@@ -1,0 +1,53 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - errcheck
+    - goconst
+    - wsl
+    - varnamelen
+    - perfsprint
+    - cyclop
+    - wrapcheck
+    - testpackage
+    - tagalign
+    - mnd
+    - lll
+    - paralleltest
+    - funcorder
+    - depguard
+    - exhaustruct
+    - nonamedreturns
+    - gosec
+    - gocognit
+    - funlen
+    - nestif
+    - gocyclo
+    - nlreturn
+    - errchkjson
+    - contextcheck
+    - revive
+    - godot
+    - ireturn
+    - gochecknoglobals
+    - maintidx
+    - forbidigo
+    - gocritic
+  settings:
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: snake
+  exclusions:
+    rules:
+      # Exclude some linters from running on tests files.
+      - path: _test\.go
+        linters:
+          - forcetypeassert
+          - noctx
+      - path: main.go
+        linters:
+          - forbidigo
+run:
+  timeout: 5m
