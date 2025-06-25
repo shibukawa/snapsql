@@ -82,7 +82,7 @@ func TestBulkVariableSubstitution(t *testing.T) {
 			ns := NewNamespace(test.schema)
 
 			// パース
-			parser := NewSqlParser(tokens, ns)
+			parser := NewSqlParser(tokens, ns, nil)
 			stmt, err := parser.Parse()
 
 			if test.expectError {
@@ -191,7 +191,7 @@ func TestBulkVariableWithDummyValues(t *testing.T) {
 	ns := NewNamespace(schema)
 
 	// パース
-	parser := NewSqlParser(tokens, ns)
+	parser := NewSqlParser(tokens, ns, nil)
 	stmt, err := parser.Parse()
 	assert.NoError(t, err)
 

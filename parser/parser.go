@@ -67,17 +67,19 @@ func (s ErrorSeverity) String() string {
 
 // NewSqlParser creates a new SQL parser
 // If ns is nil, creates an empty Namespace
-func NewSqlParser(tokens []tokenizer.Token, ns *Namespace) *SqlParser {
+// If schema is nil, no interface schema is used
+func NewSqlParser(tokens []tokenizer.Token, ns *Namespace, schema *InterfaceSchema) *SqlParser {
 	// Create empty Namespace if nil
 	if ns == nil {
 		ns = NewNamespace(nil)
 	}
 
 	return &SqlParser{
-		tokens:    tokens,
-		current:   0,
-		errors:    make([]ParseError, 0),
-		namespace: ns,
+		tokens:          tokens,
+		current:         0,
+		errors:          make([]ParseError, 0),
+		namespace:       ns,
+		interfaceSchema: schema,
 	}
 }
 
@@ -1145,11 +1147,7 @@ func (p *SqlParser) parseCTEDefinition(ns *Namespace, recursive bool) (*CTEDefin
 	subqueryTokens := p.extractParenthesesContent()
 
 	// Create parser for subquery
-	subParser := NewSqlParser(subqueryTokens, ns)
-	// interfaceSchema is inherited from environment, but set explicitly
-	if p.interfaceSchema != nil {
-		subParser.interfaceSchema = p.interfaceSchema
-	}
+	subParser := NewSqlParser(subqueryTokens, ns, p.interfaceSchema)
 	subquery, err := subParser.parseSelectStatementWithoutWith(ns)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing CTE subquery: %w", err)

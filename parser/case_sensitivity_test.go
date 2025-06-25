@@ -68,7 +68,7 @@ func TestCaseSensitivity(t *testing.T) {
 			assert.True(t, len(tokens) > 0)
 
 			// Parse
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 			if test.expectError {
 				assert.Error(t, err)
@@ -102,7 +102,7 @@ func TestKeywordCaseInsensitiveComparison(t *testing.T) {
 	upperTok := tokenizer.NewSqlTokenizer(upperCaseSQL, tokenizer.NewSQLiteDialect())
 	upperTokens, err := upperTok.AllTokens()
 	assert.NoError(t, err)
-	upperParser := NewSqlParser(upperTokens, nil)
+	upperParser := NewSqlParser(upperTokens, nil, nil)
 	upperStmt, err := upperParser.Parse()
 	assert.NoError(t, err)
 
@@ -110,7 +110,7 @@ func TestKeywordCaseInsensitiveComparison(t *testing.T) {
 	lowerTok := tokenizer.NewSqlTokenizer(lowerCaseSQL, tokenizer.NewSQLiteDialect())
 	lowerTokens, err := lowerTok.AllTokens()
 	assert.NoError(t, err)
-	lowerParser := NewSqlParser(lowerTokens, nil)
+	lowerParser := NewSqlParser(lowerTokens, nil, nil)
 	lowerStmt, err := lowerParser.Parse()
 	assert.NoError(t, err)
 
@@ -152,7 +152,7 @@ func TestComplexCaseSensitivity(t *testing.T) {
 			tokens, err := tok.AllTokens()
 			assert.NoError(t, err)
 
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 			assert.NoError(t, err)
 			assert.True(t, stmt != nil)

@@ -299,7 +299,7 @@ SELECT
 			ns.SetVariable("table_suffix", "test")
 
 			// Integration validation with parameter schema parser
-			parser := NewSqlParser(tokens, ns)
+			parser := NewSqlParser(tokens, ns, nil)
 
 			_, err = parser.Parse()
 

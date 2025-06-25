@@ -167,7 +167,7 @@ func TestConvertASTNodeWithIdentifier(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Create parser
-	parser := parser.NewSqlParser(tokens, nil)
+	parser := parser.NewSqlParser(tokens, nil, nil)
 	ast, err := parser.Parse()
 	assert.NoError(t, err)
 
@@ -304,7 +304,7 @@ func TestIntegrationWithSimpleSQL(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Create parser
-	parser := parser.NewSqlParser(tokens, nil)
+	parser := parser.NewSqlParser(tokens, nil, nil)
 	ast, err := parser.Parse()
 	assert.NoError(t, err)
 

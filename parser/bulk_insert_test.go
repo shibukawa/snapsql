@@ -59,7 +59,7 @@ func TestBulkInsertStatement(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 
 			if test.expectError {
@@ -135,7 +135,7 @@ func TestBulkInsertWithSnapSQL(t *testing.T) {
 			ns := NewNamespace(schema)
 
 			// パース
-			parser := NewSqlParser(tokens, ns)
+			parser := NewSqlParser(tokens, ns, nil)
 			stmt, err := parser.Parse()
 
 			if test.expectError {
@@ -174,7 +174,7 @@ func TestBulkInsertStringGeneration(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 			assert.NoError(t, err)
 

@@ -328,13 +328,6 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, _ []strin
 				return fmt.Errorf("validation failed: %w", err)
 			}
 		}
-
-		// Parse interface schema from frontmatter or comments
-		if err := g.parseInterfaceSchema(format, string(content), ctx); err != nil {
-			if ctx.Verbose {
-				color.Yellow("No interface schema found in %s: %v", inputFile, err)
-			}
-		}
 	}
 
 	// Generate output filename
@@ -379,9 +372,35 @@ func (g *GenerateCmd) parseAndValidateSQL(format *intermediate.IntermediateForma
 		return fmt.Errorf("tokenization failed: %w", err)
 	}
 
-	// Create parser with empty namespace (schema will be added later if available)
-	ns := parser.NewNamespace(nil)
-	sqlParser := parser.NewSqlParser(tokens, ns)
+	// Extract interface schema first
+	var schema *parser.InterfaceSchema
+
+	// Look for comment-based schema (/*@ ... @*/)
+	var schemaYAML string
+	if start := strings.Index(content, "/*@"); start != -1 {
+		if end := strings.Index(content[start:], "@*/"); end != -1 {
+			schemaYAML = content[start+3 : start+end]
+
+			// Parse interface schema
+			schema, err = parser.NewInterfaceSchemaFromFrontMatter(schemaYAML)
+			if err != nil {
+				return fmt.Errorf("failed to parse interface schema: %w", err)
+			}
+
+			// Set schema in intermediate format for output
+			format.SetInterfaceSchema(schema)
+
+			if ctx.Verbose {
+				color.Green("Interface schema parsed successfully")
+			}
+		}
+	}
+
+	// Create namespace
+	ns := parser.NewNamespace(schema)
+
+	// Create parser with schema
+	sqlParser := parser.NewSqlParser(tokens, ns, schema)
 
 	// Parse SQL
 	ast, err := sqlParser.Parse()
@@ -394,37 +413,6 @@ func (g *GenerateCmd) parseAndValidateSQL(format *intermediate.IntermediateForma
 
 	if ctx.Verbose {
 		color.Green("SQL validation passed")
-	}
-
-	return nil
-}
-
-// parseInterfaceSchema extracts interface schema from template content
-func (g *GenerateCmd) parseInterfaceSchema(format *intermediate.IntermediateFormat, content string, ctx *Context) error {
-	var schemaYAML string
-
-	// Look for comment-based schema (/*@ ... @*/)
-	if start := strings.Index(content, "/*@"); start != -1 {
-		if end := strings.Index(content[start:], "@*/"); end != -1 {
-			schemaYAML = content[start+3 : start+end]
-		}
-	}
-
-	if schemaYAML == "" {
-		return ErrNoInterfaceSchema
-	}
-
-	// Parse interface schema
-	schema, err := parser.NewInterfaceSchemaFromFrontMatter(schemaYAML)
-	if err != nil {
-		return fmt.Errorf("failed to parse interface schema: %w", err)
-	}
-
-	// Set schema in intermediate format
-	format.SetInterfaceSchema(schema)
-
-	if ctx.Verbose {
-		color.Green("Interface schema parsed successfully")
 	}
 
 	return nil
@@ -691,12 +679,32 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 		return fmt.Errorf("failed to parse markdown: %w", err)
 	}
 
-	// Set interface schema from front matter and parsed content
-	if err := g.setMarkdownInterfaceSchema(format, parsed, ctx); err != nil {
-		if ctx.Verbose {
-			color.Yellow("Failed to set interface schema: %v", err)
+	// Create interface schema from front matter and parameters
+	schema := &parser.InterfaceSchema{
+		Name:         parsed.FrontMatter.Name,
+		FunctionName: generateFunctionName(parsed.FrontMatter.Name),
+		Parameters:   make(map[string]any),
+	}
+
+	// Parse parameters section if available
+	if paramSection, exists := parsed.Sections["parameters"]; exists {
+		mdParser := markdownparser.NewParser()
+		params, err := mdParser.ParseParameters(paramSection.Content)
+		if err != nil {
+			return fmt.Errorf("failed to parse parameters: %w", err)
+		}
+
+		// Add parameters to schema
+		for name, paramType := range params {
+			schema.Parameters[name] = convertParameterType(paramType)
 		}
 	}
+
+	// Process schema
+	schema.ProcessSchema()
+
+	// Set schema in intermediate format for output
+	format.SetInterfaceSchema(schema)
 
 	// Extract and validate SQL from markdown
 	if sqlSection, exists := parsed.Sections["sql"]; exists {
@@ -709,45 +717,37 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 		if sqlContent != "" {
 			// Parse and validate SQL if validation is enabled
 			if g.Validate {
-				if err := g.parseAndValidateSQL(format, sqlContent, ctx); err != nil {
-					return fmt.Errorf("SQL validation failed: %w", err)
+				// Detect dialect and create tokenizer
+				dialect := tokenizer.DetectDialect(sqlContent)
+				sqlTokenizer := tokenizer.NewSqlTokenizer(sqlContent, dialect)
+
+				// Get all tokens
+				tokens, err := sqlTokenizer.AllTokens()
+				if err != nil {
+					return fmt.Errorf("tokenization failed: %w", err)
+				}
+
+				// Create namespace with schema
+				ns := parser.NewNamespace(schema)
+
+				// Create parser with schema
+				sqlParser := parser.NewSqlParser(tokens, ns, schema)
+
+				// Parse SQL
+				ast, err := sqlParser.Parse()
+				if err != nil {
+					return fmt.Errorf("parsing failed: %w", err)
+				}
+
+				// Set AST in intermediate format
+				format.SetAST(ast)
+
+				if ctx.Verbose {
+					color.Green("SQL validation passed")
 				}
 			}
 		}
 	}
-
-	return nil
-}
-
-// setMarkdownInterfaceSchema sets interface schema from parsed markdown
-func (g *GenerateCmd) setMarkdownInterfaceSchema(format *intermediate.IntermediateFormat, parsed *markdownparser.ParsedMarkdown, _ *Context) error {
-	// Create interface schema from front matter and parameters
-	schema := intermediate.InterfaceSchemaFormatted{
-		Name:         parsed.FrontMatter.Name,
-		FunctionName: generateFunctionName(parsed.FrontMatter.Name),
-		Parameters:   []intermediate.Parameter{},
-	}
-
-	// Parse parameters section if available
-	if paramSection, exists := parsed.Sections["parameters"]; exists {
-		mdParser := markdownparser.NewParser()
-		params, err := mdParser.ParseParameters(paramSection.Content)
-		if err != nil {
-			return fmt.Errorf("failed to parse parameters: %w", err)
-		}
-
-		// Convert parameters to intermediate format
-		for name, paramType := range params {
-			param := intermediate.Parameter{
-				Name: name,
-				Type: convertParameterType(paramType),
-			}
-			schema.Parameters = append(schema.Parameters, param)
-		}
-	}
-
-	// Set the schema in the intermediate format
-	format.InterfaceSchema = &schema
 
 	return nil
 }

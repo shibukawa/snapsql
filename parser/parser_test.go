@@ -59,7 +59,7 @@ func TestBasicSyntaxValidation(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			_, err = parser.Parse()
 
 			if test.expectError {
@@ -156,7 +156,7 @@ func TestSelectStatementParsing(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 			assert.NoError(t, err)
 			assert.True(t, stmt != nil)
@@ -219,7 +219,7 @@ func TestComplexSQL(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース（構文チェックのみ）
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 
 			// Complex SQL just needs to pass basic syntax check
@@ -264,7 +264,7 @@ func TestErrorRecovery(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			_, err = parser.Parse()
 
 			if test.expectError {
@@ -285,7 +285,7 @@ func TestASTStringRepresentation(t *testing.T) {
 	assert.NoError(t, err)
 
 	// パース
-	parser := NewSqlParser(tokens, nil)
+	parser := NewSqlParser(tokens, nil, nil)
 	stmt, err := parser.Parse()
 	assert.NoError(t, err)
 	assert.True(t, stmt != nil)
@@ -310,7 +310,7 @@ func TestParseErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	// パース
-	parser := NewSqlParser(tokens, nil)
+	parser := NewSqlParser(tokens, nil, nil)
 	_, err = parser.Parse()
 	assert.Error(t, err)
 
@@ -344,7 +344,7 @@ func TestRealSQLFiles(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース（構文チェックのみ）
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 
 			// 基本構文チェックが通ることをverification

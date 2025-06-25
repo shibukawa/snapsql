@@ -67,7 +67,7 @@ OFFSET /*= pagination.offset */0;`
 	ns.SetVariable("table_suffix", "prod")
 
 	// Create parser with implicit if generation
-	parser := NewSqlParser(tokens, ns)
+	parser := NewSqlParser(tokens, ns, nil)
 
 	// Parse with implicit if generation
 	stmt, err := parser.Parse()
@@ -311,7 +311,7 @@ OFFSET /*= pagination.page * pagination.size */0;`
 	ns := NewNamespace(is)
 
 	// Create parser with implicit if generation
-	parser := NewSqlParser(tokens, ns)
+	parser := NewSqlParser(tokens, ns, nil)
 
 	// Parse with implicit if generation
 	stmt, err := parser.Parse()

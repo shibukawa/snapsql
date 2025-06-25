@@ -53,7 +53,7 @@ func TestBulkVariableIntegration(t *testing.T) {
 			ns := NewNamespace(test.schema)
 
 			// パース
-			parser := NewSqlParser(tokens, ns)
+			parser := NewSqlParser(tokens, ns, nil)
 			stmt, err := parser.Parse()
 			assert.NoError(t, err)
 
@@ -127,7 +127,7 @@ func TestBulkVariableVsRegularInsert(t *testing.T) {
 			ns := NewNamespace(test.schema)
 
 			// パース
-			parser := NewSqlParser(tokens, ns)
+			parser := NewSqlParser(tokens, ns, nil)
 			stmt, err := parser.Parse()
 			assert.NoError(t, err)
 

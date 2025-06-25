@@ -19,7 +19,7 @@ func TestExampleOutput(t *testing.T) {
 		t.Fatalf("Tokenization failed: %v", err)
 	}
 
-	parser := parser.NewSqlParser(tokens, nil)
+	parser := parser.NewSqlParser(tokens, nil, nil)
 	ast, err := parser.Parse()
 	if err != nil {
 		t.Fatalf("Parsing failed: %v", err)
