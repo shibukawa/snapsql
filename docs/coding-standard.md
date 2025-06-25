@@ -36,6 +36,8 @@
     * CLI色付け: github.com/fatih/color
     * YAML処理: github.com/goccy/go-yaml
     * 式言語: github.com/google/cel-go
+    * Markdownのパース: github.com/yuin/goldmark
+    * PostgreSQLとMySQLのテストではTestContainers
 * 明示した以外、後方互換性の維持は不要です
 
 ## Dockerコーディング規約

@@ -89,16 +89,12 @@ func (ns *Namespace) Copy() *Namespace {
 		Name:        ns.Schema.Name,
 		Description: ns.Schema.Description,
 		Parameters:  make(map[string]any),
-		Tags:        make([]string, len(ns.Schema.Tags)),
 	}
 
 	// パラメータのコピー
 	for k, v := range ns.Schema.Parameters {
 		schemaCopy.Parameters[k] = v
 	}
-
-	// タグのコピー
-	copy(schemaCopy.Tags, ns.Schema.Tags)
 
 	// Copy variables
 	variablesCopy := make(map[string]any)

@@ -19,23 +19,16 @@ type CELVariable struct {
 }
 
 // InterfaceSchema represents the complete interface definition for SQL templates
-// InterfaceSchema represents the complete interface definition for SQL templates
 type InterfaceSchema struct {
 	// Template metadata
 	Name        string `yaml:"name"`        // Template name for function generation
 	Description string `yaml:"description"` // Template description
-	Version     string `yaml:"version"`     // Template version
 
 	// Function generation
 	FunctionName string `yaml:"function_name"` // Generated function name
-	Package      string `yaml:"package"`       // Target package/namespace
 
 	// Parameters definition (hierarchical structure preserved for type generation)
 	Parameters map[string]any `yaml:"parameters"`
-
-	// Additional metadata
-	Tags     []string          `yaml:"tags"`     // Template tags
-	Metadata map[string]string `yaml:"metadata"` // Additional metadata
 
 	// Processed information
 	OrderedParams *OrderedParameters `yaml:"-"` // Parameters with definition order preserved
@@ -143,27 +136,16 @@ func (schema *InterfaceSchema) GetFunctionMetadata() map[string]string {
 	if schema.FunctionName != "" {
 		metadata["function_name"] = schema.FunctionName
 	}
-	if schema.Package != "" {
-		metadata["package"] = schema.Package
-	}
 	if schema.Description != "" {
 		metadata["description"] = schema.Description
-	}
-	if schema.Version != "" {
-		metadata["version"] = schema.Version
-	}
-
-	// Add custom metadata
-	for key, value := range schema.Metadata {
-		metadata[key] = value
 	}
 
 	return metadata
 }
 
-// GetTags returns template tags
+// GetTags returns empty slice (tags removed from schema)
 func (schema *InterfaceSchema) GetTags() []string {
-	return schema.Tags
+	return []string{}
 }
 
 // NewInterfaceSchemaFromFrontMatter parses interface schema from frontmatter YAML with parameter order preservation

@@ -137,7 +137,7 @@ func TestComplexCaseSensitivity(t *testing.T) {
 			sql:  "SELECT U.ID, U.NAME FROM USERS U LEFT JOIN POSTS P ON U.ID = P.USER_ID WHERE U.ACTIVE = TRUE ORDER BY U.NAME ASC LIMIT 10;",
 		},
 		{
-			name: "all lowercase", 
+			name: "all lowercase",
 			sql:  "select u.id, u.name from users u left join posts p on u.id = p.user_id where u.active = true order by u.name asc limit 10;",
 		},
 		{

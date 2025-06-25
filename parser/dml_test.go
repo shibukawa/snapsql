@@ -9,28 +9,28 @@ import (
 
 func TestInsertStatement(t *testing.T) {
 	tests := []struct {
-		name string
-		sql string
+		name        string
+		sql         string
 		expectError bool
 	}{
 		{
-			name:"basic INSERT statement",
-			sql:"INSERT INTO users (name, email) VALUES ('John', 'john@example.com');",
+			name:        "basic INSERT statement",
+			sql:         "INSERT INTO users (name, email) VALUES ('John', 'john@example.com');",
 			expectError: false,
 		},
 		{
-			name:"INSERT statement without column specification",
-			sql:"INSERT INTO users VALUES ('John', 'john@example.com');",
+			name:        "INSERT statement without column specification",
+			sql:         "INSERT INTO users VALUES ('John', 'john@example.com');",
 			expectError: false,
 		},
 		{
-			name:"INSERT SELECT statement",
-			sql:"INSERT INTO users (name) SELECT name FROM temp_users;",
+			name:        "INSERT SELECT statement",
+			sql:         "INSERT INTO users (name) SELECT name FROM temp_users;",
 			expectError: false,
 		},
 		{
-			name:"incomplete INSERT statement",
-			sql:"INSERT INTO;",
+			name:        "incomplete INSERT statement",
+			sql:         "INSERT INTO;",
 			expectError: true,
 		},
 	}
@@ -52,9 +52,9 @@ func TestInsertStatement(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotZero(t, stmt)
 
-				// INSERT statementであることをverification 
+				// INSERT statementであることをverification
 				insertStmt, ok := stmt.(*InsertStatement)
-				assert.True(t, ok,"Expected InsertStatement")
+				assert.True(t, ok, "Expected InsertStatement")
 				assert.NotZero(t, insertStmt.Table)
 			}
 		})
@@ -63,28 +63,28 @@ func TestInsertStatement(t *testing.T) {
 
 func TestUpdateStatement(t *testing.T) {
 	tests := []struct {
-		name string
-		sql string
+		name        string
+		sql         string
 		expectError bool
 	}{
 		{
-			name:"basic UPDATE statement",
-			sql:"UPDATE users SET name = 'Jane' WHERE id = 1;",
+			name:        "basic UPDATE statement",
+			sql:         "UPDATE users SET name = 'Jane' WHERE id = 1;",
 			expectError: false,
 		},
 		{
-			name:"multi-column UPDATE statement",
-			sql:"UPDATE users SET name = 'Jane', email = 'jane@example.com' WHERE id = 1;",
+			name:        "multi-column UPDATE statement",
+			sql:         "UPDATE users SET name = 'Jane', email = 'jane@example.com' WHERE id = 1;",
 			expectError: false,
 		},
 		{
-			name:"UPDATE statement without WHERE clause",
-			sql:"UPDATE users SET name = 'Jane';",
+			name:        "UPDATE statement without WHERE clause",
+			sql:         "UPDATE users SET name = 'Jane';",
 			expectError: false,
 		},
 		{
-			name:"incomplete UPDATE statement",
-			sql:"UPDATE users SET;",
+			name:        "incomplete UPDATE statement",
+			sql:         "UPDATE users SET;",
 			expectError: true,
 		},
 	}
@@ -106,11 +106,11 @@ func TestUpdateStatement(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotZero(t, stmt)
 
-				// UPDATE statementであることをverification 
+				// UPDATE statementであることをverification
 				updateStmt, ok := stmt.(*UpdateStatement)
-				assert.True(t, ok,"Expected UpdateStatement")
+				assert.True(t, ok, "Expected UpdateStatement")
 				assert.NotZero(t, updateStmt.Table)
-				assert.True(t, len(updateStmt.SetClauses) > 0,"Expected at least one SET clause")
+				assert.True(t, len(updateStmt.SetClauses) > 0, "Expected at least one SET clause")
 			}
 		})
 	}
@@ -118,23 +118,23 @@ func TestUpdateStatement(t *testing.T) {
 
 func TestDeleteStatement(t *testing.T) {
 	tests := []struct {
-		name string
-		sql string
+		name        string
+		sql         string
 		expectError bool
 	}{
 		{
-			name:"basic DELETE statement",
-			sql:"DELETE FROM users WHERE id = 1;",
+			name:        "basic DELETE statement",
+			sql:         "DELETE FROM users WHERE id = 1;",
 			expectError: false,
 		},
 		{
-			name:"DELETE statement without WHERE clause",
-			sql:"DELETE FROM users;",
+			name:        "DELETE statement without WHERE clause",
+			sql:         "DELETE FROM users;",
 			expectError: false,
 		},
 		{
-			name:"incomplete DELETE statement",
-			sql:"DELETE FROM;",
+			name:        "incomplete DELETE statement",
+			sql:         "DELETE FROM;",
 			expectError: true,
 		},
 	}
@@ -156,9 +156,9 @@ func TestDeleteStatement(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotZero(t, stmt)
 
-				// DELETE statementであることをverification 
+				// DELETE statementであることをverification
 				deleteStmt, ok := stmt.(*DeleteStatement)
-				assert.True(t, ok,"Expected DeleteStatement")
+				assert.True(t, ok, "Expected DeleteStatement")
 				assert.NotZero(t, deleteStmt.Table)
 			}
 		})
@@ -167,23 +167,23 @@ func TestDeleteStatement(t *testing.T) {
 
 func TestDMLWithSnapSQL(t *testing.T) {
 	tests := []struct {
-		name string
-		sql string
+		name        string
+		sql         string
 		expectError bool
 	}{
 		{
-			name:"INSERT statementでのSnapSQLvariable ",
-			sql:"INSERT INTO users (name) VALUES (/*= user_name */'test');",
+			name:        "INSERT statementでのSnapSQLvariable ",
+			sql:         "INSERT INTO users (name) VALUES (/*= user_name */'test');",
 			expectError: false,
 		},
 		{
-			name:"UPDATE statementでのSnapSQLvariable ",
-			sql:"UPDATE users SET name = /*= new_name */'test' WHERE id = 1;",
+			name:        "UPDATE statementでのSnapSQLvariable ",
+			sql:         "UPDATE users SET name = /*= new_name */'test' WHERE id = 1;",
 			expectError: false,
 		},
 		{
-			name:"DELETE statementでのSnapSQLvariable ",
-			sql:"DELETE FROM users WHERE active = /*= filters.active */true;",
+			name:        "DELETE statementでのSnapSQLvariable ",
+			sql:         "DELETE FROM users WHERE active = /*= filters.active */true;",
 			expectError: false,
 		},
 	}
@@ -193,10 +193,10 @@ func TestDMLWithSnapSQL(t *testing.T) {
 			// 簡単なschema を作成
 			schema := &InterfaceSchema{
 				Parameters: map[string]any{
-					"env": "str",
+					"env":       "str",
 					"user_name": "str",
-					"new_name": "str",
-					"active": "bool",
+					"new_name":  "str",
+					"active":    "bool",
 					"filters": map[string]any{
 						"active": "bool",
 					},
