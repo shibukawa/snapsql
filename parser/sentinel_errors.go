@@ -51,6 +51,7 @@ var (
 	ErrExpectedDocumentNode     = errors.New("expected document node")
 	ErrExpectedMappingNode      = errors.New("expected mapping node")
 	ErrExpectedMappingForParams = errors.New("expected mapping node for parameters")
+	ErrExpectedSequenceNode     = errors.New("expected sequence node")
 	ErrUnsupportedParameterType = errors.New("unsupported parameter node type")
 
 	// CEL related errors

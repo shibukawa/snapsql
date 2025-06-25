@@ -53,5 +53,8 @@ linters:
       - path: main.go
         linters:
           - forbidigo
+      - path: cmd
+        linters:
+          - godox
 run:
   timeout: 5m

@@ -9,44 +9,44 @@ import (
 
 func TestBulkInsertStatement(t *testing.T) {
 	tests := []struct {
-		name string
-		sql string
-		expectError bool
+		name           string
+		sql            string
+		expectError    bool
 		expectedValues int // 期待されるVALUES clauseの数
 	}{
 		{
-			name:"single VALUES clause",
-			sql:"INSERT INTO users (name, email) VALUES ('John', 'john@example.com');",
-			expectError: false,
+			name:           "single VALUES clause",
+			sql:            "INSERT INTO users (name, email) VALUES ('John', 'john@example.com');",
+			expectError:    false,
 			expectedValues: 1,
 		},
 		{
-			name:"bulk insert (2 rows)",
-			sql:"INSERT INTO users (name, email) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com');",
-			expectError: false,
+			name:           "bulk insert (2 rows)",
+			sql:            "INSERT INTO users (name, email) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com');",
+			expectError:    false,
 			expectedValues: 2,
 		},
 		{
-			name:"bulk insert (3 rows)",
-			sql:"INSERT INTO users (name, email) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com'), ('Bob', 'bob@example.com');",
-			expectError: false,
+			name:           "bulk insert (3 rows)",
+			sql:            "INSERT INTO users (name, email) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com'), ('Bob', 'bob@example.com');",
+			expectError:    false,
 			expectedValues: 3,
 		},
 		{
-			name:"bulk insert without column specification",
-			sql:"INSERT INTO users VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com');",
-			expectError: false,
+			name:           "bulk insert without column specification",
+			sql:            "INSERT INTO users VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com');",
+			expectError:    false,
 			expectedValues: 2,
 		},
 		{
-			name:"bulk insert with numeric values",
-			sql:"INSERT INTO products (name, price, stock) VALUES ('Product A', 100.50, 10), ('Product B', 200.75, 5);",
-			expectError: false,
+			name:           "bulk insert with numeric values",
+			sql:            "INSERT INTO products (name, price, stock) VALUES ('Product A', 100.50, 10), ('Product B', 200.75, 5);",
+			expectError:    false,
 			expectedValues: 2,
 		},
 		{
-			name:"incomplete bulk insert (comma without values)",
-			sql:"INSERT INTO users VALUES ('John', 'john@example.com'),;",
+			name:        "incomplete bulk insert (comma without values)",
+			sql:         "INSERT INTO users VALUES ('John', 'john@example.com'),;",
 			expectError: true,
 		},
 	}
@@ -59,7 +59,7 @@ func TestBulkInsertStatement(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 
 			if test.expectError {
@@ -68,17 +68,17 @@ func TestBulkInsertStatement(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotZero(t, stmt)
 
-				// INSERT statementであることをverification 
+				// INSERT statementであることをverification
 				insertStmt, ok := stmt.(*InsertStatement)
-				assert.True(t, ok,"Expected InsertStatement")
+				assert.True(t, ok, "Expected InsertStatement")
 				assert.NotZero(t, insertStmt.Table)
 
-				// VALUES clauseの数をverification 
-				assert.Equal(t, test.expectedValues, len(insertStmt.ValuesList),"Unexpected number of VALUES clauses")
+				// VALUES clauseの数をverification
+				assert.Equal(t, test.expectedValues, len(insertStmt.ValuesList), "Unexpected number of VALUES clauses")
 
-				// 各VALUES clauseが適切な数のvalue を持つことをverification 
+				// 各VALUES clauseが適切な数のvalue を持つことをverification
 				for i, values := range insertStmt.ValuesList {
-					assert.True(t, len(values) > 0,"VALUES clause %d should have at least one value", i)
+					assert.True(t, len(values) > 0, "VALUES clause %d should have at least one value", i)
 				}
 			}
 		})
@@ -87,18 +87,18 @@ func TestBulkInsertStatement(t *testing.T) {
 
 func TestBulkInsertWithSnapSQL(t *testing.T) {
 	tests := []struct {
-		name string
-		sql string
+		name        string
+		sql         string
 		expectError bool
 	}{
 		{
-			name:"bulk insert with SnapSQL variables",
-			sql:"INSERT INTO users (name, email) VALUES (/*= user1.name */'John', /*= user1.email */'john@example.com'), (/*= user2.name */'Jane', /*= user2.email */'jane@example.com');",
+			name:        "bulk insert with SnapSQL variables",
+			sql:         "INSERT INTO users (name, email) VALUES (/*= user1.name */'John', /*= user1.email */'john@example.com'), (/*= user2.name */'Jane', /*= user2.email */'jane@example.com');",
 			expectError: false,
 		},
 		{
-			name:"conditional bulk insert",
-			sql:"INSERT INTO users (name, email) VALUES ('John', 'john@example.com')/*# if include_jane */, ('Jane', 'jane@example.com')/*# end */;",
+			name:        "conditional bulk insert",
+			sql:         "INSERT INTO users (name, email) VALUES ('John', 'john@example.com')/*# if include_jane */, ('Jane', 'jane@example.com')/*# end */;",
 			expectError: false,
 		},
 	}
@@ -109,16 +109,16 @@ func TestBulkInsertWithSnapSQL(t *testing.T) {
 			schema := &InterfaceSchema{
 				Parameters: map[string]any{
 					"user1": map[string]any{
-						"name": "str",
+						"name":  "str",
 						"email": "str",
 					},
 					"user2": map[string]any{
-						"name": "str",
+						"name":  "str",
 						"email": "str",
 					},
 					"users": []any{
 						map[string]any{
-							"name": "str",
+							"name":  "str",
 							"email": "str",
 						},
 					},
@@ -135,7 +135,7 @@ func TestBulkInsertWithSnapSQL(t *testing.T) {
 			ns := NewNamespace(schema)
 
 			// パース
-			parser := NewSqlParser(tokens, ns)
+			parser := NewSqlParser(tokens, ns, nil)
 			stmt, err := parser.Parse()
 
 			if test.expectError {
@@ -144,9 +144,9 @@ func TestBulkInsertWithSnapSQL(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotZero(t, stmt)
 
-				// INSERT statementであることをverification 
+				// INSERT statementであることをverification
 				insertStmt, ok := stmt.(*InsertStatement)
-				assert.True(t, ok,"Expected InsertStatement")
+				assert.True(t, ok, "Expected InsertStatement")
 				assert.NotZero(t, insertStmt.Table)
 			}
 		})
@@ -155,13 +155,13 @@ func TestBulkInsertWithSnapSQL(t *testing.T) {
 
 func TestBulkInsertStringGeneration(t *testing.T) {
 	tests := []struct {
-		name string
-		sql string
+		name     string
+		sql      string
 		expected string
 	}{
 		{
-			name: "bulk insert String() output",
-			sql: "INSERT INTO users (name, email) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com');",
+			name:     "bulk insert String() output",
+			sql:      "INSERT INTO users (name, email) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com');",
 			expected: "INSERT INTO   (NAME, EMAIL) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com')",
 		},
 	}
@@ -174,15 +174,15 @@ func TestBulkInsertStringGeneration(t *testing.T) {
 			assert.NoError(t, err)
 
 			// パース
-			parser := NewSqlParser(tokens, nil)
+			parser := NewSqlParser(tokens, nil, nil)
 			stmt, err := parser.Parse()
 			assert.NoError(t, err)
 
-			// INSERT statementであることをverification 
+			// INSERT statementであることをverification
 			insertStmt, ok := stmt.(*InsertStatement)
-			assert.True(t, ok,"Expected InsertStatement")
+			assert.True(t, ok, "Expected InsertStatement")
 
-			// String()output をverification 
+			// String()output をverification
 			result := insertStmt.String()
 			t.Logf("Actual output: %s", result)
 			t.Logf("Expected output: %s", test.expected)

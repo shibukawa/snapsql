@@ -349,6 +349,116 @@ Currently, you can use SnapSQL as a Go library for parsing and processing SQL te
 go get github.com/shibukawa/snapsql
 ```
 
+## Configuration
+
+SnapSQL uses a `snapsql.yaml` configuration file to manage database connections, generation settings, and other options.
+
+### Environment Variable Support
+
+SnapSQL supports environment variable expansion in configuration files:
+
+```yaml
+# Database connections with environment variables
+databases:
+  development:
+    driver: "postgres"
+    connection: "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    schema: "public"
+  
+  production:
+    driver: "postgres"
+    connection: "postgres://${PROD_DB_USER}:${PROD_DB_PASS}@${PROD_DB_HOST}:${PROD_DB_PORT}/${PROD_DB_NAME}"
+    schema: "public"
+
+# Generation settings
+generation:
+  input_dir: "./queries"
+  validate: true
+  
+  # Configure generators for multiple languages
+  generators:
+    json:
+      output: "./generated"
+      enabled: true
+      settings:
+        pretty: true
+        include_metadata: true
+    
+    go:
+      output: "./internal/queries"
+      enabled: false
+      settings:
+        package: "queries"
+    
+    typescript:
+      output: "./src/generated"
+      enabled: false
+      settings:
+        types: true
+```
+
+### Generator Configuration
+
+Each generator in the `generators` section supports:
+
+- **`output`**: Output directory for generated files
+- **`enabled`**: Whether the generator is enabled (default: false, except JSON which is always enabled)
+- **`settings`**: Generator-specific settings (flexible key-value pairs)
+
+#### Built-in Generators
+
+| Generator | Settings | Description |
+|-----------|----------|-------------|
+| `json` | `pretty`, `include_metadata` | Always enabled, generates intermediate JSON files |
+| `go` | `package`, `generate_tests` | Go language code generation |
+| `typescript` | `types`, `module_type` | TypeScript code generation |
+| `java` | `package`, `use_lombok` | Java language code generation |
+| `python` | `package`, `use_dataclasses` | Python code generation |
+
+#### Custom Generators
+
+You can add any custom generator by specifying its name and configuration:
+
+```yaml
+generation:
+  generators:
+    rust:
+      output: "./src/generated"
+      enabled: true
+      settings:
+        crate_name: "queries"
+        async_runtime: "tokio"
+    
+    csharp:
+      output: "./Generated"
+      enabled: true
+      settings:
+        namespace: "MyApp.Queries"
+        use_nullable: true
+```
+
+Custom generators are executed as external plugins named `snapsql-gen-<language>` (e.g., `snapsql-gen-rust`, `snapsql-gen-csharp`).
+
+### .env File Support
+
+Create a `.env` file in your project root:
+
+```bash
+# Database credentials
+DB_USER=myuser
+DB_PASS=mypassword
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=mydb
+
+# Production database
+PROD_DB_USER=produser
+PROD_DB_PASS=prodpassword
+PROD_DB_HOST=prod.example.com
+PROD_DB_PORT=5432
+PROD_DB_NAME=proddb
+```
+
 ## Usage
 
 ### 1. Create SQL Templates
@@ -465,10 +575,20 @@ users:
 ```
 ````
 
-### 2. Build Intermediate Files *(Planned)*
+### 2. Generate Code
 
 ```bash
-snapsql build -i queries/ -o generated/
+# Generate all configured languages
+snapsql generate
+
+# Generate specific language
+snapsql generate --lang go
+
+# Generate from single file
+snapsql generate -i queries/users.snap.sql
+
+# Generate with constant files
+snapsql generate --const constants.yaml
 ```
 
 ### 3. Use Runtime Libraries *(Planned)*
@@ -484,10 +604,10 @@ import (
 func main() {
     engine := snapsql.New("generated/")
     
-    params := map[string]interface{}{
+    params := map[string]any{
         "include_email": true,
         "env": "prod",
-        "filters": map[string]interface{}{
+        "filters": map[string]any{
             "active": true,
         },
         "sort_by": "created_at",
@@ -526,7 +646,23 @@ cursor.execute(query, args)
 
 ### Current Usage (Development)
 
-Currently, you can use SnapSQL as a Go library for parsing SQL templates:
+Currently, you can use SnapSQL CLI tool for generating intermediate files and parsing SQL templates:
+
+```bash
+# Initialize a new project
+snapsql init
+
+# Generate intermediate JSON files
+snapsql generate
+
+# Generate specific language (when implemented)
+snapsql generate --lang go
+
+# Validate templates
+snapsql validate
+```
+
+You can also use SnapSQL as a Go library for parsing SQL templates:
 
 ```go
 package main
@@ -551,6 +687,63 @@ func main() {
     }
     
     fmt.Printf("Parsed AST: %+v\n", ast)
+}
+```
+
+## Intermediate Format Schema
+
+SnapSQL generates intermediate JSON files that follow a standardized format. The JSON schema for these files is available at:
+
+- **Schema File**: [`docs/intermediate-format-schema.json`](docs/intermediate-format-schema.json)
+- **Schema ID**: `https://github.com/shibukawa/snapsql/schemas/intermediate-format.json`
+
+### Schema Validation
+
+You can validate generated intermediate files using JSON Schema validators:
+
+```bash
+# Using ajv-cli
+npm install -g ajv-cli
+ajv validate -s docs/intermediate-format-schema.json -d generated/your-file.json
+
+# Using other validators
+# Most JSON Schema validators support Draft-07 format
+```
+
+### Intermediate File Structure
+
+The intermediate format includes:
+
+- **`source`**: Original template file information (path and content)
+- **`interface_schema`**: Extracted parameter definitions and metadata (optional)
+- **`ast`**: Abstract Syntax Tree of the parsed SQL
+
+**Example intermediate file:**
+```json
+{
+  "source": {
+    "file": "/path/to/users.snap.sql",
+    "content": "SELECT * FROM users WHERE id = /*= user_id */1;"
+  },
+  "interface_schema": {
+    "name": "user_query",
+    "function_name": "getUser",
+    "parameters": [
+      {
+        "name": "user_id",
+        "type": "int"
+      }
+    ]
+  },
+  "ast": {
+    "type": "SELECT_STATEMENT",
+    "pos": [1, 1, 0],
+    "Children": {
+      "select_clause": { ... },
+      "from_clause": { ... },
+      "where_clause": { ... }
+    }
+  }
 }
 ```
 

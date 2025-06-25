@@ -739,7 +739,7 @@ func (e *TokenizeError) Error() string {
 ```go
 // オブジェクトプール（必要に応じて）
 var tokenPool = sync.Pool{
-    New: func() interface{} {
+    New: func() any {
         return &Token{}
     },
 }
@@ -1933,7 +1933,7 @@ type AstVisitor interface {
 // SQL生成Visitor
 type SqlGeneratorVisitor struct {
     output    strings.Builder
-    params    map[string]interface{}
+    params    map[string]any
     context   *GenerationContext
 }
 

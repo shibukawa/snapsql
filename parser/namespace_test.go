@@ -11,31 +11,31 @@ func TestNamespace(t *testing.T) {
 		Parameters: map[string]any{
 			"user_id": "int",
 			"filters": map[string]any{
-				"active": "bool",
+				"active":      "bool",
 				"departments": []any{"str"},
 			},
 		},
 	}
 	ns := NewNamespace(ifs)
-	ns.SetVariable("table_suffix", "prod")
-	ns.SetVariable("tenant_id", "12345")
+	ns.SetConstant("table_suffix", "prod")
+	ns.SetConstant("tenant_id", "12345")
 
-	// 環境variable のvalidation 
+	// 環境constant のvalidation
 	err := ns.ValidateExpression("table_suffix")
 	assert.NoError(t, err)
 
-	// Non-existent environment variable 
+	// Non-existent environment constant
 	err = ns.ValidateExpression("nonexistent")
 	assert.Error(t, err)
 
-	// parameter のvalidation 
+	// parameter のvalidation
 	err = ns.ValidateExpression("user_id")
 	assert.NoError(t, err)
 
 	err = ns.ValidateExpression("filters.active")
 	assert.NoError(t, err)
 
-	// Non-existent parameter 
+	// Non-existent parameter
 	err = ns.ValidateExpression("nonexistent_param")
 	assert.Error(t, err)
 }
@@ -44,49 +44,49 @@ func TestValueToLiteral(t *testing.T) {
 	ns := NewNamespace(nil)
 
 	tests := []struct {
-		name string
-		value any
+		name     string
+		value    any
 		expected string
 	}{
 		{
-			name:"string ",
-			value:"test",
-			expected:"'test'",
+			name:     "string ",
+			value:    "test",
+			expected: "'test'",
 		},
 		{
-			name:"string with single quote",
-			value:"test's value",
-			expected:"'test''s value'",
+			name:     "string with single quote",
+			value:    "test's value",
+			expected: "'test''s value'",
 		},
 		{
-			name:"integer",
-			value: 123,
-			expected:"123",
+			name:     "integer",
+			value:    123,
+			expected: "123",
 		},
 		{
-			name:"floating point number",
-			value: 123.45,
-			expected:"123.45",
+			name:     "floating point number",
+			value:    123.45,
+			expected: "123.45",
 		},
 		{
-			name:"boolean value (true)",
-			value: true,
-			expected:"true",
+			name:     "boolean value (true)",
+			value:    true,
+			expected: "true",
 		},
 		{
-			name:"boolean value (false)",
-			value: false,
-			expected:"false",
+			name:     "boolean value (false)",
+			value:    false,
+			expected: "false",
 		},
 		{
-			name:"string array ",
-			value: []string{"admin", "user"},
-			expected:"'admin', 'user'",
+			name:     "string array ",
+			value:    []string{"admin", "user"},
+			expected: "'admin', 'user'",
 		},
 		{
-			name:"anyarray ",
-			value: []any{"admin", 123, true},
-			expected:"'admin', 123, true",
+			name:     "anyarray ",
+			value:    []any{"admin", 123, true},
+			expected: "'admin', 123, true",
 		},
 	}
 
@@ -101,63 +101,63 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 	t.Skip("temporarily skipped - investigating infinite loop issue")
 
 	tests := []struct {
-		name string
-		schema *InterfaceSchema
-		variable string
-		listExpr string
-		expectError bool
-		expectedType string
+		name          string
+		schema        *InterfaceSchema
+		variable      string
+		listExpr      string
+		expectError   bool
+		expectedType  string
 		expectedValue any
 	}{
 		{
-			name:"create loop variable from string list",
+			name: "create loop variable from string list",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
 					"fields": []any{"str"},
 				},
 			},
-			variable:"field",
-			listExpr:"fields",
-			expectError: false,
-			expectedType:"str",
-			expectedValue:"dummy",
+			variable:      "field",
+			listExpr:      "fields",
+			expectError:   false,
+			expectedType:  "str",
+			expectedValue: "dummy",
 		},
 		{
-			name:"create loop variable from integer list",
+			name: "create loop variable from integer list",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
 					"numbers": []any{"int"},
 				},
 			},
-			variable:"num",
-			listExpr:"numbers",
-			expectError: false,
-			expectedType:"int",
+			variable:      "num",
+			listExpr:      "numbers",
+			expectError:   false,
+			expectedType:  "int",
 			expectedValue: 0,
 		},
 		{
-			name:"complex expression evaluation",
+			name: "complex expression evaluation",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
-					"users": []any{"str"},
+					"users":  []any{"str"},
 					"active": "bool",
 				},
 			},
-			variable:"user",
-			listExpr:"users",
-			expectError: false,
-			expectedType:"str",
-			expectedValue:"dummy",
+			variable:      "user",
+			listExpr:      "users",
+			expectError:   false,
+			expectedType:  "str",
+			expectedValue: "dummy",
 		},
 		{
-			name:"error with nonexistent variable",
+			name: "error with nonexistent variable",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
 					"fields": []any{"str"},
 				},
 			},
-			variable:"field",
-			listExpr:"nonexistent",
+			variable:    "field",
+			listExpr:    "nonexistent",
 			expectError: true,
 		},
 	}
@@ -168,7 +168,7 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 			ns := NewNamespace(tt.schema)
 			assert.NotZero(t, ns)
 
-			// AddLoopVariableWithEvaluationをexecution 
+			// AddLoopVariableWithEvaluationをexecution
 			newNs, err := ns.AddLoopVariableWithEvaluation(tt.variable, tt.listExpr)
 
 			if tt.expectError {
@@ -181,19 +181,19 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotZero(t, newNs)
 
-			// Verify loop variable is added to schema 
+			// Verify loop variable is added to schema
 			_, exists := newNs.Schema.Parameters[tt.variable]
-			assert.True(t, exists,"loop variable should be added to schema")
+			assert.True(t, exists, "loop variable should be added to schema")
 			assert.Equal(t, tt.expectedType, newNs.Schema.Parameters[tt.variable].(string))
 
 			// Verify loop variable is added to dummy data
 			_, exists = newNs.dummyData[tt.variable]
-			assert.True(t, exists,"loop variable should be added to dummy data")
+			assert.True(t, exists, "loop variable should be added to dummy data")
 			assert.Equal(t, tt.expectedValue, newNs.dummyData[tt.variable])
 
-			// Verify loop variable can be validated with CEL 
+			// Verify loop variable can be validated with CEL
 			err = newNs.ValidateParameterExpression(tt.variable)
-			assert.NoError(t, err,"loop variable should be recognized by CEL")
+			assert.NoError(t, err, "loop variable should be recognized by CEL")
 		})
 	}
 }
@@ -202,42 +202,42 @@ func TestEvaluateParameterExpression(t *testing.T) {
 	t.Skip("temporarily skipped - investigating infinite loop issue")
 
 	tests := []struct {
-		name string
-		schema *InterfaceSchema
-		expression string
+		name           string
+		schema         *InterfaceSchema
+		expression     string
 		expectedResult any
-		expectError bool
+		expectError    bool
 	}{
 		{
-			name:"simple variable reference",
+			name: "simple variable reference",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
 					"name": "str",
 				},
 			},
-			expression:"name",
-			expectedResult:"",
-			expectError: false,
+			expression:     "name",
+			expectedResult: "",
+			expectError:    false,
 		},
 		{
-			name:"list variable reference",
+			name: "list variable reference",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
 					"fields": []any{"str"},
 				},
 			},
-			expression:"fields",
+			expression:     "fields",
 			expectedResult: []string{"dummy"},
-			expectError: false,
+			expectError:    false,
 		},
 		{
-			name:"error with nonexistent variable",
+			name: "error with nonexistent variable",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
 					"name": "str",
 				},
 			},
-			expression:"nonexistent",
+			expression:  "nonexistent",
 			expectError: true,
 		},
 	}
@@ -269,43 +269,43 @@ func TestExtractElementFromList(t *testing.T) {
 	ns := NewNamespace(nil)
 
 	tests := []struct {
-		name string
-		listResult any
+		name          string
+		listResult    any
 		expectedValue any
-		expectedType string
-		expectError bool
+		expectedType  string
+		expectError   bool
 	}{
 		{
-			name:"string list ",
-			listResult: []string{"hello", "world"},
-			expectedValue:"hello",
-			expectedType:"str",
-			expectError: false,
+			name:          "string list ",
+			listResult:    []string{"hello", "world"},
+			expectedValue: "hello",
+			expectedType:  "str",
+			expectError:   false,
 		},
 		{
-			name:"integer list",
-			listResult: []int{1, 2, 3},
+			name:          "integer list",
+			listResult:    []int{1, 2, 3},
 			expectedValue: 1,
-			expectedType:"int",
-			expectError: false,
+			expectedType:  "int",
+			expectError:   false,
 		},
 		{
-			name:"empty string list ",
-			listResult: []string{},
-			expectedValue:"",
-			expectedType:"str",
-			expectError: false,
+			name:          "empty string list ",
+			listResult:    []string{},
+			expectedValue: "",
+			expectedType:  "str",
+			expectError:   false,
 		},
 		{
-			name:"any type list",
-			listResult: []any{"test", 123},
-			expectedValue:"test",
-			expectedType:"str",
-			expectError: false,
+			name:          "any type list",
+			listResult:    []any{"test", 123},
+			expectedValue: "test",
+			expectedType:  "str",
+			expectError:   false,
 		},
 		{
-			name:"non-list value",
-			listResult:"not a list",
+			name:        "non-list value",
+			listResult:  "not a list",
 			expectError: true,
 		},
 	}
@@ -330,28 +330,28 @@ func TestDummyDataGeneration(t *testing.T) {
 	// t.Skip("temporarily skipped - investigating infinite loop issue")
 
 	tests := []struct {
-		name string
-		schema *InterfaceSchema
+		name     string
+		schema   *InterfaceSchema
 		expected map[string]any
 	}{
 		{
-			name:"basic type dummy data generation",
+			name: "basic type dummy data generation",
 			schema: &InterfaceSchema{
 				Parameters: map[string]any{
-					"name": "str",
-					"age": "int",
-					"active": "bool",
-					"score": "float",
-					"fields": []any{"str"},
+					"name":    "str",
+					"age":     "int",
+					"active":  "bool",
+					"score":   "float",
+					"fields":  []any{"str"},
 					"numbers": []any{"int"},
 				},
 			},
 			expected: map[string]any{
-				"name": "",
-				"age": 0,
-				"active": false,
-				"score": 0.0,
-				"fields": []string{"dummy"},
+				"name":    "",
+				"age":     0,
+				"active":  false,
+				"score":   0.0,
+				"fields":  []string{"dummy"},
 				"numbers": []int{0},
 			},
 		},
@@ -363,7 +363,7 @@ func TestDummyDataGeneration(t *testing.T) {
 
 			for key, expectedValue := range tt.expected {
 				_, exists := result[key]
-				assert.True(t, exists,"key '%s' should be included in result", key)
+				assert.True(t, exists, "key '%s' should be included in result", key)
 				assert.Equal(t, expectedValue, result[key])
 			}
 		})
