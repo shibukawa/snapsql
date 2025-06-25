@@ -7,19 +7,20 @@ SnapSQL is a SQL template engine that enables dynamic SQL generation using the 2
 - **2-way SQL Format**: Write SQL templates that work as standard SQL when comments are removed
 - **Dynamic Query Building**: Add WHERE clauses, ORDER BY, and SELECT fields dynamically at runtime
 - **Security First**: Controlled modifications prevent SQL injection - only allows safe operations like field selection, simple conditions, and table suffix changes
-- **Multi-Database Support**: Works with PostgreSQL, MySQL, and SQLite databases
-- **Multi-language Support**: Runtime libraries available for Go, Java, Python, and Node.js
+- **Multi-Database Support**: Designed to work with PostgreSQL, MySQL, and SQLite databases
 - **Google CEL Integration**: Uses Common Expression Language for conditions and parameter references
-- **Prepared Statement Generation**: Generates safe prepared statements for execution
-- **Literate Programming**: Combine SQL templates with documentation, design notes, and test cases in `.snap.md` files
-- **Comprehensive Testing**: Built-in unit testing with input/output examples and mock data generation
+- **Advanced SQL Parsing**: Comprehensive SQL parser with support for complex queries, CTEs, and DML operations
+- **Template Engine**: Powerful template processing with conditional blocks, loops, and variable substitution
+- **Bulk Operations**: Support for bulk INSERT operations with dynamic field mapping
+- **Type Safety**: Strong type checking and parameter validation
 
 ## How It Works
 
 SnapSQL works with your existing database infrastructure and table schemas:
 
-1. **Build Time**: The `snapsql` tool (Go) converts SQL templates and markdown files containing SQL into intermediate JSON files containing AST and metadata
-2. **Runtime**: Language-specific libraries use the intermediate files to dynamically construct SQL queries based on runtime parameters
+1. **Build Time**: The `snapsql` tool (Go) converts SQL templates and markdown files containing SQL into intermediate JSON files containing AST and metadata *(Planned)*
+2. **Runtime**: Language-specific libraries use the intermediate files to dynamically construct SQL queries based on runtime parameters *(Planned)*
+3. **Current State**: The core SQL parser and template engine are implemented in Go
 
 **Prerequisites**: SnapSQL assumes you have an existing database with tables already created. It works with PostgreSQL, MySQL, and SQLite databases.
 
@@ -57,40 +58,191 @@ These features work seamlessly without requiring changes to your application cod
 
 ## Template Syntax
 
-SnapSQL uses comment-based directives that don't interfere with standard SQL execution:
+SnapSQL uses comment-based directives that don't interfere with standard SQL execution, following the **2-way SQL format**:
 
 ### Control Flow Directives
 - `/*# if condition */` - Conditional blocks
-- `/*# elseif condition */` - Alternative conditions
+- `/*# elseif condition */` - Alternative conditions (Note: uses `elseif`, not `else if`)
 - `/*# else */` - Default condition
-- `/*# endif */` - End conditional blocks
+- `/*# end */` - End conditional blocks (unified ending for all control structures)
 - `/*# for variable : list */` - Loop over collections
 - `/*# end */` - End loop blocks
 
 ### Variable Substitution
-- `/*= variable */` - Variable placeholders
+- `/*= variable */` - Variable placeholders with dummy literals for 2-way SQL compatibility
+
+### 2-Way SQL Format
+
+SnapSQL templates are designed to work as **valid SQL** when comments are removed, enabling:
+- **IDE Support**: Full syntax highlighting and IntelliSense
+- **SQL Linting**: Standard SQL tools can validate basic syntax
+- **Development Testing**: Execute templates with dummy values during development
+
+#### Variable Substitution with Dummy Literals
+
+Variables include dummy literals that make the SQL valid when comments are stripped:
+
+```sql
+-- Template with dummy literals
+SELECT * FROM users_/*= table_suffix */test
+WHERE active = /*= filters.active */true
+  AND department IN (/*= filters.departments */'sales', 'marketing')
+LIMIT /*= pagination.limit */10;
+
+-- Valid SQL when comments removed
+SELECT * FROM users_test
+WHERE active = true
+  AND department IN ('sales', 'marketing')
+LIMIT 10;
+
+-- Runtime result with actual parameters
+SELECT * FROM users_prod
+WHERE active = false
+  AND department IN ('engineering', 'design', 'product')
+LIMIT 20;
+```
+
+#### Automatic Runtime Adjustments
+
+The runtime automatically handles:
+- **Trailing Commas**: Removed when conditional fields are excluded
+- **Empty Clauses**: WHERE/ORDER BY clauses removed when all conditions are false
+- **Array Expansion**: `/*= array_var */` expands to `'val1', 'val2', 'val3'`
+- **Dummy Literal Removal**: Development dummy values replaced with actual parameters
+- **Conditional Clause Removal**: Entire clauses removed when variables are null/empty
+  - `WHERE` clause: Removed when all conditions are null/empty
+  - `ORDER BY` clause: Removed when sort fields are null/empty
+  - `LIMIT` clause: Removed when limit is null or negative
+  - `OFFSET` clause: Removed when offset is null or negative
+  - `AND/OR` conditions: Individual conditions removed when variables are null/empty
+
+### Template Formatting Guidelines
+
+1. **Indentation in Control Blocks**: Content inside `/*# if */` and `/*# for */` blocks should be indented one level
+2. **Line Breaks for Readability**: Start `/*# for */` blocks on new lines for better visibility
+3. **Consistent Structure**: Maintain consistent indentation to improve template readability
+
+```sql
+-- Good formatting with proper indentation
+SELECT 
+    id,
+    name,
+    /*# if include_email */
+        email,
+    /*# end */
+    /*# for field : additional_fields */
+        /*= field */
+    /*# end */
+FROM users
+ORDER BY 
+    /*# for sort : sort_fields */
+        /*= sort.field */ /*= sort.direction */
+    /*# end */name ASC;
+
+-- Avoid: Poor formatting without indentation
+SELECT id, name, /*# if include_email */email,/*# end */ /*# for field : additional_fields *//*= field *//*# end */ FROM users;
+```
+
+### Template Writing Guidelines
+
+1. **Place commas after elements**: Write `field,` not `,field` for easier template authoring
+2. **Include dummy literals**: Ensure SQL remains valid when comments are removed
+3. **Use consistent endings**: Always use `/*# end */` for all control structures
+4. **Leverage automatic adjustments**: Don't worry about trailing commas or empty clauses
+5. **Omit obvious conditions**: Skip `/*# if */` blocks for automatic clause removal (WHERE, ORDER BY, LIMIT, OFFSET)
+
+### Automatic Clause Removal Examples
+
+```sql
+-- You can write simply:
+WHERE active = /*= filters.active */true
+    AND department IN (/*= filters.departments */'sales', 'marketing')
+ORDER BY 
+    /*# for sort : sort_fields */
+        /*= sort.field */ /*= sort.direction */
+    /*# end */name ASC
+LIMIT /*= pagination.limit */10
+OFFSET /*= pagination.offset */5
+
+-- Instead of verbose conditional blocks:
+/*# if filters.active */
+WHERE active = /*= filters.active */
+    /*# if filters.departments */
+    AND department IN (/*= filters.departments */)
+    /*# end */
+/*# end */
+/*# if sort_fields */
+ORDER BY /*# for sort : sort_fields *//*= sort.field */ /*= sort.direction *//*# end */
+/*# end */
+/*# if pagination.limit > 0 */
+LIMIT /*= pagination.limit */
+/*# end */
+```
 
 ### Example Template
 
 ```sql
 SELECT 
     id,
-    name
-    /*# if user.permissions.includes("email") */,
-    email
-    /*# elseif user.permissions.includes("contact") */,
-    phone
-    /*# else */,
-    'hidden' as contact_info
-    /*# endif */
-    /*# for field : additional_fields */,
-    /*= field */
+    name,
+    /*# if include_email */
+        email,
     /*# end */
-FROM user_log_/*= table_suffix */
-/*# if filters.search != "" */
-WHERE name LIKE /*= filters.search */'%example'
-/*# endif */
-ORDER BY /*= sort_config.field */
+    /*# if include_profile */
+        profile_image,
+        bio
+    /*# end */
+    /*# for field : additional_fields */
+        /*= field */
+    /*# end */
+FROM users_/*= table_suffix */test
+WHERE active = /*= filters.active */true
+    AND department IN (/*= filters.departments */'sales', 'marketing')
+ORDER BY 
+    /*# for sort : sort_fields */
+        /*= sort.field */ /*= sort.direction */
+    /*# end */name ASC
+LIMIT /*= pagination.limit */10
+OFFSET /*= pagination.offset */5;
+```
+
+### Bulk Insert Example
+
+SnapSQL supports bulk INSERT operations with multiple VALUES clauses:
+
+```sql
+-- Basic bulk insert
+INSERT INTO users (name, email, created_at) 
+VALUES 
+    ('John Doe', 'john@example.com', NOW()),
+    ('Jane Smith', 'jane@example.com', NOW()),
+    ('Bob Wilson', 'bob@example.com', NOW());
+
+-- Dynamic bulk insert with SnapSQL variables
+INSERT INTO products (name, price, category_id) 
+VALUES 
+    (/*= product1.name */'Product A', /*= product1.price */100.50, /*= product1.category_id */1),
+    (/*= product2.name */'Product B', /*= product2.price */200.75, /*= product2.category_id */2),
+    (/*= product3.name */'Product C', /*= product3.price */150.25, /*= product3.category_id */1);
+
+-- Conditional bulk insert
+INSERT INTO orders (user_id, product_id, quantity) 
+VALUES 
+    (/*= order.user_id */1, /*= order.product_id */1, /*= order.quantity */2)
+    /*# if include_bulk_orders */
+    , (/*= bulk_order1.user_id */2, /*= bulk_order1.product_id */2, /*= bulk_order1.quantity */1)
+    , (/*= bulk_order2.user_id */3, /*= bulk_order2.product_id */3, /*= bulk_order2.quantity */5)
+    /*# end */;
+
+-- Map array bulk insert (automatic expansion)
+-- When 'products' is []map[string]any, it automatically expands to multiple VALUES clauses
+INSERT INTO products (name, price, category_id) 
+VALUES /*= products */('Product A', 100.50, 1);
+
+-- Single map insert (non-bulk)
+-- When 'product' is map[string]any, it's treated as regular variables
+INSERT INTO products (name, price, category_id) 
+VALUES (/*= product.name */'Product A', /*= product.price */100.50, /*= product.category_id */1);
 ```
 
 When comments are removed, this becomes valid SQL:
@@ -98,12 +250,32 @@ When comments are removed, this becomes valid SQL:
 SELECT 
     id,
     name,
-    email,
-    field1,
-    field2
-FROM user_log_202412
-WHERE name LIKE '%example'
-ORDER BY created_at
+        email,
+        profile_image,
+        bio
+        field1
+FROM users_test
+WHERE active = true
+    AND department IN ('sales', 'marketing')
+ORDER BY 
+        name ASC, created_at DESC
+    name ASC
+LIMIT 10
+OFFSET 5;
+```
+
+Runtime result with actual parameters:
+```sql
+SELECT 
+    id,
+    name,
+    email
+FROM users_prod
+WHERE active = false
+    AND department IN ('engineering', 'design', 'product')
+ORDER BY created_at DESC
+LIMIT 20
+OFFSET 40;
 ```
 
 ## Supported Dynamic Operations
@@ -113,29 +285,44 @@ ORDER BY created_at
 - Adding/removing ORDER BY clauses  
 - Adding/removing SELECT fields
 - Table name suffix modification (e.g., `users_test`, `log_202412`)
+- Array expansion in IN clauses (e.g., `/*= departments */` → `'sales', 'marketing', 'engineering'`)
 - Trailing comma and parentheses control
 - Conditional removal of entire clauses (WHERE, ORDER BY)
+- **Bulk INSERT operations** with multiple VALUES clauses
+- **Dynamic DML operations** (INSERT, UPDATE, DELETE with SnapSQL variables)
 
 ### ❌ Restricted Operations
 - Major structural changes to SQL
 - Dynamic table name changes (except suffixes)
 - Arbitrary SQL injection
 
+### Runtime Processing Features
+
+#### Automatic Cleanup
+- **Trailing Commas**: Automatically removed when conditional fields are excluded
+- **Empty WHERE Clauses**: Entire WHERE clause removed when no conditions are active
+- **Empty ORDER BY**: ORDER BY clause removed when no sort fields are specified
+- **Dummy Literals**: Development dummy values replaced with actual runtime values
+
+#### Array Processing
+- **IN Clause Expansion**: Array variables automatically expand to comma-separated quoted values
+- **Bulk Operations**: Support for bulk insert operations with dynamic field mapping
+
 ## Installation
 
-### Build Tool
+### Build Tool *(Planned)*
 ```bash
 go install github.com/shibukawa/snapsql@latest
 ```
 
-### Runtime Libraries
+### Runtime Libraries *(Planned)*
 
 #### Go
 ```bash
 go get github.com/shibukawa/snapsql
 ```
 
-#### Java
+#### Java *(Planned)*
 ```xml
 <dependency>
     <groupId>com.github.shibukawa</groupId>
@@ -144,14 +331,22 @@ go get github.com/shibukawa/snapsql
 </dependency>
 ```
 
-#### Python
+#### Python *(Planned)*
 ```bash
 pip install snapsql-python
 ```
 
-#### Node.js
+#### Node.js *(Planned)*
 ```bash
 npm install snapsql-js
+```
+
+### Current Usage (Development)
+
+Currently, you can use SnapSQL as a Go library for parsing and processing SQL templates:
+
+```bash
+go get github.com/shibukawa/snapsql
 ```
 
 ## Usage
@@ -168,14 +363,14 @@ SELECT
     name
     /*# if include_email */,
     email
-    /*# endif */
-FROM users_/*= env */
+    /*# end */
+FROM users_/*= env */test
 /*# if filters.active */
-WHERE active = true
-/*# endif */
+WHERE active = /*= filters.active */true
+/*# end */
 /*# if sort_by != "" */
-ORDER BY /*= sort_by */
-/*# endif */
+ORDER BY /*= sort_by */name
+/*# end */
 ```
 
 #### Literate Programming with Markdown (`.snap.md`)
@@ -270,15 +465,15 @@ users:
 ```
 ````
 
-### 2. Build Intermediate Files
+### 2. Build Intermediate Files *(Planned)*
 
 ```bash
 snapsql build -i queries/ -o generated/
 ```
 
-### 3. Use Runtime Libraries
+### 3. Use Runtime Libraries *(Planned)*
 
-#### Go Example
+#### Go Example *(Planned)*
 ```go
 package main
 
@@ -308,7 +503,7 @@ func main() {
 }
 ```
 
-#### Python Example
+#### Python Example *(Planned)*
 ```python
 import snapsql
 
@@ -327,6 +522,36 @@ query, args = engine.build("users", params)
 
 # Execute with your database driver
 cursor.execute(query, args)
+```
+
+### Current Usage (Development)
+
+Currently, you can use SnapSQL as a Go library for parsing SQL templates:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/shibukawa/snapsql/parser"
+    "github.com/shibukawa/snapsql/tokenizer"
+)
+
+func main() {
+    sql := `SELECT id, name FROM users WHERE active = /*= active */true`
+    
+    tokens, err := tokenizer.Tokenize(sql)
+    if err != nil {
+        panic(err)
+    }
+    
+    ast, err := parser.Parse(tokens)
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Printf("Parsed AST: %+v\n", ast)
+}
 ```
 
 ## Development Status
