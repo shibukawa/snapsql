@@ -44,38 +44,38 @@ func TestRecursiveParameterStructure(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Parse JSON to verify structure
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(jsonData, &result)
 	assert.NoError(t, err)
 
 	// Check interface schema
-	interfaceSchema := result["interface_schema"].(map[string]interface{})
+	interfaceSchema := result["interface_schema"].(map[string]any)
 	assert.Equal(t, "ComplexQuery", interfaceSchema["name"])
 	assert.Equal(t, "complexQuery", interfaceSchema["function_name"])
 
 	// Check parameters structure
-	parameters := interfaceSchema["parameters"].([]interface{})
+	parameters := interfaceSchema["parameters"].([]any)
 	assert.Equal(t, 3, len(parameters))
 
 	// Check simple parameter
-	activeParam := parameters[0].(map[string]interface{})
+	activeParam := parameters[0].(map[string]any)
 	assert.Equal(t, "active", activeParam["name"])
 	assert.Equal(t, "bool", activeParam["type"])
 	assert.Zero(t, activeParam["children"]) // No children for simple type
 
 	// Check nested object parameter
-	filtersParam := parameters[1].(map[string]interface{})
+	filtersParam := parameters[1].(map[string]any)
 	assert.Equal(t, "filters", filtersParam["name"])
 	assert.Equal(t, "object", filtersParam["type"])
 
 	// Check nested object's children (order may vary for map)
-	filtersChildren := filtersParam["children"].([]interface{})
+	filtersChildren := filtersParam["children"].([]any)
 	assert.Equal(t, 3, len(filtersChildren)) // name, department, permissions
 
 	// Find children by name (since map order is not guaranteed)
-	childrenByName := make(map[string]map[string]interface{})
+	childrenByName := make(map[string]map[string]any)
 	for _, child := range filtersChildren {
-		childMap := child.(map[string]interface{})
+		childMap := child.(map[string]any)
 		childrenByName[childMap["name"].(string)] = childMap
 	}
 
@@ -91,10 +91,10 @@ func TestRecursiveParameterStructure(t *testing.T) {
 	assert.Equal(t, "department", departmentChild["name"])
 	assert.Equal(t, "array", departmentChild["type"])
 
-	departmentChildren := departmentChild["children"].([]interface{})
+	departmentChildren := departmentChild["children"].([]any)
 	assert.Equal(t, 1, len(departmentChildren))
-	assert.Equal(t, "o1", departmentChildren[0].(map[string]interface{})["name"])
-	assert.Equal(t, "string", departmentChildren[0].(map[string]interface{})["type"])
+	assert.Equal(t, "o1", departmentChildren[0].(map[string]any)["name"])
+	assert.Equal(t, "string", departmentChildren[0].(map[string]any)["type"])
 
 	// Check permissions child
 	permissionsChild, permExists := childrenByName["permissions"]
@@ -102,18 +102,18 @@ func TestRecursiveParameterStructure(t *testing.T) {
 	assert.Equal(t, "permissions", permissionsChild["name"])
 	assert.Equal(t, "object", permissionsChild["type"])
 
-	permissionsChildren := permissionsChild["children"].([]interface{})
+	permissionsChildren := permissionsChild["children"].([]any)
 	assert.Equal(t, 2, len(permissionsChildren)) // read, write
 
 	// Check array parameter
-	sortFieldsParam := parameters[2].(map[string]interface{})
+	sortFieldsParam := parameters[2].(map[string]any)
 	assert.Equal(t, "sort_fields", sortFieldsParam["name"])
 	assert.Equal(t, "array", sortFieldsParam["type"])
 
-	sortFieldsChildren := sortFieldsParam["children"].([]interface{})
+	sortFieldsChildren := sortFieldsParam["children"].([]any)
 	assert.Equal(t, 1, len(sortFieldsChildren))
-	assert.Equal(t, "o1", sortFieldsChildren[0].(map[string]interface{})["name"])
-	assert.Equal(t, "string", sortFieldsChildren[0].(map[string]interface{})["type"])
+	assert.Equal(t, "o1", sortFieldsChildren[0].(map[string]any)["name"])
+	assert.Equal(t, "string", sortFieldsChildren[0].(map[string]any)["type"])
 }
 
 func TestParameterTypeConversion(t *testing.T) {

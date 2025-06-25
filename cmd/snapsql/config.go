@@ -47,9 +47,9 @@ type GenerationConfig struct {
 
 // GeneratorConfig represents a single generator configuration
 type GeneratorConfig struct {
-	Output   string                 `yaml:"output"`
-	Enabled  bool                   `yaml:"enabled"`
-	Settings map[string]interface{} `yaml:"settings,omitempty"`
+	Output   string         `yaml:"output"`
+	Enabled  bool           `yaml:"enabled"`
+	Settings map[string]any `yaml:"settings,omitempty"`
 }
 
 // LanguageConfig represents language-specific generation settings (deprecated, kept for backward compatibility)
@@ -124,7 +124,7 @@ func getDefaultConfig() *Config {
 				"json": {
 					Output:  "./generated",
 					Enabled: true,
-					Settings: map[string]interface{}{
+					Settings: map[string]any{
 						"pretty":           true,
 						"include_metadata": true,
 					},
@@ -132,14 +132,14 @@ func getDefaultConfig() *Config {
 				"go": {
 					Output:  "./internal/queries",
 					Enabled: false,
-					Settings: map[string]interface{}{
+					Settings: map[string]any{
 						"package": "queries",
 					},
 				},
 				"typescript": {
 					Output:  "./src/generated",
 					Enabled: false,
-					Settings: map[string]interface{}{
+					Settings: map[string]any{
 						"types": true,
 					},
 				},
@@ -175,7 +175,7 @@ func applyDefaults(config *Config) {
 		config.Generation.Generators["json"] = GeneratorConfig{
 			Output:  "./generated",
 			Enabled: true,
-			Settings: map[string]interface{}{
+			Settings: map[string]any{
 				"pretty":           true,
 				"include_metadata": true,
 			},

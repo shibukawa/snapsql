@@ -208,7 +208,7 @@ func TestWriteJSON(t *testing.T) {
 	assert.True(t, len(prettyJSON) > len(compactJSON))
 
 	// Verify both contain the same data
-	var compactData, prettyData map[string]interface{}
+	var compactData, prettyData map[string]any
 	err = json.Unmarshal([]byte(compactJSON), &compactData)
 	assert.NoError(t, err)
 	err = json.Unmarshal([]byte(prettyJSON), &prettyData)
@@ -226,11 +226,11 @@ func TestToJSON(t *testing.T) {
 	assert.NotZero(t, jsonData)
 
 	// Verify JSON structure
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(jsonData, &result)
 	assert.NoError(t, err)
 
-	source, ok := result["source"].(map[string]interface{})
+	source, ok := result["source"].(map[string]any)
 	assert.True(t, ok)
 	assert.Equal(t, "test.sql", source["file"])
 	assert.Equal(t, "SELECT id FROM users", source["content"])
@@ -318,21 +318,21 @@ func TestIntegrationWithSimpleSQL(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify JSON structure
-	var result map[string]interface{}
+	var result map[string]any
 	err = json.Unmarshal(jsonData, &result)
 	assert.NoError(t, err)
 
 	// Check source
-	source := result["source"].(map[string]interface{})
+	source := result["source"].(map[string]any)
 	assert.Equal(t, "test.sql", source["file"])
 	assert.Equal(t, sql, source["content"].(string))
 
 	// Check AST
-	astResult := result["ast"].(map[string]interface{})
+	astResult := result["ast"].(map[string]any)
 	assert.Equal(t, "SELECT_STATEMENT", astResult["type"])
 
 	// Verify position format
-	pos := astResult["pos"].([]interface{})
+	pos := astResult["pos"].([]any)
 	assert.Equal(t, 3, len(pos))
 	assert.Equal(t, 1.0, pos[0]) // line
 	assert.Equal(t, 1.0, pos[1]) // column

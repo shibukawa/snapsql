@@ -42,14 +42,14 @@ type ParsedMarkdown struct {
 }
 
 // Parameters represents the parsed parameters section
-type Parameters map[string]interface{}
+type Parameters map[string]any
 
 // TestCase represents a single test case
 type TestCase struct {
 	Name           string
-	Fixture        map[string]interface{}
-	Parameters     map[string]interface{}
-	ExpectedResult interface{}
+	Fixture        map[string]any
+	Parameters     map[string]any
+	ExpectedResult any
 }
 
 // Parser handles markdown parsing using goldmark
@@ -111,7 +111,7 @@ func (p *Parser) Parse(reader io.Reader) (*ParsedMarkdown, error) {
 }
 
 // extractFrontMatter extracts front matter from metadata
-func (p *Parser) extractFrontMatter(metaData map[string]interface{}) (*FrontMatter, error) {
+func (p *Parser) extractFrontMatter(metaData map[string]any) (*FrontMatter, error) {
 	if metaData == nil {
 		return nil, ErrInvalidFrontMatter
 	}
@@ -371,7 +371,7 @@ func (p *Parser) parseTestCase(name, content string) (*TestCase, error) {
 
 	// Extract Fixture
 	if fixture := p.extractSectionContent(content, "Fixture"); fixture != "" {
-		var fixtureData map[string]interface{}
+		var fixtureData map[string]any
 		if err := yaml.Unmarshal([]byte(fixture), &fixtureData); err != nil {
 			return nil, fmt.Errorf("invalid fixture YAML: %w", err)
 		}
@@ -380,7 +380,7 @@ func (p *Parser) parseTestCase(name, content string) (*TestCase, error) {
 
 	// Extract Parameters
 	if params := p.extractSectionContent(content, "Parameters"); params != "" {
-		var paramData map[string]interface{}
+		var paramData map[string]any
 		if err := yaml.Unmarshal([]byte(params), &paramData); err != nil {
 			return nil, fmt.Errorf("invalid parameters YAML: %w", err)
 		}
@@ -389,7 +389,7 @@ func (p *Parser) parseTestCase(name, content string) (*TestCase, error) {
 
 	// Extract Expected Result
 	if result := p.extractSectionContent(content, "Expected Result"); result != "" {
-		var resultData interface{}
+		var resultData any
 		if err := yaml.Unmarshal([]byte(result), &resultData); err != nil {
 			return nil, fmt.Errorf("invalid expected result YAML: %w", err)
 		}

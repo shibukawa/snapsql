@@ -220,7 +220,7 @@ func Users(ctx context.Context, db *sql.DB, params UsersParams) (*sql.Rows, erro
     return db.QueryContext(ctx, query, args...)
 }
 
-func buildUsersQuery(params UsersParams) (string, []interface{}) {
+func buildUsersQuery(params UsersParams) (string, []any) {
     // Generated query building logic
     // ...
 }

@@ -484,10 +484,10 @@ import (
 func main() {
     engine := snapsql.New("generated/")
     
-    params := map[string]interface{}{
+    params := map[string]any{
         "include_email": true,
         "env": "prod",
-        "filters": map[string]interface{}{
+        "filters": map[string]any{
             "active": true,
         },
         "sort_by": "created_at",

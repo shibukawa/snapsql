@@ -38,9 +38,9 @@ type Parameter struct {
 
 // ASTNode represents a serializable AST node
 type ASTNode struct {
-	Type     string                 `json:"type"`
-	Pos      [3]int                 `json:"pos"`
-	Children map[string]interface{} `json:",inline"`
+	Type     string         `json:"type"`
+	Pos      [3]int         `json:"pos"`
+	Children map[string]any `json:",inline"`
 }
 
 // NewFormat creates a new intermediate format instance
@@ -194,7 +194,7 @@ func convertASTNode(node parser.AstNode) ASTNode {
 	astNode := ASTNode{
 		Type:     node.Type().String(),
 		Pos:      [3]int{pos.Line, pos.Column, pos.Offset},
-		Children: make(map[string]interface{}),
+		Children: make(map[string]any),
 	}
 
 	// Add node-specific fields based on type

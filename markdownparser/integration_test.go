@@ -49,7 +49,7 @@ func TestParseValidMarkdownFile(t *testing.T) {
 
 	filters, exists := params["filters"]
 	assert.True(t, exists)
-	filtersMap, ok := filters.(map[string]interface{})
+	filtersMap, ok := filters.(map[string]any)
 	assert.True(t, ok)
 	assert.Equal(t, "bool", filtersMap["active"])
 
@@ -67,7 +67,7 @@ func TestParseValidMarkdownFile(t *testing.T) {
 	// Check fixture data
 	users, exists := testCases[0].Fixture["users"]
 	assert.True(t, exists)
-	userList, ok := users.([]interface{})
+	userList, ok := users.([]any)
 	assert.True(t, ok)
 	assert.Equal(t, 3, len(userList))
 
@@ -77,7 +77,7 @@ func TestParseValidMarkdownFile(t *testing.T) {
 	assert.Equal(t, 123, userID)
 
 	// Check expected result
-	expectedResult, ok := testCases[0].ExpectedResult.([]interface{})
+	expectedResult, ok := testCases[0].ExpectedResult.([]any)
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(expectedResult))
 }
@@ -135,21 +135,21 @@ func TestParseParametersFromRealFile(t *testing.T) {
 	// Check nested structures
 	filters, exists := params["filters"]
 	assert.True(t, exists)
-	filtersMap, ok := filters.(map[string]interface{})
+	filtersMap, ok := filters.(map[string]any)
 	assert.True(t, ok)
 	assert.Equal(t, "bool", filtersMap["active"])
 
 	departments, exists := filtersMap["departments"]
 	assert.True(t, exists)
-	departmentList, ok := departments.([]interface{})
+	departmentList, ok := departments.([]any)
 	assert.True(t, ok)
-	assert.Equal(t, []interface{}{"str"}, departmentList)
+	assert.Equal(t, []any{"str"}, departmentList)
 
 	assert.Equal(t, "str", filtersMap["name_pattern"])
 
 	pagination, exists := params["pagination"]
 	assert.True(t, exists)
-	paginationMap, ok := pagination.(map[string]interface{})
+	paginationMap, ok := pagination.(map[string]any)
 	assert.True(t, ok)
 	assert.Equal(t, "int", paginationMap["limit"])
 	assert.Equal(t, "int", paginationMap["offset"])
@@ -177,12 +177,12 @@ func TestParseTestCasesFromRealFile(t *testing.T) {
 	// Check fixture
 	users, exists := case1.Fixture["users"]
 	assert.True(t, exists)
-	userList, ok := users.([]interface{})
+	userList, ok := users.([]any)
 	assert.True(t, ok)
 	assert.Equal(t, 3, len(userList))
 
 	// Check first user in fixture
-	firstUser, ok := userList[0].(map[string]interface{})
+	firstUser, ok := userList[0].(map[string]any)
 	assert.True(t, ok)
 	assert.Equal(t, 1, firstUser["id"])
 	assert.Equal(t, "John Doe", firstUser["name"])
@@ -199,21 +199,21 @@ func TestParseTestCasesFromRealFile(t *testing.T) {
 	// Check filters in parameters
 	filters, exists := case1.Parameters["filters"]
 	assert.True(t, exists)
-	filtersMap, ok := filters.(map[string]interface{})
+	filtersMap, ok := filters.(map[string]any)
 	assert.True(t, ok)
 	assert.Equal(t, true, filtersMap["active"])
 	assert.Equal(t, nil, filtersMap["name_pattern"])
 
 	departments, exists := filtersMap["departments"]
 	assert.True(t, exists)
-	departmentList, ok := departments.([]interface{})
+	departmentList, ok := departments.([]any)
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(departmentList))
 	assert.Equal(t, "engineering", departmentList[0])
 	assert.Equal(t, "design", departmentList[1])
 
 	// Check expected result
-	expectedResult, ok := case1.ExpectedResult.([]interface{})
+	expectedResult, ok := case1.ExpectedResult.([]any)
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(expectedResult))
 
@@ -224,7 +224,7 @@ func TestParseTestCasesFromRealFile(t *testing.T) {
 	// Check that case2 has different fixture data
 	users2, exists := case2.Fixture["users"]
 	assert.True(t, exists)
-	userList2, ok := users2.([]interface{})
+	userList2, ok := users2.([]any)
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(userList2))
 
