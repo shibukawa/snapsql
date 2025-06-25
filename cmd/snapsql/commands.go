@@ -96,7 +96,7 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 			jsonGen := GeneratorConfig{
 				Output:  "./generated",
 				Enabled: true,
-				Settings: map[string]interface{}{
+				Settings: map[string]any{
 					"pretty":           true,
 					"include_metadata": true,
 				},
@@ -366,40 +366,32 @@ func (g *GenerateCmd) parseAndValidateSQL(format *intermediate.IntermediateForma
 	dialect := tokenizer.DetectDialect(content)
 	sqlTokenizer := tokenizer.NewSqlTokenizer(content, dialect)
 
-	// Get all tokens
+	// Get all tokens - parse only once
 	tokens, err := sqlTokenizer.AllTokens()
 	if err != nil {
 		return fmt.Errorf("tokenization failed: %w", err)
 	}
 
-	// Extract interface schema first
-	var schema *parser.InterfaceSchema
+	// Extract interface schema from SQL tokens
+	schema, err := parser.NewInterfaceSchemaFromSQL(tokens)
+	if err != nil {
+		if ctx.Verbose {
+			color.Yellow("Failed to parse interface schema: %v", err)
+		}
+		// Continue with nil schema if extraction fails
+	} else if schema != nil {
+		// Set schema in intermediate format for output
+		format.SetInterfaceSchema(schema)
 
-	// Look for comment-based schema (/*@ ... @*/)
-	var schemaYAML string
-	if start := strings.Index(content, "/*@"); start != -1 {
-		if end := strings.Index(content[start:], "@*/"); end != -1 {
-			schemaYAML = content[start+3 : start+end]
-
-			// Parse interface schema
-			schema, err = parser.NewInterfaceSchemaFromFrontMatter(schemaYAML)
-			if err != nil {
-				return fmt.Errorf("failed to parse interface schema: %w", err)
-			}
-
-			// Set schema in intermediate format for output
-			format.SetInterfaceSchema(schema)
-
-			if ctx.Verbose {
-				color.Green("Interface schema parsed successfully")
-			}
+		if ctx.Verbose {
+			color.Green("Interface schema parsed successfully")
 		}
 	}
 
 	// Create namespace
 	ns := parser.NewNamespace(schema)
 
-	// Create parser with schema
+	// Create parser with schema - reuse the tokens
 	sqlParser := parser.NewSqlParser(tokens, ns, schema)
 
 	// Parse SQL
@@ -721,7 +713,7 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 				dialect := tokenizer.DetectDialect(sqlContent)
 				sqlTokenizer := tokenizer.NewSqlTokenizer(sqlContent, dialect)
 
-				// Get all tokens
+				// Get all tokens - parse only once
 				tokens, err := sqlTokenizer.AllTokens()
 				if err != nil {
 					return fmt.Errorf("tokenization failed: %w", err)
@@ -730,7 +722,7 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 				// Create namespace with schema
 				ns := parser.NewNamespace(schema)
 
-				// Create parser with schema
+				// Create parser with schema - reuse the tokens
 				sqlParser := parser.NewSqlParser(tokens, ns, schema)
 
 				// Parse SQL
@@ -773,13 +765,13 @@ func generateFunctionName(name string) string {
 }
 
 // convertParameterType converts a parameter type from markdown to intermediate format
-func convertParameterType(paramType interface{}) string {
+func convertParameterType(paramType any) string {
 	switch v := paramType.(type) {
 	case string:
 		return v
-	case map[string]interface{}:
+	case map[string]any:
 		return "object"
-	case []interface{}:
+	case []any:
 		if len(v) > 0 {
 			return "array"
 		}
