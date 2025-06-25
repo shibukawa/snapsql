@@ -33,6 +33,8 @@ linters:
     - maintidx
     - forbidigo
     - gocritic
+    - testifylint
+    - exhaustive
   settings:
     tagliatelle:
       case:
@@ -46,6 +48,8 @@ linters:
         linters:
           - forcetypeassert
           - noctx
+          - prealloc
+          - err113
       - path: main.go
         linters:
           - forbidigo
