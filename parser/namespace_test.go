@@ -17,14 +17,14 @@ func TestNamespace(t *testing.T) {
 		},
 	}
 	ns := NewNamespace(ifs)
-	ns.SetVariable("table_suffix", "prod")
-	ns.SetVariable("tenant_id", "12345")
+	ns.SetConstant("table_suffix", "prod")
+	ns.SetConstant("tenant_id", "12345")
 
-	// 環境variable のvalidation
+	// 環境constant のvalidation
 	err := ns.ValidateExpression("table_suffix")
 	assert.NoError(t, err)
 
-	// Non-existent environment variable
+	// Non-existent environment constant
 	err = ns.ValidateExpression("nonexistent")
 	assert.Error(t, err)
 

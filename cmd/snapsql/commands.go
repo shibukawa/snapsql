@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
@@ -21,6 +22,7 @@ var (
 	ErrPluginNotFound         = errors.New("external generator plugin not found in PATH")
 	ErrInputFileNotExist      = errors.New("input file does not exist")
 	ErrNoInterfaceSchema      = errors.New("no interface schema found")
+	ErrNoASTGenerated         = errors.New("validation failed: no AST generated from template")
 )
 
 // GenerateCmd represents the generate command
@@ -294,11 +296,30 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 }
 
 // processTemplateFile processes a single template file and generates intermediate JSON
-func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, _ []string, config *Config, ctx *Context) error {
+func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantFiles []string, config *Config, ctx *Context) error {
 	// Read the template file
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Determine file type and process accordingly
+	ext := strings.ToLower(filepath.Ext(inputFile))
+
+	var parseResult *ParseResult
+
+	if ext == ".md" {
+		// Process Markdown file
+		parseResult, err = g.parseMarkdownFile(string(content), constantFiles, ctx)
+		if err != nil {
+			return fmt.Errorf("failed to parse markdown file: %w", err)
+		}
+	} else {
+		// Process SQL file
+		parseResult, err = g.parseSQLFile(string(content), constantFiles, ctx)
+		if err != nil {
+			return fmt.Errorf("failed to parse SQL file: %w", err)
+		}
 	}
 
 	// Create intermediate format
@@ -307,26 +328,18 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, _ []strin
 	// Set source information
 	format.SetSource(inputFile, string(content))
 
-	// TODO: Set constant files if provided
-	// if len(constantFiles) > 0 {
-	//     format.SetConstantFiles(constantFiles)
-	// }
-
-	// Determine file type and process accordingly
-	ext := strings.ToLower(filepath.Ext(inputFile))
-
-	if ext == ".md" {
-		// Process Markdown file
-		if err := g.processMarkdownFile(format, string(content), ctx); err != nil {
-			return fmt.Errorf("failed to process markdown file: %w", err)
+	// Validate parse result if validation is enabled
+	if parseResult != nil {
+		if err := g.validateParseResult(parseResult, ctx); err != nil {
+			return fmt.Errorf("validation failed: %w", err)
 		}
-	} else {
-		// Process SQL file
-		// Parse SQL if validation is enabled or if we want to include AST
-		if g.Validate {
-			if err := g.parseAndValidateSQL(format, string(content), ctx); err != nil {
-				return fmt.Errorf("validation failed: %w", err)
-			}
+
+		// Set parse results in intermediate format
+		if parseResult.Schema != nil {
+			format.SetInterfaceSchema(parseResult.Schema)
+		}
+		if parseResult.AST != nil {
+			format.SetAST(parseResult.AST)
 		}
 	}
 
@@ -360,8 +373,14 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, _ []strin
 	return nil
 }
 
-// parseAndValidateSQL parses SQL and adds AST to intermediate format
-func (g *GenerateCmd) parseAndValidateSQL(format *intermediate.IntermediateFormat, content string, ctx *Context) error {
+// ParseResult holds the result of parsing a template file
+type ParseResult struct {
+	Schema *parser.InterfaceSchema
+	AST    parser.AstNode
+}
+
+// parseSQLFile parses SQL content and returns parse results
+func (g *GenerateCmd) parseSQLFile(content string, constantFiles []string, ctx *Context) (*ParseResult, error) {
 	// Detect dialect and create tokenizer
 	dialect := tokenizer.DetectDialect(content)
 	sqlTokenizer := tokenizer.NewSqlTokenizer(content, dialect)
@@ -369,7 +388,7 @@ func (g *GenerateCmd) parseAndValidateSQL(format *intermediate.IntermediateForma
 	// Get all tokens - parse only once
 	tokens, err := sqlTokenizer.AllTokens()
 	if err != nil {
-		return fmt.Errorf("tokenization failed: %w", err)
+		return nil, fmt.Errorf("tokenization failed: %w", err)
 	}
 
 	// Extract interface schema from SQL tokens
@@ -379,17 +398,22 @@ func (g *GenerateCmd) parseAndValidateSQL(format *intermediate.IntermediateForma
 			color.Yellow("Failed to parse interface schema: %v", err)
 		}
 		// Continue with nil schema if extraction fails
-	} else if schema != nil {
-		// Set schema in intermediate format for output
-		format.SetInterfaceSchema(schema)
-
-		if ctx.Verbose {
-			color.Green("Interface schema parsed successfully")
-		}
+	} else if schema != nil && ctx.Verbose {
+		color.Green("Interface schema parsed successfully")
 	}
 
 	// Create namespace
 	ns := parser.NewNamespace(schema)
+
+	// Load constant files if provided
+	if len(constantFiles) > 0 {
+		if err := loadConstantFiles(ns, constantFiles); err != nil {
+			return nil, fmt.Errorf("failed to load constant files: %w", err)
+		}
+		if ctx.Verbose {
+			color.Green("Loaded %d constant files", len(constantFiles))
+		}
+	}
 
 	// Create parser with schema - reuse the tokens
 	sqlParser := parser.NewSqlParser(tokens, ns, schema)
@@ -397,14 +421,28 @@ func (g *GenerateCmd) parseAndValidateSQL(format *intermediate.IntermediateForma
 	// Parse SQL
 	ast, err := sqlParser.Parse()
 	if err != nil {
-		return fmt.Errorf("parsing failed: %w", err)
+		return nil, fmt.Errorf("parsing failed: %w", err)
 	}
 
-	// Set AST in intermediate format
-	format.SetAST(ast)
+	return &ParseResult{
+		Schema: schema,
+		AST:    ast,
+	}, nil
+}
+
+// validateParseResult validates the parse result if validation is enabled
+func (g *GenerateCmd) validateParseResult(result *ParseResult, ctx *Context) error {
+	if !g.Validate {
+		return nil
+	}
+
+	// Perform validation checks
+	if result.AST == nil {
+		return ErrNoASTGenerated
+	}
 
 	if ctx.Verbose {
-		color.Green("SQL validation passed")
+		color.Green("Validation passed")
 	}
 
 	return nil
@@ -659,8 +697,8 @@ environments:
 	return writeFile(filepath.Join("constants", "database.yaml"), sampleConstants)
 }
 
-// processMarkdownFile processes a markdown file and extracts SQL and metadata
-func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateFormat, content string, ctx *Context) error {
+// parseMarkdownFile processes a markdown file and returns parse results
+func (g *GenerateCmd) parseMarkdownFile(content string, constantFiles []string, ctx *Context) (*ParseResult, error) {
 	// Create markdown parser
 	mdParser := markdownparser.NewParser()
 
@@ -668,7 +706,7 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 	reader := strings.NewReader(content)
 	parsed, err := mdParser.Parse(reader)
 	if err != nil {
-		return fmt.Errorf("failed to parse markdown: %w", err)
+		return nil, fmt.Errorf("failed to parse markdown: %w", err)
 	}
 
 	// Create interface schema from front matter and parameters
@@ -683,7 +721,7 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 		mdParser := markdownparser.NewParser()
 		params, err := mdParser.ParseParameters(paramSection.Content)
 		if err != nil {
-			return fmt.Errorf("failed to parse parameters: %w", err)
+			return nil, fmt.Errorf("failed to parse parameters: %w", err)
 		}
 
 		// Add parameters to schema
@@ -695,10 +733,22 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 	// Process schema
 	schema.ProcessSchema()
 
-	// Set schema in intermediate format for output
-	format.SetInterfaceSchema(schema)
+	// Create namespace
+	ns := parser.NewNamespace(schema)
 
-	// Extract and validate SQL from markdown
+	// Load constant files if provided
+	if len(constantFiles) > 0 {
+		if err := loadConstantFiles(ns, constantFiles); err != nil {
+			return nil, fmt.Errorf("failed to load constant files: %w", err)
+		}
+		if ctx.Verbose {
+			color.Green("Loaded %d constant files", len(constantFiles))
+		}
+	}
+
+	var ast parser.AstNode
+
+	// Extract and parse SQL from markdown
 	if sqlSection, exists := parsed.Sections["sql"]; exists {
 		sqlContent := mdParser.ExtractSQLFromCodeBlock(sqlSection.Content)
 		if sqlContent == "" {
@@ -707,41 +757,32 @@ func (g *GenerateCmd) processMarkdownFile(format *intermediate.IntermediateForma
 		}
 
 		if sqlContent != "" {
-			// Parse and validate SQL if validation is enabled
-			if g.Validate {
-				// Detect dialect and create tokenizer
-				dialect := tokenizer.DetectDialect(sqlContent)
-				sqlTokenizer := tokenizer.NewSqlTokenizer(sqlContent, dialect)
+			// Parse SQL content
+			// Detect dialect and create tokenizer
+			dialect := tokenizer.DetectDialect(sqlContent)
+			sqlTokenizer := tokenizer.NewSqlTokenizer(sqlContent, dialect)
 
-				// Get all tokens - parse only once
-				tokens, err := sqlTokenizer.AllTokens()
-				if err != nil {
-					return fmt.Errorf("tokenization failed: %w", err)
-				}
+			// Get all tokens - parse only once
+			tokens, err := sqlTokenizer.AllTokens()
+			if err != nil {
+				return nil, fmt.Errorf("tokenization failed: %w", err)
+			}
 
-				// Create namespace with schema
-				ns := parser.NewNamespace(schema)
+			// Create parser with schema - reuse the tokens
+			sqlParser := parser.NewSqlParser(tokens, ns, schema)
 
-				// Create parser with schema - reuse the tokens
-				sqlParser := parser.NewSqlParser(tokens, ns, schema)
-
-				// Parse SQL
-				ast, err := sqlParser.Parse()
-				if err != nil {
-					return fmt.Errorf("parsing failed: %w", err)
-				}
-
-				// Set AST in intermediate format
-				format.SetAST(ast)
-
-				if ctx.Verbose {
-					color.Green("SQL validation passed")
-				}
+			// Parse SQL
+			ast, err = sqlParser.Parse()
+			if err != nil {
+				return nil, fmt.Errorf("parsing failed: %w", err)
 			}
 		}
 	}
 
-	return nil
+	return &ParseResult{
+		Schema: schema,
+		AST:    ast,
+	}, nil
 }
 
 // generateFunctionName converts a space-separated name to a function name
@@ -779,4 +820,27 @@ func convertParameterType(paramType any) string {
 	default:
 		return "unknown"
 	}
+}
+
+// loadConstantFiles loads constant definition files
+func loadConstantFiles(ns *parser.Namespace, files []string) error {
+	for _, file := range files {
+		// Read constant file
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read constant file %s: %w", file, err)
+		}
+
+		// Parse YAML
+		var fileConstants map[string]any
+		if err := yaml.Unmarshal(data, &fileConstants); err != nil {
+			return fmt.Errorf("failed to parse constant file %s: %w", file, err)
+		}
+
+		// Merge constants
+		for k, v := range fileConstants {
+			ns.SetConstant(k, v) // Set in namespace for validation
+		}
+	}
+	return nil
 }

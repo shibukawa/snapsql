@@ -64,7 +64,7 @@ OFFSET /*= pagination.offset */0;`
 	assert.NoError(t, err)
 
 	ns := NewNamespace(is)
-	ns.SetVariable("table_suffix", "prod")
+	ns.SetConstant("table_suffix", "prod")
 
 	// Create parser with implicit if generation
 	parser := NewSqlParser(tokens, ns, nil)

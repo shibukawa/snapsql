@@ -13,6 +13,7 @@ type IntermediateFormat struct {
 	Source          SourceInfo                `json:"source"`
 	InterfaceSchema *InterfaceSchemaFormatted `json:"interface_schema,omitempty"`
 	AST             ASTNode                   `json:"ast"`
+	ConstantFiles   []string                  `json:"constant_files,omitempty"`
 }
 
 // SourceInfo represents source file information
@@ -53,6 +54,14 @@ func (f *IntermediateFormat) SetSource(file, content string) {
 	f.Source = SourceInfo{
 		File:    file,
 		Content: content,
+	}
+}
+
+// SetConstantFiles sets the constant files used for this template
+func (f *IntermediateFormat) SetConstantFiles(files []string) {
+	if len(files) > 0 {
+		f.ConstantFiles = make([]string, len(files))
+		copy(f.ConstantFiles, files)
 	}
 }
 

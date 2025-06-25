@@ -10,7 +10,7 @@ import (
 
 // Namespace manages namespace information and CEL functionality in an integrated manner
 type Namespace struct {
-	Variables    map[string]any `yaml:"env"`
+	Constants    map[string]any `yaml:"env"`
 	Schema       *InterfaceSchema
 	celVariables map[string]any // CEL evaluation variables
 	envCEL       *cel.Env       // CEL environment for environment variables
@@ -32,7 +32,7 @@ func NewNamespace(schema *InterfaceSchema) *Namespace {
 	dummyData := generateDummyDataFromSchema(schema)
 
 	ns := &Namespace{
-		Variables:    make(map[string]any),
+		Constants:    make(map[string]any),
 		celVariables: make(map[string]any),
 		Schema:       schema,
 		dummyData:    dummyData,
@@ -46,9 +46,9 @@ func NewNamespace(schema *InterfaceSchema) *Namespace {
 	return ns
 }
 
-// SetVariable sets a namespace variable
-func (ns *Namespace) SetVariable(key string, value any) {
-	ns.Variables[key] = value
+// SetConstant sets a namespace constant
+func (ns *Namespace) SetConstant(key string, value any) {
+	ns.Constants[key] = value
 
 	// Reinitialize CEL engines if they are already initialized
 	if ns.envCEL != nil {
@@ -96,10 +96,10 @@ func (ns *Namespace) Copy() *Namespace {
 		schemaCopy.Parameters[k] = v
 	}
 
-	// Copy variables
-	variablesCopy := make(map[string]any)
-	for k, v := range ns.Variables {
-		variablesCopy[k] = v
+	// Copy constants
+	constantsCopy := make(map[string]any)
+	for k, v := range ns.Constants {
+		constantsCopy[k] = v
 	}
 
 	// ダミーデータのコピー
@@ -110,7 +110,7 @@ func (ns *Namespace) Copy() *Namespace {
 
 	// Create new namespace
 	newNs := &Namespace{
-		Variables:    variablesCopy,
+		Constants:    constantsCopy,
 		Schema:       schemaCopy,
 		celVariables: make(map[string]any),
 		dummyData:    dummyDataCopy,
@@ -131,9 +131,9 @@ func (ns *Namespace) AddLoopVariableToNew(variable string, valueType string) *Na
 	return newNs
 }
 
-// GetVariable retrieves namespace variables
-func (ns *Namespace) GetVariable(key string) (any, bool) {
-	value, exists := ns.Variables[key]
+// GetConstant retrieves namespace constants
+func (ns *Namespace) GetConstant(key string) (any, bool) {
+	value, exists := ns.Constants[key]
 	return value, exists
 }
 
@@ -201,15 +201,15 @@ func (ns *Namespace) initializeCELEngines() error {
 	return nil
 }
 
-// createEnvironmentCEL creates CEL environment for environment variables (/*@ */)
+// createEnvironmentCEL creates CEL environment for environment constants (/*@ */)
 func (ns *Namespace) createEnvironmentCEL() error {
 	envOptions := []cel.EnvOption{
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
 	}
 
-	// Register environment variables directly as CEL variables (no prefix)
-	for key := range ns.Variables {
+	// Register environment constants directly as CEL variables (no prefix)
+	for key := range ns.Constants {
 		envOptions = append(envOptions, cel.Variable(key, cel.DynType))
 	}
 
@@ -243,7 +243,7 @@ func (ns *Namespace) createParameterCEL() error {
 	return nil
 }
 
-// ValidateEnvironmentExpression validates environment variable expressions (/*@ */)
+// ValidateEnvironmentExpression validates environment constant expressions (/*@ */)
 func (ns *Namespace) ValidateEnvironmentExpression(expression string) error {
 	if ns.envCEL == nil {
 		return ErrEnvironmentCELNotInit
@@ -285,14 +285,14 @@ func (ns *Namespace) ValidateParameterExpression(expression string) error {
 
 // ValidateExpression validates the validity of CEL expressions (general purpose)
 func (ns *Namespace) ValidateExpression(expr string) error {
-	// First try validation as environment variable expression
+	// First try validation as environment constant expression
 	if ns.envCEL != nil {
 		if err := ns.ValidateEnvironmentExpression(expr); err == nil {
 			return nil
 		}
 	}
 
-	// If failed as environment variable expression, try validation as parameter expression
+	// If failed as environment constant expression, try validation as parameter expression
 	if ns.paramCEL != nil {
 		if err := ns.ValidateParameterExpression(expr); err == nil {
 			return nil
@@ -303,7 +303,7 @@ func (ns *Namespace) ValidateExpression(expr string) error {
 	return ErrExpressionValidationFailed
 }
 
-// EvaluateEnvironmentExpression evaluates environment variable expressions (/*@ */)
+// EvaluateEnvironmentExpression evaluates environment constant expressions (/*@ */)
 func (ns *Namespace) EvaluateEnvironmentExpression(expression string) (any, error) {
 	if ns.envCEL == nil {
 		return nil, ErrEnvironmentCELNotInit
@@ -321,14 +321,14 @@ func (ns *Namespace) EvaluateEnvironmentExpression(expression string) (any, erro
 		return nil, fmt.Errorf("failed to create CEL program: %w", err)
 	}
 
-	// Prepare environment variable values
-	envVars := make(map[string]any)
-	for key, value := range ns.Variables {
-		envVars[key] = value
+	// Prepare environment constant values
+	envConstants := make(map[string]any)
+	for key, value := range ns.Constants {
+		envConstants[key] = value
 	}
 
 	// 式を評価
-	result, _, err := program.Eval(envVars)
+	result, _, err := program.Eval(envConstants)
 	if err != nil {
 		return nil, fmt.Errorf("CEL evaluation error: %w", err)
 	}

@@ -296,7 +296,7 @@ SELECT
 			assert.NoError(t, err, "Failed to parse interface schema")
 
 			ns := NewNamespace(is)
-			ns.SetVariable("table_suffix", "test")
+			ns.SetConstant("table_suffix", "test")
 
 			// Integration validation with parameter schema parser
 			parser := NewSqlParser(tokens, ns, nil)
