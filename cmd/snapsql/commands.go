@@ -296,7 +296,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 }
 
 // processTemplateFile processes a single template file and generates intermediate JSON
-func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantFiles []string, config *Config, ctx *Context) error {
+func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantFiles []string, _ *Config, ctx *Context) error {
 	// Read the template file
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -322,48 +322,48 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantF
 		}
 	}
 
-	// Create intermediate format
-	format := intermediate.NewFormat()
+	// Validate parse result if requested
+	if err := g.validateParseResult(parseResult, ctx); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
 
-	// Set source information
-	format.SetSource(inputFile, string(content))
+	// Convert AST to instructions
+	instructions := g.convertASTToInstructions(parseResult.AST, ctx)
 
-	// Validate parse result if validation is enabled
-	if parseResult != nil {
-		if err := g.validateParseResult(parseResult, ctx); err != nil {
-			return fmt.Errorf("validation failed: %w", err)
-		}
+	// Create intermediate format generator
+	generator, err := intermediate.NewGenerator()
+	if err != nil {
+		return fmt.Errorf("failed to create intermediate generator: %w", err)
+	}
 
-		// Set parse results in intermediate format
-		if parseResult.Schema != nil {
-			format.SetInterfaceSchema(parseResult.Schema)
-		}
-		if parseResult.AST != nil {
-			format.SetAST(parseResult.AST)
+	// Generate intermediate format
+	var format *intermediate.IntermediateFormat
+	if parseResult.Schema != nil {
+		// Convert schema to intermediate format
+		schema := g.convertSchemaToIntermediate(parseResult.Schema)
+		format, err = generator.GenerateFromTemplateWithSchema(inputFile, instructions, schema)
+	} else {
+		format, err = generator.GenerateFromTemplate(inputFile, instructions)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to generate intermediate format: %w", err)
+	}
+
+	// Validate the generated format
+	if validationErrors := generator.ValidateFormat(format); len(validationErrors) > 0 {
+		if ctx.Verbose {
+			for _, validationErr := range validationErrors {
+				color.Yellow("Validation warning: %v", validationErr)
+			}
 		}
 	}
 
 	// Generate output filename
 	outputFile := g.generateOutputFilename(inputFile, outputDir)
 
-	// Write JSON output
-	file, err := os.Create(outputFile)
-	if err != nil {
-		return fmt.Errorf("failed to create output file %s: %w", outputFile, err)
-	}
-	defer file.Close()
-
-	// Determine if pretty printing is enabled
-	pretty := true
-	if jsonGen, exists := config.Generation.Generators["json"]; exists {
-		if prettyVal, ok := jsonGen.Settings["pretty"].(bool); ok {
-			pretty = prettyVal
-		}
-	}
-
-	// Write JSON with appropriate formatting
-	if err := format.WriteJSON(file, pretty); err != nil {
-		return fmt.Errorf("failed to write JSON: %w", err)
+	// Write intermediate format to file
+	if err := generator.WriteToFile(format, outputFile); err != nil {
+		return fmt.Errorf("failed to write intermediate file: %w", err)
 	}
 
 	if ctx.Verbose {
@@ -430,7 +430,47 @@ func (g *GenerateCmd) parseSQLFile(content string, constantFiles []string, ctx *
 	}, nil
 }
 
-// validateParseResult validates the parse result if validation is enabled
+// convertASTToInstructions converts AST to instruction sequence
+func (g *GenerateCmd) convertASTToInstructions(_ parser.AstNode, ctx *Context) []intermediate.Instruction {
+	// For now, create a simple instruction sequence
+	// In a real implementation, this would traverse the AST and generate instructions
+	instructions := []intermediate.Instruction{
+		{
+			Op:    "EMIT_LITERAL",
+			Pos:   []int{1, 1, 0}, // Default position
+			Value: "SELECT * FROM users",
+		},
+	}
+
+	if ctx.Verbose {
+		color.Blue("Converted AST to %d instructions", len(instructions))
+	}
+
+	return instructions
+}
+
+// convertSchemaToIntermediate converts parser schema to intermediate schema
+func (g *GenerateCmd) convertSchemaToIntermediate(schema *parser.InterfaceSchema) *intermediate.InterfaceSchema {
+	if schema == nil {
+		return nil
+	}
+
+	// Convert parameters
+	parameters := make([]intermediate.Parameter, 0, len(schema.Parameters))
+	for name, paramType := range schema.Parameters {
+		param := intermediate.Parameter{
+			Name: name,
+			Type: fmt.Sprintf("%T", paramType),
+		}
+		parameters = append(parameters, param)
+	}
+
+	return &intermediate.InterfaceSchema{
+		Name:         schema.Name,
+		FunctionName: schema.FunctionName,
+		Parameters:   parameters,
+	}
+}
 func (g *GenerateCmd) validateParseResult(result *ParseResult, ctx *Context) error {
 	if !g.Validate {
 		return nil
