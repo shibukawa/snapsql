@@ -17,6 +17,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.37.0
 	github.com/yuin/goldmark v1.7.12
 	github.com/yuin/goldmark-meta v1.1.0
+	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -84,7 +85,6 @@ require (
 	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
