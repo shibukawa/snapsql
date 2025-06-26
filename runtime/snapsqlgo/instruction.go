@@ -209,13 +209,13 @@ func (e *InstructionExecutor) evaluateCELExpression(expression string) any {
 
 	// For complex expressions, try CEL
 	vars := e.getAllVariables()
-	
+
 	// Create a CEL environment with all variables
 	envOptions := []cel.EnvOption{}
 	for key := range vars {
 		envOptions = append(envOptions, cel.Variable(key, cel.AnyType))
 	}
-	
+
 	env, err := cel.NewEnv(envOptions...)
 	if err != nil {
 		return nil
@@ -242,7 +242,7 @@ func (e *InstructionExecutor) evaluateCELExpression(expression string) any {
 // evaluateSimpleExpression handles simple expressions without CEL
 func (e *InstructionExecutor) evaluateSimpleExpression(expression string) any {
 	vars := e.getAllVariables()
-	
+
 	// Handle negation
 	if strings.HasPrefix(expression, "!") {
 		inner := strings.TrimPrefix(expression, "!")
@@ -252,7 +252,7 @@ func (e *InstructionExecutor) evaluateSimpleExpression(expression string) any {
 		innerResult := e.evaluateSimpleExpression(inner)
 		return !e.isTruthy(innerResult)
 	}
-	
+
 	// Handle OR expressions
 	if strings.Contains(expression, " || ") {
 		parts := strings.Split(expression, " || ")
@@ -264,7 +264,7 @@ func (e *InstructionExecutor) evaluateSimpleExpression(expression string) any {
 		}
 		return false
 	}
-	
+
 	// Handle AND expressions
 	if strings.Contains(expression, " && ") {
 		parts := strings.Split(expression, " && ")
@@ -276,34 +276,34 @@ func (e *InstructionExecutor) evaluateSimpleExpression(expression string) any {
 		}
 		return true
 	}
-	
+
 	// Handle simple variable lookup
 	if value, exists := vars[expression]; exists {
 		return value
 	}
-	
+
 	// Handle dot notation
 	if strings.Contains(expression, ".") {
 		return e.getParamValueFromVars(expression, vars)
 	}
-	
+
 	return nil
 }
 
 // getAllVariables returns all available variables (params + loop variables)
 func (e *InstructionExecutor) getAllVariables() map[string]any {
 	vars := make(map[string]any)
-	
+
 	// Add all parameters
 	for k, v := range e.params {
 		vars[k] = v
 	}
-	
+
 	// Add loop variables (they shadow parameters)
 	for k, v := range e.variables {
 		vars[k] = v
 	}
-	
+
 	return vars
 }
 

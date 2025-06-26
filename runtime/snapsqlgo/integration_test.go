@@ -44,7 +44,7 @@ func TestIntegrationWithIntermediateFile(t *testing.T) {
 	// Execute the instructions
 	params := map[string]any{
 		"include_email": true,
-		"table_suffix": "prod",
+		"table_suffix":  "prod",
 		"filters": map[string]any{
 			"active":      false,
 			"departments": []string{"engineering", "design"},
@@ -90,9 +90,9 @@ func TestIntermediateFormatStructure(t *testing.T) {
 	for _, inst := range format.Instructions {
 		assert.True(t, len(inst.Op) > 0)
 		assert.Equal(t, 3, len(inst.Pos)) // [line, column, offset]
-		assert.True(t, inst.Pos[0] >= 1) // Line number should be >= 1
-		assert.True(t, inst.Pos[1] >= 1) // Column number should be >= 1
-		assert.True(t, inst.Pos[2] >= 0) // Offset should be >= 0
+		assert.True(t, inst.Pos[0] >= 1)  // Line number should be >= 1
+		assert.True(t, inst.Pos[1] >= 1)  // Column number should be >= 1
+		assert.True(t, inst.Pos[2] >= 0)  // Offset should be >= 0
 	}
 
 	// Test dependencies
@@ -118,12 +118,12 @@ func TestCacheKeyGeneration(t *testing.T) {
 	// Test cache key generation
 	params1 := map[string]any{
 		"include_email": true,
-		"table_suffix": "prod",
+		"table_suffix":  "prod",
 	}
 
 	params2 := map[string]any{
 		"include_email": false,
-		"table_suffix": "dev",
+		"table_suffix":  "dev",
 	}
 
 	key1 := format.Dependencies.GenerateCacheKey(params1)
@@ -189,7 +189,7 @@ func TestValidateIntermediateFormat(t *testing.T) {
 
 	// Validate the format
 	validationErrors := generator.ValidateFormat(format)
-	
+
 	// Log any validation errors for debugging
 	for _, validationErr := range validationErrors {
 		t.Logf("Validation error: %v", validationErr)
@@ -202,9 +202,9 @@ func TestValidateIntermediateFormat(t *testing.T) {
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		 containsAt(s, substr, 1)))
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			containsAt(s, substr, 1)))
 }
 
 func containsAt(s, substr string, start int) bool {
