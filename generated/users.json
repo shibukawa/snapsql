@@ -1,0 +1,36 @@
+{
+  "source": {
+    "file": "queries/users.snap.sql",
+    "content": "SELECT \n    id,\n    name\n    /*# if include_email */,\n    email\n    /*# end */\nFROM users_/*= table_suffix */test\nWHERE active = /*= filters.active */true\n    AND department IN (/*= filters.departments */'sales', 'marketing')\nORDER BY \n    /*# for sort : sort_fields */\n        /*= sort.field */ /*= sort.direction */,\n    /*# end */\n    name ASC\nLIMIT /*= pagination.limit */10\nOFFSET /*= pagination.offset */0;\n",
+    "hash": "d5094c56cc3d30a74d83c31222c7f1ba6c05f283c697db57995bf16b46598eb3"
+  },
+  "interface_schema": {
+    "name": "",
+    "function_name": "",
+    "parameters": []
+  },
+  "instructions": [
+    {
+      "op": "EMIT_LITERAL",
+      "pos": [
+        1,
+        1,
+        0
+      ],
+      "value": "SELECT * FROM users"
+    }
+  ],
+  "dependencies": {
+    "all_variables": [],
+    "structural_variables": [],
+    "parameter_variables": [],
+    "dependency_graph": {},
+    "cache_key_template": "static"
+  },
+  "metadata": {
+    "version": "2.0.0",
+    "generated_at": "2025-06-26T14:42:44+09:00",
+    "generator": "snapsql-intermediate-generator",
+    "schema_url": "https://github.com/shibukawa/snapsql/schemas/intermediate-format.json"
+  }
+}
