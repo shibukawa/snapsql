@@ -38,6 +38,9 @@
     * 式言語: github.com/google/cel-go
     * Markdownのパース: github.com/yuin/goldmark
     * PostgreSQLとMySQLのテストではTestContainers
+    * MySQLはgithub.com/go-sql-driver/mysql
+	* PostgreSQLはgithub.com/jackc/pgx/v5
+	* SQLiteはgithub.com/mattn/go-sqlite3
 * 明示した以外、後方互換性の維持は不要です
 
 ## Dockerコーディング規約

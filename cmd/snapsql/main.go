@@ -24,6 +24,15 @@ type CLI struct {
 
 func main() {
 	var cli CLI
+
+	// Handle version flag before parsing commands
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" {
+			fmt.Println("snapsql version 0.1.0")
+			return
+		}
+	}
+
 	ctx := kong.Parse(&cli,
 		kong.Name("snapsql"),
 		kong.Description("SnapSQL - SQL template engine with 2-way SQL format"),
