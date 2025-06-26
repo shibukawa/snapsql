@@ -30,16 +30,16 @@ func TestDebugNestedConditionsExecution(t *testing.T) {
 
 	// Debug step by step execution
 	fmt.Printf("Starting execution with params: %+v\n", params)
-	
+
 	// Check the first condition
 	result := executor.isExpressionTruthy("!(filters.active || filters.department)")
 	fmt.Printf("First condition !(filters.active || filters.department): %v\n", result)
-	
+
 	sql, args, err := executor.Execute()
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	fmt.Printf("Final SQL: %q\n", sql)
 	fmt.Printf("Final args: %v\n", args)
 }

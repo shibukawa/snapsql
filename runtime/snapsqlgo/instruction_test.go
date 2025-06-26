@@ -125,16 +125,16 @@ func TestInstructionExecutor_EmptyLoop(t *testing.T) {
 
 func TestInstructionExecutor_NestedConditions(t *testing.T) {
 	instructions := []Instruction{
-		{Op: "EMIT_LITERAL", Value: "SELECT * FROM users"},                                    // 0
-		{Op: "JUMP_IF_EXP", Exp: "!(filters.active || filters.department)", Target: 9},      // 1 -> jump to 9 (end_where)
-		{Op: "EMIT_LITERAL", Value: " WHERE 1=1"},                                            // 2
-		{Op: "JUMP_IF_EXP", Exp: "!filters.active", Target: 6},                              // 3 -> jump to 6
-		{Op: "EMIT_LITERAL", Value: " AND active = "},                                        // 4
-		{Op: "EMIT_EVAL", Exp: "filters.active", Placeholder: "true"},                       // 5
-		{Op: "JUMP_IF_EXP", Exp: "!filters.department", Target: 9},                          // 6 -> jump to 9 (end_where)
-		{Op: "EMIT_LITERAL", Value: " AND department = "},                                    // 7
-		{Op: "EMIT_EVAL", Exp: "filters.department", Placeholder: "'sales'"},                // 8
-		{Op: "LABEL", Name: "end_where"},                                                     // 9
+		{Op: "EMIT_LITERAL", Value: "SELECT * FROM users"},                             // 0
+		{Op: "JUMP_IF_EXP", Exp: "!(filters.active || filters.department)", Target: 9}, // 1 -> jump to 9 (end_where)
+		{Op: "EMIT_LITERAL", Value: " WHERE 1=1"},                                      // 2
+		{Op: "JUMP_IF_EXP", Exp: "!filters.active", Target: 6},                         // 3 -> jump to 6
+		{Op: "EMIT_LITERAL", Value: " AND active = "},                                  // 4
+		{Op: "EMIT_EVAL", Exp: "filters.active", Placeholder: "true"},                  // 5
+		{Op: "JUMP_IF_EXP", Exp: "!filters.department", Target: 9},                     // 6 -> jump to 9 (end_where)
+		{Op: "EMIT_LITERAL", Value: " AND department = "},                              // 7
+		{Op: "EMIT_EVAL", Exp: "filters.department", Placeholder: "'sales'"},           // 8
+		{Op: "LABEL", Name: "end_where"},                                               // 9
 	}
 
 	// Test with both filters

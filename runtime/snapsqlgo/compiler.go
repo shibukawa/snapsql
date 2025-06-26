@@ -28,7 +28,7 @@ func NewInstructionCompiler() *InstructionCompiler {
 // This is a simplified version for demonstration
 type ASTNode struct {
 	Type        string     `json:"type"`
-	Pos         []int      `json:"pos"`                   // Position [line, column, offset] (required)
+	Pos         []int      `json:"pos"` // Position [line, column, offset] (required)
 	Value       string     `json:"value,omitempty"`
 	Placeholder string     `json:"placeholder,omitempty"`
 	Condition   string     `json:"condition,omitempty"`
