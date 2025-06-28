@@ -10,6 +10,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql" // MySQL driver
 	_ "github.com/mattn/go-sqlite3"    // SQLite driver
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // DatabaseConnector handles database connections and operations
@@ -264,14 +265,6 @@ func (p *PullOperation) ValidateConfig() error {
 		return ErrInvalidOutputPath
 	}
 
-	// Validate output format
-	switch p.Config.OutputFormat {
-	case OutputSingleFile, OutputPerTable, OutputPerSchema:
-		// Valid formats
-	default:
-		return ErrInvalidOutputFormat
-	}
-
 	// Validate database URL format
 	return p.connector.ValidateConnectionString(p.Config.DatabaseURL)
 }
@@ -319,12 +312,7 @@ func (p *PullOperation) Execute() (*PullResult, error) {
 	}
 
 	// Generate YAML files
-	generator := NewYAMLGenerator(
-		p.Config.OutputFormat,
-		true, // Pretty print
-		p.Config.SchemaAware,
-		true, // Flow style
-	)
+	generator := NewYAMLGenerator(p.Config.SchemaAware)
 	p.generator = generator
 
 	if err := generator.Generate(schemas, p.Config.OutputPath); err != nil {
@@ -336,15 +324,14 @@ func (p *PullOperation) Execute() (*PullResult, error) {
 }
 
 // CreateResult creates a pull result from schemas and errors
-func (p *PullOperation) CreateResult(schemas []DatabaseSchema, errors []error) *PullResult {
-	var dbInfo DatabaseInfo
+func (p *PullOperation) CreateResult(schemas []snapsql.DatabaseSchema, errors []error) *PullResult {
+	var dbInfo snapsql.DatabaseInfo
 	if len(schemas) > 0 {
 		dbInfo = schemas[0].DatabaseInfo
 	}
 
 	return &PullResult{
 		Schemas:      schemas,
-		ExtractedAt:  time.Now(),
 		DatabaseInfo: dbInfo,
 		Errors:       errors,
 	}

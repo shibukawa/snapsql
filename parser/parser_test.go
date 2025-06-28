@@ -355,6 +355,35 @@ func TestRealSQLFiles(t *testing.T) {
 	}
 }
 
+func TestParseInsertUpdateReturning(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+	}{
+		{
+			name: "INSERT with RETURNING",
+			sql:  "INSERT INTO users (name, age) VALUES ('Alice', 30) RETURNING id, name;",
+		},
+		{
+			name: "UPDATE with RETURNING",
+			sql:  "UPDATE users SET age = 31 WHERE name = 'Alice' RETURNING id, age;",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tok := tokenizer.NewSqlTokenizer(test.sql, tokenizer.DetectDialect(test.sql))
+			tokens, err := tok.AllTokens()
+			assert.NoError(t, err)
+
+			parser := NewSqlParser(tokens, nil, nil)
+			stmt, err := parser.Parse()
+			assert.NoError(t, err)
+			assert.True(t, stmt != nil)
+		})
+	}
+}
+
 // ヘルパーfunction
 func readTestFile(filename string) (string, error) {
 	// 実際の実装では os.ReadFile を使用

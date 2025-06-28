@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // PostgreSQLExtractor handles PostgreSQL-specific schema extraction
@@ -38,7 +39,7 @@ func (e *PostgreSQLExtractor) GetSystemSchemas() []string {
 }
 
 // ExtractSchemas extracts all schemas from the database
-func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]DatabaseSchema, error) {
+func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
 	// Get database info
 	dbInfo, err := e.GetDatabaseInfo(db)
 	if err != nil {
@@ -54,11 +55,10 @@ func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) (
 	// Filter schemas
 	filteredSchemas := e.FilterSchemas(schemaNames, config)
 
-	schemas := make([]DatabaseSchema, 0, len(filteredSchemas))
+	schemas := make([]snapsql.DatabaseSchema, 0, len(filteredSchemas))
 	for _, schemaName := range filteredSchemas {
-		schema := DatabaseSchema{
+		schema := snapsql.DatabaseSchema{
 			Name:         schemaName,
-			ExtractedAt:  time.Now(),
 			DatabaseInfo: dbInfo,
 		}
 
@@ -67,7 +67,13 @@ func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) (
 		if err != nil {
 			return nil, err
 		}
-		schema.Tables = e.filterTables(tables, config)
+		var filteredTables []*snapsql.TableInfo
+		for _, table := range tables {
+			if ShouldIncludeTable(table.Name, config.IncludeTables, config.ExcludeTables) {
+				filteredTables = append(filteredTables, table)
+			}
+		}
+		schema.Tables = filteredTables
 
 		// Extract views if requested
 		if config.IncludeViews {
@@ -85,7 +91,7 @@ func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) (
 }
 
 // ExtractTables extracts all tables from a specific schema
-func (e *PostgreSQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]TableSchema, error) {
+func (e *PostgreSQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
 	query := e.BuildTablesQuery(schemaName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -93,37 +99,41 @@ func (e *PostgreSQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]Ta
 	}
 	defer rows.Close()
 
-	var tables []TableSchema
+	var tables []*snapsql.TableInfo
 	for rows.Next() {
-		var table TableSchema
+		var tableName string
 		var comment sql.NullString
 
-		err := rows.Scan(&table.Name, &comment)
+		err := rows.Scan(&tableName, &comment)
 		if err != nil {
 			return nil, err
 		}
 
-		table.Schema = schemaName
+		table := &snapsql.TableInfo{
+			Name:    tableName,
+			Schema:  schemaName,
+			Columns: map[string]*snapsql.ColumnInfo{},
+		}
 		if comment.Valid {
 			table.Comment = comment.String
 		}
 
 		// Extract columns
-		columns, err := e.ExtractColumns(db, schemaName, table.Name)
+		columns, err := e.ExtractColumns(db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Columns = columns
 
 		// Extract constraints
-		constraints, err := e.ExtractConstraints(db, schemaName, table.Name)
+		constraints, err := e.ExtractConstraints(db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Constraints = constraints
 
 		// Extract indexes
-		indexes, err := e.ExtractIndexes(db, schemaName, table.Name)
+		indexes, err := e.ExtractIndexes(db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -140,7 +150,7 @@ func (e *PostgreSQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]Ta
 }
 
 // ExtractColumns extracts all columns from a specific table
-func (e *PostgreSQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string) ([]ColumnSchema, error) {
+func (e *PostgreSQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
 	query := e.BuildColumnsQuery(schemaName, tableName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -148,35 +158,28 @@ func (e *PostgreSQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName s
 	}
 	defer rows.Close()
 
-	var columns []ColumnSchema
+	columns := map[string]*snapsql.ColumnInfo{}
 	for rows.Next() {
-		var col ColumnSchema
+		var columnName, dataType, isNullable string
 		var defaultValue, comment sql.NullString
-		var isNullable string
 
-		err := rows.Scan(
-			&col.Name,
-			&col.Type,
-			&isNullable,
-			&defaultValue,
-			&comment,
-		)
+		err := rows.Scan(&columnName, &dataType, &isNullable, &defaultValue, &comment)
 		if err != nil {
 			return nil, err
 		}
 
-		col.Nullable = (isNullable == "YES")
+		col := &snapsql.ColumnInfo{
+			Name:     columnName,
+			DataType: e.MapPostgreSQLType(dataType),
+			Nullable: isNullable == "YES",
+		}
 		if defaultValue.Valid {
-			col.DefaultValue = defaultValue.String
+			col.DefaultValue = e.ParseDefaultValue(defaultValue.String)
 		}
 		if comment.Valid {
 			col.Comment = comment.String
 		}
-
-		// Map PostgreSQL types to SnapSQL types
-		col.SnapSQLType = e.MapPostgreSQLType(col.Type)
-
-		columns = append(columns, col)
+		columns[columnName] = col
 	}
 
 	if err := rows.Err(); err != nil {
@@ -187,7 +190,7 @@ func (e *PostgreSQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName s
 }
 
 // ExtractConstraints extracts all constraints from a specific table
-func (e *PostgreSQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]ConstraintSchema, error) {
+func (e *PostgreSQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
 	query := e.BuildConstraintsQuery(schemaName, tableName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -195,26 +198,26 @@ func (e *PostgreSQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableNa
 	}
 	defer rows.Close()
 
-	var constraints []ConstraintSchema
+	var constraints []snapsql.ConstraintInfo
 	for rows.Next() {
-		var constraint ConstraintSchema
-		var columnsStr string
+		var name, typ, columnsStr string
 
-		err := rows.Scan(
-			&constraint.Name,
-			&constraint.Type,
-			&columnsStr,
-		)
+		err := rows.Scan(&name, &typ, &columnsStr)
 		if err != nil {
 			return nil, err
 		}
 
 		// Parse column names
-		constraint.Columns = strings.Split(columnsStr, ",")
-		for i, col := range constraint.Columns {
-			constraint.Columns[i] = strings.TrimSpace(col)
+		columns := strings.Split(columnsStr, ",")
+		for i, col := range columns {
+			columns[i] = strings.TrimSpace(col)
 		}
 
+		constraint := snapsql.ConstraintInfo{
+			Name:    name,
+			Type:    e.ParseConstraintType(typ),
+			Columns: columns,
+		}
 		constraints = append(constraints, constraint)
 	}
 
@@ -226,7 +229,7 @@ func (e *PostgreSQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableNa
 }
 
 // ExtractIndexes extracts all indexes from a specific table
-func (e *PostgreSQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]IndexSchema, error) {
+func (e *PostgreSQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
 	query := e.BuildIndexesQuery(schemaName, tableName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -234,27 +237,28 @@ func (e *PostgreSQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName s
 	}
 	defer rows.Close()
 
-	var indexes []IndexSchema
+	var indexes []snapsql.IndexInfo
 	for rows.Next() {
-		var index IndexSchema
-		var columnsStr string
+		var name, columnsStr, typ string
+		var isUnique bool
 
-		err := rows.Scan(
-			&index.Name,
-			&columnsStr,
-			&index.IsUnique,
-			&index.Type,
-		)
+		err := rows.Scan(&name, &columnsStr, &isUnique, &typ)
 		if err != nil {
 			return nil, err
 		}
 
 		// Parse column names
-		index.Columns = strings.Split(columnsStr, ",")
-		for i, col := range index.Columns {
-			index.Columns[i] = strings.TrimSpace(col)
+		columns := strings.Split(columnsStr, ",")
+		for i, col := range columns {
+			columns[i] = strings.TrimSpace(col)
 		}
 
+		index := snapsql.IndexInfo{
+			Name:     name,
+			Columns:  columns,
+			IsUnique: isUnique,
+			Type:     typ,
+		}
 		indexes = append(indexes, index)
 	}
 
@@ -266,7 +270,7 @@ func (e *PostgreSQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName s
 }
 
 // ExtractViews extracts all views from a specific schema
-func (e *PostgreSQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]ViewSchema, error) {
+func (e *PostgreSQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
 	query := e.BuildViewsQuery(schemaName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -274,21 +278,24 @@ func (e *PostgreSQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]Vie
 	}
 	defer rows.Close()
 
-	var views []ViewSchema
+	var views []*snapsql.ViewInfo
 	for rows.Next() {
-		var view ViewSchema
+		var viewName, viewDefinition string
 		var comment sql.NullString
 
-		err := rows.Scan(&view.Name, &view.Definition, &comment)
+		err := rows.Scan(&viewName, &viewDefinition, &comment)
 		if err != nil {
 			return nil, err
 		}
 
-		view.Schema = schemaName
+		view := &snapsql.ViewInfo{
+			Name:       viewName,
+			Schema:     schemaName,
+			Definition: viewDefinition,
+		}
 		if comment.Valid {
 			view.Comment = comment.String
 		}
-
 		views = append(views, view)
 	}
 
@@ -300,22 +307,22 @@ func (e *PostgreSQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]Vie
 }
 
 // GetDatabaseInfo extracts database information
-func (e *PostgreSQLExtractor) GetDatabaseInfo(db *sql.DB) (DatabaseInfo, error) {
+func (e *PostgreSQLExtractor) GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo, error) {
 	query := e.BuildDatabaseInfoQuery()
 	row := db.QueryRow(query)
 
-	var info DatabaseInfo
-	var version string
+	var version, dbName string
 
-	err := row.Scan(&version, &info.Name)
+	err := row.Scan(&version, &dbName)
 	if err != nil {
-		return info, err
+		return snapsql.DatabaseInfo{}, err
 	}
 
-	info.Type = "postgresql"
-	info.Version = version
-
-	return info, nil
+	return snapsql.DatabaseInfo{
+		Type:    "postgresql",
+		Version: version,
+		Name:    dbName,
+	}, nil
 }
 
 // Helper methods
@@ -341,45 +348,6 @@ func (e *PostgreSQLExtractor) getSchemaNames(db *sql.DB) ([]string, error) {
 	}
 
 	return schemas, nil
-}
-
-// filterTables filters tables based on configuration
-func (e *PostgreSQLExtractor) filterTables(tables []TableSchema, config ExtractConfig) []TableSchema {
-	if len(config.IncludeTables) == 0 && len(config.ExcludeTables) == 0 {
-		return tables
-	}
-
-	var filtered []TableSchema
-	for _, table := range tables {
-		include := true
-
-		// Check include list
-		if len(config.IncludeTables) > 0 {
-			include = false
-			for _, pattern := range config.IncludeTables {
-				if matched, _ := regexp.MatchString(pattern, table.Name); matched {
-					include = true
-					break
-				}
-			}
-		}
-
-		// Check exclude list
-		if include && len(config.ExcludeTables) > 0 {
-			for _, pattern := range config.ExcludeTables {
-				if matched, _ := regexp.MatchString(pattern, table.Name); matched {
-					include = false
-					break
-				}
-			}
-		}
-
-		if include {
-			filtered = append(filtered, table)
-		}
-	}
-
-	return filtered
 }
 
 // Query builders

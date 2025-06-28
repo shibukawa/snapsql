@@ -57,6 +57,9 @@ const (
 
 	// Others
 	OTHER_NODE
+
+	// RETURNING_CLAUSE: RETURNING句
+	RETURNING_CLAUSE
 )
 
 // String returns string representation of NodeType
@@ -464,11 +467,12 @@ func (c *CTEDefinition) String() string {
 // InsertStatement represents an INSERT statement AST node
 type InsertStatement struct {
 	BaseAstNode
-	Table        AstNode     // table name
-	Columns      []AstNode   // column name list (optional)
-	ValuesList   [][]AstNode // multiple VALUES clauses (bulk insert support)
-	SelectStmt   AstNode     // SELECT statement (for INSERT INTO ... SELECT)
-	BulkVariable AstNode     // bulk variable (for map arrays)
+	Table           AstNode          // table name
+	Columns         []AstNode        // column name list (optional)
+	ValuesList      [][]AstNode      // multiple VALUES clauses (bulk insert support)
+	SelectStmt      AstNode          // SELECT statement (for INSERT INTO ... SELECT)
+	BulkVariable    AstNode          // bulk variable (for map arrays)
+	ReturningClause *ReturningClause // RETURNING句（オプション）
 }
 
 func (i *InsertStatement) String() string {
@@ -498,15 +502,20 @@ func (i *InsertStatement) String() string {
 		parts = append(parts, i.SelectStmt.String())
 	}
 
+	if i.ReturningClause != nil {
+		parts = append(parts, i.ReturningClause.String())
+	}
+
 	return strings.Join(parts, " ")
 }
 
 // UpdateStatement represents an UPDATE statement AST node
 type UpdateStatement struct {
 	BaseAstNode
-	Table       AstNode      // table name
-	SetClauses  []AstNode    // list of SET clauses
-	WhereClause *WhereClause // WHERE clause (optional)
+	Table           AstNode          // table name
+	SetClauses      []AstNode        // list of SET clauses
+	WhereClause     *WhereClause     // WHERE clause (optional)
+	ReturningClause *ReturningClause // RETURNING句（オプション）
 }
 
 func (u *UpdateStatement) String() string {
@@ -519,6 +528,10 @@ func (u *UpdateStatement) String() string {
 
 	if u.WhereClause != nil {
 		parts = append(parts, u.WhereClause.String())
+	}
+
+	if u.ReturningClause != nil {
+		parts = append(parts, u.ReturningClause.String())
 	}
 
 	return strings.Join(parts, " ")
@@ -552,4 +565,15 @@ type SetClause struct {
 
 func (s *SetClause) String() string {
 	return s.Column.String() + " = " + s.Value.String()
+}
+
+// ReturningClause represents a RETURNING clause in INSERT/UPDATE statements
+// Fields: list of expressions (AstNode)
+type ReturningClause struct {
+	BaseAstNode
+	Fields []AstNode
+}
+
+func (r *ReturningClause) String() string {
+	return "RETURNING " + joinNodes(r.Fields)
 }

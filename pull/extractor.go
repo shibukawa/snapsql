@@ -4,17 +4,22 @@ import (
 	"database/sql"
 	"path/filepath"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // Extractor interface for database-agnostic schema extraction
+// snapsqlパッケージの型で統一
+// ExtractTables/ExtractColumns/ExtractConstraints/ExtractIndexes/ExtractViewsもsnapsql型で返す
+// DatabaseInfoもsnapsql型で返す
 type Extractor interface {
-	ExtractSchemas(db *sql.DB, config ExtractConfig) ([]DatabaseSchema, error)
-	ExtractTables(db *sql.DB, schemaName string) ([]TableSchema, error)
-	ExtractColumns(db *sql.DB, schemaName, tableName string) ([]ColumnSchema, error)
-	ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]ConstraintSchema, error)
-	ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]IndexSchema, error)
-	ExtractViews(db *sql.DB, schemaName string) ([]ViewSchema, error)
-	GetDatabaseInfo(db *sql.DB) (DatabaseInfo, error)
+	ExtractSchemas(db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error)
+	ExtractTables(db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error)
+	ExtractColumns(db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error)
+	ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error)
+	ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error)
+	ExtractViews(db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error)
+	GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo, error)
 }
 
 // NewExtractor creates a new extractor for the specified database type

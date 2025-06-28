@@ -1407,6 +1407,15 @@ func (p *SqlParser) parseInsertStatement(ns *Namespace) (*InsertStatement, error
 		return nil, ErrExpectedValues
 	}
 
+	// RETURNING句（オプション）
+	if p.matchWord("RETURNING") {
+		returningClause, err := p.parseReturningClause(ns)
+		if err != nil {
+			return nil, err
+		}
+		stmt.ReturningClause = returningClause
+	}
+
 	return stmt, nil
 }
 
@@ -1562,6 +1571,15 @@ func (p *SqlParser) parseUpdateStatement(ns *Namespace) (*UpdateStatement, error
 			return nil, err
 		}
 		stmt.WhereClause = whereClause
+	}
+
+	// RETURNING句（オプション）
+	if p.matchWord("RETURNING") {
+		returningClause, err := p.parseReturningClause(ns)
+		if err != nil {
+			return nil, err
+		}
+		stmt.ReturningClause = returningClause
 	}
 
 	return stmt, nil
@@ -1726,4 +1744,33 @@ func (p *SqlParser) parseSimpleValue(ns *Namespace) (AstNode, error) {
 	}
 
 	return nil, ErrExpectedValue
+}
+
+// parseReturningClause はRETURNING句をパースする
+func (p *SqlParser) parseReturningClause(ns *Namespace) (*ReturningClause, error) {
+	clause := &ReturningClause{
+		BaseAstNode: BaseAstNode{
+			nodeType: RETURNING_CLAUSE,
+			position: p.previousToken().Position,
+		},
+		Fields: make([]AstNode, 0),
+	}
+
+	for {
+		field, err := p.parseExpression(ns)
+		if err != nil {
+			return nil, err
+		}
+		clause.Fields = append(clause.Fields, field)
+
+		if !p.match(tokenizer.COMMA) {
+			break
+		}
+	}
+
+	if len(clause.Fields) == 0 {
+		return nil, ErrSelectMustHaveFields // 使い回し
+	}
+
+	return clause, nil
 }

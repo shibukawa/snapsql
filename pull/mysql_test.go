@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 func TestMySQLExtractor(t *testing.T) {
@@ -227,7 +228,7 @@ func TestMySQLViewHandling(t *testing.T) {
 func TestMySQLDatabaseInfo(t *testing.T) {
 	t.Run("DatabaseInfoStructure", func(t *testing.T) {
 		// Test that database info has correct structure for MySQL
-		info := DatabaseInfo{
+		info := snapsql.DatabaseInfo{
 			Type:    "mysql",
 			Version: "8.0.33",
 			Name:    "testdb",

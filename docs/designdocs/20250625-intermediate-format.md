@@ -1,8 +1,8 @@
 # SnapSQL Intermediate Format Specification
 
-**Document Version:** 1.0  
-**Date:** 2025-06-25  
-**Status:** Design Phase
+**Document Version:** 1.1  
+**Date:** 2025-06-28  
+**Status:** Updated for new CLI and output format
 
 ## Overview
 
@@ -155,7 +155,7 @@ This document defines the intermediate JSON format for SnapSQL templates. The in
 
 ## JSON Schema Definition
 
-The intermediate format will include a JSON Schema definition for validation:
+The intermediate format includes a JSON Schema definition for validation:
 
 ```json
 {
@@ -223,21 +223,24 @@ The intermediate format will include a JSON Schema definition for validation:
 3. Create validation error reporting
 
 ### Phase 5: CLI Integration
-1. Create `rawparse` subcommand
-2. Add output formatting options
-3. Implement file processing pipeline
+1. Create `rawparse` subcommand (replaces previous parse/generate separation)
+2. Output is always per-file (no date in filename)
+3. Output directory is specified with `--output-dir`
+4. Output format is always JSON (pretty-print with `--pretty`)
+5. Validation is performed with `--validate`
+6. No output format option for pull (see database-pull doc)
 
 ## Usage Examples
 
 ### Command Line Usage
 ```bash
-# Parse single file to intermediate format
+# Parse single file to intermediate format (JSON)
 snapsql rawparse queries/users.snap.sql
 
 # Parse with pretty printing
 snapsql rawparse --pretty queries/users.snap.sql
 
-# Parse multiple files
+# Parse multiple files to output directory (one JSON per input)
 snapsql rawparse queries/*.snap.sql --output-dir generated/
 
 # Validate against schema
