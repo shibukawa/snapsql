@@ -1,6 +1,10 @@
 package pull
 
-import "time"
+import (
+	"time"
+
+	snapsql "github.com/shibukawa/snapsql"
+)
 
 // OutputFormat defines the output format for schema files
 type OutputFormat string
@@ -28,9 +32,9 @@ type PullConfig struct {
 
 // PullResult contains the result of a pull operation
 type PullResult struct {
-	Schemas      []DatabaseSchema
+	Schemas      []snapsql.DatabaseSchema
 	ExtractedAt  time.Time
-	DatabaseInfo DatabaseInfo
+	DatabaseInfo snapsql.DatabaseInfo
 	Errors       []error
 }
 
@@ -49,9 +53,9 @@ func Pull(config PullConfig) (*PullResult, error) {
 	// This is a placeholder implementation for testing
 	// The actual implementation will be added in the next phase
 	return &PullResult{
-		Schemas:     []DatabaseSchema{},
+		Schemas:     []snapsql.DatabaseSchema{},
 		ExtractedAt: time.Now(),
-		DatabaseInfo: DatabaseInfo{
+		DatabaseInfo: snapsql.DatabaseInfo{
 			Type: config.DatabaseType,
 		},
 		Errors: []error{},

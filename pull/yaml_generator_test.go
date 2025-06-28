@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/assert/v2"
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 func TestYAMLGenerator(t *testing.T) {
@@ -82,7 +83,7 @@ func TestYAMLGeneration(t *testing.T) {
 		generator := NewYAMLGenerator(OutputSingleFile, true, false, true)
 		outputPath := filepath.Join(tempDir, "single")
 
-		err := generator.Generate([]DatabaseSchema{testSchema}, outputPath)
+		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
 		assert.NoError(t, err)
 
 		// Check that single file was created
@@ -110,7 +111,7 @@ func TestYAMLGeneration(t *testing.T) {
 		generator := NewYAMLGenerator(OutputPerTable, true, true, true)
 		outputPath := filepath.Join(tempDir, "per_table")
 
-		err := generator.Generate([]DatabaseSchema{testSchema}, outputPath)
+		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
 		assert.NoError(t, err)
 
 		// Check that schema directory was created
@@ -144,7 +145,7 @@ func TestYAMLGeneration(t *testing.T) {
 		generator := NewYAMLGenerator(OutputPerSchema, true, true, true)
 		outputPath := filepath.Join(tempDir, "per_schema")
 
-		err := generator.Generate([]DatabaseSchema{testSchema}, outputPath)
+		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
 		assert.NoError(t, err)
 
 		// Check that schema file was created
@@ -178,7 +179,7 @@ func TestYAMLFlowStyleGeneration(t *testing.T) {
 		generator := NewYAMLGenerator(OutputPerTable, true, true, true)
 		outputPath := filepath.Join(tempDir, "flow_style")
 
-		err := generator.Generate([]DatabaseSchema{testSchema}, outputPath)
+		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
 		assert.NoError(t, err)
 
 		usersFile := filepath.Join(outputPath, "public", "users.yaml")
@@ -201,7 +202,7 @@ func TestYAMLFlowStyleGeneration(t *testing.T) {
 		generator := NewYAMLGenerator(OutputPerTable, true, true, false)
 		outputPath := filepath.Join(tempDir, "block_style")
 
-		err := generator.Generate([]DatabaseSchema{testSchema}, outputPath)
+		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
 		assert.NoError(t, err)
 
 		usersFile := filepath.Join(outputPath, "public", "users.yaml")
@@ -227,7 +228,7 @@ func TestYAMLGenerationWithViews(t *testing.T) {
 		generator := NewYAMLGenerator(OutputSingleFile, true, false, true)
 		outputPath := filepath.Join(tempDir, "with_views")
 
-		err := generator.Generate([]DatabaseSchema{testSchema}, outputPath)
+		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
 		assert.NoError(t, err)
 
 		singleFile := filepath.Join(outputPath, "database_schema.yaml")
@@ -250,14 +251,14 @@ func TestYAMLGenerationErrorHandling(t *testing.T) {
 		invalidPath := "/root/invalid/path/that/cannot/be/created"
 		testSchema := createTestDatabaseSchema()
 
-		err := generator.Generate([]DatabaseSchema{testSchema}, invalidPath)
+		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, invalidPath)
 		assert.Error(t, err)
 	})
 
 	t.Run("GenerateWithEmptySchemas", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		err := generator.Generate([]DatabaseSchema{}, tempDir)
+		err := generator.Generate([]snapsql.DatabaseSchema{}, tempDir)
 		assert.NoError(t, err) // Should not error, just create empty structure
 	})
 }
@@ -308,20 +309,29 @@ func TestYAMLGenerationWithMultipleSchemas(t *testing.T) {
 	publicSchema := createTestDatabaseSchema()
 	publicSchema.Name = "public"
 
-	authSchema := DatabaseSchema{
+	authSchema := snapsql.DatabaseSchema{
 		Name: "auth",
-		Tables: []TableSchema{
+		Tables: []*snapsql.TableInfo{
 			{
 				Name:   "sessions",
 				Schema: "auth",
-				Columns: []ColumnSchema{
-					{Name: "id", Type: "uuid", SnapSQLType: "string", Nullable: false, IsPrimaryKey: true},
-					{Name: "user_id", Type: "integer", SnapSQLType: "int", Nullable: false},
+				Columns: map[string]*snapsql.ColumnInfo{
+					"id": {
+						Name:         "id",
+						DataType:     "uuid",
+						Nullable:     false,
+						IsPrimaryKey: true,
+					},
+					"user_id": {
+						Name:     "user_id",
+						DataType: "int",
+						Nullable: false,
+					},
 				},
 			},
 		},
-		ExtractedAt: time.Now(),
-		DatabaseInfo: DatabaseInfo{
+		ExtractedAt: time.Now().Format(time.RFC3339),
+		DatabaseInfo: snapsql.DatabaseInfo{
 			Type:    "postgresql",
 			Version: "14.2",
 			Name:    "testdb",
@@ -329,7 +339,7 @@ func TestYAMLGenerationWithMultipleSchemas(t *testing.T) {
 		},
 	}
 
-	schemas := []DatabaseSchema{publicSchema, authSchema}
+	schemas := []snapsql.DatabaseSchema{publicSchema, authSchema}
 
 	t.Run("GenerateMultipleSchemasPerTable", func(t *testing.T) {
 		generator := NewYAMLGenerator(OutputPerTable, true, true, true)

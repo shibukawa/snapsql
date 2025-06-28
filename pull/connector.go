@@ -10,6 +10,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql" // MySQL driver
 	_ "github.com/mattn/go-sqlite3"    // SQLite driver
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // DatabaseConnector handles database connections and operations
@@ -336,8 +337,8 @@ func (p *PullOperation) Execute() (*PullResult, error) {
 }
 
 // CreateResult creates a pull result from schemas and errors
-func (p *PullOperation) CreateResult(schemas []DatabaseSchema, errors []error) *PullResult {
-	var dbInfo DatabaseInfo
+func (p *PullOperation) CreateResult(schemas []snapsql.DatabaseSchema, errors []error) *PullResult {
+	var dbInfo snapsql.DatabaseInfo
 	if len(schemas) > 0 {
 		dbInfo = schemas[0].DatabaseInfo
 	}

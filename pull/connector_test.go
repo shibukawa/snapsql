@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/shibukawa/snapsql"
 )
 
 func TestDatabaseConnector(t *testing.T) {
@@ -236,7 +237,7 @@ func TestPullExecution(t *testing.T) {
 		operation := NewPullOperation(config)
 
 		// Test with mock data (simulating successful extraction)
-		mockSchemas := []DatabaseSchema{
+		mockSchemas := []snapsql.DatabaseSchema{
 			createTestDatabaseSchema(),
 		}
 

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // MySQLExtractor handles MySQL-specific schema extraction
@@ -21,7 +23,7 @@ func NewMySQLExtractor() *MySQLExtractor {
 }
 
 // ExtractSchemas extracts all schemas from the database
-func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]DatabaseSchema, error) {
+func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
 	// Get database info
 	dbInfo, err := e.GetDatabaseInfo(db)
 	if err != nil {
@@ -29,9 +31,9 @@ func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]Dat
 	}
 
 	// MySQL uses the database name as schema name
-	schema := DatabaseSchema{
+	schema := snapsql.DatabaseSchema{
 		Name:         dbInfo.Name,
-		ExtractedAt:  time.Now(),
+		ExtractedAt:  time.Now().Format(time.RFC3339),
 		DatabaseInfo: dbInfo,
 	}
 
@@ -42,7 +44,7 @@ func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]Dat
 	}
 
 	// Apply table filtering
-	var filteredTables []TableSchema
+	var filteredTables []*snapsql.TableInfo
 	for _, table := range tables {
 		if ShouldIncludeTable(table.Name, config.IncludeTables, config.ExcludeTables) {
 			filteredTables = append(filteredTables, table)
@@ -59,11 +61,11 @@ func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]Dat
 		schema.Views = views
 	}
 
-	return []DatabaseSchema{schema}, nil
+	return []snapsql.DatabaseSchema{schema}, nil
 }
 
 // ExtractTables extracts all tables from a specific schema
-func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]TableSchema, error) {
+func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
 	query := e.BuildTablesQuery(schemaName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -71,7 +73,7 @@ func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]TableSc
 	}
 	defer rows.Close()
 
-	var tables []TableSchema
+	var tables []*snapsql.TableInfo
 	for rows.Next() {
 		var tableName, tableType, engine string
 		var comment sql.NullString
@@ -81,9 +83,10 @@ func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]TableSc
 			return nil, e.HandleDatabaseError(err)
 		}
 
-		table := TableSchema{
-			Name:   tableName,
-			Schema: schemaName,
+		table := &snapsql.TableInfo{
+			Name:    tableName,
+			Schema:  schemaName,
+			Columns: map[string]*snapsql.ColumnInfo{},
 		}
 
 		if comment.Valid {
@@ -122,7 +125,7 @@ func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]TableSc
 }
 
 // ExtractColumns extracts all columns from a specific table
-func (e *MySQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string) ([]ColumnSchema, error) {
+func (e *MySQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
 	query := e.BuildColumnsQuery(schemaName, tableName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -130,7 +133,7 @@ func (e *MySQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string
 	}
 	defer rows.Close()
 
-	var columns []ColumnSchema
+	columns := map[string]*snapsql.ColumnInfo{}
 	for rows.Next() {
 		var columnName, dataType, isNullable, columnKey string
 		var columnDefault, extra, comment sql.NullString
@@ -143,32 +146,31 @@ func (e *MySQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string
 			return nil, e.HandleDatabaseError(err)
 		}
 
-		column := ColumnSchema{
+		col := &snapsql.ColumnInfo{
 			Name:         columnName,
-			Type:         dataType,
-			SnapSQLType:  e.MapColumnType(dataType),
+			DataType:     e.MapColumnType(dataType),
 			Nullable:     isNullable == "YES",
 			IsPrimaryKey: columnKey == "PRI",
 		}
-
 		if columnDefault.Valid {
-			column.DefaultValue = e.ParseDefaultValue(columnDefault.String)
+			col.DefaultValue = e.ParseDefaultValue(columnDefault.String)
 		}
-
 		if comment.Valid {
-			column.Comment = comment.String
+			col.Comment = comment.String
 		}
-
-		// Handle auto increment - add to comment if not already present
-		if extra.Valid && strings.Contains(extra.String, "auto_increment") {
-			if column.Comment == "" {
-				column.Comment = "AUTO_INCREMENT"
-			} else if !strings.Contains(column.Comment, "AUTO_INCREMENT") {
-				column.Comment += " (AUTO_INCREMENT)"
-			}
+		if characterMaxLength.Valid {
+			v := int(characterMaxLength.Int64)
+			col.MaxLength = &v
 		}
-
-		columns = append(columns, column)
+		if numericPrecision.Valid {
+			v := int(numericPrecision.Int64)
+			col.Precision = &v
+		}
+		if numericScale.Valid {
+			v := int(numericScale.Int64)
+			col.Scale = &v
+		}
+		columns[columnName] = col
 	}
 
 	if err := rows.Err(); err != nil {
@@ -179,7 +181,7 @@ func (e *MySQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string
 }
 
 // ExtractConstraints extracts all constraints from a specific table
-func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]ConstraintSchema, error) {
+func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
 	query := e.BuildConstraintsQuery(schemaName, tableName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -187,7 +189,7 @@ func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName st
 	}
 	defer rows.Close()
 
-	constraintMap := make(map[string]*ConstraintSchema)
+	constraintMap := make(map[string]*snapsql.ConstraintInfo)
 
 	for rows.Next() {
 		var constraintName, constraintType string
@@ -210,7 +212,7 @@ func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName st
 			}
 		} else {
 			// Create new constraint
-			constraint := &ConstraintSchema{
+			constraint := &snapsql.ConstraintInfo{
 				Name: constraintName,
 				Type: e.ParseConstraintType(constraintType),
 			}
@@ -237,7 +239,7 @@ func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName st
 	}
 
 	// Convert map to slice
-	constraints := make([]ConstraintSchema, 0, len(constraintMap))
+	constraints := make([]snapsql.ConstraintInfo, 0, len(constraintMap))
 	for _, constraint := range constraintMap {
 		constraints = append(constraints, *constraint)
 	}
@@ -246,7 +248,7 @@ func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName st
 }
 
 // ExtractIndexes extracts all indexes from a specific table
-func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]IndexSchema, error) {
+func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
 	query := e.BuildIndexesQuery(schemaName, tableName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -254,7 +256,7 @@ func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string
 	}
 	defer rows.Close()
 
-	indexMap := make(map[string]*IndexSchema)
+	indexMap := make(map[string]*snapsql.IndexInfo)
 
 	for rows.Next() {
 		var indexName, columnName, indexType string
@@ -285,7 +287,7 @@ func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string
 			}
 		} else {
 			// Create new index
-			index := &IndexSchema{
+			index := &snapsql.IndexInfo{
 				Name:     indexName,
 				Columns:  []string{columnName},
 				IsUnique: nonUnique == 0,
@@ -301,7 +303,7 @@ func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string
 	}
 
 	// Convert map to slice
-	indexes := make([]IndexSchema, 0, len(indexMap))
+	indexes := make([]snapsql.IndexInfo, 0, len(indexMap))
 	for _, index := range indexMap {
 		indexes = append(indexes, *index)
 	}
@@ -310,7 +312,7 @@ func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string
 }
 
 // ExtractViews extracts all views from a specific schema
-func (e *MySQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]ViewSchema, error) {
+func (e *MySQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
 	query := e.BuildViewsQuery(schemaName)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -318,7 +320,7 @@ func (e *MySQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]ViewSche
 	}
 	defer rows.Close()
 
-	var views []ViewSchema
+	var views []*snapsql.ViewInfo
 	for rows.Next() {
 		var viewName, viewDefinition string
 
@@ -327,7 +329,7 @@ func (e *MySQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]ViewSche
 			return nil, e.HandleDatabaseError(err)
 		}
 
-		view := ViewSchema{
+		view := &snapsql.ViewInfo{
 			Name:       viewName,
 			Schema:     schemaName,
 			Definition: viewDefinition,
@@ -344,19 +346,19 @@ func (e *MySQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]ViewSche
 }
 
 // GetDatabaseInfo extracts database information
-func (e *MySQLExtractor) GetDatabaseInfo(db *sql.DB) (DatabaseInfo, error) {
+func (e *MySQLExtractor) GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo, error) {
 	var version, dbName, charset string
 
 	// Get version
 	err := db.QueryRow("SELECT VERSION()").Scan(&version)
 	if err != nil {
-		return DatabaseInfo{}, e.HandleDatabaseError(err)
+		return snapsql.DatabaseInfo{}, e.HandleDatabaseError(err)
 	}
 
 	// Get database name
 	err = db.QueryRow("SELECT DATABASE()").Scan(&dbName)
 	if err != nil {
-		return DatabaseInfo{}, e.HandleDatabaseError(err)
+		return snapsql.DatabaseInfo{}, e.HandleDatabaseError(err)
 	}
 
 	// Get default charset
@@ -366,7 +368,7 @@ func (e *MySQLExtractor) GetDatabaseInfo(db *sql.DB) (DatabaseInfo, error) {
 		charset = "utf8mb4"
 	}
 
-	return DatabaseInfo{
+	return snapsql.DatabaseInfo{
 		Type:    "mysql",
 		Version: version,
 		Name:    dbName,

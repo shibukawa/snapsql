@@ -78,6 +78,12 @@ type Field struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	DatabaseTag string `json:"database_tag,omitempty"`
+	// --- typeinference 型情報 ---
+	BaseType   string `json:"base_type,omitempty"`
+	IsNullable bool   `json:"is_nullable,omitempty"`
+	MaxLength  *int   `json:"max_length,omitempty"`
+	Precision  *int   `json:"precision,omitempty"`
+	Scale      *int   `json:"scale,omitempty"`
 }
 
 // VariableDependencies contains variable dependency information for optimization
