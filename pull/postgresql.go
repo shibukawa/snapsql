@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	snapsql "github.com/shibukawa/snapsql"
 )
@@ -60,7 +59,6 @@ func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) (
 	for _, schemaName := range filteredSchemas {
 		schema := snapsql.DatabaseSchema{
 			Name:         schemaName,
-			ExtractedAt:  time.Now().Format(time.RFC3339),
 			DatabaseInfo: dbInfo,
 		}
 

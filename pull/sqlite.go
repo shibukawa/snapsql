@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	snapsql "github.com/shibukawa/snapsql"
 )
@@ -33,7 +32,6 @@ func (e *SQLiteExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sn
 	// SQLite uses 'main' as default schema, map to 'global'
 	schema := snapsql.DatabaseSchema{
 		Name:         "global",
-		ExtractedAt:  time.Now().Format(time.RFC3339),
 		DatabaseInfo: dbInfo,
 	}
 

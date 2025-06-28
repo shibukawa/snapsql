@@ -125,7 +125,6 @@ func TestPullOperation(t *testing.T) {
 			DatabaseURL:  "postgres://user:pass@localhost:5432/testdb",
 			DatabaseType: "postgresql",
 			OutputPath:   ".snapsql/schema",
-			OutputFormat: OutputPerTable,
 			SchemaAware:  true,
 		}
 
@@ -146,7 +145,7 @@ func TestPullOperation(t *testing.T) {
 					DatabaseURL:  "postgres://user:pass@localhost:5432/testdb",
 					DatabaseType: "postgresql",
 					OutputPath:   ".snapsql/schema",
-					OutputFormat: OutputPerTable,
+					SchemaAware:  true,
 				},
 				shouldError: false,
 			},
@@ -156,7 +155,7 @@ func TestPullOperation(t *testing.T) {
 					DatabaseURL:  "",
 					DatabaseType: "postgresql",
 					OutputPath:   ".snapsql/schema",
-					OutputFormat: OutputPerTable,
+					SchemaAware:  true,
 				},
 				shouldError: true,
 			},
@@ -166,7 +165,7 @@ func TestPullOperation(t *testing.T) {
 					DatabaseURL:  "postgres://user:pass@localhost:5432/testdb",
 					DatabaseType: "",
 					OutputPath:   ".snapsql/schema",
-					OutputFormat: OutputPerTable,
+					SchemaAware:  true,
 				},
 				shouldError: true,
 			},
@@ -176,17 +175,7 @@ func TestPullOperation(t *testing.T) {
 					DatabaseURL:  "postgres://user:pass@localhost:5432/testdb",
 					DatabaseType: "postgresql",
 					OutputPath:   "",
-					OutputFormat: OutputPerTable,
-				},
-				shouldError: true,
-			},
-			{
-				name: "InvalidOutputFormat",
-				config: PullConfig{
-					DatabaseURL:  "postgres://user:pass@localhost:5432/testdb",
-					DatabaseType: "postgresql",
-					OutputPath:   ".snapsql/schema",
-					OutputFormat: "invalid",
+					SchemaAware:  true,
 				},
 				shouldError: true,
 			},
@@ -212,7 +201,6 @@ func TestPullExecution(t *testing.T) {
 			DatabaseURL:  "postgres://user:pass@localhost:5432/testdb",
 			DatabaseType: "postgresql",
 			OutputPath:   ".snapsql/schema",
-			OutputFormat: OutputPerTable,
 			SchemaAware:  true,
 		}
 
@@ -230,7 +218,6 @@ func TestPullExecution(t *testing.T) {
 			DatabaseURL:  "postgres://user:pass@localhost:5432/testdb",
 			DatabaseType: "postgresql",
 			OutputPath:   ".snapsql/schema",
-			OutputFormat: OutputPerTable,
 			SchemaAware:  true,
 		}
 
@@ -379,7 +366,6 @@ func TestErrorHandling(t *testing.T) {
 			DatabaseURL:  "",
 			DatabaseType: "postgresql",
 			OutputPath:   ".snapsql/schema",
-			OutputFormat: OutputPerTable,
 		}
 
 		operation := NewPullOperation(config)

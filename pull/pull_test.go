@@ -2,7 +2,6 @@ package pull
 
 import (
 	"testing"
-	"time"
 
 	"github.com/alecthomas/assert/v2"
 	snapsql "github.com/shibukawa/snapsql"
@@ -14,14 +13,12 @@ func TestPullConfig(t *testing.T) {
 			DatabaseURL:  "postgres://user:pass@localhost/testdb",
 			DatabaseType: "postgresql",
 			OutputPath:   ".snapsql/schema",
-			OutputFormat: OutputPerTable,
 			SchemaAware:  true,
 		}
 
 		assert.Equal(t, "postgres://user:pass@localhost/testdb", config.DatabaseURL)
 		assert.Equal(t, "postgresql", config.DatabaseType)
 		assert.Equal(t, ".snapsql/schema", config.OutputPath)
-		assert.Equal(t, OutputPerTable, config.OutputFormat)
 		assert.Equal(t, true, config.SchemaAware)
 	})
 
@@ -30,7 +27,6 @@ func TestPullConfig(t *testing.T) {
 			DatabaseURL:    "mysql://user:pass@localhost/testdb",
 			DatabaseType:   "mysql",
 			OutputPath:     ".snapsql/schema",
-			OutputFormat:   OutputSingleFile,
 			SchemaAware:    true,
 			IncludeSchemas: []string{"public", "auth"},
 			ExcludeSchemas: []string{"information_schema", "mysql"},
@@ -41,7 +37,6 @@ func TestPullConfig(t *testing.T) {
 		}
 
 		assert.Equal(t, "mysql", config.DatabaseType)
-		assert.Equal(t, OutputSingleFile, config.OutputFormat)
 		assert.Equal(t, []string{"public", "auth"}, config.IncludeSchemas)
 		assert.Equal(t, []string{"information_schema", "mysql"}, config.ExcludeSchemas)
 		assert.Equal(t, []string{"users", "posts", "comments"}, config.IncludeTables)
@@ -55,30 +50,25 @@ func TestPullConfig(t *testing.T) {
 			DatabaseURL:  "sqlite:///path/to/database.db",
 			DatabaseType: "sqlite",
 			OutputPath:   ".snapsql/schema",
-			OutputFormat: OutputPerSchema,
 			SchemaAware:  false, // SQLite uses global schema
 		}
 
 		assert.Equal(t, "sqlite:///path/to/database.db", config.DatabaseURL)
 		assert.Equal(t, "sqlite", config.DatabaseType)
-		assert.Equal(t, OutputPerSchema, config.OutputFormat)
 		assert.Equal(t, false, config.SchemaAware)
 	})
 }
 
 func TestPullResult(t *testing.T) {
 	t.Run("CreateBasicPullResult", func(t *testing.T) {
-		extractedAt := time.Now().Format(time.RFC3339)
 		result := struct {
 			Schemas      []snapsql.DatabaseSchema
-			ExtractedAt  string
 			DatabaseInfo snapsql.DatabaseInfo
 			Errors       []error
 		}{
 			Schemas: []snapsql.DatabaseSchema{
 				createTestDatabaseSchema(),
 			},
-			ExtractedAt:  extractedAt,
 			DatabaseInfo: snapsql.DatabaseInfo{Type: "postgresql", Version: "14.2", Name: "testdb", Charset: "UTF8"},
 			Errors:       []error{},
 		}
@@ -86,7 +76,6 @@ func TestPullResult(t *testing.T) {
 		assert.Equal(t, 1, len(result.Schemas))
 		assert.Equal(t, "public", result.Schemas[0].Name)
 		assert.Equal(t, 2, len(result.Schemas[0].Tables))
-		assert.Equal(t, extractedAt, result.ExtractedAt)
 		assert.Equal(t, "postgresql", result.DatabaseInfo.Type)
 		assert.Equal(t, 0, len(result.Errors))
 	})
@@ -94,12 +83,10 @@ func TestPullResult(t *testing.T) {
 	t.Run("CreatePullResultWithErrors", func(t *testing.T) {
 		result := struct {
 			Schemas      []snapsql.DatabaseSchema
-			ExtractedAt  string
 			DatabaseInfo snapsql.DatabaseInfo
 			Errors       []error
 		}{
-			Schemas:     []snapsql.DatabaseSchema{},
-			ExtractedAt: time.Now().Format(time.RFC3339),
+			Schemas: []snapsql.DatabaseSchema{},
 			DatabaseInfo: snapsql.DatabaseInfo{
 				Type: "postgresql",
 			},
@@ -118,7 +105,6 @@ func TestPullResult(t *testing.T) {
 	t.Run("CreateMultiSchemaPullResult", func(t *testing.T) {
 		result := struct {
 			Schemas      []snapsql.DatabaseSchema
-			ExtractedAt  string
 			DatabaseInfo snapsql.DatabaseInfo
 		}{
 			Schemas: []snapsql.DatabaseSchema{
@@ -137,7 +123,6 @@ func TestPullResult(t *testing.T) {
 					},
 				},
 			},
-			ExtractedAt:  time.Now().Format(time.RFC3339),
 			DatabaseInfo: snapsql.DatabaseInfo{Type: "postgresql"},
 		}
 
@@ -146,20 +131,6 @@ func TestPullResult(t *testing.T) {
 		assert.Equal(t, "auth", result.Schemas[1].Name)
 		assert.Equal(t, 2, len(result.Schemas[0].Tables))
 		assert.Equal(t, 2, len(result.Schemas[1].Tables))
-	})
-}
-
-func TestOutputFormat(t *testing.T) {
-	t.Run("OutputFormatConstants", func(t *testing.T) {
-		assert.Equal(t, OutputFormat("single"), OutputSingleFile)
-		assert.Equal(t, OutputFormat("per_table"), OutputPerTable)
-		assert.Equal(t, OutputFormat("per_schema"), OutputPerSchema)
-	})
-
-	t.Run("OutputFormatString", func(t *testing.T) {
-		assert.Equal(t, "single", string(OutputSingleFile))
-		assert.Equal(t, "per_table", string(OutputPerTable))
-		assert.Equal(t, "per_schema", string(OutputPerSchema))
 	})
 }
 
@@ -280,7 +251,6 @@ func createTestTableInfo() *snapsql.TableInfo {
 
 func createTestDatabaseSchema() snapsql.DatabaseSchema {
 	tables := []*snapsql.TableInfo{
-		createTestTableInfo(),
 		{
 			Name:   "posts",
 			Schema: "public",
@@ -317,6 +287,7 @@ func createTestDatabaseSchema() snapsql.DatabaseSchema {
 				},
 			},
 		},
+		createTestTableInfo(),
 	}
 	return snapsql.DatabaseSchema{
 		Name:   "public",
@@ -329,7 +300,6 @@ func createTestDatabaseSchema() snapsql.DatabaseSchema {
 				Comment:    "Users active in the last 30 days",
 			},
 		},
-		ExtractedAt:  time.Now().Format(time.RFC3339),
 		DatabaseInfo: snapsql.DatabaseInfo{Type: "postgresql", Version: "14.2", Name: "testdb", Charset: "UTF8"},
 	}
 }

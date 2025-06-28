@@ -62,7 +62,6 @@ func TestPostgreSQLIntegration(t *testing.T) {
 			DatabaseURL:    connStr,
 			DatabaseType:   "postgresql",
 			OutputPath:     tempDir,
-			OutputFormat:   OutputPerTable,
 			SchemaAware:    true,
 			IncludeViews:   true,
 			IncludeIndexes: true,
@@ -118,7 +117,6 @@ func TestPostgreSQLIntegration(t *testing.T) {
 			DatabaseURL:   connStr,
 			DatabaseType:  "postgresql",
 			OutputPath:    tempDir,
-			OutputFormat:  OutputPerTable,
 			SchemaAware:   true,
 			IncludeTables: []string{"users"}, // Only include users table
 		}
@@ -198,7 +196,6 @@ func TestMySQLIntegration(t *testing.T) {
 			DatabaseURL:  mysqlURL,
 			DatabaseType: "mysql",
 			OutputPath:   tempDir,
-			OutputFormat: OutputPerTable,
 			SchemaAware:  false, // MySQL doesn't use schema-aware structure in our test
 		}
 
@@ -241,7 +238,6 @@ func TestSQLiteIntegration(t *testing.T) {
 			DatabaseURL:  fmt.Sprintf("sqlite://%s", dbPath),
 			DatabaseType: "sqlite",
 			OutputPath:   outputDir,
-			OutputFormat: OutputPerTable,
 			SchemaAware:  true,
 		}
 
@@ -265,34 +261,6 @@ func TestSQLiteIntegration(t *testing.T) {
 		assert.Contains(t, usersYAML, "name: users")
 		assert.Contains(t, usersYAML, "name: id")
 		assert.Contains(t, usersYAML, "name: email")
-	})
-
-	t.Run("SingleFileOutput", func(t *testing.T) {
-		outputDir := filepath.Join(tempDir, "single_output")
-
-		config := PullConfig{
-			DatabaseURL:  fmt.Sprintf("sqlite://%s", dbPath),
-			DatabaseType: "sqlite",
-			OutputPath:   outputDir,
-			OutputFormat: OutputSingleFile,
-		}
-
-		result, err := ExecutePull(config)
-		assert.NoError(t, err)
-		assert.NotZero(t, result)
-
-		// Verify single file was created
-		singleFile := filepath.Join(outputDir, "database_schema.yaml")
-		fileExists(t, singleFile)
-
-		// Verify content
-		content, err := os.ReadFile(singleFile)
-		assert.NoError(t, err)
-		yamlContent := string(content)
-		assert.Contains(t, yamlContent, "database_info:")
-		assert.Contains(t, yamlContent, "type: sqlite")
-		assert.Contains(t, yamlContent, "schemas:")
-		assert.Contains(t, yamlContent, "name: global")
 	})
 }
 

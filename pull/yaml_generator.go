@@ -12,51 +12,19 @@ import (
 
 // YAMLGenerator generates YAML schema files from database schemas
 type YAMLGenerator struct {
-	Format      OutputFormat
-	Pretty      bool
 	SchemaAware bool // Enable schema-aware directory structure
-	FlowStyle   bool // Use flow style for columns, constraints, indexes
 }
 
 // NewYAMLGenerator creates a new YAML generator
-func NewYAMLGenerator(format OutputFormat, pretty, schemaAware, flowStyle bool) *YAMLGenerator {
+func NewYAMLGenerator(schemaAware bool) *YAMLGenerator {
 	return &YAMLGenerator{
-		Format:      format,
-		Pretty:      pretty,
 		SchemaAware: schemaAware,
-		FlowStyle:   flowStyle,
 	}
 }
 
-// Generate generates YAML files from database schemas
+// Generate generates YAML files from database schemas (PerTableのみ)
 func (g *YAMLGenerator) Generate(schemas []snapsql.DatabaseSchema, outputPath string) error {
-	switch g.Format {
-	case OutputSingleFile:
-		return g.generateSingleFile(schemas, outputPath)
-	case OutputPerTable:
-		return g.generatePerTable(schemas, outputPath)
-	case OutputPerSchema:
-		return g.generatePerSchema(schemas, outputPath)
-	default:
-		return ErrInvalidOutputFormat
-	}
-}
-
-// generateSingleFile generates a single YAML file containing all schemas
-func (g *YAMLGenerator) generateSingleFile(schemas []snapsql.DatabaseSchema, outputPath string) error {
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
-		return ErrDirectoryCreateFailed
-	}
-
-	filename := filepath.Join(outputPath, "database_schema.yaml")
-	file, err := os.Create(filename)
-	if err != nil {
-		return ErrFileWriteFailed
-	}
-	defer file.Close()
-
-	// metadataラッパー
-	return g.writeYAML(file, map[string]interface{}{"metadata": toYAMLSingleFileSchema(schemas)})
+	return g.generatePerTable(schemas, outputPath)
 }
 
 // generatePerTable generates separate YAML files for each table
@@ -86,31 +54,6 @@ func (g *YAMLGenerator) generatePerTable(schemas []snapsql.DatabaseSchema, outpu
 			}
 			file.Close()
 		}
-	}
-
-	return nil
-}
-
-// generatePerSchema generates separate YAML files for each schema
-func (g *YAMLGenerator) generatePerSchema(schemas []snapsql.DatabaseSchema, outputPath string) error {
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
-		return ErrDirectoryCreateFailed
-	}
-
-	for _, schema := range schemas {
-		yamlSchema := toYAMLSchema(schema)
-		filename := filepath.Join(outputPath, g.getSchemaFileName(schema.Name))
-		file, err := os.Create(filename)
-		if err != nil {
-			return ErrFileWriteFailed
-		}
-
-		// metadataラッパー
-		if err := g.writeYAML(file, map[string]interface{}{"metadata": yamlSchema}); err != nil {
-			file.Close()
-			return err
-		}
-		file.Close()
 	}
 
 	return nil
@@ -163,17 +106,6 @@ func (g *YAMLGenerator) getSchemaFileName(schemaName string) string {
 }
 
 // --- 変換関数 ---
-func toYAMLSingleFileSchema(schemas []snapsql.DatabaseSchema) YAMLSingleFileSchema {
-	var yamlSchemas []YAMLSchema
-	for _, s := range schemas {
-		yamlSchemas = append(yamlSchemas, toYAMLSchema(s))
-	}
-	return YAMLSingleFileSchema{
-		DatabaseInfo: schemas[0].DatabaseInfo,
-		Schemas:      yamlSchemas,
-	}
-}
-
 func toYAMLSchema(s snapsql.DatabaseSchema) YAMLSchema {
 	var tables []YAMLTable
 	for _, t := range s.Tables {

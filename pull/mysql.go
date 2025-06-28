@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	snapsql "github.com/shibukawa/snapsql"
 )
@@ -33,7 +32,6 @@ func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sna
 	// MySQL uses the database name as schema name
 	schema := snapsql.DatabaseSchema{
 		Name:         dbInfo.Name,
-		ExtractedAt:  time.Now().Format(time.RFC3339),
 		DatabaseInfo: dbInfo,
 	}
 

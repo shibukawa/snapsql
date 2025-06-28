@@ -265,14 +265,6 @@ func (p *PullOperation) ValidateConfig() error {
 		return ErrInvalidOutputPath
 	}
 
-	// Validate output format
-	switch p.Config.OutputFormat {
-	case OutputSingleFile, OutputPerTable, OutputPerSchema:
-		// Valid formats
-	default:
-		return ErrInvalidOutputFormat
-	}
-
 	// Validate database URL format
 	return p.connector.ValidateConnectionString(p.Config.DatabaseURL)
 }
@@ -320,12 +312,7 @@ func (p *PullOperation) Execute() (*PullResult, error) {
 	}
 
 	// Generate YAML files
-	generator := NewYAMLGenerator(
-		p.Config.OutputFormat,
-		true, // Pretty print
-		p.Config.SchemaAware,
-		true, // Flow style
-	)
+	generator := NewYAMLGenerator(p.Config.SchemaAware)
 	p.generator = generator
 
 	if err := generator.Generate(schemas, p.Config.OutputPath); err != nil {
@@ -345,7 +332,6 @@ func (p *PullOperation) CreateResult(schemas []snapsql.DatabaseSchema, errors []
 
 	return &PullResult{
 		Schemas:      schemas,
-		ExtractedAt:  time.Now(),
 		DatabaseInfo: dbInfo,
 		Errors:       errors,
 	}

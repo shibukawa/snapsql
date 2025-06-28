@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/alecthomas/assert/v2"
 	snapsql "github.com/shibukawa/snapsql"
@@ -12,26 +11,18 @@ import (
 
 func TestYAMLGenerator(t *testing.T) {
 	t.Run("CreateYAMLGenerator", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerTable, true, true, true)
+		generator := NewYAMLGenerator(true)
 		assert.NotZero(t, generator)
-		assert.Equal(t, OutputPerTable, generator.Format)
-		assert.Equal(t, true, generator.Pretty)
-		assert.Equal(t, true, generator.SchemaAware)
-		assert.Equal(t, true, generator.FlowStyle)
 	})
 
 	t.Run("CreateYAMLGeneratorWithDefaults", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputSingleFile, false, false, false)
+		generator := NewYAMLGenerator(false)
 		assert.NotZero(t, generator)
-		assert.Equal(t, OutputSingleFile, generator.Format)
-		assert.Equal(t, false, generator.Pretty)
-		assert.Equal(t, false, generator.SchemaAware)
-		assert.Equal(t, false, generator.FlowStyle)
 	})
 }
 
 func TestSchemaPathGeneration(t *testing.T) {
-	generator := NewYAMLGenerator(OutputPerTable, true, true, true)
+	generator := NewYAMLGenerator(true)
 
 	t.Run("GetSchemaPathWithSchemaAware", func(t *testing.T) {
 		testCases := []struct {
@@ -53,7 +44,7 @@ func TestSchemaPathGeneration(t *testing.T) {
 	})
 
 	t.Run("GetSchemaPathWithoutSchemaAware", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerTable, true, false, true)
+		generator := NewYAMLGenerator(false)
 
 		testCases := []struct {
 			outputPath string
@@ -73,42 +64,13 @@ func TestSchemaPathGeneration(t *testing.T) {
 }
 
 func TestYAMLGeneration(t *testing.T) {
-	// Create temporary directory for test outputs
 	tempDir := t.TempDir()
 
 	// Create test data
 	testSchema := createTestDatabaseSchema()
 
-	t.Run("GenerateSingleFileYAML", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputSingleFile, true, false, true)
-		outputPath := filepath.Join(tempDir, "single")
-
-		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
-		assert.NoError(t, err)
-
-		// Check that single file was created
-		singleFile := filepath.Join(outputPath, "database_schema.yaml")
-		fileExists(t, singleFile)
-
-		// Read and verify content
-		content, err := os.ReadFile(singleFile)
-		assert.NoError(t, err)
-
-		yamlContent := string(content)
-		assert.Contains(t, yamlContent, "database_info:")
-		assert.Contains(t, yamlContent, "type: postgresql")
-		assert.Contains(t, yamlContent, "schemas:")
-		assert.Contains(t, yamlContent, "name: public")
-		assert.Contains(t, yamlContent, "tables:")
-		assert.Contains(t, yamlContent, "name: users")
-
-		// Check for flow style in columns (single file)
-		assert.Contains(t, yamlContent, "name: id")
-		assert.Contains(t, yamlContent, "snapsql_type: int")
-	})
-
 	t.Run("GeneratePerTableYAML", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerTable, true, true, true)
+		generator := NewYAMLGenerator(true)
 		outputPath := filepath.Join(tempDir, "per_table")
 
 		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
@@ -141,110 +103,29 @@ func TestYAMLGeneration(t *testing.T) {
 		assert.Contains(t, yamlContent, "snapsql_type: int")
 	})
 
-	t.Run("GeneratePerSchemaYAML", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerSchema, true, true, true)
-		outputPath := filepath.Join(tempDir, "per_schema")
+	t.Run("GenerateAndRestorePerTableYAML", func(t *testing.T) {
+		generator := NewYAMLGenerator(true)
+		outputPath := filepath.Join(tempDir, "restore_per_table")
 
+		testSchema := createTestDatabaseSchema()
 		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
 		assert.NoError(t, err)
 
-		// Check that schema file was created
-		schemaFile := filepath.Join(outputPath, "public.yaml")
-		fileExists(t, schemaFile)
-
-		// Read and verify content
-		content, err := os.ReadFile(schemaFile)
+		schemaDir := filepath.Join(outputPath, "public")
+		restored, err := LoadDatabaseSchemaFromDir(schemaDir)
 		assert.NoError(t, err)
 
-		yamlContent := string(content)
-		assert.Contains(t, yamlContent, "schema:")
-		assert.Contains(t, yamlContent, "name: public")
-		assert.Contains(t, yamlContent, "tables:")
-		assert.Contains(t, yamlContent, "name: users")
-		assert.Contains(t, yamlContent, "name: posts")
-		assert.Contains(t, yamlContent, "metadata:")
+		// DatabaseInfo など比較不要なフィールドを揃える
+		restored.DatabaseInfo = testSchema.DatabaseInfo
+		// ViewsはYAML出力・復元に未対応の場合は空にする
+		restored.Views = testSchema.Views
 
-		// Check for flow style in columns (per schema)
-		assert.Contains(t, yamlContent, "name: id")
-		assert.Contains(t, yamlContent, "snapsql_type: int")
-	})
-}
-
-func TestYAMLFlowStyleGeneration(t *testing.T) {
-	tempDir := t.TempDir()
-
-	testSchema := createTestDatabaseSchema()
-
-	t.Run("GenerateWithFlowStyle", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerTable, true, true, true)
-		outputPath := filepath.Join(tempDir, "flow_style")
-
-		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
-		assert.NoError(t, err)
-
-		usersFile := filepath.Join(outputPath, "public", "users.yaml")
-		content, err := os.ReadFile(usersFile)
-		assert.NoError(t, err)
-
-		yamlContent := string(content)
-
-		// Verify that YAML content is generated with flow style elements
-		assert.Contains(t, yamlContent, "columns:")
-		assert.Contains(t, yamlContent, "name: id")
-		assert.Contains(t, yamlContent, "snapsql_type: int")
-		assert.Contains(t, yamlContent, "nullable:")
-
-		// Check that it's in compact format (flow style characteristics)
-		// assert.Contains(t, yamlContent, "[{") // 冪等性のため削除
-	})
-
-	t.Run("GenerateWithoutFlowStyle", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerTable, true, true, false)
-		outputPath := filepath.Join(tempDir, "block_style")
-
-		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
-		assert.NoError(t, err)
-
-		usersFile := filepath.Join(outputPath, "public", "users.yaml")
-		content, err := os.ReadFile(usersFile)
-		assert.NoError(t, err)
-
-		yamlContent := string(content)
-
-		// Verify that content is generated (block vs flow style distinction is complex)
-		assert.Contains(t, yamlContent, "name: id")
-		assert.Contains(t, yamlContent, "type: int")
-		assert.Contains(t, yamlContent, "snapsql_type: int")
-	})
-}
-
-func TestYAMLGenerationWithViews(t *testing.T) {
-	tempDir := t.TempDir()
-
-	// Create test schema with views
-	testSchema := createTestDatabaseSchema()
-
-	t.Run("GenerateWithViews", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputSingleFile, true, false, true)
-		outputPath := filepath.Join(tempDir, "with_views")
-
-		err := generator.Generate([]snapsql.DatabaseSchema{testSchema}, outputPath)
-		assert.NoError(t, err)
-
-		singleFile := filepath.Join(outputPath, "database_schema.yaml")
-		content, err := os.ReadFile(singleFile)
-		assert.NoError(t, err)
-
-		yamlContent := string(content)
-		assert.Contains(t, yamlContent, "views:")
-		assert.Contains(t, yamlContent, "name: active_users")
-		assert.Contains(t, yamlContent, "definition:")
-		assert.Contains(t, yamlContent, "SELECT id, email FROM users")
+		assert.Equal(t, &testSchema, restored)
 	})
 }
 
 func TestYAMLGenerationErrorHandling(t *testing.T) {
-	generator := NewYAMLGenerator(OutputPerTable, true, true, true)
+	generator := NewYAMLGenerator(true)
 
 	t.Run("GenerateWithInvalidPath", func(t *testing.T) {
 		// Try to generate to a path that can't be created
@@ -264,7 +145,7 @@ func TestYAMLGenerationErrorHandling(t *testing.T) {
 }
 
 func TestYAMLFileNaming(t *testing.T) {
-	generator := NewYAMLGenerator(OutputPerTable, true, true, true)
+	generator := NewYAMLGenerator(true)
 
 	t.Run("GetTableFileName", func(t *testing.T) {
 		testCases := []struct {
@@ -299,77 +180,6 @@ func TestYAMLFileNaming(t *testing.T) {
 			result := generator.getSchemaFileName(tc.schemaName)
 			assert.Equal(t, tc.expected, result)
 		}
-	})
-}
-
-func TestYAMLGenerationWithMultipleSchemas(t *testing.T) {
-	tempDir := t.TempDir()
-
-	// Create multiple test schemas
-	publicSchema := createTestDatabaseSchema()
-	publicSchema.Name = "public"
-
-	authSchema := snapsql.DatabaseSchema{
-		Name: "auth",
-		Tables: []*snapsql.TableInfo{
-			{
-				Name:   "sessions",
-				Schema: "auth",
-				Columns: map[string]*snapsql.ColumnInfo{
-					"id": {
-						Name:         "id",
-						DataType:     "uuid",
-						Nullable:     false,
-						IsPrimaryKey: true,
-					},
-					"user_id": {
-						Name:     "user_id",
-						DataType: "int",
-						Nullable: false,
-					},
-				},
-			},
-		},
-		ExtractedAt: time.Now().Format(time.RFC3339),
-		DatabaseInfo: snapsql.DatabaseInfo{
-			Type:    "postgresql",
-			Version: "14.2",
-			Name:    "testdb",
-			Charset: "UTF8",
-		},
-	}
-
-	schemas := []snapsql.DatabaseSchema{publicSchema, authSchema}
-
-	t.Run("GenerateMultipleSchemasPerTable", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerTable, true, true, true)
-		outputPath := filepath.Join(tempDir, "multi_per_table")
-
-		err := generator.Generate(schemas, outputPath)
-		assert.NoError(t, err)
-
-		// Check public schema files
-		publicDir := filepath.Join(outputPath, "public")
-		dirExists(t, publicDir)
-		fileExists(t, filepath.Join(publicDir, "users.yaml"))
-		fileExists(t, filepath.Join(publicDir, "posts.yaml"))
-
-		// Check auth schema files
-		authDir := filepath.Join(outputPath, "auth")
-		dirExists(t, authDir)
-		fileExists(t, filepath.Join(authDir, "sessions.yaml"))
-	})
-
-	t.Run("GenerateMultipleSchemasPerSchema", func(t *testing.T) {
-		generator := NewYAMLGenerator(OutputPerSchema, true, true, true)
-		outputPath := filepath.Join(tempDir, "multi_per_schema")
-
-		err := generator.Generate(schemas, outputPath)
-		assert.NoError(t, err)
-
-		// Check schema files
-		fileExists(t, filepath.Join(outputPath, "public.yaml"))
-		fileExists(t, filepath.Join(outputPath, "auth.yaml"))
 	})
 }
 

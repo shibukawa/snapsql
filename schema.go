@@ -28,7 +28,6 @@ type DatabaseSchema struct {
 	Name         string       // Schema/database name
 	Tables       []*TableInfo // Tables
 	Views        []*ViewInfo  // Views (optional)
-	ExtractedAt  string       // Extraction timestamp (RFC3339)
 	DatabaseInfo DatabaseInfo // DB info
 }
 
