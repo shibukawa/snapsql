@@ -83,6 +83,12 @@ const (
 
 	// Others
 	OTHER // complex expressions, database-specific syntax
+
+	// SnapSQL extensions
+	DUPLICATE   // DUPLICATE keyword
+	KEY         // KEY keyword
+	ON          // ON keyword
+	CONFLICT    // CONFLICT keyword
 )
 
 // String returns the string representation of TokenType
@@ -200,6 +206,14 @@ func (t TokenType) String() string {
 		return "BLOCK_COMMENT"
 	case OTHER:
 		return "OTHER"
+	case ON:
+		return "ON"
+	case CONFLICT:
+		return "CONFLICT"
+	case DUPLICATE:
+		return "DUPLICATE"
+	case KEY:
+		return "KEY"
 	default:
 		return "UNKNOWN"
 	}

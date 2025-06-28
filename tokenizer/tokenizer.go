@@ -625,6 +625,14 @@ func (t *tokenizer) getKeywordTokenType(word string) TokenType {
 		return WORD
 	case "OFFSET":
 		return WORD
+	case "ON":
+		return ON
+	case "CONFLICT":
+		return CONFLICT
+	case "DUPLICATE":
+		return DUPLICATE
+	case "KEY":
+		return KEY
 	default:
 		return WORD
 	}
