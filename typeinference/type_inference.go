@@ -122,7 +122,7 @@ func NewTypeInferenceEngine(schema *SchemaStore) *TypeInferenceEngine {
 const StarType = 6 // SELECT * or t.* 対応
 
 func (tie *TypeInferenceEngine) InferSelectTypes(selectClause *SelectClause, context *InferenceContext) ([]*InferredField, error) {
-	var fields []*InferredField
+	fields := make([]*InferredField, 0, len(selectClause.Fields))
 	for _, field := range selectClause.Fields {
 		if field.Type == StarType {
 			// SELECT * or t.*
@@ -162,6 +162,15 @@ type SelectClause struct {
 	Fields []*SelectField
 }
 
+type UnknownFieldError struct {
+	Field   *SelectField
+	Context *InferenceContext
+}
+
+func (e *UnknownFieldError) Error() string {
+	return "unknown field type: " + e.Field.Column + " in context: " + string(e.Context.Dialect)
+}
+
 func (tie *TypeInferenceEngine) inferFieldType(field *SelectField, context *InferenceContext) (*InferredField, error) {
 	if field.Type == ColumnReference {
 		return tie.inferColumnType(field, context)
@@ -196,11 +205,11 @@ func (tie *TypeInferenceEngine) inferFieldType(field *SelectField, context *Infe
 			return nil, err
 		}
 		if len(fields) == 0 {
-			return nil, errors.New("subquery returns no columns")
+			return nil, ErrSubqueryNoColumns
 		}
 		return fields[0], nil
 	}
-	return nil, nil
+	return nil, &UnknownFieldError{Field: field, Context: context}
 }
 
 func (tie *TypeInferenceEngine) inferColumnType(field *SelectField, context *InferenceContext) (*InferredField, error) {
@@ -208,8 +217,8 @@ func (tie *TypeInferenceEngine) inferColumnType(field *SelectField, context *Inf
 	columnName := field.Column
 
 	// テーブルエイリアス解決
-	if real, ok := context.TableAliases[tableName]; ok {
-		tableName = real
+	if realName, ok := context.TableAliases[tableName]; ok {
+		tableName = realName
 	}
 	table, exists := tie.schema.Tables[tableName]
 	if !exists {
@@ -244,7 +253,7 @@ func (tie *TypeInferenceEngine) inferColumnType(field *SelectField, context *Inf
 func (tie *TypeInferenceEngine) inferExpressionType(field *SelectField, context *InferenceContext) (*InferredField, error) {
 	expr := field.Expression
 	if expr == nil {
-		return nil, errors.New("expression is nil")
+		return nil, ErrExpressionIsNil
 	}
 	// 論理演算子対応
 	switch expr.Operator {
@@ -253,7 +262,7 @@ func (tie *TypeInferenceEngine) inferExpressionType(field *SelectField, context 
 		if err != nil {
 			return nil, err
 		}
-		var isNullable bool = left.Type.IsNullable
+		isNullable := left.Type.IsNullable
 		if expr.Operator != "NOT" && expr.Right != nil {
 			right, err := tie.inferFieldType(expr.Right, context)
 			if err != nil {
@@ -287,10 +296,10 @@ func (tie *TypeInferenceEngine) inferExpressionType(field *SelectField, context 
 	if expr.Operator == "||" || expr.Operator == "CONCAT" {
 		dialect := tie.schema.Dialect
 		if expr.Operator == "||" && !snapsql.Capabilities[dialect][snapsql.FeatureConcatOperator] {
-			return nil, errors.New("'||' operator not supported in this dialect")
+			return nil, ErrConcatOperator
 		}
 		if expr.Operator == "CONCAT" && !snapsql.Capabilities[dialect][snapsql.FeatureConcatFunction] {
-			return nil, errors.New("CONCAT() not supported in this dialect")
+			return nil, ErrConcatFunction
 		}
 		left, err := tie.inferFieldType(expr.Left, context)
 		if err != nil {
@@ -355,7 +364,7 @@ func (tie *TypeInferenceEngine) inferExpressionType(field *SelectField, context 
 func (tie *TypeInferenceEngine) inferCaseType(field *SelectField, context *InferenceContext) (*InferredField, error) {
 	caseExpr := field.CaseExpr
 	if caseExpr == nil || len(caseExpr.Whens) == 0 {
-		return nil, errors.New("invalid CASE expression")
+		return nil, ErrInvalidCaseExpression
 	}
 	var (
 		baseType   string
@@ -407,20 +416,20 @@ func (tie *TypeInferenceEngine) inferCaseType(field *SelectField, context *Infer
 func (tie *TypeInferenceEngine) inferFunctionType(field *SelectField, context *InferenceContext) (*InferredField, error) {
 	funcCall := field.FuncCall
 	if funcCall == nil {
-		return nil, errors.New("function call is nil")
+		return nil, ErrFunctionCallIsNil
 	}
 	dialect := tie.schema.Dialect
 	name := funcCall.Name
 	// 引数の型を推論
-	var argTypes []*TypeInfo
+	argTypes := make([]*TypeInfo, len(funcCall.Args))
 	allArgsNull := true
-	for _, arg := range funcCall.Args {
+	for i, arg := range funcCall.Args {
 		argType, err := tie.inferFieldType(arg, context)
 		if err != nil {
 			return nil, err
 		}
-		argTypes = append(argTypes, argType.Type)
-		if !(arg.Type == LiteralType && arg.Column == "") {
+		argTypes[i] = argType.Type
+		if arg.Type != LiteralType || arg.Column != "" {
 			allArgsNull = false
 		}
 	}
@@ -573,8 +582,8 @@ func (tie *TypeInferenceEngine) GetAllColumnNames(tableNamesOrAliases []string, 
 	seen := map[string]struct{}{}
 	for _, name := range tableNamesOrAliases {
 		tableName := name
-		if real, ok := context.TableAliases[name]; ok {
-			tableName = real
+		if realName, ok := context.TableAliases[name]; ok {
+			tableName = realName
 		}
 		table, exists := tie.schema.Tables[tableName]
 		if !exists {
@@ -596,8 +605,8 @@ func (tie *TypeInferenceEngine) GetAllColumnsWithTypeInfo(tableNamesOrAliases []
 	seen := map[string]struct{}{}
 	for _, name := range tableNamesOrAliases {
 		tableName := name
-		if real, ok := context.TableAliases[name]; ok {
-			tableName = real
+		if realName, ok := context.TableAliases[name]; ok {
+			tableName = realName
 		}
 		table, exists := tie.schema.Tables[tableName]
 		if !exists {
@@ -681,6 +690,12 @@ func isIntLiteral(s string) bool {
 }
 
 var (
-	ErrTableNotFound  = errors.New("table not found")
-	ErrColumnNotFound = errors.New("column not found")
+	ErrTableNotFound         = errors.New("table not found")
+	ErrColumnNotFound        = errors.New("column not found")
+	ErrSubqueryNoColumns     = errors.New("subquery returns no columns")
+	ErrExpressionIsNil       = errors.New("expression is nil")
+	ErrConcatOperator        = errors.New("'||' operator not supported in this dialect")
+	ErrConcatFunction        = errors.New("CONCAT() not supported in this dialect")
+	ErrInvalidCaseExpression = errors.New("invalid CASE expression")
+	ErrFunctionCallIsNil     = errors.New("function call is nil")
 )

@@ -396,9 +396,11 @@ func (g *GenerateCmd) parseSQLFile(content string, constantFiles []string, ctx *
 	// Get all tokens - parse only once
 	tokens, err := sqlTokenizer.AllTokens()
 	if err != nil {
-		return nil, fmt.Errorf("tokenization failed: %w", err)
+		if ctx.Verbose {
+			color.Red("Failed to tokenize interface schema: %v", err)
+		}
+		return nil, err
 	}
-
 	// Extract interface schema from SQL tokens
 	schema, err := parser.NewInterfaceSchemaFromSQL(tokens)
 	if err != nil {
@@ -573,7 +575,6 @@ type PullCmd struct {
 
 	// Output options
 	Output      string `short:"o" help:"Output directory" default:"./schema" type:"path"`
-	Format      string `help:"Output format (per_table, per_schema, single_file)" enum:"per_table,per_schema,single_file" default:"per_table"`
 	SchemaAware bool   `help:"Create schema-aware directory structure" default:"true"`
 
 	// Filtering options
@@ -619,7 +620,6 @@ func (p *PullCmd) Run(ctx *Context) error {
 		color.Blue("Database URL: %s", dbURL)
 		color.Blue("Database type: %s", dbType)
 		color.Blue("Output directory: %s", p.Output)
-		color.Blue("Output format: %s", p.Format)
 	}
 
 	// Create pull configuration
@@ -690,24 +690,10 @@ func (p *PullCmd) resolveDatabaseConnection(config *Config) (string, string, err
 
 // createPullConfig creates a pull configuration from command line options
 func (p *PullCmd) createPullConfig(dbURL, dbType string) pull.PullConfig {
-	// Convert format string to enum
-	var outputFormat pull.OutputFormat
-	switch p.Format {
-	case "per_table":
-		outputFormat = pull.OutputPerTable
-	case "per_schema":
-		outputFormat = pull.OutputPerSchema
-	case "single_file":
-		outputFormat = pull.OutputSingleFile
-	default:
-		outputFormat = pull.OutputPerTable
-	}
-
 	return pull.PullConfig{
 		DatabaseURL:    dbURL,
 		DatabaseType:   dbType,
 		OutputPath:     p.Output,
-		OutputFormat:   outputFormat,
 		SchemaAware:    p.SchemaAware,
 		IncludeSchemas: p.IncludeSchemas,
 		ExcludeSchemas: p.ExcludeSchemas,

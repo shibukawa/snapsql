@@ -350,45 +350,6 @@ func (e *PostgreSQLExtractor) getSchemaNames(db *sql.DB) ([]string, error) {
 	return schemas, nil
 }
 
-// filterTables filters tables based on configuration
-func (e *PostgreSQLExtractor) filterTables(tables []*snapsql.TableInfo, config ExtractConfig) []*snapsql.TableInfo {
-	if len(config.IncludeTables) == 0 && len(config.ExcludeTables) == 0 {
-		return tables
-	}
-
-	var filtered []*snapsql.TableInfo
-	for _, table := range tables {
-		include := true
-
-		// Check include list
-		if len(config.IncludeTables) > 0 {
-			include = false
-			for _, pattern := range config.IncludeTables {
-				if matched, _ := regexp.MatchString(pattern, table.Name); matched {
-					include = true
-					break
-				}
-			}
-		}
-
-		// Check exclude list
-		if include && len(config.ExcludeTables) > 0 {
-			for _, pattern := range config.ExcludeTables {
-				if matched, _ := regexp.MatchString(pattern, table.Name); matched {
-					include = false
-					break
-				}
-			}
-		}
-
-		if include {
-			filtered = append(filtered, table)
-		}
-	}
-
-	return filtered
-}
-
 // Query builders
 func (e *PostgreSQLExtractor) BuildSchemasQuery() string {
 	return `

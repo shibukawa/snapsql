@@ -56,5 +56,8 @@ linters:
       - path: cmd
         linters:
           - godox
+      - path: functionsigs
+        linters:
+          - dupl
 run:
   timeout: 5m

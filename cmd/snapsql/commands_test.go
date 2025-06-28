@@ -17,13 +17,11 @@ func TestPullCmd(t *testing.T) {
 			DB:     "sqlite://test.db",
 			Type:   "sqlite",
 			Output: tempDir,
-			Format: "per_table",
 		}
 
 		assert.Equal(t, "sqlite://test.db", cmd.DB)
 		assert.Equal(t, "sqlite", cmd.Type)
 		assert.Equal(t, tempDir, cmd.Output)
-		assert.Equal(t, "per_table", cmd.Format)
 	})
 
 	t.Run("ResolveDatabaseConnection", func(t *testing.T) {
@@ -77,7 +75,6 @@ func TestPullCmd(t *testing.T) {
 	t.Run("CreatePullConfig", func(t *testing.T) {
 		cmd := &PullCmd{
 			Output:         tempDir,
-			Format:         "single_file",
 			SchemaAware:    true,
 			IncludeSchemas: []string{"public"},
 			ExcludeSchemas: []string{"temp"},

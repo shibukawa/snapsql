@@ -107,13 +107,13 @@ func (g *YAMLGenerator) getSchemaFileName(schemaName string) string {
 
 // --- 変換関数 ---
 func toYAMLSchema(s snapsql.DatabaseSchema) YAMLSchema {
-	var tables []YAMLTable
-	for _, t := range s.Tables {
-		tables = append(tables, toYAMLTable(t, s.DatabaseInfo.Type))
+	tables := make([]YAMLTable, len(s.Tables))
+	for i, t := range s.Tables {
+		tables[i] = toYAMLTable(t, s.DatabaseInfo.Type)
 	}
-	var views []YAMLView
-	for _, v := range s.Views {
-		views = append(views, toYAMLView(v))
+	views := make([]YAMLView, len(s.Views))
+	for i, v := range s.Views {
+		views[i] = toYAMLView(v)
 	}
 	return YAMLSchema{
 		Name:         s.Name,
@@ -124,17 +124,17 @@ func toYAMLSchema(s snapsql.DatabaseSchema) YAMLSchema {
 }
 
 func toYAMLTable(t *snapsql.TableInfo, dbType string) YAMLTable {
-	var columns []YAMLColumn
+	columns := make([]YAMLColumn, 0, len(t.Columns))
 	for _, c := range t.Columns {
 		columns = append(columns, toYAMLColumn(c, dbType))
 	}
-	var constraints []YAMLConstraint
-	for _, c := range t.Constraints {
-		constraints = append(constraints, toYAMLConstraint(c))
+	constraints := make([]YAMLConstraint, len(t.Constraints))
+	for i, c := range t.Constraints {
+		constraints[i] = toYAMLConstraint(c)
 	}
-	var indexes []YAMLIndex
-	for _, i := range t.Indexes {
-		indexes = append(indexes, toYAMLIndex(i))
+	indexes := make([]YAMLIndex, len(t.Indexes))
+	for i, idx := range t.Indexes {
+		indexes[i] = toYAMLIndex(idx)
 	}
 	return YAMLTable{
 		Name:        t.Name,

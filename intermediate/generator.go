@@ -187,9 +187,9 @@ func InferResultTypeFields(schema *typeinference.SchemaStore, selectClause *type
 	if err != nil {
 		return nil, err
 	}
-	var fields []Field
-	for _, f := range inferred {
-		fields = append(fields, Field{
+	fields := make([]Field, len(inferred))
+	for i, f := range inferred {
+		fields[i] = Field{
 			Name:       f.Name,
 			Type:       f.Type.BaseType,
 			BaseType:   f.Type.BaseType,
@@ -197,7 +197,7 @@ func InferResultTypeFields(schema *typeinference.SchemaStore, selectClause *type
 			MaxLength:  f.Type.MaxLength,
 			Precision:  f.Type.Precision,
 			Scale:      f.Type.Scale,
-		})
+		}
 	}
 	return fields, nil
 }
