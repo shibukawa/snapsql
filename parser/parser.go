@@ -1416,6 +1416,26 @@ func (p *SqlParser) parseInsertStatement(ns *Namespace) (*InsertStatement, error
 		stmt.ReturningClause = returningClause
 	}
 
+	// ON CONFLICT/ON DUPLICATE KEY UPDATE句の構文チェック
+	if p.match(tokenizer.ON) {
+		if p.match(tokenizer.CONFLICT) {
+			// PostgreSQL: ON CONFLICT ... [DO NOTHING|DO UPDATE ...]
+			// ここでは最低限、CONFLICTの後にDOが来るかだけをチェック（詳細は省略）
+			if !p.match(tokenizer.WORD) { // DO
+				return nil, ErrInvalidSyntax
+			}
+			// 以降はother/literal扱いでOK
+		} else if p.match(tokenizer.DUPLICATE) {
+			// MySQL: ON DUPLICATE KEY UPDATE
+			if !p.match(tokenizer.KEY) || !p.match(tokenizer.UPDATE) {
+				return nil, ErrInvalidSyntax
+			}
+			// 以降はother/literal扱いでOK
+		} else {
+			return nil, ErrInvalidSyntax
+		}
+	}
+
 	return stmt, nil
 }
 
