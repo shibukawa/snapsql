@@ -7,7 +7,6 @@ import (
 // YAML output structure for a single file (database_schema.yaml)
 type YAMLSingleFileSchema struct {
 	DatabaseInfo snapsql.DatabaseInfo `yaml:"database_info"`
-	ExtractedAt  string               `yaml:"extracted_at"`
 	Schemas      []YAMLSchema         `yaml:"schemas"`
 }
 
@@ -15,7 +14,6 @@ type YAMLSchema struct {
 	Name         string               `yaml:"name"`
 	Tables       []YAMLTable          `yaml:"tables"`
 	Views        []YAMLView           `yaml:"views,omitempty"`
-	ExtractedAt  string               `yaml:"extracted_at"`
 	DatabaseInfo snapsql.DatabaseInfo `yaml:"database_info"`
 }
 
@@ -31,6 +29,7 @@ type YAMLTable struct {
 type YAMLColumn struct {
 	Name         string `yaml:"name"`
 	DataType     string `yaml:"data_type"`
+	SnapSQLType  string `yaml:"snapsql_type"`
 	Nullable     bool   `yaml:"nullable"`
 	DefaultValue string `yaml:"default_value,omitempty"`
 	Comment      string `yaml:"comment,omitempty"`

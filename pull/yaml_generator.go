@@ -55,7 +55,8 @@ func (g *YAMLGenerator) generateSingleFile(schemas []snapsql.DatabaseSchema, out
 	}
 	defer file.Close()
 
-	return g.writeYAML(file, toYAMLSingleFileSchema(schemas))
+	// metadataラッパー
+	return g.writeYAML(file, map[string]interface{}{"metadata": toYAMLSingleFileSchema(schemas)})
 }
 
 // generatePerTable generates separate YAML files for each table
@@ -74,7 +75,12 @@ func (g *YAMLGenerator) generatePerTable(schemas []snapsql.DatabaseSchema, outpu
 				return ErrFileWriteFailed
 			}
 
-			if err := g.writeYAML(file, table); err != nil {
+			// metadataラッパー+tableラッパー
+			out := map[string]interface{}{
+				"metadata": yamlSchema,
+				"table":    table,
+			}
+			if err := g.writeYAML(file, out); err != nil {
 				file.Close()
 				return err
 			}
@@ -99,7 +105,8 @@ func (g *YAMLGenerator) generatePerSchema(schemas []snapsql.DatabaseSchema, outp
 			return ErrFileWriteFailed
 		}
 
-		if err := g.writeYAML(file, yamlSchema); err != nil {
+		// metadataラッパー
+		if err := g.writeYAML(file, map[string]interface{}{"metadata": yamlSchema}); err != nil {
 			file.Close()
 			return err
 		}
@@ -114,10 +121,17 @@ func (g *YAMLGenerator) writeYAML(writer io.Writer, data interface{}) error {
 	encoder := yaml.NewEncoder(writer)
 	defer encoder.Close()
 
-	if err := encoder.Encode(data); err != nil {
-		return ErrYAMLGenerationFailed
+	// ラッパー付与: テーブル単位の場合はtable:、スキーマ単位はmetadata:等
+	switch v := data.(type) {
+	case YAMLTable:
+		return encoder.Encode(map[string]interface{}{"table": v})
+	case YAMLSchema:
+		return encoder.Encode(map[string]interface{}{"metadata": v})
+	default:
+		if err := encoder.Encode(data); err != nil {
+			return ErrYAMLGenerationFailed
+		}
 	}
-
 	return nil
 }
 
@@ -156,7 +170,6 @@ func toYAMLSingleFileSchema(schemas []snapsql.DatabaseSchema) YAMLSingleFileSche
 	}
 	return YAMLSingleFileSchema{
 		DatabaseInfo: schemas[0].DatabaseInfo,
-		ExtractedAt:  schemas[0].ExtractedAt,
 		Schemas:      yamlSchemas,
 	}
 }
@@ -164,7 +177,7 @@ func toYAMLSingleFileSchema(schemas []snapsql.DatabaseSchema) YAMLSingleFileSche
 func toYAMLSchema(s snapsql.DatabaseSchema) YAMLSchema {
 	var tables []YAMLTable
 	for _, t := range s.Tables {
-		tables = append(tables, toYAMLTable(t))
+		tables = append(tables, toYAMLTable(t, s.DatabaseInfo.Type))
 	}
 	var views []YAMLView
 	for _, v := range s.Views {
@@ -174,15 +187,14 @@ func toYAMLSchema(s snapsql.DatabaseSchema) YAMLSchema {
 		Name:         s.Name,
 		Tables:       tables,
 		Views:        views,
-		ExtractedAt:  s.ExtractedAt,
 		DatabaseInfo: s.DatabaseInfo,
 	}
 }
 
-func toYAMLTable(t *snapsql.TableInfo) YAMLTable {
+func toYAMLTable(t *snapsql.TableInfo, dbType string) YAMLTable {
 	var columns []YAMLColumn
 	for _, c := range t.Columns {
-		columns = append(columns, toYAMLColumn(c))
+		columns = append(columns, toYAMLColumn(c, dbType))
 	}
 	var constraints []YAMLConstraint
 	for _, c := range t.Constraints {
@@ -202,10 +214,18 @@ func toYAMLTable(t *snapsql.TableInfo) YAMLTable {
 	}
 }
 
-func toYAMLColumn(c *snapsql.ColumnInfo) YAMLColumn {
+func toYAMLColumn(c *snapsql.ColumnInfo, dbType string) YAMLColumn {
+	mapper, err := NewTypeMapper(dbType)
+	var snapType string
+	if err == nil {
+		snapType = mapper.GetSnapSQLType(c.DataType)
+	} else {
+		snapType = "string"
+	}
 	return YAMLColumn{
 		Name:         c.Name,
 		DataType:     c.DataType,
+		SnapSQLType:  snapType,
 		Nullable:     c.Nullable,
 		DefaultValue: c.DefaultValue,
 		Comment:      c.Comment,
