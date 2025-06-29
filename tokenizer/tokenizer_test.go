@@ -97,14 +97,49 @@ func TestBasicTokens(t *testing.T) {
 			expected: []TokenType{WHERE, WHITESPACE, WORD, WHITESPACE, EQUAL, WHITESPACE, NUMBER, EOF},
 		},
 		{
-			name:     "string リテラル",
-			input:    "WHERE name = 'John'",
-			expected: []TokenType{WHERE, WHITESPACE, WORD, WHITESPACE, EQUAL, WHITESPACE, QUOTE, EOF},
-		},
-		{
 			name:     "parentheses",
 			input:    "SELECT (id)",
 			expected: []TokenType{SELECT, WHITESPACE, OPENED_PARENS, WORD, CLOSED_PARENS, EOF},
+		},
+		{
+			name:     "single quoted string",
+			input:    "'abc'",
+			expected: []TokenType{STRING, EOF},
+		},
+		{
+			name:     "double quoted identifier",
+			input:    `"col"`,
+			expected: []TokenType{IDENTIFIER, EOF},
+		},
+		{
+			name:     "single quote with double inside",
+			input:    `'a"b'`,
+			expected: []TokenType{STRING, EOF},
+		},
+		{
+			name:     "double quote with single inside",
+			input:    `"a'b"`,
+			expected: []TokenType{IDENTIFIER, EOF},
+		},
+		{
+			name:     "escaped single quote (doubled)",
+			input:    "'a''b'",
+			expected: []TokenType{STRING, EOF},
+		},
+		{
+			name:     "escaped double quote (doubled)",
+			input:    `"a""b"`,
+			expected: []TokenType{IDENTIFIER, EOF},
+		},
+		{
+			name:     "backslash escape in single quote",
+			input:    `'a\'b'`,
+			expected: []TokenType{STRING, EOF},
+		},
+		{
+			name:     "backtick identifier (MySQL)",
+			input:    "`col`",
+			expected: []TokenType{IDENTIFIER, EOF},
 		},
 	}
 
@@ -163,18 +198,18 @@ func TestSnapSQLDirectives(t *testing.T) {
 			directiveType: "elseif",
 		},
 		{
+			name:          "elseif directive(no space)",
+			input:         "/*#elseif condition*/",
+			expectedType:  BLOCK_COMMENT,
+			isDirective:   true,
+			directiveType: "elseif",
+		},
+		{
 			name:          "else ディレクティブ",
 			input:         "/*# else */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   true,
 			directiveType: "else",
-		},
-		{
-			name:          "endif ディレクティブ",
-			input:         "/*# endif */",
-			expectedType:  BLOCK_COMMENT,
-			isDirective:   true,
-			directiveType: "endif",
 		},
 		{
 			name:          "for ディレクティブ",

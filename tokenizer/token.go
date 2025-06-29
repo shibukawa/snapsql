@@ -18,7 +18,8 @@ const (
 	EOF TokenType = iota
 	WHITESPACE
 	WORD          // identifiers, keywords
-	QUOTE         // string literals ('text', "text")
+	STRING        // string literals ('text')
+	IDENTIFIER    // quoted identifiers ("col")
 	NUMBER        // numeric literals
 	OPENED_PARENS // (
 	CLOSED_PARENS // )
@@ -85,10 +86,10 @@ const (
 	OTHER // complex expressions, database-specific syntax
 
 	// SnapSQL extensions
-	DUPLICATE   // DUPLICATE keyword
-	KEY         // KEY keyword
-	ON          // ON keyword
-	CONFLICT    // CONFLICT keyword
+	DUPLICATE // DUPLICATE keyword
+	KEY       // KEY keyword
+	ON        // ON keyword
+	CONFLICT  // CONFLICT keyword
 )
 
 // String returns the string representation of TokenType
@@ -100,8 +101,10 @@ func (t TokenType) String() string {
 		return "WHITESPACE"
 	case WORD:
 		return "WORD"
-	case QUOTE:
-		return "QUOTE"
+	case STRING:
+		return "STRING"
+	case IDENTIFIER:
+		return "IDENTIFIER"
 	case NUMBER:
 		return "NUMBER"
 	case OPENED_PARENS:

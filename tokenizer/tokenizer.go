@@ -143,7 +143,7 @@ func (t *tokenizer) nextToken() (Token, error) {
 			token := t.newToken(DOT, string(t.current))
 			t.readChar()
 			return token, nil
-		case '\'', '"':
+		case '\'', '"', '`':
 			return t.readString(t.current)
 		case '-':
 			if t.peekChar() == '-' {
@@ -295,7 +295,7 @@ func (t *tokenizer) readWord() (Token, error) {
 	}, nil
 }
 
-// readString reads string literals
+// readString reads string literals or quoted identifiers
 func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	var builder strings.Builder
 	startLine := t.line
@@ -305,29 +305,45 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	builder.WriteRune(delimiter) // include opening quote
 	t.readChar()
 
-	for t.current != 0 && t.current != delimiter {
-		if t.current == '\\' {
+	for t.current != 0 {
+		if t.current == delimiter {
+			// 連続するクオートはエスケープ（例: '' or "" or ``）
+			if t.peekChar() == delimiter {
+				builder.WriteRune(delimiter)
+				t.readChar()
+				t.readChar()
+				continue
+			}
+			break // 終了クオート
+		}
+		if t.current == '\\' && delimiter == '\'' {
+			// バックスラッシュエスケープ（PostgreSQL互換）
 			builder.WriteRune(t.current)
 			t.readChar()
 			if t.current != 0 {
 				builder.WriteRune(t.current)
 				t.readChar()
 			}
-		} else {
-			builder.WriteRune(t.current)
-			t.readChar()
+			continue
 		}
+		builder.WriteRune(t.current)
+		t.readChar()
 	}
 
-	if t.current == 0 {
+	if t.current != delimiter {
 		return Token{}, fmt.Errorf("%w: %c at line %d, column %d", ErrUnterminatedString, delimiter, startLine, startColumn)
 	}
 
 	builder.WriteRune(delimiter) // include closing quote
 	t.readChar()
 
+	type_ := STRING
+	if delimiter == '"' || delimiter == '`' {
+		type_ = IDENTIFIER
+	}
+
 	return Token{
-		Type:  QUOTE,
+		Type:  type_,
 		Value: builder.String(),
 		Position: Position{
 			Line:   startLine,
@@ -506,15 +522,13 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) (directiveType string,
 	if strings.HasPrefix(trimmed, "/*#") && strings.HasSuffix(trimmed, "*/") {
 		content := strings.TrimSpace(trimmed[3 : len(trimmed)-2])
 
-		if strings.HasPrefix(content, "if ") {
+		if strings.HasPrefix(content, "if") && (len(content) == 2 || content[2] == ' ') {
 			return "if", true
-		} else if strings.HasPrefix(content, "elseif ") {
+		} else if strings.HasPrefix(content, "elseif") && (len(content) == 6 || content[6] == ' ') {
 			return "elseif", true
 		} else if content == "else" {
 			return "else", true
-		} else if content == "endif" {
-			return "endif", true
-		} else if strings.HasPrefix(content, "for ") {
+		} else if strings.HasPrefix(content, "for") && (len(content) == 3 || content[3] == ' ') {
 			return "for", true
 		} else if content == "end" {
 			return "end", true
