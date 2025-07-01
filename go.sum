@@ -136,6 +136,10 @@ github.com/shibukawa/parsercombinator v1.0.2 h1:EO0NZW3M8tNLiVhvqf3zp90RFzuwjLzp
 github.com/shibukawa/parsercombinator v1.0.2/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
 github.com/shibukawa/parsercombinator v1.0.3 h1:s0BzUtOnOHuMyUhxr4B5FJIChvrpN+JnZJ0GxJzBu+s=
 github.com/shibukawa/parsercombinator v1.0.3/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
+github.com/shibukawa/parsercombinator v1.0.4 h1:kVL/ESQK0xIJ2EUkAIIg8SUO1zX78cocCzynoCs7KEU=
+github.com/shibukawa/parsercombinator v1.0.4/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
+github.com/shibukawa/parsercombinator v1.0.5 h1:HxjQ9xNaKfubPW8/FBAEGcKstUOR0k4jG7wj/czRDPg=
+github.com/shibukawa/parsercombinator v1.0.5/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
 github.com/shirou/gopsutil/v4 v4.25.1 h1:QSWkTc+fu9LTAWfkZwZ6j8MSUk4A2LV7rbH0ZqmLjXs=
 github.com/shirou/gopsutil/v4 v4.25.1/go.mod h1:RoUCUpndaJFtT+2zsZzzmhvbfGoDCJ7nFXKJf8GqJbI=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=

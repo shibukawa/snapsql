@@ -8,6 +8,23 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+// ws means with space. Appends trailing spaces or comments to the token.
+func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
+	return pc.Trans(
+		pc.SeqWithLabel("token with comment or space",
+			token,
+			pc.ZeroOrMore("comment or space", pc.Or(space(), comment())),
+		),
+		func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+			var spaces []tokenizer.Token
+			for _, t := range tokens[1:] {
+				spaces = append(spaces, t.Val.Original)
+			}
+			tokens[0].Val.spaces = spaces
+			return tokens[:1], nil
+		})
+}
+
 // LiteralAstNode is a minimal AST node for literals (number/string)
 type LiteralNode struct {
 	cmn.BaseAstNode
@@ -22,7 +39,7 @@ func (l LiteralNode) String() string               { return "Literal:" + l.Value
 
 // literal parses a numeric or string literal and returns a LiteralAstNode.
 func literal() pc.Parser[Entity] {
-	return pc.Trace("literal", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+	return ws(pc.Trace("literal", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
 		if tokens[0].Type == "raw" {
 			o := tokens[0].Val.Original
 			switch o.Type {
@@ -40,7 +57,7 @@ func literal() pc.Parser[Entity] {
 								LiteralType: o.Type,
 								Value:       o.Value,
 							},
-							rowTokens: []tokenizer.Token{o},
+							rawTokens: []tokenizer.Token{o},
 						},
 						Raw: o.Value,
 					},
@@ -48,24 +65,7 @@ func literal() pc.Parser[Entity] {
 			}
 		}
 		return 0, nil, pc.ErrNotMatch
-	})
-}
-
-// ws means with space. Appends trailing spaces or comments to the token.
-func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
-	return pc.Trans(
-		pc.SeqWithLabel("token with comment or space",
-			token,
-			pc.ZeroOrMore("comment or space", pc.Or(space(), comment())),
-		),
-		func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-			var spaces []tokenizer.Token
-			for _, t := range tokens[1:] {
-				spaces = append(spaces, t.Val.Original)
-			}
-			tokens[0].Val.spaces = spaces
-			return tokens[:1], nil
-		})
+	}))
 }
 
 func ifDirective() pc.Parser[Entity] {
@@ -113,7 +113,7 @@ func endDirective() pc.Parser[Entity] {
 // --- Primitive Parsers ---
 
 func primitiveType(tokens []pc.Token[Entity], typeName string, types ...tokenizer.TokenType) (int, []pc.Token[Entity], error) {
-	if tokens[0].Type == "raw" {
+	if len(tokens) > 0 && tokens[0].Type == "raw" {
 		o := tokens[0].Val.Original
 		if slices.Contains(types, o.Type) {
 			return 1, []pc.Token[Entity]{

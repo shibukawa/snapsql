@@ -9,12 +9,12 @@ import (
 type Entity struct {
 	Original  tokenizer.Token      // The original token from the tokenizer
 	NewValue  parsercommon.AstNode // The parsed AST node (can be nil if not yet parsed)
-	rowTokens []tokenizer.Token    // Tokens that are part of the same row (e.g., SELECT statement)
+	rawTokens []tokenizer.Token    // Tokens that are part of the same row (e.g., SELECT statement)
 	spaces    []tokenizer.Token    // Tokens that represent spaces or comments before this entity
 }
 
 func (e *Entity) RawTokens() []tokenizer.Token {
-	return append(append([]tokenizer.Token{}, e.rowTokens...), e.spaces...)
+	return append(append([]tokenizer.Token{}, e.rawTokens...), e.spaces...)
 }
 
 func TokenToEntity(tokens []tokenizer.Token) []pc.Token[Entity] {
@@ -26,7 +26,7 @@ func TokenToEntity(tokens []tokenizer.Token) []pc.Token[Entity] {
 		entity := Entity{
 			Original:  token,
 			NewValue:  nil,                      // Initially nil, will be set during parsing
-			rowTokens: []tokenizer.Token{token}, // Each token is its own row initially
+			rawTokens: []tokenizer.Token{token}, // Each token is its own row initially
 			spaces:    []tokenizer.Token{},      // No spaces initially
 		}
 		pcToken := pc.Token[Entity]{

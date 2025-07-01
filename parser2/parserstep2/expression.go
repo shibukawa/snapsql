@@ -1,7 +1,6 @@
 package parserstep2
 
 import (
-	"log"
 	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
@@ -28,84 +27,87 @@ func (e *ExpressionNode) String() string {
 }
 
 var expression pc.Parser[Entity]
-var expressionAlias pc.Parser[Entity]
 
 func init() {
-	var expressionBody func(pc.Parser[Entity]) pc.Parser[Entity]
-	expressionBody, expressionAlias = pc.NewAlias[Entity]("expression")
-	expression = expressionBody(
-		pc.Or(
-			pc.Trans(
-				pc.Seq(expressionAlias, operator(), expressionAlias),
-				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-					var allTokens []tokenizer.Token
-					log.Println(tokens[0].Val.NewValue.RawTokens())
-					log.Println(tokens[1].Val.NewValue.RawTokens())
-					allTokens = append(allTokens, tokens[0].Val.NewValue.RawTokens()...)
-					allTokens = append(allTokens, tokens[1].Val.Original) // operator
-					allTokens = append(allTokens, tokens[2].Val.NewValue.RawTokens()...)
-					return []pc.Token[Entity]{
-						{
-							Type: "expression",
-							Pos:  tokens[0].Pos,
-							Val: Entity{
-								NewValue: &ExpressionNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.EXPRESSION,
-										Pos:      tokens[0].Val.Original.Position,
-									},
+	primary := pc.Or(
+		pc.Trans(
+			literal(),
+			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+				return []pc.Token[Entity]{
+					{
+						Type: "expression",
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							NewValue: &ExpressionNode{
+								BaseAstNode: cmn.BaseAstNode{
+									NodeType: cmn.EXPRESSION,
+									Pos:      tokens[0].Val.Original.Position,
 								},
-								rowTokens: allTokens,
 							},
+							rawTokens: tokens[0].Val.rawTokens,
 						},
-					}, nil
-				},
-			),
-			pc.Trans(
-				pc.Seq(parenOpen(), expressionAlias, parenClose()),
-				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-					var allTokens []tokenizer.Token
-					allTokens = append(allTokens, tokens[0].Val.Original) // (
-					allTokens = append(allTokens, tokens[1].Val.NewValue.RawTokens()...)
-					allTokens = append(allTokens, tokens[2].Val.Original) // )
-					return []pc.Token[Entity]{
-						{
-							Type: "expression",
-							Pos:  tokens[0].Pos,
-							Val: Entity{
-								NewValue: &ExpressionNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.EXPRESSION,
-										Pos:      tokens[0].Val.Original.Position,
-									},
-								},
-								rowTokens: allTokens,
-							},
-						},
-					}, nil
-				},
-			),
-			pc.Trans(
-				literal(),
-				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-					log.Println("literal matched:", tokens[0].Val.Original)
-					return []pc.Token[Entity]{
-						{
-							Type: "expression",
-							Pos:  tokens[0].Pos,
-							Val: Entity{
-								NewValue: &ExpressionNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.EXPRESSION,
-										Pos:      tokens[0].Val.Original.Position,
-									},
-								},
-								rowTokens: []tokenizer.Token{tokens[0].Val.Original},
-							},
-						},
-					}, nil
-				},
-			),
+					},
+				}, nil
+			},
 		),
+		pc.Trans(
+			pc.Seq(
+				parenOpen(),
+				pc.Lazy(func() pc.Parser[Entity] { return expression }),
+				parenClose(),
+			),
+			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+				var allTokens []tokenizer.Token
+				allTokens = append(allTokens, tokens[0].Val.Original) // (
+				allTokens = append(allTokens, tokens[1].Val.rawTokens...)
+				allTokens = append(allTokens, tokens[2].Val.Original) // )
+				return []pc.Token[Entity]{
+					{
+						Type: "expression",
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							NewValue: &ExpressionNode{
+								BaseAstNode: cmn.BaseAstNode{
+									NodeType: cmn.EXPRESSION,
+									Pos:      tokens[0].Val.Original.Position,
+								},
+							},
+							rawTokens: allTokens,
+						},
+					},
+				}, nil
+			},
+		),
+	)
+	expression = pc.Or(
+		pc.Trans(
+			pc.Seq(
+				primary,
+				operator(),
+				pc.Lazy(func() pc.Parser[Entity] { return expression }),
+			),
+			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+				var allTokens []tokenizer.Token
+				allTokens = append(allTokens, tokens[0].Val.rawTokens...)
+				allTokens = append(allTokens, tokens[1].Val.Original) // operator
+				allTokens = append(allTokens, tokens[2].Val.rawTokens...)
+				return []pc.Token[Entity]{
+					{
+						Type: "expression",
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							NewValue: &ExpressionNode{
+								BaseAstNode: cmn.BaseAstNode{
+									NodeType: cmn.EXPRESSION,
+									Pos:      tokens[0].Val.Original.Position,
+								},
+							},
+							rawTokens: allTokens,
+						},
+					},
+				}, nil
+			},
+		),
+		primary,
 	)
 }

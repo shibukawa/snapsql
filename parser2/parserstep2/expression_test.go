@@ -1,6 +1,7 @@
 package parserstep2
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -35,16 +36,18 @@ func TestOperatorExpr(t *testing.T) {
 	}
 }
 
-func TestExpression_Binary(t *testing.T) {
+func TestExpression(t *testing.T) {
 	tests := []struct {
-		name    string
-		src     string
-		exprStr string
+		name          string
+		src           string
+		exprStr       string
+		rawTokenCount int
 	}{
-		{"add", "1 + 2", "1 + 2"},
-		{"sub", "3 - 4", "3 - 4"},
-		{"mul", "5 * 6", "5 * 6"},
-		{"div", "8 / 2", "8 / 2"},
+		{"add", "1 + 2", "1 + 2", 3},
+		{"sub", "3 - 4", "3 - 4", 3},
+		{"mul", "5 * 6", "5 * 6", 3},
+		{"div", "8 / 2", "8 / 2", 3},
+		{"paren", "( 1 )", "( 1 )", 3},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -55,32 +58,22 @@ func TestExpression_Binary(t *testing.T) {
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 20
 			pctx.TraceEnable = true
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
 			consumed, result, err := expression(pctx, pcTokens)
 			if err != nil {
 				pctx.DumpTrace()
 			}
 			assert.NoError(t, err)
 			assert.True(t, consumed > 0)
-			ast := result[0].Val.NewValue
-			assert.Equal(t, test.exprStr, ast.String())
+			assert.Equal(t, "expression", result[0].Type)
+			assert.Equal(t, 1, len(result))
+			assert.Equal(t, test.rawTokenCount, len(result[0].Val.rawTokens))
+			var nodes []string
+			for _, t := range result[0].Val.rawTokens {
+				nodes = append(nodes, t.Value)
+			}
+			assert.Equal(t, test.exprStr, strings.Join(nodes, " "))
 		})
 	}
-}
-
-func TestExpression_Paren(t *testing.T) {
-	tz := tok.NewSqlTokenizer("( 1 )", tok.NewSQLiteDialect())
-	tokens, err := tz.AllTokens()
-	assert.NoError(t, err)
-	pcTokens := TokenToEntity(tokens)
-	pctx := &pc.ParseContext[Entity]{}
-	pctx.MaxDepth = 20
-	pctx.TraceEnable = true
-	consumed, result, err := expression(pctx, pcTokens)
-	if err != nil {
-		pctx.DumpTrace()
-	}
-	assert.NoError(t, err)
-	assert.True(t, consumed > 0)
-	ast := result[0].Val.NewValue
-	assert.Equal(t, "1", ast.String())
 }
