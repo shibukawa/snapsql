@@ -37,6 +37,7 @@ func TokenToEntity(tokens []tokenizer.Token) []pc.Token[Entity] {
 				Index: token.Position.Offset,
 			},
 			Val: entity,
+			Raw: token.Value,
 		}
 		results = append(results, pcToken)
 	}

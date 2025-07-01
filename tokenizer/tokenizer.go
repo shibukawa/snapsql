@@ -535,6 +535,11 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) (directiveType string,
 		}
 	}
 
+	// /*@ で始まる場合（定数ディレクティブ）
+	if strings.HasPrefix(trimmed, "/*@") && strings.HasSuffix(trimmed, "*/") {
+		return "const", true
+	}
+
 	// If it starts with /*=
 	if strings.HasPrefix(trimmed, "/*=") && strings.HasSuffix(trimmed, "*/") {
 		return "variable", true
@@ -548,106 +553,15 @@ func (t *tokenizer) getKeywordTokenType(word string) TokenType {
 	upperWord := strings.ToUpper(word)
 
 	switch upperWord {
-	case "SELECT":
-		return SELECT
-	case "INSERT":
-		return INSERT
-	case "UPDATE":
-		return UPDATE
-	case "DELETE":
-		return DELETE
-	case "FROM":
-		return FROM
-	case "WHERE":
-		return WHERE
-	case "GROUP":
-		return GROUP
-	case "HAVING":
-		return HAVING
-	case "ORDER":
-		return ORDER
-	case "BY":
-		return BY
-	case "UNION":
-		return UNION
-	case "ALL":
-		return ALL
-	case "DISTINCT":
-		return DISTINCT
-	case "AS":
-		return AS
-	case "WITH":
-		return WITH
-	case "AND":
-		return AND
-	case "OR":
-		return OR
-	case "NOT":
-		return NOT
-	case "IN":
-		return IN
-	case "EXISTS":
-		return EXISTS
-	case "BETWEEN":
-		return BETWEEN
-	case "LIKE":
-		return LIKE
-	case "IS":
-		return IS
-	case "NULL":
-		return NULL
-	case "OVER":
-		return OVER
-	case "PARTITION":
-		return PARTITION
-	case "ROWS":
-		return ROWS
-	case "RANGE":
-		return RANGE
-	case "UNBOUNDED":
-		return UNBOUNDED
-	case "PRECEDING":
-		return PRECEDING
-	case "FOLLOWING":
-		return FOLLOWING
-	case "CURRENT":
-		return CURRENT
-	case "ROW":
-		return ROW
-	// Additional SQL keywords
-	case "CREATE":
-		return WORD
-	case "DROP":
-		return WORD
-	case "ALTER":
-		return WORD
-	case "TABLE":
-		return WORD
-	case "INDEX":
-		return WORD
-	case "VIEW":
-		return WORD
-	case "VALUES":
-		return WORD
-	case "INTO":
-		return WORD
-	case "SET":
-		return WORD
-	case "RETURNING":
-		return WORD
-	case "LIMIT":
-		return WORD
-	case "OFFSET":
-		return WORD
-	case "ON":
-		return ON
-	case "CONFLICT":
-		return CONFLICT
-	case "DUPLICATE":
-		return DUPLICATE
-	case "KEY":
-		return KEY
+	case "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "GROUP", "HAVING", "ORDER", "BY", "UNION", "ALL", "DISTINCT", "AS", "WITH", "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "NULL":
+		return KEYWORD
+	// Window function keywords
+	case "OVER", "PARTITION", "ROWS", "RANGE", "UNBOUNDED", "PRECEDING", "FOLLOWING", "CURRENT", "ROW":
+		return KEYWORD
+	// Additional SQL keywords (DDL, DML, etc.)
+	case "ON", "CONFLICT", "DUPLICATE", "KEY", "CREATE", "DROP", "ALTER", "TABLE", "INDEX", "VIEW", "VALUES", "INTO", "SET", "RETURNING", "LIMIT", "OFFSET":
+		return KEYWORD
 	default:
-		return WORD
+		return IDENTIFIER
 	}
 }

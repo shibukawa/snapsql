@@ -17,7 +17,7 @@ const (
 	// Basic tokens
 	EOF TokenType = iota
 	WHITESPACE
-	WORD          // identifiers, keywords
+	KEYWORD
 	STRING        // string literals ('text')
 	IDENTIFIER    // quoted identifiers ("col")
 	NUMBER        // numeric literals
@@ -99,8 +99,8 @@ func (t TokenType) String() string {
 		return "EOF"
 	case WHITESPACE:
 		return "WHITESPACE"
-	case WORD:
-		return "WORD"
+	case KEYWORD:
+		return "KEYWORD"
 	case STRING:
 		return "STRING"
 	case IDENTIFIER:

@@ -123,21 +123,21 @@ func (n NodeType) String() string {
 // BaseAstNode is the base implementation of AST nodes
 // Embedding this struct is recommended for all AST node types.
 type BaseAstNode struct {
-	nodeType NodeType
-	position tokenizer.Position
-	tokens   []tokenizer.Token // Original token sequence
+	NodeType NodeType
+	Pos      tokenizer.Position
+	Tokens   []tokenizer.Token // Original token sequence
 }
 
 func (n BaseAstNode) Type() NodeType {
-	return n.nodeType
+	return n.NodeType
 }
 
 func (n BaseAstNode) Position() tokenizer.Position {
-	return n.position
+	return n.Pos
 }
 
 func (n BaseAstNode) RawTokens() []tokenizer.Token {
-	return n.tokens
+	return n.Tokens
 }
 
 // OptionalClause represents a clause that can be optionally included with if/end directive

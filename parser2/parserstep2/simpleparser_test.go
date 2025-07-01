@@ -39,12 +39,6 @@ func TestSimpleParsers(t *testing.T) {
 			expected: []string{"string"},
 		},
 		{
-			name:     "parentheses",
-			src:      "( ",
-			parser:   paren(),
-			expected: []string{"paren"},
-		},
-		{
 			name:     "comma",
 			src:      ", ",
 			parser:   comma(),
@@ -85,6 +79,30 @@ func TestSimpleParsers(t *testing.T) {
 			src:      "/* comment */",
 			parser:   comment(),
 			expected: []string{"comment"},
+		},
+		{
+			name:     "literalExpr number",
+			src:      "42 ",
+			parser:   literal(),
+			expected: []string{"literal"},
+		},
+		{
+			name:     "literalExpr string",
+			src:      "'abc' ",
+			parser:   literal(),
+			expected: []string{"literal"},
+		},
+		{
+			name:     "paren open",
+			src:      "(",
+			parser:   parenOpen(),
+			expected: []string{"parenOpen"},
+		},
+		{
+			name:     "paren close",
+			src:      ")",
+			parser:   parenClose(),
+			expected: []string{"parenClose"},
 		},
 	}
 

@@ -128,6 +128,14 @@ github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c h1:ncq/mPwQF
 github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c/go.mod h1:OmDBASR4679mdNQnz2pUhc2G8CO2JrUAVFDRBDP/hJE=
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
+github.com/shibukawa/parsercombinator v1.0.0 h1:WdzPMlKoyh994mLelxW9R4TnHTmtfJzJoFC2WFt4quM=
+github.com/shibukawa/parsercombinator v1.0.0/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
+github.com/shibukawa/parsercombinator v1.0.1 h1:xZH1ReVj5TYyCh68evZaLsUHlWB0LzcYghVRQkJf1pA=
+github.com/shibukawa/parsercombinator v1.0.1/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
+github.com/shibukawa/parsercombinator v1.0.2 h1:EO0NZW3M8tNLiVhvqf3zp90RFzuwjLzpY/LXfkicjL8=
+github.com/shibukawa/parsercombinator v1.0.2/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
+github.com/shibukawa/parsercombinator v1.0.3 h1:s0BzUtOnOHuMyUhxr4B5FJIChvrpN+JnZJ0GxJzBu+s=
+github.com/shibukawa/parsercombinator v1.0.3/go.mod h1:qsxkyj6jaewJ+582OcUzS2M314nuaFpJi0DPrCaR6DM=
 github.com/shirou/gopsutil/v4 v4.25.1 h1:QSWkTc+fu9LTAWfkZwZ6j8MSUk4A2LV7rbH0ZqmLjXs=
 github.com/shirou/gopsutil/v4 v4.25.1/go.mod h1:RoUCUpndaJFtT+2zsZzzmhvbfGoDCJ7nFXKJf8GqJbI=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=

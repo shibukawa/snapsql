@@ -58,16 +58,31 @@ parserstep2は、トークン列からSQL文の構造をパーサーコンビネ
 - サブのAstNode
     - CTEDefinition: {Name string, Recursive bool, Query *SelectStatement, Columns []string}
     - SelectItem:  SelectField | Expression | SubQuery | FunctionCall | ...
-    - SelectField: {TableName: Identifier, FieldName: FieldName, Alias: Identifier, Window: WindowSpec}
+    - SelectField: {TableName: Identifier, FieldName: FieldName, FieldAlias: Identifier, Window: WindowSpec}
     - WindowSpec: {Name: Identifier, Definition: Expression}
-    - TableReference: Identifier | SubQuery | JoinClause | ...
-    - JoinClause: { TableName Identifier, Alias: Identifier, JoinType, OnClause: Expression, Using: []Identifier}
+    - TableReference: Identifier | TableAliasDef | SubQuery | JoinClause | ...
+    - TableAliasDef: { TableName: Identifier, TableAlias: TableAlias }
+    - JoinClause: { LeftTable: TableReference, JoinType: JoinType, RightTable: TableReference, OnClause: Expression, Using: []Identifier}
+    - JoinType: INNER | LEFT | RIGHT | FULL_OUTER | CROSS
+    - SubQuery: { Query: SelectStatement, Alias: Identifier }
     - Mapping: {Left: FieldName, Right: FieldName}
-    - FieldName: Identifier
+    - TableAlias: Identifier
+    - TableLabel: TableName | TableAlias
+    - FieldName: Identifier | { TableLabel: Identifier, FieldName: Identifier }
     - OrderByField: FieldName + Asc/Desc
     - Values: ValueList | SelectStatement
     - ValueList: [][]Expression
     - OnConflictClause: {Target: []FieldName, Action: []SetClause}
+
+- Expression関連のAstNode
+    - Expression: BinaryExpression | UnaryExpression | FunctionCall | FieldReference | Literal | SubQuery | CaseExpression | ...
+    - BinaryExpression: { Left: Expression, Operator: BinaryOperator, Right: Expression }
+    - UnaryExpression: { Operator: UnaryOperator, Operand: Expression }
+    - FunctionCall: { Name: Identifier, Arguments: []Expression, Window: WindowSpec, Distinct: bool }
+    - FieldReference: { TableLabel: Identifier, FieldName: Identifier } | { FieldName: Identifier }
+    - Literal: { Type: LiteralType, Value: string }
+    - CaseExpression: { WhenClauses: []WhenClause, ElseClause: Expression }
+    - WhenClause: { Condition: Expression, Result: Expression }
 
 - AstNodeインターフェース
     - Type() NodeType
@@ -138,9 +153,10 @@ func (n *BaseAstNode) RawTokens() []tokenizer.Token { return n.tokens }
     - MERGE（ON, WHEN MATCHED/NOT MATCHED, if/endによる句ON/OFF）
     - VALUES文単体
 - DDL（データ定義言語）
-    - 現時点では未対応（今後の拡張候補: CREATE TABLE, ALTER TABLE, DROP TABLE等）
+    - 現時点では未対応
 - COPY/IMPORT/EXPORT
-    - 現時点では未対応（今後の拡張候補: COPY, LOAD DATA, EXPORT等）
+    - 現時点では未対応
+- 複数命令
 - その他
     - SnapSQLディレクティブ（if/for/else/elseif/end, =var, @env など）
     - パーサーコンビネータによる柔軟な構文解析
