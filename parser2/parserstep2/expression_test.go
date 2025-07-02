@@ -95,9 +95,16 @@ func TestExpression(t *testing.T) {
 		dialect       tok.SqlDialect
 	}{
 		{"add", "1 + 2", "1 + 2", 3, tok.SQLiteDialect},
+		{"minus", "1 - 2", "1 - 2", 3, tok.SQLiteDialect},
 		{"mul", "5 * 6", "5 * 6", 3, tok.SQLiteDialect},
 		{"div", "8 / 2", "8 / 2", 3, tok.SQLiteDialect},
-		{"paren", "( 1 )", "( 1 )", 3, tok.SQLiteDialect},
+		{"and", "8 and 2", "8 and 2", 3, tok.SQLiteDialect},
+		{"or", "8 or 2", "8 or 2", 3, tok.SQLiteDialect},
+		{"like", "8 like 2", "8 like 2", 3, tok.SQLiteDialect},
+		{"not like", `'abc' NOT LIKE '%c'`, `'abc' NOT LIKE '%c'`, 4, tok.SQLiteDialect},
+		{"between", "age between 18 and 60", "age between 18 and 60", 5, tok.SQLiteDialect},
+		{"between with paren", "age between (18 + 2) and 60", "age between ( 18 + 2 ) and 60", 9, tok.SQLiteDialect},
+		{"paren", "(1)", "( 1 )", 3, tok.SQLiteDialect},
 		{"column", "age", "age", 1, tok.SQLiteDialect},
 		{"qualified_column", "users.id", "users . id", 3, tok.SQLiteDialect},
 		{"column_arithmetic", "age + 1", "age + 1", 3, tok.SQLiteDialect},
@@ -124,7 +131,7 @@ func TestExpression(t *testing.T) {
 				pctx.DumpTrace()
 			}
 			assert.NoError(t, err)
-			assert.True(t, consumed > 0)
+			assert.Equal(t, consumed, len(pcTokens))
 			assert.Equal(t, "expression", result[0].Type)
 			assert.Equal(t, 1, len(result))
 			assert.Equal(t, test.rawTokenCount, len(result[0].Val.rawTokens))

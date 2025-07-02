@@ -15,7 +15,7 @@ type TokenType int
 
 const (
 	// Basic tokens
-	EOF TokenType = iota
+	EOF TokenType = iota + 1
 	WHITESPACE
 	STRING        // string literals ('text')
 	IDENTIFIER    // quoted identifiers ("col")
@@ -37,8 +37,6 @@ const (
 	MINUS         // -
 	MULTIPLY      // *
 	DIVIDE        // /
-	AND           // AND keyword
-	OR            // OR keyword
 
 	// Window function related
 	OVER      // OVER keyword
@@ -54,6 +52,8 @@ const (
 	ROW       // ROW keyword
 
 	// Logical operators and conditional expressions
+	AND     // AND keyword
+	OR      // OR keyword
 	NOT     // NOT keyword
 	IN      // IN keyword
 	EXISTS  // EXISTS keyword
@@ -138,6 +138,28 @@ func (t TokenType) String() string {
 		return "MULTIPLY"
 	case DIVIDE:
 		return "DIVIDE"
+	case OVER:
+		return "OVER"
+	case PARTITION:
+		return "PARTITION"
+	case ORDER:
+		return "ORDER"
+	case BY:
+		return "BY"
+	case ROWS:
+		return "ROWS"
+	case RANGE:
+		return "RANGE"
+	case UNBOUNDED:
+		return "UNBOUNDED"
+	case PRECEDING:
+		return "PRECEDING"
+	case FOLLOWING:
+		return "FOLLOWING"
+	case CURRENT:
+		return "CURRENT"
+	case ROW:
+		return "ROW"
 	case AND:
 		return "AND"
 	case OR:

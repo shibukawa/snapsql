@@ -262,6 +262,18 @@ func (t *tokenizer) readWhitespace() Token {
 	}
 }
 
+var keywordLikeTokenTypeMap = map[string]TokenType{
+	"AND":     AND,
+	"OR":      OR,
+	"NOT":     NOT,
+	"IN":      IN,
+	"EXISTS":  EXISTS,
+	"BETWEEN": BETWEEN,
+	"LIKE":    LIKE,
+	"IS":      IS,
+	"NULL":    NULL,
+}
+
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking
 func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	var builder strings.Builder
@@ -279,18 +291,15 @@ func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	upperValue := strings.ToUpper(originalValue)
 
 	var tokenType TokenType
-	switch {
-	case upperValue == "AND":
-		tokenType = AND
-	case upperValue == "OR":
-		tokenType = OR
-	case t.dialect.IsKeyword(upperValue):
+	if tt, ok := keywordLikeTokenTypeMap[upperValue]; ok {
+		tokenType = tt
+	} else if t.dialect.IsKeyword(upperValue) {
 		if t.dialect.IsStrictlyReserved(upperValue) {
 			tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
 		} else {
 			tokenType = CONTEXTUAL_IDENTIFIER // Non-reserved keywords can be identifiers
 		}
-	default:
+	} else {
 		tokenType = IDENTIFIER // Regular identifiers
 	}
 
@@ -562,22 +571,4 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) (directiveType string,
 	}
 
 	return "", false
-}
-
-// getKeywordTokenType returns the TokenType corresponding to a keyword
-func (t *tokenizer) getKeywordTokenType(word string) TokenType {
-	upperWord := strings.ToUpper(word)
-
-	switch upperWord {
-	case "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "GROUP", "HAVING", "ORDER", "BY", "UNION", "ALL", "DISTINCT", "AS", "WITH", "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "NULL":
-		return RESERVED_IDENTIFIER
-	// Window function keywords
-	case "OVER", "PARTITION", "ROWS", "RANGE", "UNBOUNDED", "PRECEDING", "FOLLOWING", "CURRENT", "ROW":
-		return RESERVED_IDENTIFIER
-	// Additional SQL keywords (DDL, DML, etc.)
-	case "ON", "CONFLICT", "DUPLICATE", "KEY", "CREATE", "DROP", "ALTER", "TABLE", "INDEX", "VIEW", "VALUES", "INTO", "SET", "RETURNING", "LIMIT", "OFFSET":
-		return RESERVED_IDENTIFIER
-	default:
-		return IDENTIFIER
-	}
 }

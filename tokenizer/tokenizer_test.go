@@ -141,6 +141,13 @@ func TestBasicTokens(t *testing.T) {
 			input:    "`col`",
 			expected: []TokenType{IDENTIFIER, EOF},
 		},
+		{
+			name:  "keyword like token",
+			input: "AND OR NOT IN EXISTS BETWEEN LIKE IS NULL",
+			expected: []TokenType{
+				AND, WHITESPACE, OR, WHITESPACE, NOT, WHITESPACE, IN, WHITESPACE, EXISTS, WHITESPACE,
+				BETWEEN, WHITESPACE, LIKE, WHITESPACE, IS, WHITESPACE, NULL, EOF},
+		},
 	}
 
 	for _, test := range tests {
@@ -170,28 +177,28 @@ func TestSnapSQLDirectives(t *testing.T) {
 		directiveType string
 	}{
 		{
-			name:          "if ディレクティブ",
+			name:          "if directive",
 			input:         "/*# if condition */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   true,
 			directiveType: "if",
 		},
 		{
-			name:          "variable ディレクティブ",
+			name:          "variable directive",
 			input:         "/*= variable */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   true,
 			directiveType: "variable",
 		},
 		{
-			name:          "normal コメント",
+			name:          "normal comment",
 			input:         "/* normal comment */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   false,
 			directiveType: "",
 		},
 		{
-			name:          "elseif ディレクティブ",
+			name:          "elseif directive",
 			input:         "/*# elseif condition */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   true,
@@ -205,21 +212,21 @@ func TestSnapSQLDirectives(t *testing.T) {
 			directiveType: "elseif",
 		},
 		{
-			name:          "else ディレクティブ",
+			name:          "else directive",
 			input:         "/*# else */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   true,
 			directiveType: "else",
 		},
 		{
-			name:          "for ディレクティブ",
+			name:          "for directive",
 			input:         "/*# for item : items */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   true,
 			directiveType: "for",
 		},
 		{
-			name:          "end ディレクティブ",
+			name:          "end directive",
 			input:         "/*# end */",
 			expectedType:  BLOCK_COMMENT,
 			isDirective:   true,

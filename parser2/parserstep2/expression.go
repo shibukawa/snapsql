@@ -44,6 +44,7 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 								},
 							},
 							rawTokens: tokens[0].Val.rawTokens,
+							spaces:    tokens[0].Val.spaces,
 						},
 					},
 				}, nil
@@ -76,10 +77,7 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 				parenClose(),
 			),
 			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-				var allTokens []tokenizer.Token
-				allTokens = append(allTokens, tokens[0].Val.Original) // (
-				allTokens = append(allTokens, tokens[1].Val.rawTokens...)
-				allTokens = append(allTokens, tokens[2].Val.Original) // )
+				allTokens, spaces := margeTokens(tokens)
 				return []pc.Token[Entity]{
 					{
 						Type: "expression",
@@ -92,6 +90,7 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 								},
 							},
 							rawTokens: allTokens,
+							spaces:    spaces,
 						},
 					},
 				}, nil
@@ -101,17 +100,17 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 
 	// Return the main expression parser
 	return pc.Or(
+		// a between b like c
 		pc.Trans(
 			pc.Seq(
 				primary,
-				operator(),
-				pc.Lazy(func() pc.Parser[Entity] { return expression(clause) }), // Pass clause to recursive call
+				between(),
+				primary,
+				andOp(),
+				pc.Lazy(func() pc.Parser[Entity] { return expression(clause) }),
 			),
 			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-				var allTokens []tokenizer.Token
-				allTokens = append(allTokens, tokens[0].Val.rawTokens...)
-				allTokens = append(allTokens, tokens[1].Val.Original) // operator
-				allTokens = append(allTokens, tokens[2].Val.rawTokens...)
+				allTokens, spaces := margeTokens(tokens)
 				return []pc.Token[Entity]{
 					{
 						Type: "expression",
@@ -124,6 +123,62 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 								},
 							},
 							rawTokens: allTokens,
+							spaces:    spaces,
+						},
+					},
+				}, nil
+			},
+		),
+		// a not like b
+		pc.Trans(
+			pc.Seq(
+				primary,
+				not(),
+				like(),
+				pc.Lazy(func() pc.Parser[Entity] { return expression(clause) }),
+			),
+			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+				allTokens, spaces := margeTokens(tokens)
+				return []pc.Token[Entity]{
+					{
+						Type: "expression",
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							NewValue: &ExpressionNode{
+								BaseAstNode: cmn.BaseAstNode{
+									NodeType: cmn.EXPRESSION,
+									Pos:      tokens[0].Val.Original.Position,
+								},
+							},
+							rawTokens: allTokens,
+							spaces:    spaces,
+						},
+					},
+				}, nil
+			},
+		),
+		// a operator b
+		pc.Trans(
+			pc.Seq(
+				primary,
+				operator(),
+				pc.Lazy(func() pc.Parser[Entity] { return expression(clause) }),
+			),
+			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+				allTokens, spaces := margeTokens(tokens)
+				return []pc.Token[Entity]{
+					{
+						Type: "expression",
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							NewValue: &ExpressionNode{
+								BaseAstNode: cmn.BaseAstNode{
+									NodeType: cmn.EXPRESSION,
+									Pos:      tokens[0].Val.Original.Position,
+								},
+							},
+							rawTokens: allTokens,
+							spaces:    spaces,
 						},
 					},
 				}, nil
@@ -131,4 +186,14 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 		),
 		primary,
 	)
+}
+
+func margeTokens(tokens []pc.Token[Entity]) ([]tokenizer.Token, [][]tokenizer.Token) {
+	var allTokens []tokenizer.Token
+	var spaces [][]tokenizer.Token
+	for _, t := range tokens {
+		allTokens = append(allTokens, t.Val.rawTokens...)
+		spaces = append(spaces, t.Val.spaces...)
+	}
+	return allTokens, spaces
 }

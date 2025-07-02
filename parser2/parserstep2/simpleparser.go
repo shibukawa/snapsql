@@ -21,7 +21,7 @@ func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
 			for _, t := range tokens[1:] {
 				spaces = append(spaces, t.Val.Original)
 			}
-			tokens[0].Val.spaces = spaces
+			tokens[0].Val.spaces = [][]tokenizer.Token{spaces}
 			return tokens[:1], nil
 		})
 }
@@ -40,17 +40,17 @@ func (l LiteralNode) String() string               { return "Literal:" + l.Value
 
 // literal parses numeric, string, boolean, or null literals and returns a LiteralAstNode.
 func literal() pc.Parser[Entity] {
-	return ws(pc.Or(
-		// Number and string literals
-		pc.Trace("number-string-literal", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-			if tokens[0].Type == "raw" {
-				o := tokens[0].Val.Original
-				switch o.Type {
-				case tokenizer.NUMBER, tokenizer.STRING:
-					return 1, []pc.Token[Entity]{
+	return ws(
+		pc.Trace("literal", pc.Or(
+			pc.Trans(
+				pc.Or(str(), number(), null()),
+				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+					t := tokens[0]
+					o := t.Val.Original
+					return []pc.Token[Entity]{
 						{
 							Type: "literal",
-							Pos:  tokens[0].Pos,
+							Pos:  t.Pos,
 							Val: Entity{
 								NewValue: &LiteralNode{
 									BaseAstNode: cmn.BaseAstNode{
@@ -65,199 +65,157 @@ func literal() pc.Parser[Entity] {
 							Raw: o.Value,
 						},
 					}, nil
-				}
-			}
-			return 0, nil, pc.ErrNotMatch
-		}),
-		// Boolean literals (TRUE/FALSE)
-		pc.Trace("boolean-literal", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-			if len(tokens) > 0 && tokens[0].Type == "raw" {
-				o := tokens[0].Val.Original
-				if (o.Type == tokenizer.RESERVED_IDENTIFIER || o.Type == tokenizer.IDENTIFIER) &&
-					(strings.EqualFold(o.Value, "TRUE") || strings.EqualFold(o.Value, "FALSE")) {
-					return 1, []pc.Token[Entity]{
-						{
-							Type: "literal",
-							Pos:  tokens[0].Pos,
-							Val: Entity{
-								NewValue: &LiteralNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.LITERAL,
-										Pos:      o.Position,
+				},
+			),
+			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+				if len(tokens) > 0 && tokens[0].Type == "raw" {
+					o := tokens[0].Val.Original
+					if (o.Type == tokenizer.RESERVED_IDENTIFIER || o.Type == tokenizer.IDENTIFIER) &&
+						(strings.EqualFold(o.Value, "TRUE") || strings.EqualFold(o.Value, "FALSE")) {
+						return 1, []pc.Token[Entity]{
+							{
+								Type: "literal",
+								Pos:  tokens[0].Pos,
+								Val: Entity{
+									NewValue: &LiteralNode{
+										BaseAstNode: cmn.BaseAstNode{
+											NodeType: cmn.LITERAL,
+											Pos:      o.Position,
+										},
+										LiteralType: o.Type, // IDENTIFIER or RESERVED_IDENTIFIER for boolean
+										Value:       o.Value,
 									},
-									LiteralType: o.Type, // IDENTIFIER or RESERVED_IDENTIFIER for boolean
-									Value:       o.Value,
+									rawTokens: []tokenizer.Token{o},
 								},
-								rawTokens: []tokenizer.Token{o},
+								Raw: o.Value,
 							},
-							Raw: o.Value,
-						},
-					}, nil
+						}, nil
+					}
 				}
-			}
-			return 0, nil, pc.ErrNotMatch
-		}),
-		// NULL literal
-		pc.Trace("null-literal", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-			if len(tokens) > 0 && tokens[0].Type == "raw" {
-				o := tokens[0].Val.Original
-				if o.Type == tokenizer.RESERVED_IDENTIFIER && strings.EqualFold(o.Value, "NULL") {
-					return 1, []pc.Token[Entity]{
-						{
-							Type: "literal",
-							Pos:  tokens[0].Pos,
-							Val: Entity{
-								NewValue: &LiteralNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.LITERAL,
-										Pos:      o.Position,
-									},
-									LiteralType: o.Type, // RESERVED_IDENTIFIER for null
-									Value:       o.Value,
-								},
-								rawTokens: []tokenizer.Token{o},
-							},
-							Raw: o.Value,
+				return 0, nil, pc.ErrNotMatch
+			})))
+}
+
+func directive(name, directiveType string) pc.Parser[Entity] {
+	return ws(pc.Trace(name, func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+		if tokens[0].Type == "raw" {
+			o := tokens[0].Val.Original
+			if o.Type == tokenizer.BLOCK_COMMENT && o.IsSnapSQLDirective && o.DirectiveType == directiveType {
+				return 1, []pc.Token[Entity]{
+					{
+						Type: name,
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							Original: o,
 						},
-					}, nil
-				}
+						Raw: o.Value,
+					},
+				}, nil
 			}
-			return 0, nil, pc.ErrNotMatch
-		}),
-	))
+		}
+		return 0, nil, pc.ErrNotMatch
+	}))
 }
 
 func ifDirective() pc.Parser[Entity] {
-	return ws(pc.Trace("if-directive", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		if tokens[0].Type == "raw" {
-			o := tokens[0].Val.Original
-			if o.Type == tokenizer.BLOCK_COMMENT && o.IsSnapSQLDirective && o.DirectiveType == "if" {
-				return 1, []pc.Token[Entity]{
-					{
-						Type: "if-directive",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							Original: o,
-						},
-						Raw: o.Value, // Store the raw comment text
-					},
-				}, nil
-			}
-		}
-		return 0, nil, pc.ErrNotMatch
-	}))
+	return directive("if-directive", "if")
 }
 
 func endDirective() pc.Parser[Entity] {
-	return ws(pc.Trace("end-directive", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		if tokens[0].Type == "raw" {
-			o := tokens[0].Val.Original
-			if o.Type == tokenizer.BLOCK_COMMENT && o.IsSnapSQLDirective && o.DirectiveType == "end" {
-				return 1, []pc.Token[Entity]{
-					{
-						Type: "end-directive",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							Original: o,
-						},
-						Raw: o.Value, // Store the raw comment text
-					},
-				}, nil
-			}
-		}
-		return 0, nil, pc.ErrNotMatch
-	}))
+	return directive("end-directive", "end")
 }
 
 // --- Primitive Parsers ---
 
-func primitiveType(tokens []pc.Token[Entity], typeName string, types ...tokenizer.TokenType) (int, []pc.Token[Entity], error) {
-	if len(tokens) > 0 && tokens[0].Type == "raw" {
-		o := tokens[0].Val.Original
-		if slices.Contains(types, o.Type) {
-			return 1, []pc.Token[Entity]{
-				{
-					Type: typeName,
-					Pos:  tokens[0].Pos,
-					Val: Entity{
-						Original: o,
+func primitiveType(typeName string, types ...tokenizer.TokenType) pc.Parser[Entity] {
+	return pc.Trace(typeName, func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+		if len(tokens) > 0 && tokens[0].Type == "raw" {
+			o := tokens[0].Val.Original
+			if slices.Contains(types, o.Type) {
+				return 1, []pc.Token[Entity]{
+					{
+						Type: typeName,
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							Original:  o,
+							rawTokens: []tokenizer.Token{o},
+						},
+						Raw: o.Value,
 					},
-					Raw: o.Value, // Store the raw comment text
-				},
-			}, nil
+				}, nil
+			}
 		}
-	}
-	return 0, nil, pc.ErrNotMatch
+		return 0, nil, pc.ErrNotMatch
+	})
 }
 
 func space() pc.Parser[Entity] {
-	return pc.Trace("space", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "space", tokenizer.WHITESPACE)
-	})
+	return primitiveType("space", tokenizer.WHITESPACE)
 }
 
 func comment() pc.Parser[Entity] {
-	return pc.Trace("comment", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "comment", tokenizer.BLOCK_COMMENT, tokenizer.LINE_COMMENT)
-	})
+	return primitiveType("comment", tokenizer.BLOCK_COMMENT, tokenizer.LINE_COMMENT)
 }
 
 func identifier() pc.Parser[Entity] {
-	return pc.Trace("identifier", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "identifier", tokenizer.IDENTIFIER)
-	})
+	return primitiveType("identifier", tokenizer.IDENTIFIER)
 }
 
 func number() pc.Parser[Entity] {
-	return ws(pc.Trace("number", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "number", tokenizer.NUMBER)
-	}))
+	return ws(primitiveType("number", tokenizer.NUMBER))
 }
 
 func str() pc.Parser[Entity] {
-	return ws(pc.Trace("string", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "string", tokenizer.STRING)
-	}))
+	return ws(primitiveType("string", tokenizer.STRING))
 }
 
 func comma() pc.Parser[Entity] {
-	return ws(pc.Trace("comma", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "comma", tokenizer.COMMA)
-	}))
+	return ws(primitiveType("comma", tokenizer.COMMA))
 }
 
 func semicolon() pc.Parser[Entity] {
-	return ws(pc.Trace("semicolon", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "semicolon", tokenizer.SEMICOLON)
-	}))
+	return ws(primitiveType("semicolon", tokenizer.SEMICOLON))
+}
+
+func between() pc.Parser[Entity] {
+	return ws(primitiveType("between", tokenizer.BETWEEN))
+}
+
+func not() pc.Parser[Entity] {
+	return ws(primitiveType("not", tokenizer.NOT))
+}
+
+func like() pc.Parser[Entity] {
+	return ws(primitiveType("like", tokenizer.LIKE))
+}
+
+func null() pc.Parser[Entity] {
+	return ws(primitiveType("null", tokenizer.NULL))
 }
 
 func operator() pc.Parser[Entity] {
-	return ws(pc.Trace("operator", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "operator",
-			tokenizer.EQUAL, tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.LESS_EQUAL,
-			tokenizer.GREATER_THAN, tokenizer.GREATER_EQUAL, tokenizer.PLUS, tokenizer.MINUS,
-			tokenizer.MULTIPLY, tokenizer.DIVIDE, tokenizer.AND, tokenizer.OR) // Add AND and OR
-	}))
+	return ws(primitiveType("operator",
+		tokenizer.EQUAL, tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.LESS_EQUAL,
+		tokenizer.GREATER_THAN, tokenizer.GREATER_EQUAL, tokenizer.PLUS, tokenizer.MINUS,
+		tokenizer.MULTIPLY, tokenizer.DIVIDE,
+		tokenizer.AND, tokenizer.OR, tokenizer.IN, tokenizer.LIKE))
+}
+
+func andOp() pc.Parser[Entity] {
+	return ws(primitiveType("and", tokenizer.AND))
 }
 
 func parenOpen() pc.Parser[Entity] {
-	return ws(pc.Trace("parenOpen", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "parenOpen", tokenizer.OPENED_PARENS)
-	}))
+	return ws(primitiveType("parenOpen", tokenizer.OPENED_PARENS))
 }
 
 func parenClose() pc.Parser[Entity] {
-	return ws(pc.Trace("parenClose", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "parenClose", tokenizer.CLOSED_PARENS)
-	}))
+	return ws(primitiveType("parenClose", tokenizer.CLOSED_PARENS))
 }
 
 // dot parses dot operator without ws wrapper (no spaces allowed)
 func dot() pc.Parser[Entity] {
-	return pc.Trace("dot", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		return primitiveType(tokens, "dot", tokenizer.DOT)
-	})
+	return ws(primitiveType("dot", tokenizer.DOT))
 }
 
 // anyIdentifier parses any valid identifier (including contextual and quoted)
@@ -349,7 +307,7 @@ func keyword(word string) pc.Parser[Entity] {
 }
 
 // booleanLiteral parses TRUE or FALSE with case-insensitive comparison
-func booleanLiteral() pc.Parser[Entity] {
+func boolean() pc.Parser[Entity] {
 	return ws(pc.Trace("boolean", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
 		if len(tokens) > 0 && tokens[0].Type == "raw" {
 			o := tokens[0].Val.Original
@@ -358,28 +316,6 @@ func booleanLiteral() pc.Parser[Entity] {
 				return 1, []pc.Token[Entity]{
 					{
 						Type: "boolean",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							Original: o,
-						},
-						Raw: o.Value, // Preserve original case
-					},
-				}, nil
-			}
-		}
-		return 0, nil, pc.ErrNotMatch
-	}))
-}
-
-// nullLiteral parses NULL with case-insensitive comparison
-func nullLiteral() pc.Parser[Entity] {
-	return ws(pc.Trace("null", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		if len(tokens) > 0 && tokens[0].Type == "raw" {
-			o := tokens[0].Val.Original
-			if o.Type == tokenizer.RESERVED_IDENTIFIER && strings.EqualFold(o.Value, "NULL") { // Case-insensitive
-				return 1, []pc.Token[Entity]{
-					{
-						Type: "null",
 						Pos:  tokens[0].Pos,
 						Val: Entity{
 							Original: o,
