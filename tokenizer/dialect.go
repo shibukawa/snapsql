@@ -2,167 +2,601 @@ package tokenizer
 
 import "strings"
 
-// Define keyword maps as package global variables
+// KeywordInfo contains keyword classification information
+type KeywordInfo struct {
+    Keyword          bool // Whether this word is a keyword
+    StrictlyReserved bool // Whether this keyword is strictly reserved (cannot be used as identifier without quotes)
+}
+
+// SqlDialect interface for database dialect handling
+type SqlDialect interface {
+    IsKeyword(word string) bool
+    IsStrictlyReserved(word string) bool
+    GetName() string
+}
+
+// dialectImpl is the common implementation for all SQL dialects
+type dialectImpl struct {
+    name     string
+    keywords map[string]KeywordInfo
+}
+
+func (d *dialectImpl) IsKeyword(word string) bool {
+    info, exists := d.keywords[strings.ToUpper(word)]
+    return exists && info.Keyword
+}
+
+func (d *dialectImpl) IsStrictlyReserved(word string) bool {
+    info, exists := d.keywords[strings.ToUpper(word)]
+    return exists && info.StrictlyReserved
+}
+
+func (d *dialectImpl) GetName() string {
+    return d.name
+}
+
+// Global dialect instances
 var (
-	postgresqlKeywordsMap = map[string]bool{
-		"SELECT": true, "FROM": true, "WHERE": true, "INSERT": true, "UPDATE": true, "DELETE": true,
-		"CREATE": true, "DROP": true, "ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true,
-		"AND": true, "OR": true, "NOT": true, "IN": true, "EXISTS": true, "BETWEEN": true,
-		"LIKE": true, "IS": true, "NULL": true, "ORDER": true, "BY": true, "GROUP": true,
-		"HAVING": true, "UNION": true, "ALL": true, "DISTINCT": true, "AS": true, "WITH": true,
-		"OVER": true, "PARTITION": true, "ROWS": true, "RANGE": true, "UNBOUNDED": true,
-		"PRECEDING": true, "FOLLOWING": true, "CURRENT": true, "ROW": true,
-		"RETURNING": true, "ARRAY_AGG": true,
-	}
-
-	postgresqlReservedWordsMap = map[string]bool{
-		"SELECT": true, "FROM": true, "WHERE": true, "INSERT": true, "UPDATE": true, "DELETE": true,
-		"CREATE": true, "DROP": true, "ALTER": true, "TABLE": true,
-	}
-
-	mysqlKeywordsMap = map[string]bool{
-		"SELECT": true, "FROM": true, "WHERE": true, "INSERT": true, "UPDATE": true, "DELETE": true,
-		"CREATE": true, "DROP": true, "ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true,
-		"AND": true, "OR": true, "NOT": true, "IN": true, "EXISTS": true, "BETWEEN": true,
-		"LIKE": true, "IS": true, "NULL": true, "ORDER": true, "BY": true, "GROUP": true,
-		"HAVING": true, "UNION": true, "ALL": true, "DISTINCT": true, "AS": true, "WITH": true,
-		"OVER": true, "PARTITION": true, "ROWS": true, "RANGE": true, "UNBOUNDED": true,
-		"PRECEDING": true, "FOLLOWING": true, "CURRENT": true, "ROW": true,
-		"LIMIT": true, "OFFSET": true,
-	}
-
-	mysqlReservedWordsMap = map[string]bool{
-		"SELECT": true, "FROM": true, "WHERE": true, "INSERT": true, "UPDATE": true, "DELETE": true,
-		"CREATE": true, "DROP": true, "ALTER": true, "TABLE": true,
-	}
-
-	sqliteKeywordsMap = map[string]bool{
-		"SELECT": true, "FROM": true, "WHERE": true, "INSERT": true, "UPDATE": true, "DELETE": true,
-		"CREATE": true, "DROP": true, "ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true,
-		"AND": true, "OR": true, "NOT": true, "IN": true, "EXISTS": true, "BETWEEN": true,
-		"LIKE": true, "IS": true, "NULL": true, "ORDER": true, "BY": true, "GROUP": true,
-		"HAVING": true, "UNION": true, "ALL": true, "DISTINCT": true, "AS": true, "WITH": true,
-		"OVER": true, "PARTITION": true, "ROWS": true, "RANGE": true, "UNBOUNDED": true,
-		"PRECEDING": true, "FOLLOWING": true, "CURRENT": true, "ROW": true,
-		"LIMIT": true,
-	}
-
-	sqliteReservedWordsMap = map[string]bool{
-		"SELECT": true, "FROM": true, "WHERE": true, "INSERT": true, "UPDATE": true, "DELETE": true,
-		"CREATE": true, "DROP": true, "ALTER": true, "TABLE": true,
-	}
+    SQLiteDialect     SqlDialect
+    PostgreSQLDialect SqlDialect
+    MySQLDialect      SqlDialect
 )
 
-// SqlDialect is the interface for database dialects
-type SqlDialect interface {
-	Name() string
-	IsKeyword(word string) bool
-	IsReservedWord(word string) bool
-	QuoteIdentifier(identifier string) string
-	QuoteLiteral(literal string) string
+// Initialize dialects
+func init() {
+    initSQLiteDialect()
+    initPostgreSQLDialect()
+    initMySQLDialect()
 }
 
-// PostgreSQLDialect is the implementation for PostgreSQL dialect
-type PostgreSQLDialect struct{}
+// SQLite dialect initialization
+func initSQLiteDialect() {
+    keywords := map[string]KeywordInfo{
+        // SQLite keywords with reservation status
+        "ABORT":               {Keyword: true, StrictlyReserved: false},
+        "ACTION":              {Keyword: true, StrictlyReserved: false},
+        "ADD":                 {Keyword: true, StrictlyReserved: false},
+        "AFTER":               {Keyword: true, StrictlyReserved: false},
+        "ALL":                 {Keyword: true, StrictlyReserved: true},
+        "ALTER":               {Keyword: true, StrictlyReserved: true},
+        "ANALYZE":             {Keyword: true, StrictlyReserved: false},
+        "AND":                 {Keyword: true, StrictlyReserved: true},
+        "AS":                  {Keyword: true, StrictlyReserved: true},
+        "ASC":                 {Keyword: true, StrictlyReserved: true},
+        "ATTACH":              {Keyword: true, StrictlyReserved: false},
+        "AUTOINCREMENT":       {Keyword: true, StrictlyReserved: false},
+        "BEFORE":              {Keyword: true, StrictlyReserved: false},
+        "BEGIN":               {Keyword: true, StrictlyReserved: false},
+        "BETWEEN":             {Keyword: true, StrictlyReserved: true},
+        "BY":                  {Keyword: true, StrictlyReserved: true},
+        "CASCADE":             {Keyword: true, StrictlyReserved: false},
+        "CASE":                {Keyword: true, StrictlyReserved: true},
+        "CAST":                {Keyword: true, StrictlyReserved: true},
+        "CHECK":               {Keyword: true, StrictlyReserved: true},
+        "COLLATE":             {Keyword: true, StrictlyReserved: true},
+        "COLUMN":              {Keyword: true, StrictlyReserved: false},
+        "COMMIT":              {Keyword: true, StrictlyReserved: false},
+        "CONFLICT":            {Keyword: true, StrictlyReserved: false},
+        "CONSTRAINT":          {Keyword: true, StrictlyReserved: false},
+        "CREATE":              {Keyword: true, StrictlyReserved: true},
+        "CROSS":               {Keyword: true, StrictlyReserved: true},
+        "CURRENT_DATE":        {Keyword: true, StrictlyReserved: false},
+        "CURRENT_TIME":        {Keyword: true, StrictlyReserved: false},
+        "CURRENT_TIMESTAMP":   {Keyword: true, StrictlyReserved: false},
+        "DATABASE":            {Keyword: true, StrictlyReserved: false},
+        "DEFAULT":             {Keyword: true, StrictlyReserved: false},
+        "DEFERRABLE":          {Keyword: true, StrictlyReserved: false},
+        "DEFERRED":            {Keyword: true, StrictlyReserved: false},
+        "DELETE":              {Keyword: true, StrictlyReserved: true},
+        "DESC":                {Keyword: true, StrictlyReserved: true},
+        "DETACH":              {Keyword: true, StrictlyReserved: false},
+        "DISTINCT":            {Keyword: true, StrictlyReserved: true},
+        "DROP":                {Keyword: true, StrictlyReserved: true},
+        "EACH":                {Keyword: true, StrictlyReserved: false},
+        "ELSE":                {Keyword: true, StrictlyReserved: true},
+        "END":                 {Keyword: true, StrictlyReserved: true},
+        "ESCAPE":              {Keyword: true, StrictlyReserved: false},
+        "EXCEPT":              {Keyword: true, StrictlyReserved: true},
+        "EXCLUSIVE":           {Keyword: true, StrictlyReserved: false},
+        "EXISTS":              {Keyword: true, StrictlyReserved: true},
+        "EXPLAIN":             {Keyword: true, StrictlyReserved: false},
+        "FAIL":                {Keyword: true, StrictlyReserved: false},
+        "FOR":                 {Keyword: true, StrictlyReserved: true},
+        "FOREIGN":             {Keyword: true, StrictlyReserved: false},
+        "FROM":                {Keyword: true, StrictlyReserved: true},
+        "FULL":                {Keyword: true, StrictlyReserved: true},
+        "GLOB":                {Keyword: true, StrictlyReserved: false},
+        "GROUP":               {Keyword: true, StrictlyReserved: true},
+        "HAVING":              {Keyword: true, StrictlyReserved: true},
+        "IF":                  {Keyword: true, StrictlyReserved: false},
+        "IGNORE":              {Keyword: true, StrictlyReserved: false},
+        "IMMEDIATE":           {Keyword: true, StrictlyReserved: false},
+        "IN":                  {Keyword: true, StrictlyReserved: true},
+        "INDEX":               {Keyword: true, StrictlyReserved: false},
+        "INDEXED":             {Keyword: true, StrictlyReserved: false},
+        "INITIALLY":           {Keyword: true, StrictlyReserved: false},
+        "INNER":               {Keyword: true, StrictlyReserved: true},
+        "INSERT":              {Keyword: true, StrictlyReserved: true},
+        "INSTEAD":             {Keyword: true, StrictlyReserved: false},
+        "INTERSECT":           {Keyword: true, StrictlyReserved: true},
+        "INTO":                {Keyword: true, StrictlyReserved: true},
+        "IS":                  {Keyword: true, StrictlyReserved: true},
+        "ISNULL":              {Keyword: true, StrictlyReserved: false},
+        "JOIN":                {Keyword: true, StrictlyReserved: true},
+        "KEY":                 {Keyword: true, StrictlyReserved: false},
+        "LEFT":                {Keyword: true, StrictlyReserved: true},
+        "LIKE":                {Keyword: true, StrictlyReserved: true},
+        "LIMIT":               {Keyword: true, StrictlyReserved: true},
+        "MATCH":               {Keyword: true, StrictlyReserved: false},
+        "NATURAL":             {Keyword: true, StrictlyReserved: true},
+        "NO":                  {Keyword: true, StrictlyReserved: false},
+        "NOT":                 {Keyword: true, StrictlyReserved: true},
+        "NOTNULL":             {Keyword: true, StrictlyReserved: false},
+        "NULL":                {Keyword: true, StrictlyReserved: true},
+        "OF":                  {Keyword: true, StrictlyReserved: false},
+        "OFFSET":              {Keyword: true, StrictlyReserved: false},
+        "ON":                  {Keyword: true, StrictlyReserved: true},
+        "OR":                  {Keyword: true, StrictlyReserved: true},
+        "ORDER":               {Keyword: true, StrictlyReserved: true},
+        "OUTER":               {Keyword: true, StrictlyReserved: true},
+        "PLAN":                {Keyword: true, StrictlyReserved: false},
+        "PRAGMA":              {Keyword: true, StrictlyReserved: false},
+        "PRIMARY":             {Keyword: true, StrictlyReserved: true},
+        "QUERY":               {Keyword: true, StrictlyReserved: false},
+        "RAISE":               {Keyword: true, StrictlyReserved: false},
+        "RECURSIVE":           {Keyword: true, StrictlyReserved: false},
+        "REFERENCES":          {Keyword: true, StrictlyReserved: false},
+        "REGEXP":              {Keyword: true, StrictlyReserved: false},
+        "REINDEX":             {Keyword: true, StrictlyReserved: false},
+        "RELEASE":             {Keyword: true, StrictlyReserved: false},
+        "RENAME":              {Keyword: true, StrictlyReserved: false},
+        "REPLACE":             {Keyword: true, StrictlyReserved: false},
+        "RESTRICT":            {Keyword: true, StrictlyReserved: false},
+        "RIGHT":               {Keyword: true, StrictlyReserved: true},
+        "ROLLBACK":            {Keyword: true, StrictlyReserved: false},
+        "ROW":                 {Keyword: true, StrictlyReserved: false},
+        "SAVEPOINT":           {Keyword: true, StrictlyReserved: false},
+        "SELECT":              {Keyword: true, StrictlyReserved: true},
+        "SET":                 {Keyword: true, StrictlyReserved: true},
+        "TABLE":               {Keyword: true, StrictlyReserved: false}, // table is non-reserved in SQLite
+        "TEMP":                {Keyword: true, StrictlyReserved: false},
+        "TEMPORARY":           {Keyword: true, StrictlyReserved: false},
+        "THEN":                {Keyword: true, StrictlyReserved: true},
+        "TO":                  {Keyword: true, StrictlyReserved: false},
+        "TRANSACTION":         {Keyword: true, StrictlyReserved: false},
+        "TRIGGER":             {Keyword: true, StrictlyReserved: false},
+        "UNION":               {Keyword: true, StrictlyReserved: true},
+        "UNIQUE":              {Keyword: true, StrictlyReserved: true},
+        "UPDATE":              {Keyword: true, StrictlyReserved: true},
+        "USING":               {Keyword: true, StrictlyReserved: true},
+        "VACUUM":              {Keyword: true, StrictlyReserved: false},
+        "VALUES":              {Keyword: true, StrictlyReserved: true},
+        "VIEW":                {Keyword: true, StrictlyReserved: false},
+        "VIRTUAL":             {Keyword: true, StrictlyReserved: false},
+        "WHEN":                {Keyword: true, StrictlyReserved: true},
+        "WHERE":               {Keyword: true, StrictlyReserved: true},
+        "WITH":                {Keyword: true, StrictlyReserved: true},
+        "WITHOUT":             {Keyword: true, StrictlyReserved: false},
+    }
 
-// NewPostgreSQLDialect creates a PostgreSQL dialect
-func NewPostgreSQLDialect() *PostgreSQLDialect {
-	return &PostgreSQLDialect{}
+    SQLiteDialect = &dialectImpl{
+        name:     "SQLite",
+        keywords: keywords,
+    }
 }
 
-func (d *PostgreSQLDialect) Name() string {
-	return "PostgreSQL"
+// PostgreSQL dialect initialization
+func initPostgreSQLDialect() {
+    keywords := map[string]KeywordInfo{
+        // PostgreSQL keywords with reservation status
+        "ALL":                 {Keyword: true, StrictlyReserved: true},
+        "ANALYSE":             {Keyword: true, StrictlyReserved: true},
+        "ANALYZE":             {Keyword: true, StrictlyReserved: true},
+        "AND":                 {Keyword: true, StrictlyReserved: true},
+        "ANY":                 {Keyword: true, StrictlyReserved: true},
+        "ARRAY":               {Keyword: true, StrictlyReserved: true},
+        "AS":                  {Keyword: true, StrictlyReserved: true},
+        "ASC":                 {Keyword: true, StrictlyReserved: true},
+        "ASYMMETRIC":          {Keyword: true, StrictlyReserved: true},
+        "AUTHORIZATION":       {Keyword: true, StrictlyReserved: false},
+        "BIGINT":              {Keyword: true, StrictlyReserved: false},
+        "BINARY":              {Keyword: true, StrictlyReserved: false},
+        "BIT":                 {Keyword: true, StrictlyReserved: false},
+        "BOOLEAN":             {Keyword: true, StrictlyReserved: false},
+        "BOTH":                {Keyword: true, StrictlyReserved: true},
+        "CASE":                {Keyword: true, StrictlyReserved: true},
+        "CAST":                {Keyword: true, StrictlyReserved: true},
+        "CHAR":                {Keyword: true, StrictlyReserved: false},
+        "CHARACTER":           {Keyword: true, StrictlyReserved: false},
+        "CHECK":               {Keyword: true, StrictlyReserved: true},
+        "COALESCE":            {Keyword: true, StrictlyReserved: false},
+        "COLLATE":             {Keyword: true, StrictlyReserved: true},
+        "COLLATION":           {Keyword: true, StrictlyReserved: false},
+        "COLUMN":              {Keyword: true, StrictlyReserved: true},
+        "CONCURRENTLY":        {Keyword: true, StrictlyReserved: false},
+        "CONSTRAINT":          {Keyword: true, StrictlyReserved: true},
+        "CREATE":              {Keyword: true, StrictlyReserved: true},
+        "CROSS":               {Keyword: true, StrictlyReserved: false},
+        "CURRENT_CATALOG":     {Keyword: true, StrictlyReserved: true},
+        "CURRENT_DATE":        {Keyword: true, StrictlyReserved: true},
+        "CURRENT_ROLE":        {Keyword: true, StrictlyReserved: true},
+        "CURRENT_SCHEMA":      {Keyword: true, StrictlyReserved: false},
+        "CURRENT_TIME":        {Keyword: true, StrictlyReserved: true},
+        "CURRENT_TIMESTAMP":   {Keyword: true, StrictlyReserved: true},
+        "CURRENT_USER":        {Keyword: true, StrictlyReserved: true},
+        "DEC":                 {Keyword: true, StrictlyReserved: false},
+        "DECIMAL":             {Keyword: true, StrictlyReserved: false},
+        "DEFAULT":             {Keyword: true, StrictlyReserved: true},
+        "DEFERRABLE":          {Keyword: true, StrictlyReserved: true},
+        "DESC":                {Keyword: true, StrictlyReserved: true},
+        "DISTINCT":            {Keyword: true, StrictlyReserved: true},
+        "DO":                  {Keyword: true, StrictlyReserved: true},
+        "ELSE":                {Keyword: true, StrictlyReserved: true},
+        "END":                 {Keyword: true, StrictlyReserved: true},
+        "EXCEPT":              {Keyword: true, StrictlyReserved: true},
+        "EXISTS":              {Keyword: true, StrictlyReserved: false},
+        "EXTRACT":             {Keyword: true, StrictlyReserved: false},
+        "FALSE":               {Keyword: true, StrictlyReserved: true},
+        "FETCH":               {Keyword: true, StrictlyReserved: true},
+        "FLOAT":               {Keyword: true, StrictlyReserved: false},
+        "FOR":                 {Keyword: true, StrictlyReserved: true},
+        "FOREIGN":             {Keyword: true, StrictlyReserved: true},
+        "FREEZE":              {Keyword: true, StrictlyReserved: false},
+        "FROM":                {Keyword: true, StrictlyReserved: true},
+        "FULL":                {Keyword: true, StrictlyReserved: false},
+        "GRANT":               {Keyword: true, StrictlyReserved: true},
+        "GREATEST":            {Keyword: true, StrictlyReserved: false},
+        "GROUP":               {Keyword: true, StrictlyReserved: true},
+        "GROUPING":            {Keyword: true, StrictlyReserved: false},
+        "HAVING":              {Keyword: true, StrictlyReserved: true},
+        "ILIKE":               {Keyword: true, StrictlyReserved: false},
+        "IN":                  {Keyword: true, StrictlyReserved: true},
+        "INITIALLY":           {Keyword: true, StrictlyReserved: true},
+        "INNER":               {Keyword: true, StrictlyReserved: false},
+        "INOUT":               {Keyword: true, StrictlyReserved: false},
+        "INT":                 {Keyword: true, StrictlyReserved: false},
+        "INTEGER":             {Keyword: true, StrictlyReserved: false},
+        "INTERSECT":           {Keyword: true, StrictlyReserved: true},
+        "INTERVAL":            {Keyword: true, StrictlyReserved: false},
+        "INTO":                {Keyword: true, StrictlyReserved: true},
+        "IS":                  {Keyword: true, StrictlyReserved: false},
+        "ISNULL":              {Keyword: true, StrictlyReserved: false},
+        "JOIN":                {Keyword: true, StrictlyReserved: false},
+        "LATERAL":             {Keyword: true, StrictlyReserved: true},
+        "LEADING":             {Keyword: true, StrictlyReserved: true},
+        "LEAST":               {Keyword: true, StrictlyReserved: false},
+        "LEFT":                {Keyword: true, StrictlyReserved: false},
+        "LIKE":                {Keyword: true, StrictlyReserved: false},
+        "LIMIT":               {Keyword: true, StrictlyReserved: true},
+        "LOCALTIME":           {Keyword: true, StrictlyReserved: true},
+        "LOCALTIMESTAMP":      {Keyword: true, StrictlyReserved: true},
+        "NATIONAL":            {Keyword: true, StrictlyReserved: false},
+        "NATURAL":             {Keyword: true, StrictlyReserved: false},
+        "NCHAR":               {Keyword: true, StrictlyReserved: false},
+        "NONE":                {Keyword: true, StrictlyReserved: false},
+        "NORMALIZE":           {Keyword: true, StrictlyReserved: false},
+        "NOT":                 {Keyword: true, StrictlyReserved: true},
+        "NOTNULL":             {Keyword: true, StrictlyReserved: false},
+        "NULL":                {Keyword: true, StrictlyReserved: true},
+        "NULLIF":              {Keyword: true, StrictlyReserved: false},
+        "NUMERIC":             {Keyword: true, StrictlyReserved: false},
+        "OFFSET":              {Keyword: true, StrictlyReserved: true},
+        "ON":                  {Keyword: true, StrictlyReserved: true},
+        "ONLY":                {Keyword: true, StrictlyReserved: true},
+        "OR":                  {Keyword: true, StrictlyReserved: true},
+        "ORDER":               {Keyword: true, StrictlyReserved: true},
+        "OUT":                 {Keyword: true, StrictlyReserved: false},
+        "OUTER":               {Keyword: true, StrictlyReserved: false},
+        "OVERLAY":             {Keyword: true, StrictlyReserved: false},
+        "PLACING":             {Keyword: true, StrictlyReserved: true},
+        "POSITION":            {Keyword: true, StrictlyReserved: false},
+        "PRECISION":           {Keyword: true, StrictlyReserved: false},
+        "PRIMARY":             {Keyword: true, StrictlyReserved: true},
+        "REAL":                {Keyword: true, StrictlyReserved: false},
+        "REFERENCES":          {Keyword: true, StrictlyReserved: true},
+        "RETURNING":           {Keyword: true, StrictlyReserved: true},
+        "RIGHT":               {Keyword: true, StrictlyReserved: false},
+        "ROW":                 {Keyword: true, StrictlyReserved: false},
+        "SELECT":              {Keyword: true, StrictlyReserved: true},
+        "SESSION_USER":        {Keyword: true, StrictlyReserved: true},
+        "SETOF":               {Keyword: true, StrictlyReserved: false},
+        "SIMILAR":             {Keyword: true, StrictlyReserved: false},
+        "SMALLINT":            {Keyword: true, StrictlyReserved: false},
+        "SOME":                {Keyword: true, StrictlyReserved: true},
+        "SUBSTRING":           {Keyword: true, StrictlyReserved: false},
+        "SYMMETRIC":           {Keyword: true, StrictlyReserved: true},
+        "TABLE":               {Keyword: true, StrictlyReserved: true},
+        "TABLESAMPLE":         {Keyword: true, StrictlyReserved: false},
+        "THEN":                {Keyword: true, StrictlyReserved: true},
+        "TIME":                {Keyword: true, StrictlyReserved: false},
+        "TIMESTAMP":           {Keyword: true, StrictlyReserved: false},
+        "TO":                  {Keyword: true, StrictlyReserved: true},
+        "TRAILING":            {Keyword: true, StrictlyReserved: true},
+        "TREAT":               {Keyword: true, StrictlyReserved: false},
+        "TRIM":                {Keyword: true, StrictlyReserved: false},
+        "TRUE":                {Keyword: true, StrictlyReserved: true},
+        "UNION":               {Keyword: true, StrictlyReserved: true},
+        "UNIQUE":              {Keyword: true, StrictlyReserved: true},
+        "USER":                {Keyword: true, StrictlyReserved: true},
+        "USING":               {Keyword: true, StrictlyReserved: true},
+        "VALUES":              {Keyword: true, StrictlyReserved: true},
+        "VARCHAR":             {Keyword: true, StrictlyReserved: false},
+        "VARIADIC":            {Keyword: true, StrictlyReserved: true},
+        "VERBOSE":             {Keyword: true, StrictlyReserved: false},
+        "WHEN":                {Keyword: true, StrictlyReserved: true},
+        "WHERE":               {Keyword: true, StrictlyReserved: true},
+        "WINDOW":              {Keyword: true, StrictlyReserved: true},
+        "WITH":                {Keyword: true, StrictlyReserved: true},
+        "XMLATTRIBUTES":       {Keyword: true, StrictlyReserved: false},
+        "XMLCONCAT":           {Keyword: true, StrictlyReserved: false},
+        "XMLELEMENT":          {Keyword: true, StrictlyReserved: false},
+        "XMLEXISTS":           {Keyword: true, StrictlyReserved: false},
+        "XMLFOREST":           {Keyword: true, StrictlyReserved: false},
+        "XMLPARSE":            {Keyword: true, StrictlyReserved: false},
+        "XMLPI":               {Keyword: true, StrictlyReserved: false},
+        "XMLROOT":             {Keyword: true, StrictlyReserved: false},
+        "XMLSERIALIZE":        {Keyword: true, StrictlyReserved: false},
+    }
+
+    PostgreSQLDialect = &dialectImpl{
+        name:     "PostgreSQL",
+        keywords: keywords,
+    }
 }
 
-func (d *PostgreSQLDialect) IsKeyword(word string) bool {
-	return postgresqlKeywordsMap[strings.ToUpper(word)]
+// MySQL dialect initialization
+func initMySQLDialect() {
+    keywords := map[string]KeywordInfo{
+        // MySQL keywords with reservation status
+        "ACCESSIBLE":                      {Keyword: true, StrictlyReserved: false},
+        "ADD":                             {Keyword: true, StrictlyReserved: true},
+        "ALL":                             {Keyword: true, StrictlyReserved: true},
+        "ALTER":                           {Keyword: true, StrictlyReserved: true},
+        "ANALYZE":                         {Keyword: true, StrictlyReserved: true},
+        "AND":                             {Keyword: true, StrictlyReserved: true},
+        "AS":                              {Keyword: true, StrictlyReserved: true},
+        "ASC":                             {Keyword: true, StrictlyReserved: true},
+        "ASENSITIVE":                      {Keyword: true, StrictlyReserved: true},
+        "BEFORE":                          {Keyword: true, StrictlyReserved: true},
+        "BETWEEN":                         {Keyword: true, StrictlyReserved: true},
+        "BIGINT":                          {Keyword: true, StrictlyReserved: true},
+        "BINARY":                          {Keyword: true, StrictlyReserved: true},
+        "BLOB":                            {Keyword: true, StrictlyReserved: true},
+        "BOTH":                            {Keyword: true, StrictlyReserved: true},
+        "BY":                              {Keyword: true, StrictlyReserved: true},
+        "CALL":                            {Keyword: true, StrictlyReserved: true},
+        "CASCADE":                         {Keyword: true, StrictlyReserved: true},
+        "CASE":                            {Keyword: true, StrictlyReserved: true},
+        "CHANGE":                          {Keyword: true, StrictlyReserved: true},
+        "CHAR":                            {Keyword: true, StrictlyReserved: true},
+        "CHARACTER":                       {Keyword: true, StrictlyReserved: true},
+        "CHECK":                           {Keyword: true, StrictlyReserved: true},
+        "COLLATE":                         {Keyword: true, StrictlyReserved: true},
+        "COLUMN":                          {Keyword: true, StrictlyReserved: true},
+        "CONDITION":                       {Keyword: true, StrictlyReserved: true},
+        "CONSTRAINT":                      {Keyword: true, StrictlyReserved: false}, // Non-reserved in MySQL
+        "CONTINUE":                        {Keyword: true, StrictlyReserved: true},
+        "CONVERT":                         {Keyword: true, StrictlyReserved: true},
+        "CREATE":                          {Keyword: true, StrictlyReserved: true},
+        "CROSS":                           {Keyword: true, StrictlyReserved: true},
+        "CUBE":                            {Keyword: true, StrictlyReserved: false},
+        "CURRENT_DATE":                    {Keyword: true, StrictlyReserved: true},
+        "CURRENT_TIME":                    {Keyword: true, StrictlyReserved: true},
+        "CURRENT_TIMESTAMP":               {Keyword: true, StrictlyReserved: true},
+        "CURRENT_USER":                    {Keyword: true, StrictlyReserved: true},
+        "CURSOR":                          {Keyword: true, StrictlyReserved: true},
+        "DATABASE":                        {Keyword: true, StrictlyReserved: true},
+        "DATABASES":                       {Keyword: true, StrictlyReserved: true},
+        "DAY_HOUR":                        {Keyword: true, StrictlyReserved: true},
+        "DAY_MICROSECOND":                 {Keyword: true, StrictlyReserved: true},
+        "DAY_MINUTE":                      {Keyword: true, StrictlyReserved: true},
+        "DAY_SECOND":                      {Keyword: true, StrictlyReserved: true},
+        "DEC":                             {Keyword: true, StrictlyReserved: true},
+        "DECIMAL":                         {Keyword: true, StrictlyReserved: true},
+        "DECLARE":                         {Keyword: true, StrictlyReserved: true},
+        "DEFAULT":                         {Keyword: true, StrictlyReserved: true},
+        "DELAYED":                         {Keyword: true, StrictlyReserved: true},
+        "DELETE":                          {Keyword: true, StrictlyReserved: true},
+        "DESC":                            {Keyword: true, StrictlyReserved: true},
+        "DESCRIBE":                        {Keyword: true, StrictlyReserved: true},
+        "DETERMINISTIC":                   {Keyword: true, StrictlyReserved: true},
+        "DISTINCT":                        {Keyword: true, StrictlyReserved: true},
+        "DISTINCTROW":                     {Keyword: true, StrictlyReserved: true},
+        "DIV":                             {Keyword: true, StrictlyReserved: true},
+        "DOUBLE":                          {Keyword: true, StrictlyReserved: true},
+        "DROP":                            {Keyword: true, StrictlyReserved: true},
+        "DUAL":                            {Keyword: true, StrictlyReserved: true},
+        "EACH":                            {Keyword: true, StrictlyReserved: true},
+        "ELSE":                            {Keyword: true, StrictlyReserved: true},
+        "ELSEIF":                          {Keyword: true, StrictlyReserved: true},
+        "ENCLOSED":                        {Keyword: true, StrictlyReserved: true},
+        "ESCAPED":                         {Keyword: true, StrictlyReserved: true},
+        "EXISTS":                          {Keyword: true, StrictlyReserved: true},
+        "EXIT":                            {Keyword: true, StrictlyReserved: true},
+        "EXPLAIN":                         {Keyword: true, StrictlyReserved: true},
+        "FALSE":                           {Keyword: true, StrictlyReserved: true},
+        "FETCH":                           {Keyword: true, StrictlyReserved: true},
+        "FLOAT":                           {Keyword: true, StrictlyReserved: true},
+        "FLOAT4":                          {Keyword: true, StrictlyReserved: true},
+        "FLOAT8":                          {Keyword: true, StrictlyReserved: true},
+        "FOR":                             {Keyword: true, StrictlyReserved: true},
+        "FORCE":                           {Keyword: true, StrictlyReserved: true},
+        "FOREIGN":                         {Keyword: true, StrictlyReserved: true},
+        "FROM":                            {Keyword: true, StrictlyReserved: true},
+        "FULLTEXT":                        {Keyword: true, StrictlyReserved: true},
+        "GRANT":                           {Keyword: true, StrictlyReserved: true},
+        "GROUP":                           {Keyword: true, StrictlyReserved: true},
+        "HAVING":                          {Keyword: true, StrictlyReserved: true},
+        "HIGH_PRIORITY":                   {Keyword: true, StrictlyReserved: true},
+        "HOUR_MICROSECOND":                {Keyword: true, StrictlyReserved: true},
+        "HOUR_MINUTE":                     {Keyword: true, StrictlyReserved: true},
+        "HOUR_SECOND":                     {Keyword: true, StrictlyReserved: true},
+        "IF":                              {Keyword: true, StrictlyReserved: true},
+        "IGNORE":                          {Keyword: true, StrictlyReserved: true},
+        "IN":                              {Keyword: true, StrictlyReserved: true},
+        "INDEX":                           {Keyword: true, StrictlyReserved: false}, // Non-reserved
+        "INFILE":                          {Keyword: true, StrictlyReserved: true},
+        "INNER":                           {Keyword: true, StrictlyReserved: true},
+        "INOUT":                           {Keyword: true, StrictlyReserved: true},
+        "INSENSITIVE":                     {Keyword: true, StrictlyReserved: true},
+        "INSERT":                          {Keyword: true, StrictlyReserved: true},
+        "INT":                             {Keyword: true, StrictlyReserved: true},
+        "INT1":                            {Keyword: true, StrictlyReserved: true},
+        "INT2":                            {Keyword: true, StrictlyReserved: true},
+        "INT3":                            {Keyword: true, StrictlyReserved: true},
+        "INT4":                            {Keyword: true, StrictlyReserved: true},
+        "INT8":                            {Keyword: true, StrictlyReserved: true},
+        "INTEGER":                         {Keyword: true, StrictlyReserved: true},
+        "INTERVAL":                        {Keyword: true, StrictlyReserved: true},
+        "INTO":                            {Keyword: true, StrictlyReserved: true},
+        "IO_AFTER_GTIDS":                  {Keyword: true, StrictlyReserved: false},
+        "IO_BEFORE_GTIDS":                 {Keyword: true, StrictlyReserved: false},
+        "IS":                              {Keyword: true, StrictlyReserved: true},
+        "ITERATE":                         {Keyword: true, StrictlyReserved: true},
+        "JOIN":                            {Keyword: true, StrictlyReserved: true},
+        "KEY":                             {Keyword: true, StrictlyReserved: true},
+        "KEYS":                            {Keyword: true, StrictlyReserved: true},
+        "KILL":                            {Keyword: true, StrictlyReserved: true},
+        "LEADING":                         {Keyword: true, StrictlyReserved: true},
+        "LEAVE":                           {Keyword: true, StrictlyReserved: true},
+        "LEFT":                            {Keyword: true, StrictlyReserved: true},
+        "LIKE":                            {Keyword: true, StrictlyReserved: true},
+        "LIMIT":                           {Keyword: true, StrictlyReserved: true},
+        "LINEAR":                          {Keyword: true, StrictlyReserved: true},
+        "LINES":                           {Keyword: true, StrictlyReserved: true},
+        "LOAD":                            {Keyword: true, StrictlyReserved: true},
+        "LOCALTIME":                       {Keyword: true, StrictlyReserved: true},
+        "LOCALTIMESTAMP":                  {Keyword: true, StrictlyReserved: true},
+        "LOCK":                            {Keyword: true, StrictlyReserved: true},
+        "LONG":                            {Keyword: true, StrictlyReserved: true},
+        "LONGBLOB":                        {Keyword: true, StrictlyReserved: true},
+        "LONGTEXT":                        {Keyword: true, StrictlyReserved: true},
+        "LOOP":                            {Keyword: true, StrictlyReserved: true},
+        "LOW_PRIORITY":                    {Keyword: true, StrictlyReserved: true},
+        "MASTER_BIND":                     {Keyword: true, StrictlyReserved: false},
+        "MASTER_SSL_VERIFY_SERVER_CERT":   {Keyword: true, StrictlyReserved: false},
+        "MATCH":                           {Keyword: true, StrictlyReserved: true},
+        "MAXVALUE":                        {Keyword: true, StrictlyReserved: false},
+        "MEDIUMBLOB":                      {Keyword: true, StrictlyReserved: true},
+        "MEDIUMINT":                       {Keyword: true, StrictlyReserved: true},
+        "MEDIUMTEXT":                      {Keyword: true, StrictlyReserved: true},
+        "MIDDLEINT":                       {Keyword: true, StrictlyReserved: true},
+        "MINUTE_MICROSECOND":              {Keyword: true, StrictlyReserved: true},
+        "MINUTE_SECOND":                   {Keyword: true, StrictlyReserved: true},
+        "MOD":                             {Keyword: true, StrictlyReserved: true},
+        "MODIFIES":                        {Keyword: true, StrictlyReserved: true},
+        "NATURAL":                         {Keyword: true, StrictlyReserved: true},
+        "NOT":                             {Keyword: true, StrictlyReserved: true},
+        "NO_WRITE_TO_BINLOG":              {Keyword: true, StrictlyReserved: true},
+        "NULL":                            {Keyword: true, StrictlyReserved: true},
+        "NUMERIC":                         {Keyword: true, StrictlyReserved: true},
+        "ON":                              {Keyword: true, StrictlyReserved: true},
+        "OPTIMIZE":                        {Keyword: true, StrictlyReserved: true},
+        "OPTION":                          {Keyword: true, StrictlyReserved: true},
+        "OPTIONALLY":                      {Keyword: true, StrictlyReserved: true},
+        "OR":                              {Keyword: true, StrictlyReserved: true},
+        "ORDER":                           {Keyword: true, StrictlyReserved: false}, // Non-reserved in MySQL
+        "OUT":                             {Keyword: true, StrictlyReserved: true},
+        "OUTER":                           {Keyword: true, StrictlyReserved: true},
+        "OUTFILE":                         {Keyword: true, StrictlyReserved: true},
+        "PARTITION":                       {Keyword: true, StrictlyReserved: false},
+        "PRECISION":                       {Keyword: true, StrictlyReserved: true},
+        "PRIMARY":                         {Keyword: true, StrictlyReserved: true},
+        "PROCEDURE":                       {Keyword: true, StrictlyReserved: true},
+        "PURGE":                           {Keyword: true, StrictlyReserved: true},
+        "RANGE":                           {Keyword: true, StrictlyReserved: true},
+        "READ":                            {Keyword: true, StrictlyReserved: true},
+        "READS":                           {Keyword: true, StrictlyReserved: true},
+        "READ_WRITE":                      {Keyword: true, StrictlyReserved: true},
+        "REAL":                            {Keyword: true, StrictlyReserved: true},
+        "REFERENCES":                      {Keyword: true, StrictlyReserved: true},
+        "REGEXP":                          {Keyword: true, StrictlyReserved: true},
+        "RELEASE":                         {Keyword: true, StrictlyReserved: true},
+        "RENAME":                          {Keyword: true, StrictlyReserved: true},
+        "REPEAT":                          {Keyword: true, StrictlyReserved: true},
+        "REPLACE":                         {Keyword: true, StrictlyReserved: true},
+        "REQUIRE":                         {Keyword: true, StrictlyReserved: true},
+        "RESIGNAL":                        {Keyword: true, StrictlyReserved: true},
+        "RESTRICT":                        {Keyword: true, StrictlyReserved: true},
+        "RETURN":                          {Keyword: true, StrictlyReserved: true},
+        "REVOKE":                          {Keyword: true, StrictlyReserved: true},
+        "RIGHT":                           {Keyword: true, StrictlyReserved: true},
+        "RLIKE":                           {Keyword: true, StrictlyReserved: true},
+        "SCHEMA":                          {Keyword: true, StrictlyReserved: true},
+        "SCHEMAS":                         {Keyword: true, StrictlyReserved: true},
+        "SECOND_MICROSECOND":              {Keyword: true, StrictlyReserved: true},
+        "SELECT":                          {Keyword: true, StrictlyReserved: true},
+        "SENSITIVE":                       {Keyword: true, StrictlyReserved: true},
+        "SEPARATOR":                       {Keyword: true, StrictlyReserved: true},
+        "SET":                             {Keyword: true, StrictlyReserved: true},
+        "SHOW":                            {Keyword: true, StrictlyReserved: true},
+        "SIGNAL":                          {Keyword: true, StrictlyReserved: true},
+        "SMALLINT":                        {Keyword: true, StrictlyReserved: true},
+        "SPATIAL":                         {Keyword: true, StrictlyReserved: true},
+        "SPECIFIC":                        {Keyword: true, StrictlyReserved: true},
+        "SQL":                             {Keyword: true, StrictlyReserved: true},
+        "SQLEXCEPTION":                    {Keyword: true, StrictlyReserved: true},
+        "SQLSTATE":                        {Keyword: true, StrictlyReserved: true},
+        "SQLWARNING":                      {Keyword: true, StrictlyReserved: true},
+        "SQL_BIG_RESULT":                  {Keyword: true, StrictlyReserved: true},
+        "SQL_CALC_FOUND_ROWS":             {Keyword: true, StrictlyReserved: true},
+        "SQL_SMALL_RESULT":                {Keyword: true, StrictlyReserved: true},
+        "SSL":                             {Keyword: true, StrictlyReserved: true},
+        "STARTING":                        {Keyword: true, StrictlyReserved: true},
+        "STRAIGHT_JOIN":                   {Keyword: true, StrictlyReserved: true},
+        "TABLE":                           {Keyword: true, StrictlyReserved: false}, // Non-reserved in MySQL
+        "TERMINATED":                      {Keyword: true, StrictlyReserved: true},
+        "THEN":                            {Keyword: true, StrictlyReserved: true},
+        "TINYBLOB":                        {Keyword: true, StrictlyReserved: true},
+        "TINYINT":                         {Keyword: true, StrictlyReserved: true},
+        "TINYTEXT":                        {Keyword: true, StrictlyReserved: true},
+        "TO":                              {Keyword: true, StrictlyReserved: true},
+        "TRAILING":                        {Keyword: true, StrictlyReserved: true},
+        "TRIGGER":                         {Keyword: true, StrictlyReserved: true},
+        "TRUE":                            {Keyword: true, StrictlyReserved: true},
+        "UNDO":                            {Keyword: true, StrictlyReserved: true},
+        "UNION":                           {Keyword: true, StrictlyReserved: true},
+        "UNIQUE":                          {Keyword: true, StrictlyReserved: true},
+        "UNLOCK":                          {Keyword: true, StrictlyReserved: true},
+        "UNSIGNED":                        {Keyword: true, StrictlyReserved: true},
+        "UPDATE":                          {Keyword: true, StrictlyReserved: true},
+        "USAGE":                           {Keyword: true, StrictlyReserved: true},
+        "USE":                             {Keyword: true, StrictlyReserved: true},
+        "USING":                           {Keyword: true, StrictlyReserved: true},
+        "UTC_DATE":                        {Keyword: true, StrictlyReserved: true},
+        "UTC_TIME":                        {Keyword: true, StrictlyReserved: true},
+        "UTC_TIMESTAMP":                   {Keyword: true, StrictlyReserved: true},
+        "VALUES":                          {Keyword: true, StrictlyReserved: true},
+        "VARBINARY":                       {Keyword: true, StrictlyReserved: true},
+        "VARCHAR":                         {Keyword: true, StrictlyReserved: true},
+        "VARCHARACTER":                    {Keyword: true, StrictlyReserved: true},
+        "VARYING":                         {Keyword: true, StrictlyReserved: true},
+        "WHEN":                            {Keyword: true, StrictlyReserved: true},
+        "WHERE":                           {Keyword: true, StrictlyReserved: true},
+        "WHILE":                           {Keyword: true, StrictlyReserved: true},
+        "WITH":                            {Keyword: true, StrictlyReserved: true},
+        "WRITE":                           {Keyword: true, StrictlyReserved: true},
+        "X509":                            {Keyword: true, StrictlyReserved: true},
+        "XOR":                             {Keyword: true, StrictlyReserved: true},
+        "YEAR_MONTH":                      {Keyword: true, StrictlyReserved: true},
+        "ZEROFILL":                        {Keyword: true, StrictlyReserved: true},
+    }
+
+    MySQLDialect = &dialectImpl{
+        name:     "MySQL",
+        keywords: keywords,
+    }
 }
 
-func (d *PostgreSQLDialect) IsReservedWord(word string) bool {
-	return postgresqlReservedWordsMap[strings.ToUpper(word)]
+// Convenience functions for backward compatibility
+func NewSQLiteDialect() SqlDialect {
+    return SQLiteDialect
 }
 
-func (d *PostgreSQLDialect) QuoteIdentifier(identifier string) string {
-	return `"` + identifier + `"`
+func NewPostgreSQLDialect() SqlDialect {
+    return PostgreSQLDialect
 }
 
-func (d *PostgreSQLDialect) QuoteLiteral(literal string) string {
-	return `'` + strings.ReplaceAll(literal, `'`, `''`) + `'`
-}
-
-// MySQLDialect is the implementation for MySQL dialect
-type MySQLDialect struct{}
-
-// NewMySQLDialect creates a MySQL dialect
-func NewMySQLDialect() *MySQLDialect {
-	return &MySQLDialect{}
-}
-
-func (d *MySQLDialect) Name() string {
-	return "MySQL"
-}
-
-func (d *MySQLDialect) IsKeyword(word string) bool {
-	return mysqlKeywordsMap[strings.ToUpper(word)]
-}
-
-func (d *MySQLDialect) IsReservedWord(word string) bool {
-	return mysqlReservedWordsMap[strings.ToUpper(word)]
-}
-
-func (d *MySQLDialect) QuoteIdentifier(identifier string) string {
-	return "`" + identifier + "`"
-}
-
-func (d *MySQLDialect) QuoteLiteral(literal string) string {
-	return `'` + strings.ReplaceAll(literal, `'`, `''`) + `'`
-}
-
-// SQLiteDialect is the implementation for SQLite dialect
-type SQLiteDialect struct{}
-
-// NewSQLiteDialect creates a SQLite dialect
-func NewSQLiteDialect() *SQLiteDialect {
-	return &SQLiteDialect{}
-}
-
-func (d *SQLiteDialect) Name() string {
-	return "SQLite"
-}
-
-func (d *SQLiteDialect) IsKeyword(word string) bool {
-	return sqliteKeywordsMap[strings.ToUpper(word)]
-}
-
-func (d *SQLiteDialect) IsReservedWord(word string) bool {
-	return sqliteReservedWordsMap[strings.ToUpper(word)]
-}
-
-func (d *SQLiteDialect) QuoteIdentifier(identifier string) string {
-	return `"` + identifier + `"`
-}
-
-func (d *SQLiteDialect) QuoteLiteral(literal string) string {
-	return `'` + strings.ReplaceAll(literal, `'`, `''`) + `'`
-}
-
-// DetectDialect automatically detects the dialect from SQL content
-func DetectDialect(sql string) SqlDialect {
-	upperSQL := strings.ToUpper(sql)
-
-	// PostgreSQL specific
-	if strings.Contains(upperSQL, "RETURNING") ||
-		strings.Contains(upperSQL, "ARRAY_AGG") ||
-		strings.Contains(upperSQL, "::") { // cast operator
-		return NewPostgreSQLDialect()
-	}
-
-	// MySQL specific
-	if (strings.Contains(upperSQL, "LIMIT") && strings.Contains(upperSQL, "OFFSET")) ||
-		strings.Contains(upperSQL, "`") { // backtick
-		return NewMySQLDialect()
-	}
-
-	// Default is SQLite
-	return NewSQLiteDialect()
+func NewMySQLDialect() SqlDialect {
+    return MySQLDialect
 }

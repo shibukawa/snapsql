@@ -467,37 +467,6 @@ func TestErrorHandling(t *testing.T) {
 	}
 }
 
-func TestDialectDetection(t *testing.T) {
-	tests := []struct {
-		name     string
-		sql      string
-		expected string
-	}{
-		{
-			name:     "PostgreSQL detection",
-			sql:      "SELECT id, name FROM users RETURNING id",
-			expected: "PostgreSQL",
-		},
-		{
-			name:     "MySQL detection",
-			sql:      "SELECT `id`, `name` FROM users LIMIT 10 OFFSET 5",
-			expected: "MySQL",
-		},
-		{
-			name:     "SQLite detection (default)",
-			sql:      "SELECT id, name FROM users",
-			expected: "SQLite",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			dialect := DetectDialect(test.sql)
-			assert.Equal(t, test.expected, dialect.Name())
-		})
-	}
-}
-
 func TestAllTokens(t *testing.T) {
 	sql := "SELECT id FROM users;"
 	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect())

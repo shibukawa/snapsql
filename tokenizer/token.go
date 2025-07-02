@@ -90,6 +90,10 @@ const (
 	KEY       // KEY keyword
 	ON        // ON keyword
 	CONFLICT  // CONFLICT keyword
+
+	// Extended token types
+	CONTEXTUAL_IDENTIFIER // Non-reserved keyword used as identifier
+	RESERVED_IDENTIFIER   // Strictly reserved keyword used as identifier (quoted)
 )
 
 // String returns the string representation of TokenType

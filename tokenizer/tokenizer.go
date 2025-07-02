@@ -21,7 +21,6 @@ type SqlTokenizer struct {
 type TokenizerOptions struct {
 	SkipWhitespace bool
 	SkipComments   bool
-	PreserveCase   bool
 }
 
 // NewSqlTokenizer creates a new SqlTokenizer
@@ -29,7 +28,6 @@ func NewSqlTokenizer(input string, dialect SqlDialect, options ...TokenizerOptio
 	opts := TokenizerOptions{
 		SkipWhitespace: false,
 		SkipComments:   false,
-		PreserveCase:   false,
 	}
 	if len(options) > 0 {
 		opts = options[0]
@@ -203,7 +201,7 @@ func (t *tokenizer) nextToken() (Token, error) {
 			return token, nil
 		default:
 			if unicode.IsLetter(t.current) || t.current == '_' {
-				return t.readWord()
+				return t.readIdentifierOrKeyword()
 			} else if unicode.IsDigit(t.current) {
 				return t.readNumber()
 			} else {
@@ -264,38 +262,41 @@ func (t *tokenizer) readWhitespace() Token {
 	}
 }
 
-// readWord reads words (identifiers and keywords)
-func (t *tokenizer) readWord() (Token, error) {
+// readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking
+func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	var builder strings.Builder
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
 
+	// Read identifier characters
 	for unicode.IsLetter(t.current) || unicode.IsDigit(t.current) || t.current == '_' {
 		builder.WriteRune(t.current)
 		t.readChar()
 	}
 
-	word := builder.String()
-	if !t.options.PreserveCase {
-		word = strings.ToUpper(word)
+	originalValue := builder.String()
+	upperValue := strings.ToUpper(originalValue)
+
+	var tokenType TokenType
+	if t.dialect.IsKeyword(upperValue) {
+		if t.dialect.IsStrictlyReserved(upperValue) {
+			tokenType = KEYWORD // Strictly reserved keywords remain as KEYWORD
+		} else {
+			tokenType = CONTEXTUAL_IDENTIFIER // Non-reserved keywords can be identifiers
+		}
+	} else {
+		tokenType = IDENTIFIER // Regular identifiers
 	}
 
-	// キーワード判定
-	tokenType := t.getKeywordTokenType(word)
-
 	return Token{
-		Type:  tokenType,
-		Value: word,
-		Position: Position{
-			Line:   startLine,
-			Column: startColumn,
-			Offset: startOffset,
-		},
+		Type:     tokenType,
+		Value:    originalValue, // Preserve original case
+		Position: Position{Line: startLine, Column: startColumn, Offset: startOffset},
 	}, nil
 }
 
-// readString reads string literals or quoted identifiers
+// readString reads string literals or quoted identifiers with reserved keyword support
 func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	var builder strings.Builder
 	startLine := t.line
@@ -307,17 +308,17 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 
 	for t.current != 0 {
 		if t.current == delimiter {
-			// 連続するクオートはエスケープ（例: '' or "" or ``）
+			// Handle escaped quotes (e.g., '' or "" or ``)
 			if t.peekChar() == delimiter {
 				builder.WriteRune(delimiter)
 				t.readChar()
 				t.readChar()
 				continue
 			}
-			break // 終了クオート
+			break // closing quote
 		}
 		if t.current == '\\' && delimiter == '\'' {
-			// バックスラッシュエスケープ（PostgreSQL互換）
+			// Backslash escape (PostgreSQL compatible)
 			builder.WriteRune(t.current)
 			t.readChar()
 			if t.current != 0 {
@@ -337,14 +338,25 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	builder.WriteRune(delimiter) // include closing quote
 	t.readChar()
 
-	type_ := STRING
-	if delimiter == '"' || delimiter == '`' {
-		type_ = IDENTIFIER
+	// Determine token type based on delimiter and content
+	var tokenType TokenType
+	quotedContent := builder.String()
+	unquotedContent := quotedContent[1 : len(quotedContent)-1] // Remove quotes
+
+	if delimiter == '"' || delimiter == '`' || delimiter == '[' {
+		// Quoted identifiers - even strictly reserved keywords are allowed
+		if t.dialect.IsStrictlyReserved(strings.ToUpper(unquotedContent)) {
+			tokenType = RESERVED_IDENTIFIER // Special type for quoted reserved words
+		} else {
+			tokenType = IDENTIFIER // Regular quoted identifier
+		}
+	} else {
+		tokenType = STRING // String literal
 	}
 
 	return Token{
-		Type:  type_,
-		Value: builder.String(),
+		Type:  tokenType,
+		Value: quotedContent, // Keep quotes for quoted identifiers, remove later in parser
 		Position: Position{
 			Line:   startLine,
 			Column: startColumn,
