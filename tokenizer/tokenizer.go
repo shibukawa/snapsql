@@ -281,7 +281,7 @@ func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	var tokenType TokenType
 	if t.dialect.IsKeyword(upperValue) {
 		if t.dialect.IsStrictlyReserved(upperValue) {
-			tokenType = KEYWORD // Strictly reserved keywords remain as KEYWORD
+			tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
 		} else {
 			tokenType = CONTEXTUAL_IDENTIFIER // Non-reserved keywords can be identifiers
 		}
@@ -338,18 +338,17 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	builder.WriteRune(delimiter) // include closing quote
 	t.readChar()
 
-	// Determine token type based on delimiter and content
+	// Determine token type based on delimiter
 	var tokenType TokenType
 	quotedContent := builder.String()
-	unquotedContent := quotedContent[1 : len(quotedContent)-1] // Remove quotes
+	// Note: We no longer need to check reserved words for quoted identifiers
 
-	if delimiter == '"' || delimiter == '`' || delimiter == '[' {
-		// Quoted identifiers - even strictly reserved keywords are allowed
-		if t.dialect.IsStrictlyReserved(strings.ToUpper(unquotedContent)) {
-			tokenType = RESERVED_IDENTIFIER // Special type for quoted reserved words
-		} else {
-			tokenType = IDENTIFIER // Regular quoted identifier
-		}
+	if delimiter == '"' || delimiter == '[' || delimiter == '`' {
+		// All quoted identifiers are treated as regular identifiers
+		// For standard SQL and SQLite, double quotes (") are used
+		// For MySQL, backticks (`) are used
+		// For SQL Server, square brackets ([]) are used
+		tokenType = IDENTIFIER // All quoted identifiers are regular identifiers
 	} else {
 		tokenType = STRING // String literal
 	}
@@ -566,13 +565,13 @@ func (t *tokenizer) getKeywordTokenType(word string) TokenType {
 
 	switch upperWord {
 	case "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "GROUP", "HAVING", "ORDER", "BY", "UNION", "ALL", "DISTINCT", "AS", "WITH", "AND", "OR", "NOT", "IN", "EXISTS", "BETWEEN", "LIKE", "IS", "NULL":
-		return KEYWORD
+		return RESERVED_IDENTIFIER
 	// Window function keywords
 	case "OVER", "PARTITION", "ROWS", "RANGE", "UNBOUNDED", "PRECEDING", "FOLLOWING", "CURRENT", "ROW":
-		return KEYWORD
+		return RESERVED_IDENTIFIER
 	// Additional SQL keywords (DDL, DML, etc.)
 	case "ON", "CONFLICT", "DUPLICATE", "KEY", "CREATE", "DROP", "ALTER", "TABLE", "INDEX", "VIEW", "VALUES", "INTO", "SET", "RETURNING", "LIMIT", "OFFSET":
-		return KEYWORD
+		return RESERVED_IDENTIFIER
 	default:
 		return IDENTIFIER
 	}

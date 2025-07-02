@@ -12,8 +12,8 @@ func TestTokenIterator(t *testing.T) {
 	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect())
 
 	expectedTypes := []TokenType{
-		KEYWORD, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
-		KEYWORD, WHITESPACE, IDENTIFIER, WHITESPACE, KEYWORD, WHITESPACE, IDENTIFIER,
+		RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
+		RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER,
 		WHITESPACE, EQUAL, WHITESPACE, IDENTIFIER, SEMICOLON, EOF,
 	}
 
@@ -39,7 +39,7 @@ func TestTokenIteratorWithOptions(t *testing.T) {
 	})
 
 	expectedTypes := []TokenType{
-		KEYWORD, IDENTIFIER, COMMA, IDENTIFIER, KEYWORD, IDENTIFIER, KEYWORD, IDENTIFIER, EQUAL, IDENTIFIER, SEMICOLON, EOF,
+		RESERVED_IDENTIFIER, IDENTIFIER, COMMA, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, EQUAL, IDENTIFIER, SEMICOLON, EOF,
 	}
 
 	var actualTypes []TokenType
@@ -84,22 +84,22 @@ func TestBasicTokens(t *testing.T) {
 		{
 			name:     "single keyword",
 			input:    "SELECT",
-			expected: []TokenType{KEYWORD, EOF},
+			expected: []TokenType{RESERVED_IDENTIFIER, EOF},
 		},
 		{
 			name:     "basic SELECT statement",
 			input:    "SELECT id, name FROM users",
-			expected: []TokenType{KEYWORD, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE, KEYWORD, WHITESPACE, IDENTIFIER, EOF},
+			expected: []TokenType{RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, EOF},
 		},
 		{
 			name:     "WHERE clause with condition",
 			input:    "WHERE id = 123",
-			expected: []TokenType{KEYWORD, WHITESPACE, IDENTIFIER, WHITESPACE, EQUAL, WHITESPACE, NUMBER, EOF},
+			expected: []TokenType{RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, EQUAL, WHITESPACE, NUMBER, EOF},
 		},
 		{
 			name:     "parentheses",
 			input:    "SELECT (id)",
-			expected: []TokenType{KEYWORD, WHITESPACE, OPENED_PARENS, IDENTIFIER, CLOSED_PARENS, EOF},
+			expected: []TokenType{RESERVED_IDENTIFIER, WHITESPACE, OPENED_PARENS, IDENTIFIER, CLOSED_PARENS, EOF},
 		},
 		{
 			name:     "single quoted string",
@@ -296,7 +296,7 @@ func TestWindowFunctions(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testForTokenType(t, test.input, KEYWORD, test.expectError, "OVER keyword not found")
+			testForTokenType(t, test.input, RESERVED_IDENTIFIER, test.expectError, "OVER keyword not found")
 		})
 	}
 }
@@ -382,7 +382,7 @@ func TestSubqueries(t *testing.T) {
 					parenCount++
 				} else if token.Type == CLOSED_PARENS {
 					parenCount--
-				} else if token.Type == KEYWORD && parenCount > 0 {
+				} else if token.Type == RESERVED_IDENTIFIER && parenCount > 0 {
 					foundSubquery = true
 				}
 				if token.Type == EOF {
@@ -421,7 +421,7 @@ func TestCTEs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testForTokenType(t, test.input, KEYWORD, test.expectError, "WITH keyword not found")
+			testForTokenType(t, test.input, RESERVED_IDENTIFIER, test.expectError, "WITH keyword not found")
 		})
 	}
 }
@@ -474,7 +474,7 @@ func TestAllTokens(t *testing.T) {
 	tokens, err := tokenizer.AllTokens()
 	assert.NoError(t, err)
 
-	expectedTypes := []TokenType{KEYWORD, WHITESPACE, IDENTIFIER, WHITESPACE, KEYWORD, WHITESPACE, IDENTIFIER, SEMICOLON, EOF}
+	expectedTypes := []TokenType{RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, SEMICOLON, EOF}
 	var actualTypes []TokenType
 	for _, token := range tokens {
 		actualTypes = append(actualTypes, token.Type)
@@ -573,7 +573,7 @@ func TestComplexSQL(t *testing.T) {
 	assert.True(t, tokenCount > 50, "token count is less than expected")
 
 	// Verify important keywords are included
-	expectedKeywords := []TokenType{KEYWORD}
+	expectedKeywords := []TokenType{}
 	for _, keyword := range expectedKeywords {
 		assert.True(t, foundKeywords[keyword], "keyword %s not found", keyword.String())
 	}

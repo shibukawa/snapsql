@@ -8,11 +8,10 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// ExpressionNode: 式全体をトークン列で保持するASTノード
+// ExpressionNode: Expression AST node that holds token sequences
 // NodeType: EXPRESSION
-// 復元性重視のため、トークン列をそのまま保持
-// String()はトークン列をスペース区切りで連結
-
+// Maintains token sequences for reconstruction purposes
+// String() concatenates token sequences with spaces
 type ExpressionNode struct {
 	cmn.BaseAstNode
 }
@@ -26,9 +25,9 @@ func (e *ExpressionNode) String() string {
 	return strings.Join(parts, " ")
 }
 
-var expression pc.Parser[Entity]
-
-func init() {
+// expression parses SQL expressions with context awareness
+func expression(clause SQLClause) pc.Parser[Entity] {
+	// Define primary parser for this context
 	primary := pc.Or(
 		pc.Trans(
 			literal(),
@@ -51,9 +50,29 @@ func init() {
 			},
 		),
 		pc.Trans(
+			columnReference(),
+			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+				return []pc.Token[Entity]{
+					{
+						Type: "expression",
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							NewValue: &ExpressionNode{
+								BaseAstNode: cmn.BaseAstNode{
+									NodeType: cmn.EXPRESSION,
+									Pos:      tokens[0].Val.Original.Position,
+								},
+							},
+							rawTokens: tokens[0].Val.rawTokens,
+						},
+					},
+				}, nil
+			},
+		),
+		pc.Trans(
 			pc.Seq(
 				parenOpen(),
-				pc.Lazy(func() pc.Parser[Entity] { return expression }),
+				pc.Lazy(func() pc.Parser[Entity] { return expression(clause) }), // Pass clause to recursive call
 				parenClose(),
 			),
 			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
@@ -79,12 +98,14 @@ func init() {
 			},
 		),
 	)
-	expression = pc.Or(
+
+	// Return the main expression parser
+	return pc.Or(
 		pc.Trans(
 			pc.Seq(
 				primary,
 				operator(),
-				pc.Lazy(func() pc.Parser[Entity] { return expression }),
+				pc.Lazy(func() pc.Parser[Entity] { return expression(clause) }), // Pass clause to recursive call
 			),
 			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
 				var allTokens []tokenizer.Token

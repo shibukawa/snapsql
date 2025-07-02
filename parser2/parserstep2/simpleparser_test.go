@@ -93,6 +93,36 @@ func TestSimpleParsers(t *testing.T) {
 			expected: []string{"literal"},
 		},
 		{
+			name:     "literalExpr boolean true",
+			src:      "TRUE ",
+			parser:   literal(),
+			expected: []string{"literal"},
+		},
+		{
+			name:     "literalExpr boolean false",
+			src:      "FALSE ",
+			parser:   literal(),
+			expected: []string{"literal"},
+		},
+		{
+			name:     "literalExpr boolean mixed case",
+			src:      "True ",
+			parser:   literal(),
+			expected: []string{"literal"},
+		},
+		{
+			name:     "literalExpr null",
+			src:      "NULL ",
+			parser:   literal(),
+			expected: []string{"literal"},
+		},
+		{
+			name:     "literalExpr null mixed case",
+			src:      "null ",
+			parser:   literal(),
+			expected: []string{"literal"},
+		},
+		{
 			name:     "paren open",
 			src:      "(",
 			parser:   parenOpen(),
@@ -156,7 +186,7 @@ func TestComplexParsing(t *testing.T) {
 			name: "multiple tokens",
 			src:  "id = 123",
 			parser: pc.Seq(
-				identifier(),
+				ws(identifier()),
 				operator(),
 				number(),
 			),
@@ -170,7 +200,6 @@ func TestComplexParsing(t *testing.T) {
 			tz := tok.NewSqlTokenizer(test.src, tok.NewSQLiteDialect())
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
-
 			// Convert to parsercombinator tokens
 			pcTokens := TokenToEntity(tokens)
 
@@ -179,7 +208,16 @@ func TestComplexParsing(t *testing.T) {
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.TraceEnable = true // Enable tracing for debugging
 
+			pctx.MaxDepth = 20
+			pctx.TraceEnable = true
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
+
 			consumed, result, err := test.parser(pctx, pcTokens)
+			if err != nil {
+				pctx.DumpTrace()
+			}
+
 			assert.NoError(t, err)
 			assert.True(t, consumed > 0, "parser should consume at least one token")
 			for _, token := range result {
