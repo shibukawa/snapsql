@@ -237,7 +237,7 @@ func operator() pc.Parser[Entity] {
 		return primitiveType(tokens, "operator",
 			tokenizer.EQUAL, tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.LESS_EQUAL,
 			tokenizer.GREATER_THAN, tokenizer.GREATER_EQUAL, tokenizer.PLUS, tokenizer.MINUS,
-			tokenizer.MULTIPLY, tokenizer.DIVIDE)
+			tokenizer.MULTIPLY, tokenizer.DIVIDE, tokenizer.AND, tokenizer.OR) // Add AND and OR
 	}))
 }
 

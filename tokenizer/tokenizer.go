@@ -279,13 +279,18 @@ func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	upperValue := strings.ToUpper(originalValue)
 
 	var tokenType TokenType
-	if t.dialect.IsKeyword(upperValue) {
+	switch {
+	case upperValue == "AND":
+		tokenType = AND
+	case upperValue == "OR":
+		tokenType = OR
+	case t.dialect.IsKeyword(upperValue):
 		if t.dialect.IsStrictlyReserved(upperValue) {
 			tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
 		} else {
 			tokenType = CONTEXTUAL_IDENTIFIER // Non-reserved keywords can be identifiers
 		}
-	} else {
+	default:
 		tokenType = IDENTIFIER // Regular identifiers
 	}
 
