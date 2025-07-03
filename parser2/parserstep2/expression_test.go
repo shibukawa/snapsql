@@ -96,6 +96,16 @@ func TestExpression(t *testing.T) {
 		{"boolean_mixed_case", "True", "True", 1},
 		{"null_literal", "NULL", "NULL", 1},
 		{"null_mixed_case", "Null", "Null", 1},
+
+		// CASE expressions
+		{"case_simple", "CASE status WHEN 'active' THEN 1 ELSE 0 END", "CASE status WHEN 'active' THEN 1 ELSE 0 END", 9},
+		{"case_multiple_when", "CASE status WHEN 'active' THEN 1 WHEN 'inactive' THEN 0 ELSE -1 END", "CASE status WHEN 'active' THEN 1 WHEN 'inactive' THEN 0 ELSE -1 END", 13},
+		{"case_searched", "CASE WHEN age > 18 THEN 'adult' ELSE 'minor' END", "CASE WHEN age > 18 THEN 'adult' ELSE 'minor' END", 11},
+		{"case_searched_multiple", "CASE WHEN age < 13 THEN 'child' WHEN age < 18 THEN 'teen' ELSE 'adult' END", "CASE WHEN age < 13 THEN 'child' WHEN age < 18 THEN 'teen' ELSE 'adult' END", 19},
+		{"case_no_else", "CASE status WHEN 'active' THEN 1 END", "CASE status WHEN 'active' THEN 1 END", 7},
+		{"case_nested", "CASE WHEN age > 18 THEN CASE status WHEN 'active' THEN 'adult_active' ELSE 'adult_inactive' END ELSE 'minor' END", "CASE WHEN age > 18 THEN CASE status WHEN 'active' THEN 'adult_active' ELSE 'adult_inactive' END ELSE 'minor' END", 21},
+		{"case_with_expressions", "CASE WHEN (age * 2) > 36 THEN 'double_adult' ELSE 'young' END", "CASE WHEN ( age * 2 ) > 36 THEN 'double_adult' ELSE 'young' END", 15},
+		{"case_with_column_ref", "CASE users.status WHEN 'active' THEN users.id ELSE 0 END", "CASE users . status WHEN 'active' THEN users . id ELSE 0 END", 13},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

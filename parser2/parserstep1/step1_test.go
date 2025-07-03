@@ -8,7 +8,7 @@ import (
 )
 
 func tokenize(sql string) ([]tokenizer.Token, error) {
-	tok := tokenizer.NewSqlTokenizer(sql, tokenizer.NewSQLiteDialect())
+	tok := tokenizer.NewSqlTokenizer(sql)
 	return tok.AllTokens()
 }
 
