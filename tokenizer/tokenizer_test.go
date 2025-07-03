@@ -9,13 +9,13 @@ import (
 
 func TestTokenIterator(t *testing.T) {
 	sql := "SELECT id, name FROM users WHERE active = true;"
-	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect())
+	tokenizer := NewSqlTokenizer(sql)
 
-	expectedTypes := []TokenType{
-		RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
-		RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER,
-		WHITESPACE, EQUAL, WHITESPACE, IDENTIFIER, SEMICOLON, EOF,
-	}
+	   expectedTypes := []TokenType{
+			   RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
+			   RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER,
+			   WHITESPACE, EQUAL, WHITESPACE, RESERVED_IDENTIFIER, SEMICOLON, EOF,
+	   }
 
 	var actualTypes []TokenType
 	for token, err := range tokenizer.Tokens() {
@@ -33,14 +33,14 @@ func TestTokenIterator(t *testing.T) {
 
 func TestTokenIteratorWithOptions(t *testing.T) {
 	sql := "SELECT id, name FROM users -- comment\nWHERE active = true;"
-	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect(), TokenizerOptions{
+	tokenizer := NewSqlTokenizer(sql, TokenizerOptions{
 		SkipWhitespace: true,
 		SkipComments:   true,
 	})
 
-	expectedTypes := []TokenType{
-		RESERVED_IDENTIFIER, IDENTIFIER, COMMA, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, EQUAL, IDENTIFIER, SEMICOLON, EOF,
-	}
+	   expectedTypes := []TokenType{
+			   RESERVED_IDENTIFIER, IDENTIFIER, COMMA, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, EQUAL, RESERVED_IDENTIFIER, SEMICOLON, EOF,
+	   }
 
 	var actualTypes []TokenType
 	for token, err := range tokenizer.Tokens() {
@@ -58,7 +58,7 @@ func TestTokenIteratorWithOptions(t *testing.T) {
 
 func TestIteratorEarlyTermination(t *testing.T) {
 	sql := "SELECT id, name FROM users WHERE active = true;"
-	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect())
+	tokenizer := NewSqlTokenizer(sql)
 
 	count := 0
 	for _, err := range tokenizer.Tokens() {
@@ -152,7 +152,7 @@ func TestBasicTokens(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input, NewSQLiteDialect())
+			tokenizer := NewSqlTokenizer(test.input)
 
 			var actualTypes []TokenType
 			for token, err := range tokenizer.Tokens() {
@@ -236,7 +236,7 @@ func TestSnapSQLDirectives(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input, NewSQLiteDialect())
+			tokenizer := NewSqlTokenizer(test.input)
 
 			var foundToken Token
 			for token, err := range tokenizer.Tokens() {
@@ -257,7 +257,7 @@ func TestSnapSQLDirectives(t *testing.T) {
 // Helper function to test for specific token types
 func testForTokenType(t *testing.T, input string, expectedTokenType TokenType, expectError bool, errorMsg string) {
 	t.Helper()
-	tokenizer := NewSqlTokenizer(input, NewSQLiteDialect())
+	tokenizer := NewSqlTokenizer(input)
 
 	var hasError bool
 	var foundToken bool
@@ -331,7 +331,7 @@ func TestComplexConditions(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input, NewSQLiteDialect())
+			tokenizer := NewSqlTokenizer(test.input)
 
 			var hasError bool
 			for _, err := range tokenizer.Tokens() {
@@ -375,7 +375,7 @@ func TestSubqueries(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input, NewSQLiteDialect())
+			tokenizer := NewSqlTokenizer(test.input)
 
 			var hasError bool
 			var foundSubquery bool
@@ -458,7 +458,7 @@ func TestErrorHandling(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input, NewSQLiteDialect())
+			tokenizer := NewSqlTokenizer(test.input)
 
 			var foundError error
 			for _, err := range tokenizer.Tokens() {
@@ -476,7 +476,7 @@ func TestErrorHandling(t *testing.T) {
 
 func TestAllTokens(t *testing.T) {
 	sql := "SELECT id FROM users;"
-	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect())
+	tokenizer := NewSqlTokenizer(sql)
 
 	tokens, err := tokenizer.AllTokens()
 	assert.NoError(t, err)
@@ -492,7 +492,7 @@ func TestAllTokens(t *testing.T) {
 
 func TestTokenPosition(t *testing.T) {
 	sql := "SELECT\nid,\nname"
-	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect())
+	tokenizer := NewSqlTokenizer(sql)
 
 	expectedPositions := []Position{
 		{Line: 1, Column: 1, Offset: 0},  // SELECT
@@ -556,7 +556,7 @@ func TestComplexSQL(t *testing.T) {
 	ORDER BY eh.level, eh.name;
 	`
 
-	tokenizer := NewSqlTokenizer(sql, NewSQLiteDialect())
+	tokenizer := NewSqlTokenizer(sql)
 
 	var tokenCount int
 	var hasError bool

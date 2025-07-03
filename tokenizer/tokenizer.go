@@ -13,7 +13,6 @@ type TokenIterator iter.Seq2[Token, error]
 // SqlTokenizer is a tokenizer that returns an iterator
 type SqlTokenizer struct {
 	input   string
-	dialect SqlDialect
 	options TokenizerOptions
 }
 
@@ -24,7 +23,7 @@ type TokenizerOptions struct {
 }
 
 // NewSqlTokenizer creates a new SqlTokenizer
-func NewSqlTokenizer(input string, dialect SqlDialect, options ...TokenizerOptions) *SqlTokenizer {
+func NewSqlTokenizer(input string, options ...TokenizerOptions) *SqlTokenizer {
 	opts := TokenizerOptions{
 		SkipWhitespace: false,
 		SkipComments:   false,
@@ -35,7 +34,6 @@ func NewSqlTokenizer(input string, dialect SqlDialect, options ...TokenizerOptio
 
 	return &SqlTokenizer{
 		input:   input,
-		dialect: dialect,
 		options: opts,
 	}
 }
@@ -48,7 +46,6 @@ func (t *SqlTokenizer) Tokens() TokenIterator {
 			position: 0,
 			line:     1,
 			column:   1,
-			dialect:  t.dialect,
 			options:  t.options,
 		}
 
@@ -109,7 +106,6 @@ type tokenizer struct {
 	line     int
 	column   int
 	current  rune
-	dialect  SqlDialect
 	options  TokenizerOptions
 }
 
@@ -290,18 +286,18 @@ func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	originalValue := builder.String()
 	upperValue := strings.ToUpper(originalValue)
 
-	var tokenType TokenType
-	if tt, ok := keywordLikeTokenTypeMap[upperValue]; ok {
-		tokenType = tt
-	} else if t.dialect.IsKeyword(upperValue) {
-		if t.dialect.IsStrictlyReserved(upperValue) {
-			tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
-		} else {
-			tokenType = CONTEXTUAL_IDENTIFIER // Non-reserved keywords can be identifiers
-		}
-	} else {
-		tokenType = IDENTIFIER // Regular identifiers
-	}
+	   var tokenType TokenType
+	   if tt, ok := keywordLikeTokenTypeMap[upperValue]; ok {
+			   tokenType = tt
+	   } else if info, ok := KeywordSet[upperValue]; ok && info.Keyword {
+			   if info.StrictReserved {
+					   tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
+			   } else {
+					   tokenType = IDENTIFIER
+			   }
+	   } else {
+			   tokenType = IDENTIFIER // Regular identifiers
+	   }
 
 	return Token{
 		Type:     tokenType,

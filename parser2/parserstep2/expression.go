@@ -109,34 +109,6 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 				}, nil
 			},
 		),
-		// a not like b
-		pc.Trans(
-			pc.Seq(
-				primary,
-				not(),
-				like(),
-				pc.Lazy(func() pc.Parser[Entity] { return expression(clause) }),
-			),
-			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-				allTokens, spaces := margeTokens(tokens)
-				return []pc.Token[Entity]{
-					{
-						Type: "expression",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							NewValue: &ExpressionNode{
-								BaseAstNode: cmn.BaseAstNode{
-									NodeType: cmn.EXPRESSION,
-									Pos:      tokens[0].Val.Original.Position,
-								},
-							},
-							rawTokens: allTokens,
-							spaces:    spaces,
-						},
-					},
-				}, nil
-			},
-		),
 		// a operator b
 		pc.Trans(
 			pc.Seq(

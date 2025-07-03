@@ -40,59 +40,30 @@ func (l LiteralNode) String() string               { return "Literal:" + l.Value
 
 // literal parses numeric, string, boolean, or null literals and returns a LiteralAstNode.
 func literal() pc.Parser[Entity] {
-	return ws(
-		pc.Trace("literal", pc.Or(
-			pc.Trans(
-				pc.Or(str(), number(), null(), boolean()),
-				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-					t := tokens[0]
-					o := t.Val.Original
-					return []pc.Token[Entity]{
-						{
-							Type: "literal",
-							Pos:  t.Pos,
-							Val: Entity{
-								NewValue: &LiteralNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.LITERAL,
-										Pos:      o.Position,
-									},
-									LiteralType: o.Type,
-									Value:       o.Value,
+	return ws(pc.Trace("literal",
+		pc.Trans(
+			pc.Or(str(), number(), boolean(), null()),
+			func(pctx *pc.ParseContext[Entity], src []pc.Token[Entity]) (converted []pc.Token[Entity], err error) {
+				t := src[0]
+				o := t.Val.Original
+				return []pc.Token[Entity]{
+					{
+						Type: "literal",
+						Pos:  t.Pos,
+						Val: Entity{
+							NewValue: &LiteralNode{
+								BaseAstNode: cmn.BaseAstNode{
+									NodeType: cmn.LITERAL,
+									Pos:      o.Position,
 								},
-								rawTokens: []tokenizer.Token{o},
+								LiteralType: o.Type,
+								Value:       o.Value,
 							},
-							Raw: o.Value,
+							rawTokens: []tokenizer.Token{o},
 						},
-					}, nil
-				},
-			),
-			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-				if len(tokens) > 0 && tokens[0].Type == "raw" {
-					o := tokens[0].Val.Original
-					if (o.Type == tokenizer.RESERVED_IDENTIFIER || o.Type == tokenizer.IDENTIFIER) &&
-						(strings.EqualFold(o.Value, "TRUE") || strings.EqualFold(o.Value, "FALSE")) {
-						return 1, []pc.Token[Entity]{
-							{
-								Type: "literal",
-								Pos:  tokens[0].Pos,
-								Val: Entity{
-									NewValue: &LiteralNode{
-										BaseAstNode: cmn.BaseAstNode{
-											NodeType: cmn.LITERAL,
-											Pos:      o.Position,
-										},
-										LiteralType: o.Type, // IDENTIFIER or RESERVED_IDENTIFIER for boolean
-										Value:       o.Value,
-									},
-									rawTokens: []tokenizer.Token{o},
-								},
-								Raw: o.Value,
-							},
-						}, nil
-					}
-				}
-				return 0, nil, pc.ErrNotMatch
+						Raw: o.Value,
+					},
+				}, nil
 			})))
 }
 
@@ -169,6 +140,29 @@ func str() pc.Parser[Entity] {
 	return ws(primitiveType("string", tokenizer.STRING))
 }
 
+// booleanLiteral parses TRUE or FALSE with case-insensitive comparison
+func boolean() pc.Parser[Entity] {
+	return ws(pc.Trace("boolean", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+		if len(tokens) > 0 && tokens[0].Type == "raw" {
+			o := tokens[0].Val.Original
+			if (o.Type == tokenizer.RESERVED_IDENTIFIER || o.Type == tokenizer.IDENTIFIER) &&
+				(strings.EqualFold(o.Value, "TRUE") || strings.EqualFold(o.Value, "FALSE")) { // Case-insensitive
+				return 1, []pc.Token[Entity]{
+					{
+						Type: "boolean",
+						Pos:  tokens[0].Pos,
+						Val: Entity{
+							Original: o,
+						},
+						Raw: o.Value, // Preserve original case
+					},
+				}, nil
+			}
+		}
+		return 0, nil, pc.ErrNotMatch
+	}))
+}
+
 func comma() pc.Parser[Entity] {
 	return ws(primitiveType("comma", tokenizer.COMMA))
 }
@@ -181,28 +175,32 @@ func between() pc.Parser[Entity] {
 	return ws(primitiveType("between", tokenizer.BETWEEN))
 }
 
-func not() pc.Parser[Entity] {
-	return ws(primitiveType("not", tokenizer.NOT))
+// This parser passes invalid combination like "NOT IS" or "LIKE NOT".
+// This check will be done in later step.
+func operator() pc.Parser[Entity] {
+	p := ws(primitiveType("operator",
+		tokenizer.EQUAL, tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.LESS_EQUAL,
+		tokenizer.GREATER_THAN, tokenizer.GREATER_EQUAL, tokenizer.PLUS, tokenizer.MINUS,
+		tokenizer.MULTIPLY, tokenizer.DIVIDE,
+		tokenizer.AND, tokenizer.OR, tokenizer.IN, tokenizer.LIKE, tokenizer.IS))
+
+	return pc.Or(
+		pc.Seq(ws(not()), p),
+		pc.Seq(p, ws(not())),
+		p,
+	)
 }
 
-func like() pc.Parser[Entity] {
-	return ws(primitiveType("like", tokenizer.LIKE))
+func andOp() pc.Parser[Entity] {
+	return ws(primitiveType("and", tokenizer.AND))
 }
 
 func null() pc.Parser[Entity] {
 	return ws(primitiveType("null", tokenizer.NULL))
 }
 
-func operator() pc.Parser[Entity] {
-	return ws(primitiveType("operator",
-		tokenizer.EQUAL, tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.LESS_EQUAL,
-		tokenizer.GREATER_THAN, tokenizer.GREATER_EQUAL, tokenizer.PLUS, tokenizer.MINUS,
-		tokenizer.MULTIPLY, tokenizer.DIVIDE,
-		tokenizer.AND, tokenizer.OR, tokenizer.IN, tokenizer.LIKE))
-}
-
-func andOp() pc.Parser[Entity] {
-	return ws(primitiveType("and", tokenizer.AND))
+func not() pc.Parser[Entity] {
+	return ws(primitiveType("not", tokenizer.NOT))
 }
 
 func minus() pc.Parser[Entity] {
@@ -309,63 +307,6 @@ func columnReference() pc.Parser[Entity] {
 				},
 			),
 		)))
-}
-
-// Helper function to join raw tokens into a string
-func joinRawTokens(tokens []tokenizer.Token) string {
-	var result string
-	for i, token := range tokens {
-		if i > 0 {
-			result += " "
-		}
-		result += token.Value
-	}
-	return result
-}
-
-// keyword parses specific SQL keywords with case-insensitive comparison
-func keyword(word string) pc.Parser[Entity] {
-	return ws(pc.Trace("keyword-"+word, func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		if len(tokens) > 0 && tokens[0].Type == "raw" {
-			o := tokens[0].Val.Original
-			if o.Type == tokenizer.RESERVED_IDENTIFIER && strings.EqualFold(o.Value, word) { // Case-insensitive comparison
-				return 1, []pc.Token[Entity]{
-					{
-						Type: "keyword",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							Original: o,
-						},
-						Raw: o.Value, // Preserve original case
-					},
-				}, nil
-			}
-		}
-		return 0, nil, pc.ErrNotMatch
-	}))
-}
-
-// booleanLiteral parses TRUE or FALSE with case-insensitive comparison
-func boolean() pc.Parser[Entity] {
-	return ws(pc.Trace("boolean", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		if len(tokens) > 0 && tokens[0].Type == "raw" {
-			o := tokens[0].Val.Original
-			if (o.Type == tokenizer.RESERVED_IDENTIFIER || o.Type == tokenizer.IDENTIFIER) &&
-				(strings.EqualFold(o.Value, "TRUE") || strings.EqualFold(o.Value, "FALSE")) { // Case-insensitive
-				return 1, []pc.Token[Entity]{
-					{
-						Type: "boolean",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							Original: o,
-						},
-						Raw: o.Value, // Preserve original case
-					},
-				}, nil
-			}
-		}
-		return 0, nil, pc.ErrNotMatch
-	}))
 }
 
 // ColumnReferenceNode represents a column reference in SQL (e.g., "col" or "table.col")

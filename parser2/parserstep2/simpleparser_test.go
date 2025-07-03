@@ -12,7 +12,6 @@ import (
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 }
-
 func TestSimpleParsers(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -139,7 +138,7 @@ func TestSimpleParsers(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Generate tokens from source
-			tz := tok.NewSqlTokenizer(test.src, tok.NewSQLiteDialect())
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 
@@ -197,7 +196,7 @@ func TestComplexParsing(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Generate tokens from source
-			tz := tok.NewSqlTokenizer(test.src, tok.NewSQLiteDialect())
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 			// Convert to parsercombinator tokens
@@ -254,7 +253,7 @@ func TestParserNotMatch(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Generate tokens from source
-			tz := tok.NewSqlTokenizer(test.src, tok.NewSQLiteDialect())
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 
@@ -263,10 +262,14 @@ func TestParserNotMatch(t *testing.T) {
 
 			// Parse using the specified parser - should return ErrNotMatch
 			pctx := &pc.ParseContext[Entity]{}
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
+			pctx.MaxDepth = 20
+
 			consumed, _, err := test.parser(pctx, pcTokens)
 			assert.Error(t, err)
 			assert.Equal(t, 0, consumed)
-			assert.Equal(t, pc.ErrNotMatch, err)
+			assert.IsError(t, err, pc.ErrNotMatch)
 		})
 	}
 }
@@ -295,7 +298,7 @@ func TestSnapSQLDirectiveParsers(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Generate tokens from source
-			tz := tok.NewSqlTokenizer(test.src, tok.NewSQLiteDialect())
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 
@@ -326,24 +329,23 @@ func TestAtomic(t *testing.T) {
 		expectedType string
 		expectedRaw  string
 		shouldError  bool
-		dialect      tok.SqlDialect
 	}{
 		// Literal tests
-		{"number", "42", "literal", "42", false, tok.SQLiteDialect},
-		{"string", "'hello'", "literal", "'hello'", false, tok.SQLiteDialect},
-		{"boolean_true", "TRUE", "literal", "TRUE", false, tok.SQLiteDialect},
-		{"null", "NULL", "literal", "NULL", false, tok.SQLiteDialect},
+		{"number", "42", "literal", "42", false},
+		{"string", "'hello'", "literal", "'hello'", false},
+		{"boolean_true", "TRUE", "literal", "TRUE", false},
+		{"null", "NULL", "literal", "NULL", false},
 
 		// Column reference tests
-		{"simple_column", "col", "column-reference", "col", false, tok.SQLiteDialect},
-		{"qualified_column", "table_name.col", "column-reference", "table_name.col", false, tok.SQLiteDialect},
-		{"quoted_reserved", "\"select\".id", "column-reference", "\"select\".id", false, tok.SQLiteDialect},
-		{"backtick_mysql", "`from`.column", "column-reference", "`from`.column", false, tok.MySQLDialect},
+		{"simple_column", "col", "column-reference", "col", false},
+		{"qualified_column", "table_name.col", "column-reference", "table_name.col", false},
+		{"quoted_reserved", "\"select\".id", "column-reference", "\"select\".id", false},
+		{"backtick_mysql", "`from`.column", "column-reference", "`from`.column", false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
@@ -368,29 +370,28 @@ func TestAtomicWithUnary(t *testing.T) {
 		src         string
 		shouldError bool
 		tokenCount  int
-		dialect     tok.SqlDialect
 	}{
 		// Regular atomic values
-		{"number", "42", false, 1, tok.SQLiteDialect},
-		{"string", "'hello'", false, 1, tok.SQLiteDialect},
-		{"column", "age", false, 1, tok.SQLiteDialect},
-		{"qualified_column", "users.id", false, 1, tok.SQLiteDialect},
+		{"number", "42", false, 1},
+		{"string", "'hello'", false, 1},
+		{"column", "age", false, 1},
+		{"qualified_column", "users.id", false, 1},
 
 		// Unary minus
-		{"minus_number", "-42", false, 2, tok.SQLiteDialect},
-		{"minus_string", "-'hello'", false, 2, tok.SQLiteDialect},
-		{"minus_column", "-age", false, 2, tok.SQLiteDialect},
-		{"minus_qualified_column", "-users.balance", false, 2, tok.SQLiteDialect},
+		{"minus_number", "-42", false, 2},
+		{"minus_string", "-'hello'", false, 2},
+		{"minus_column", "-age", false, 2},
+		{"minus_qualified_column", "-users.balance", false, 2},
 
 		// NOT operator
-		{"not_boolean", "NOT TRUE", false, 2, tok.SQLiteDialect},
-		{"not_column", "NOT active", false, 2, tok.SQLiteDialect},
-		{"not_qualified_column", "NOT users.deleted", false, 2, tok.SQLiteDialect},
+		{"not_boolean", "NOT TRUE", false, 2},
+		{"not_column", "NOT active", false, 2},
+		{"not_qualified_column", "NOT users.deleted", false, 2},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)

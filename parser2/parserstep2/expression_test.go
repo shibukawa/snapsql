@@ -15,17 +15,16 @@ func TestOperatorExpr(t *testing.T) {
 		name     string
 		src      string
 		expected string
-		dialect  tok.SqlDialect
 	}{
-		{"plus", "+", "+", tok.SQLiteDialect},
-		{"minus", "-", "-", tok.SQLiteDialect},
-		{"equal", "=", "=", tok.SQLiteDialect},
-		{"multiply", "*", "*", tok.SQLiteDialect},
-		{"divide", "/", "/", tok.SQLiteDialect},
+		{"plus", "+", "+"},
+		{"minus", "-", "-"},
+		{"equal", "=", "="},
+		{"multiply", "*", "*"},
+		{"divide", "/", "/"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
@@ -44,21 +43,17 @@ func TestColumnReference(t *testing.T) {
 		src           string
 		exprStr       string
 		rawTokenCount int
-		dialect       tok.SqlDialect
 	}{
-		{"simple_column", "col", "col", 1, tok.SQLiteDialect},
-		{"qualified_column", "table_name.col", "table_name . col", 3, tok.SQLiteDialect},
-		{"underscore_column", "user_id", "user_id", 1, tok.SQLiteDialect},
-		{"qualified_underscore", "users.user_id", "users . user_id", 3, tok.SQLiteDialect},
-		{"sqlite_non_reserved_table", "table.id", "table . id", 3, tok.SQLiteDialect},
-		{"mysql_non_reserved_constraint", "constraint.id", "constraint . id", 3, tok.MySQLDialect},
-		{"mysql_non_reserved_order", "order.id", "order . id", 3, tok.MySQLDialect},
-		{"quoted_reserved_select", "\"select\".id", `"select" . id`, 3, tok.SQLiteDialect},
-		{"backtick_reserved_from", "`from`.column", "`from` . column", 3, tok.MySQLDialect},
+		{"simple_column", "col", "col", 1},
+		{"qualified_column", "table_name.col", "table_name . col", 3},
+		{"underscore_column", "user_id", "user_id", 1},
+		{"qualified_underscore", "users.user_id", "users . user_id", 3},
+		{"quoted_reserved_select", "\"select\".id", `"select" . id`, 3},
+		{"backtick_reserved_from", "`from`.column", "`from` . column", 3},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
@@ -98,33 +93,32 @@ func TestExpression(t *testing.T) {
 		src           string
 		exprStr       string
 		rawTokenCount int
-		dialect       tok.SqlDialect
 	}{
-		{"add", "1 + 2", "1 + 2", 3, tok.SQLiteDialect},
-		{"minus", "1 - 2", "1 - 2", 3, tok.SQLiteDialect},
-		{"mul", "5 * 6", "5 * 6", 3, tok.SQLiteDialect},
-		{"div", "8 / 2", "8 / 2", 3, tok.SQLiteDialect},
-		{"and", "8 and 2", "8 and 2", 3, tok.SQLiteDialect},
-		{"or", "8 or 2", "8 or 2", 3, tok.SQLiteDialect},
-		{"like", "8 like 2", "8 like 2", 3, tok.SQLiteDialect},
-		{"not like", `'abc' NOT LIKE '%c'`, `'abc' NOT LIKE '%c'`, 4, tok.SQLiteDialect},
+		{"add", "1 + 2", "1 + 2", 3},
+		{"minus", "1 - 2", "1 - 2", 3},
+		{"mul", "5 * 6", "5 * 6", 3},
+		{"div", "8 / 2", "8 / 2", 3},
+		{"and", "8 and 2", "8 and 2", 3},
+		{"or", "8 or 2", "8 or 2", 3},
+		{"like", "8 like 2", "8 like 2", 3},
+		{"not like", `'abc' NOT LIKE '%c'`, `'abc' NOT LIKE '%c'`, 4},
 
-		{"between", "age between 18 and 60", "age between 18 and 60", 5, tok.SQLiteDialect},
-		{"between with paren", "age between (18 + 2) and 60", "age between ( 18 + 2 ) and 60", 9, tok.SQLiteDialect},
-		{"paren", "(1)", "( 1 )", 3, tok.SQLiteDialect},
-		{"column", "age", "age", 1, tok.SQLiteDialect},
-		{"qualified_column", "users.id", "users . id", 3, tok.SQLiteDialect},
-		{"column_arithmetic", "age + 1", "age + 1", 3, tok.SQLiteDialect},
-		{"qualified_arithmetic", "users.age * 2", "users . age * 2", 5, tok.SQLiteDialect},
-		{"boolean_true", "TRUE", "TRUE", 1, tok.SQLiteDialect},
-		{"boolean_false", "FALSE", "FALSE", 1, tok.SQLiteDialect},
-		{"boolean_mixed_case", "True", "True", 1, tok.SQLiteDialect},
-		{"null_literal", "NULL", "NULL", 1, tok.SQLiteDialect},
-		{"null_mixed_case", "Null", "Null", 1, tok.SQLiteDialect},
+		{"between", "age between 18 and 60", "age between 18 and 60", 5},
+		{"between with paren", "age between (18 + 2) and 60", "age between ( 18 + 2 ) and 60", 9},
+		{"paren", "(1)", "( 1 )", 3},
+		{"column", "age", "age", 1},
+		{"qualified_column", "users.id", "users . id", 3},
+		{"column_arithmetic", "age + 1", "age + 1", 3},
+		{"qualified_arithmetic", "users.age * 2", "users . age * 2", 5},
+		{"boolean_true", "TRUE", "TRUE", 1},
+		{"boolean_false", "FALSE", "FALSE", 1},
+		{"boolean_mixed_case", "True", "True", 1},
+		{"null_literal", "NULL", "NULL", 1},
+		{"null_mixed_case", "Null", "Null", 1},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
@@ -151,25 +145,57 @@ func TestExpression(t *testing.T) {
 	}
 }
 
+func TestIsExpression(t *testing.T) {
+	tests := []struct {
+		name           string
+		src            string
+		expectedTokens int
+		shouldError    bool
+	}{
+		{"is_null", "age IS NULL", 3, false},
+		{"is_true", "flag IS TRUE", 3, false},
+		{"is_false", "flag IS FALSE", 3, false},
+		{"is_not_null", "age IS NOT NULL", 4, false},
+		{"is_not_true", "flag IS NOT TRUE", 4, false},
+		{"is_not_false", "flag IS NOT FALSE", 4, false},
+		// {"not_is_expr", "age is 1", 0, true}, // this step passes, but later step should fail
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tz := tok.NewSqlTokenizer(test.src)
+			tokens, err := tz.AllTokens()
+			assert.NoError(t, err)
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			consumed, result, err := expression(SelectClause)(pctx, pcTokens)
+
+			if test.shouldError {
+				assert.Error(t, err)
+				assert.Equal(t, 0, consumed)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, len(pcTokens), consumed)
+				assert.Equal(t, test.expectedTokens, len(result[0].Val.rawTokens))
+			}
+		})
+	}
+}
+
 func TestAnyIdentifier(t *testing.T) {
 	tests := []struct {
 		name        string
 		src         string
 		expected    string
 		shouldError bool
-		dialect     tok.SqlDialect
 	}{
-		{"regular_identifier", "user_id", "user_id", false, tok.SQLiteDialect},
-		{"sqlite_non_reserved_table", "table", "table", false, tok.SQLiteDialect},              // Non-reserved in SQLite
-		{"mysql_non_reserved_constraint", "constraint", "constraint", false, tok.MySQLDialect}, // Non-reserved in MySQL
-		{"mysql_non_reserved_order", "order", "order", false, tok.MySQLDialect},                // Non-reserved in MySQL
-		{"quoted_reserved_keyword", "\"select\"", `"select"`, false, tok.SQLiteDialect},
-		{"backtick_reserved_keyword", "`from`", "`from`", false, tok.MySQLDialect},
-		{"mysql_non_reserved_index", "index", "index", false, tok.MySQLDialect}, // Non-reserved in MySQL
+		{"regular_identifier", "user_id", "user_id", false},
+		{"quoted_reserved_keyword", "\"select\"", `"select"`, false},
+		{"backtick_reserved_keyword", "`from`", "`from`", false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tz := tok.NewSqlTokenizer(test.src)
 			tokens, err := tz.AllTokens()
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
