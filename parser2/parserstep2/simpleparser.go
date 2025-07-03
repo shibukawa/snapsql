@@ -205,6 +205,10 @@ func andOp() pc.Parser[Entity] {
 	return ws(primitiveType("and", tokenizer.AND))
 }
 
+func minus() pc.Parser[Entity] {
+	return ws(primitiveType("minus", tokenizer.MINUS))
+}
+
 func parenOpen() pc.Parser[Entity] {
 	return ws(primitiveType("parenOpen", tokenizer.OPENED_PARENS))
 }
@@ -381,7 +385,9 @@ func (c *ColumnReferenceNode) String() string {
 	return "ColumnRef:" + c.ColumnName
 }
 
-// atomic parses atomic values including literals and column references
 func atomic() pc.Parser[Entity] {
-	return ws(pc.Or(literal(), columnReference()))
+	return pc.Seq(
+		pc.Optional(pc.Or(minus(), not())),
+		pc.Or(literal(), columnReference()),
+	)
 }

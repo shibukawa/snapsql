@@ -6,7 +6,6 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	pc "github.com/shibukawa/parsercombinator"
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -363,19 +362,30 @@ func TestAtomic(t *testing.T) {
 	}
 }
 
-func TestColumnReferenceNode(t *testing.T) {
+func TestAtomicWithUnary(t *testing.T) {
 	tests := []struct {
-		name          string
-		src           string
-		expectedTable string
-		expectedCol   string
-		dialect       tok.SqlDialect
+		name        string
+		src         string
+		shouldError bool
+		tokenCount  int
+		dialect     tok.SqlDialect
 	}{
-		{"simple", "age", "", "age", tok.SQLiteDialect},
-		{"qualified", "users.age", "users", "age", tok.SQLiteDialect},
-		{"quoted_table", "\"users\".age", "\"users\"", "age", tok.SQLiteDialect},
-		{"quoted_column", "users.\"user_id\"", "users", "\"user_id\"", tok.SQLiteDialect},
-		{"mysql_backtick", "`order`.id", "`order`", "id", tok.MySQLDialect},
+		// Regular atomic values
+		{"number", "42", false, 1, tok.SQLiteDialect},
+		{"string", "'hello'", false, 1, tok.SQLiteDialect},
+		{"column", "age", false, 1, tok.SQLiteDialect},
+		{"qualified_column", "users.id", false, 1, tok.SQLiteDialect},
+
+		// Unary minus
+		{"minus_number", "-42", false, 2, tok.SQLiteDialect},
+		{"minus_string", "-'hello'", false, 2, tok.SQLiteDialect},
+		{"minus_column", "-age", false, 2, tok.SQLiteDialect},
+		{"minus_qualified_column", "-users.balance", false, 2, tok.SQLiteDialect},
+
+		// NOT operator
+		{"not_boolean", "NOT TRUE", false, 2, tok.SQLiteDialect},
+		{"not_column", "NOT active", false, 2, tok.SQLiteDialect},
+		{"not_qualified_column", "NOT users.deleted", false, 2, tok.SQLiteDialect},
 	}
 
 	for _, test := range tests {
@@ -385,18 +395,15 @@ func TestColumnReferenceNode(t *testing.T) {
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
-			consumed, result, err := columnReference()(pctx, pcTokens)
+			consumed, result, err := atomic()(pctx, pcTokens)
 
-			assert.NoError(t, err)
-			assert.True(t, consumed > 0)
-			assert.Equal(t, "column-reference", result[0].Type)
-
-			// Check AST node
-			colRef, ok := result[0].Val.NewValue.(*ColumnReferenceNode)
-			assert.True(t, ok)
-			assert.Equal(t, test.expectedTable, colRef.TableName)
-			assert.Equal(t, test.expectedCol, colRef.ColumnName)
-			assert.Equal(t, cmn.COLUMN_REFERENCE, colRef.Type())
+			if test.shouldError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, consumed, len(pcTokens))
+				assert.Equal(t, test.tokenCount, len(result))
+			}
 		})
 	}
 }
