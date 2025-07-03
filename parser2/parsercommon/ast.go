@@ -56,6 +56,9 @@ const (
 	// Others
 	OTHER_NODE
 	RETURNING_CLAUSE
+
+	// Column reference
+	COLUMN_REFERENCE
 )
 
 // String returns string representation of NodeType
@@ -115,6 +118,8 @@ func (n NodeType) String() string {
 		return "OTHER_NODE"
 	case RETURNING_CLAUSE:
 		return "RETURNING_CLAUSE"
+	case COLUMN_REFERENCE:
+		return "COLUMN_REFERENCE"
 	default:
 		return "UNKNOWN"
 	}

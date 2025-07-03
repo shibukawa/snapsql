@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	pc "github.com/shibukawa/parsercombinator"
+	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -46,13 +47,12 @@ func TestColumnReference(t *testing.T) {
 		dialect       tok.SqlDialect
 	}{
 		{"simple_column", "col", "col", 1, tok.SQLiteDialect},
-		{"qualified_column", "table_name.col", "table_name . col", 3, tok.SQLiteDialect}, // table, ., col (note: spaces added)
+		{"qualified_column", "table_name.col", "table_name . col", 3, tok.SQLiteDialect},
 		{"underscore_column", "user_id", "user_id", 1, tok.SQLiteDialect},
 		{"qualified_underscore", "users.user_id", "users . user_id", 3, tok.SQLiteDialect},
-		// Test non-reserved keywords as identifiers
-		{"sqlite_non_reserved_table", "table.id", "table . id", 3, tok.SQLiteDialect},              // table is non-reserved in SQLite
-		{"mysql_non_reserved_constraint", "constraint.id", "constraint . id", 3, tok.MySQLDialect}, // constraint is non-reserved in MySQL
-		{"mysql_non_reserved_order", "order.id", "order . id", 3, tok.MySQLDialect},                // order is non-reserved in MySQL
+		{"sqlite_non_reserved_table", "table.id", "table . id", 3, tok.SQLiteDialect},
+		{"mysql_non_reserved_constraint", "constraint.id", "constraint . id", 3, tok.MySQLDialect},
+		{"mysql_non_reserved_order", "order.id", "order . id", 3, tok.MySQLDialect},
 		{"quoted_reserved_select", "\"select\".id", `"select" . id`, 3, tok.SQLiteDialect},
 		{"backtick_reserved_from", "`from`.column", "`from` . column", 3, tok.MySQLDialect},
 	}
@@ -76,6 +76,12 @@ func TestColumnReference(t *testing.T) {
 			assert.Equal(t, "column-reference", result[0].Type)
 			assert.Equal(t, 1, len(result))
 			assert.Equal(t, test.rawTokenCount, len(result[0].Val.rawTokens))
+
+			// Check that it returns ColumnReferenceNode
+			colRef, ok := result[0].Val.NewValue.(*ColumnReferenceNode)
+			assert.True(t, ok)
+			assert.Equal(t, cmn.COLUMN_REFERENCE, colRef.Type())
+
 			var nodes []string
 			for _, t := range result[0].Val.rawTokens {
 				nodes = append(nodes, t.Value)
@@ -102,6 +108,7 @@ func TestExpression(t *testing.T) {
 		{"or", "8 or 2", "8 or 2", 3, tok.SQLiteDialect},
 		{"like", "8 like 2", "8 like 2", 3, tok.SQLiteDialect},
 		{"not like", `'abc' NOT LIKE '%c'`, `'abc' NOT LIKE '%c'`, 4, tok.SQLiteDialect},
+
 		{"between", "age between 18 and 60", "age between 18 and 60", 5, tok.SQLiteDialect},
 		{"between with paren", "age between (18 + 2) and 60", "age between ( 18 + 2 ) and 60", 9, tok.SQLiteDialect},
 		{"paren", "(1)", "( 1 )", 3, tok.SQLiteDialect},
@@ -122,7 +129,7 @@ func TestExpression(t *testing.T) {
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
-			pctx.MaxDepth = 20
+			pctx.MaxDepth = 30
 			pctx.TraceEnable = true
 			pctx.OrMode = pc.OrModeTryFast
 			pctx.CheckTransformSafety = true

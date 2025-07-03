@@ -43,7 +43,7 @@ func literal() pc.Parser[Entity] {
 	return ws(
 		pc.Trace("literal", pc.Or(
 			pc.Trans(
-				pc.Or(str(), number(), null()),
+				pc.Or(str(), number(), null(), boolean()),
 				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
 					t := tokens[0]
 					o := t.Val.Original
@@ -243,33 +243,68 @@ func anyIdentifier() pc.Parser[Entity] {
 
 // Update columnReference to use anyIdentifier
 func columnReference() pc.Parser[Entity] {
-	return ws(pc.Trans(
-		pc.SeqWithLabel("column-reference",
-			pc.Optional(
-				pc.Seq(
-					anyIdentifier(), // Use anyIdentifier for table name
-					dot(),
-				),
-			),
-			anyIdentifier(), // Use anyIdentifier for column name
-		),
-		func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-			rawTokens := make([]tokenizer.Token, len(tokens))
-			// Handle optional table qualifier
-			for i, token := range tokens {
-				rawTokens[i] = token.Val.Original
-			}
-			return []pc.Token[Entity]{
-				{
-					Type: "column-reference",
-					Pos:  tokens[0].Pos,
-					Val: Entity{
-						rawTokens: rawTokens,
-					},
-					Raw: joinRawTokens(rawTokens),
+	return ws(
+		pc.Trace("column-reference", pc.Or(
+			// Qualified column: table.column
+			pc.Trans(
+				pc.Seq(anyIdentifier(), dot(), anyIdentifier()),
+				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+					tableName := tokens[0].Val.Original.Value
+					columnName := tokens[2].Val.Original.Value
+
+					// Collect all raw tokens
+					var allTokens []tokenizer.Token
+					allTokens = append(allTokens, tokens[0].Val.Original) // table
+					allTokens = append(allTokens, tokens[1].Val.Original) // dot
+					allTokens = append(allTokens, tokens[2].Val.Original) // column
+
+					return []pc.Token[Entity]{
+						{
+							Type: "column-reference",
+							Pos:  tokens[0].Pos,
+							Val: Entity{
+								NewValue: &ColumnReferenceNode{
+									BaseAstNode: cmn.BaseAstNode{
+										NodeType: cmn.COLUMN_REFERENCE,
+										Pos:      tokens[0].Val.Original.Position,
+									},
+									TableName:  tableName,
+									ColumnName: columnName,
+								},
+								rawTokens: allTokens,
+							},
+							Raw: tableName + "." + columnName,
+						},
+					}, nil
 				},
-			}, nil
-		}))
+			),
+			// Simple column: column
+			pc.Trans(
+				anyIdentifier(),
+				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
+					columnName := tokens[0].Val.Original.Value
+
+					return []pc.Token[Entity]{
+						{
+							Type: "column-reference",
+							Pos:  tokens[0].Pos,
+							Val: Entity{
+								NewValue: &ColumnReferenceNode{
+									BaseAstNode: cmn.BaseAstNode{
+										NodeType: cmn.COLUMN_REFERENCE,
+										Pos:      tokens[0].Val.Original.Position,
+									},
+									TableName:  "", // No table qualification
+									ColumnName: columnName,
+								},
+								rawTokens: []tokenizer.Token{tokens[0].Val.Original},
+							},
+							Raw: columnName,
+						},
+					}, nil
+				},
+			),
+		)))
 }
 
 // Helper function to join raw tokens into a string
@@ -327,4 +362,26 @@ func boolean() pc.Parser[Entity] {
 		}
 		return 0, nil, pc.ErrNotMatch
 	}))
+}
+
+// ColumnReferenceNode represents a column reference in SQL (e.g., "col" or "table.col")
+type ColumnReferenceNode struct {
+	cmn.BaseAstNode
+	TableName  string // Optional table qualifier (empty string if not qualified)
+	ColumnName string // Column name
+}
+
+func (c *ColumnReferenceNode) Type() cmn.NodeType           { return cmn.COLUMN_REFERENCE }
+func (c *ColumnReferenceNode) Position() tokenizer.Position { return c.BaseAstNode.Position() }
+func (c *ColumnReferenceNode) RawTokens() []tokenizer.Token { return c.BaseAstNode.RawTokens() }
+func (c *ColumnReferenceNode) String() string {
+	if c.TableName != "" {
+		return "ColumnRef:" + c.TableName + "." + c.ColumnName
+	}
+	return "ColumnRef:" + c.ColumnName
+}
+
+// atomic parses atomic values including literals and column references
+func atomic() pc.Parser[Entity] {
+	return ws(pc.Or(literal(), columnReference()))
 }

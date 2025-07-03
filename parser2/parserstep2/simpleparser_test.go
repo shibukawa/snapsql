@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	pc "github.com/shibukawa/parsercombinator"
+	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -315,6 +316,87 @@ func TestSnapSQLDirectiveParsers(t *testing.T) {
 			}
 
 			assert.Equal(t, test.expected, actualTypes)
+		})
+	}
+}
+
+func TestAtomic(t *testing.T) {
+	tests := []struct {
+		name         string
+		src          string
+		expectedType string
+		expectedRaw  string
+		shouldError  bool
+		dialect      tok.SqlDialect
+	}{
+		// Literal tests
+		{"number", "42", "literal", "42", false, tok.SQLiteDialect},
+		{"string", "'hello'", "literal", "'hello'", false, tok.SQLiteDialect},
+		{"boolean_true", "TRUE", "literal", "TRUE", false, tok.SQLiteDialect},
+		{"null", "NULL", "literal", "NULL", false, tok.SQLiteDialect},
+
+		// Column reference tests
+		{"simple_column", "col", "column-reference", "col", false, tok.SQLiteDialect},
+		{"qualified_column", "table_name.col", "column-reference", "table_name.col", false, tok.SQLiteDialect},
+		{"quoted_reserved", "\"select\".id", "column-reference", "\"select\".id", false, tok.SQLiteDialect},
+		{"backtick_mysql", "`from`.column", "column-reference", "`from`.column", false, tok.MySQLDialect},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tokens, err := tz.AllTokens()
+			assert.NoError(t, err)
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			consumed, result, err := atomic()(pctx, pcTokens)
+
+			if test.shouldError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.True(t, consumed > 0)
+				assert.Equal(t, test.expectedType, result[0].Type)
+				assert.Equal(t, test.expectedRaw, result[0].Raw)
+			}
+		})
+	}
+}
+
+func TestColumnReferenceNode(t *testing.T) {
+	tests := []struct {
+		name          string
+		src           string
+		expectedTable string
+		expectedCol   string
+		dialect       tok.SqlDialect
+	}{
+		{"simple", "age", "", "age", tok.SQLiteDialect},
+		{"qualified", "users.age", "users", "age", tok.SQLiteDialect},
+		{"quoted_table", "\"users\".age", "\"users\"", "age", tok.SQLiteDialect},
+		{"quoted_column", "users.\"user_id\"", "users", "\"user_id\"", tok.SQLiteDialect},
+		{"mysql_backtick", "`order`.id", "`order`", "id", tok.MySQLDialect},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tz := tok.NewSqlTokenizer(test.src, test.dialect)
+			tokens, err := tz.AllTokens()
+			assert.NoError(t, err)
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			consumed, result, err := columnReference()(pctx, pcTokens)
+
+			assert.NoError(t, err)
+			assert.True(t, consumed > 0)
+			assert.Equal(t, "column-reference", result[0].Type)
+
+			// Check AST node
+			colRef, ok := result[0].Val.NewValue.(*ColumnReferenceNode)
+			assert.True(t, ok)
+			assert.Equal(t, test.expectedTable, colRef.TableName)
+			assert.Equal(t, test.expectedCol, colRef.ColumnName)
+			assert.Equal(t, cmn.COLUMN_REFERENCE, colRef.Type())
 		})
 	}
 }

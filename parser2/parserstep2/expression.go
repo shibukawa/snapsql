@@ -30,7 +30,7 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 	// Define primary parser for this context
 	primary := pc.Or(
 		pc.Trans(
-			literal(),
+			atomic(), // Use atomic instead of literal
 			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
 				return []pc.Token[Entity]{
 					{
@@ -40,31 +40,11 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 							NewValue: &ExpressionNode{
 								BaseAstNode: cmn.BaseAstNode{
 									NodeType: cmn.EXPRESSION,
-									Pos:      tokens[0].Val.Original.Position,
+									Pos:      tokens[0].Val.rawTokens[0].Position,
 								},
 							},
 							rawTokens: tokens[0].Val.rawTokens,
 							spaces:    tokens[0].Val.spaces,
-						},
-					},
-				}, nil
-			},
-		),
-		pc.Trans(
-			columnReference(),
-			func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-				return []pc.Token[Entity]{
-					{
-						Type: "expression",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							NewValue: &ExpressionNode{
-								BaseAstNode: cmn.BaseAstNode{
-									NodeType: cmn.EXPRESSION,
-									Pos:      tokens[0].Val.Original.Position,
-								},
-							},
-							rawTokens: tokens[0].Val.rawTokens,
 						},
 					},
 				}, nil
@@ -86,7 +66,7 @@ func expression(clause SQLClause) pc.Parser[Entity] {
 							NewValue: &ExpressionNode{
 								BaseAstNode: cmn.BaseAstNode{
 									NodeType: cmn.EXPRESSION,
-									Pos:      tokens[0].Val.Original.Position,
+									Pos:      tokens[0].Val.rawTokens[0].Position,
 								},
 							},
 							rawTokens: allTokens,
