@@ -52,19 +52,20 @@ const (
 	ROW       // ROW keyword
 
 	// Logical operators and conditional expressions
-	AND        // AND keyword
-	OR         // OR keyword
-	NOT        // NOT keyword
-	IN         // IN keyword
-	EXISTS     // EXISTS keyword
-	BETWEEN    // BETWEEN keyword
-	LIKE       // LIKE keyword
-	SIMILAR_TO // SIMILAR TO keyword (PostgreSQL)
-	REGEXP     // REGEXP keyword (MySQL/SQLite)
-	RLIKE      // RLIKE keyword (MySQL)
-	ILIKE      // ILIKE keyword (PostgreSQL)
-	IS         // IS keyword
-	NULL       // NULL keyword
+	AND     // AND keyword
+	OR      // OR keyword
+	NOT     // NOT keyword
+	IN      // IN keyword
+	EXISTS  // EXISTS keyword
+	BETWEEN // BETWEEN keyword
+	LIKE    // LIKE keyword
+	SIMILAR // SIMILAR keyword (PostgreSQL)
+	TO      // TO keyword (PostgreSQL)
+	REGEXP  // REGEXP keyword (MySQL/SQLite)
+	RLIKE   // RLIKE keyword (MySQL)
+	ILIKE   // ILIKE keyword (PostgreSQL)
+	IS      // IS keyword
+	NULL    // NULL keyword
 	// Typed literal tokens (for e.g. DATE '...', TIMESTAMP '...')
 	// These are not standard SQL tokens but are useful for parser clarity
 	DATE_LITERAL      // DATE '...'
@@ -182,8 +183,10 @@ func (t TokenType) String() string {
 		return "BETWEEN"
 	case LIKE:
 		return "LIKE"
-	case SIMILAR_TO:
-		return "SIMILAR_TO"
+	case SIMILAR:
+		return "SIMILAR"
+	case TO:
+		return "TO"
 	case REGEXP:
 		return "REGEXP"
 	case RLIKE:

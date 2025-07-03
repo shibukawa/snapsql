@@ -268,6 +268,11 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"LIKE":    LIKE,
 	"IS":      IS,
 	"NULL":    NULL,
+	"SIMILAR": SIMILAR,
+	"TO":      TO,
+	"REGEXP":  REGEXP,
+	"RLIKE":   RLIKE,
+	"ILIKE":   ILIKE,
 }
 
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking
@@ -286,18 +291,18 @@ func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	originalValue := builder.String()
 	upperValue := strings.ToUpper(originalValue)
 
-	   var tokenType TokenType
-	   if tt, ok := keywordLikeTokenTypeMap[upperValue]; ok {
-			   tokenType = tt
-	   } else if info, ok := KeywordSet[upperValue]; ok && info.Keyword {
-			   if info.StrictReserved {
-					   tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
-			   } else {
-					   tokenType = IDENTIFIER
-			   }
-	   } else {
-			   tokenType = IDENTIFIER // Regular identifiers
-	   }
+	var tokenType TokenType
+	if tt, ok := keywordLikeTokenTypeMap[upperValue]; ok {
+		tokenType = tt
+	} else if info, ok := KeywordSet[upperValue]; ok && info.Keyword {
+		if info.StrictReserved {
+			tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
+		} else {
+			tokenType = IDENTIFIER
+		}
+	} else {
+		tokenType = IDENTIFIER // Regular identifiers
+	}
 
 	return Token{
 		Type:     tokenType,

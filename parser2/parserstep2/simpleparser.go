@@ -1,3 +1,4 @@
+// --- SQL keyword primitive parsers for test coverage ---
 package parserstep2
 
 import (
@@ -182,11 +183,13 @@ func operator() pc.Parser[Entity] {
 		tokenizer.EQUAL, tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.LESS_EQUAL,
 		tokenizer.GREATER_THAN, tokenizer.GREATER_EQUAL, tokenizer.PLUS, tokenizer.MINUS,
 		tokenizer.MULTIPLY, tokenizer.DIVIDE,
-		tokenizer.AND, tokenizer.OR, tokenizer.IN, tokenizer.LIKE, tokenizer.IS))
+		tokenizer.AND, tokenizer.OR, tokenizer.IN, tokenizer.IS,
+		tokenizer.LIKE, tokenizer.ILIKE, tokenizer.RLIKE, tokenizer.REGEXP))
 
 	return pc.Or(
-		pc.Seq(ws(not()), p),
-		pc.Seq(p, ws(not())),
+		pc.Seq(pc.Optional(not()), similar(), to()),
+		pc.Seq(not(), p),
+		pc.Seq(p, not()),
 		p,
 	)
 }
@@ -213,6 +216,14 @@ func parenOpen() pc.Parser[Entity] {
 
 func parenClose() pc.Parser[Entity] {
 	return ws(primitiveType("parenClose", tokenizer.CLOSED_PARENS))
+}
+
+func similar() pc.Parser[Entity] {
+	return ws(primitiveType("similar", tokenizer.SIMILAR))
+}
+
+func to() pc.Parser[Entity] {
+	return ws(primitiveType("to", tokenizer.TO))
 }
 
 // dot parses dot operator without ws wrapper (no spaces allowed)
@@ -243,7 +254,6 @@ func anyIdentifier() pc.Parser[Entity] {
 	}))
 }
 
-// Update columnReference to use anyIdentifier
 func columnReference() pc.Parser[Entity] {
 	return ws(
 		pc.Trace("column-reference", pc.Or(

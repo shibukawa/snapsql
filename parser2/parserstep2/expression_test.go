@@ -10,33 +10,6 @@ import (
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
-func TestOperatorExpr(t *testing.T) {
-	tests := []struct {
-		name     string
-		src      string
-		expected string
-	}{
-		{"plus", "+", "+"},
-		{"minus", "-", "-"},
-		{"equal", "=", "="},
-		{"multiply", "*", "*"},
-		{"divide", "/", "/"},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			tz := tok.NewSqlTokenizer(test.src)
-			tokens, err := tz.AllTokens()
-			assert.NoError(t, err)
-			pcTokens := TokenToEntity(tokens)
-			pctx := &pc.ParseContext[Entity]{}
-			consumed, result, err := operator()(pctx, pcTokens)
-			assert.NoError(t, err)
-			assert.True(t, consumed > 0)
-			assert.Equal(t, test.expected, result[0].Raw)
-		})
-	}
-}
-
 func TestColumnReference(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -100,8 +73,16 @@ func TestExpression(t *testing.T) {
 		{"div", "8 / 2", "8 / 2", 3},
 		{"and", "8 and 2", "8 and 2", 3},
 		{"or", "8 or 2", "8 or 2", 3},
-		{"like", "8 like 2", "8 like 2", 3},
+		{"like", "'abc' like '%c'", "'abc' like '%c'", 3},
 		{"not like", `'abc' NOT LIKE '%c'`, `'abc' NOT LIKE '%c'`, 4},
+		{"ilike", "'abc' ilike 'ABC'", "'abc' ilike 'ABC'", 3},
+		{"not ilike", `'abc' NOT ILIKE '%c'`, `'abc' NOT ILIKE '%c'`, 4},
+		{"rlike", "'abc' rlike 'a*c'", "'abc' rlike 'a*c'", 3},
+		{"not rlike", `'abc' NOT RLIKE 'z*'`, `'abc' NOT RLIKE 'z*'`, 4},
+		{"regexp", "'abc' regexp '*bc'", "'abc' regexp '*bc'", 3},
+		{"not regexp", `'abc' NOT REGEXP 'c*'`, `'abc' NOT REGEXP 'c*'`, 4},
+		{"similar to", "'abc' similar to '*bc'", "'abc' similar to '*bc'", 4},
+		{"not similar to", `'abc' NOT SIMILAR TO 'c*'`, `'abc' NOT SIMILAR TO 'c*'`, 5},
 
 		{"between", "age between 18 and 60", "age between 18 and 60", 5},
 		{"between with paren", "age between (18 + 2) and 60", "age between ( 18 + 2 ) and 60", 9},
