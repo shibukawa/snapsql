@@ -1,0 +1,290 @@
+package parserstep2
+
+import (
+	"log"
+	"testing"
+
+	"github.com/alecthomas/assert/v2"
+	pc "github.com/shibukawa/parsercombinator"
+	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	"github.com/shibukawa/snapsql/tokenizer"
+)
+
+func init() {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+}
+
+func TestSubQuery(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		wantCount int
+		wantErr   error
+	}{
+		{
+			name:      "not subquery",
+			src:       `SELECT * FROM users`,
+			wantCount: 0,
+			wantErr:   pc.ErrNotMatch,
+		},
+		{
+			name:      "subquery with correct parentheses",
+			src:       `( SELECT * FROM users)`,
+			wantCount: 10,
+			wantErr:   nil,
+		},
+		{
+			name:      "missing closing parenthesis",
+			src:       `( SELECT * FROM users`,
+			wantCount: 0,
+			wantErr:   pc.ErrCritical,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tz := tokenizer.NewSqlTokenizer(tt.src)
+			tokens, err := tz.AllTokens()
+			assert.NoError(t, err)
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			pctx.MaxDepth = 30
+			pctx.TraceEnable = true
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
+			consumed, _, err := subQuery()(pctx, pcTokens)
+			if tt.wantErr != nil {
+				assert.IsError(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantCount, consumed)
+		})
+	}
+}
+
+func TestParseStatement(t *testing.T) {
+	type args struct {
+		src string
+	}
+	// Remove stray closing brace so the rest of the function is inside
+	tests := []struct {
+		name        string
+		args        args
+		wantType    cmn.NodeType
+		wantClauses int
+		wantCTEs    int
+		wantErr     bool
+	}{
+		{
+			name: "simple select",
+			args: args{
+				src: `SELECT id, name FROM users;`,
+			},
+			wantType:    cmn.SELECT_STATEMENT,
+			wantClauses: 2,
+			wantCTEs:    0,
+			wantErr:     false,
+		},
+		/*{
+			name: "select with subquery",
+			args: args{
+				src: `SELECT id FROM (SELECT id FROM users) AS sub;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "select with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id FROM users) SELECT * FROM tmp;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+		{
+			name: "select with multiple CTEs",
+			args: args{
+				src: `WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a JOIN b ON a.col = b.col;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 2,
+			wantErr:  false,
+		},
+		{
+			name: "select with multiple CTEs (3 CTEs)",
+			args: args{
+				src: `WITH a AS (SELECT 1), b AS (SELECT 2), c AS (SELECT 3) SELECT * FROM a JOIN b ON a.col = b.col JOIN c ON b.col = c.col;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 3,
+			wantErr:  false,
+		},
+		{
+			name: "select for update",
+			args: args{
+				src: `SELECT id, name FROM users WHERE id = 1 FOR UPDATE;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "select insert",
+			args: args{
+				src: `SELECT id, name INTO archived_users FROM users WHERE deleted = 1;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "insert simple",
+			args: args{
+				src: `INSERT INTO users (id, name) VALUES (1, 'Alice');`,
+			},
+			wantType: cmn.INSERT_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "insert with subquery",
+			args: args{
+				src: `INSERT INTO users (id, name) SELECT id, name FROM tmp;`,
+			},
+			wantType: cmn.INSERT_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "insert with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id, name FROM users) INSERT INTO users (id, name) SELECT id, name FROM tmp;`,
+			},
+			wantType: cmn.INSERT_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+		{
+			name: "select insert",
+			args: args{
+				src: `SELECT * INTO new_users FROM users WHERE active = 1;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "update simple",
+			args: args{
+				src: `UPDATE users SET name = 'Bob' WHERE id = 1;`,
+			},
+			wantType: cmn.UPDATE_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "update with subquery",
+			args: args{
+				src: `UPDATE users SET name = (SELECT name FROM tmp WHERE tmp.id = users.id) WHERE id = 1;`,
+			},
+			wantType: cmn.UPDATE_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "update with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id, name FROM users) UPDATE users SET name = (SELECT name FROM tmp WHERE tmp.id = users.id) WHERE id = 1;`,
+			},
+			wantType: cmn.UPDATE_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+		{
+			name: "delete simple",
+			args: args{
+				src: `DELETE FROM users WHERE id = 2;`,
+			},
+			wantType: cmn.DELETE_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "delete with subquery",
+			args: args{
+				src: `DELETE FROM users WHERE id IN (SELECT id FROM tmp);`,
+			},
+			wantType: cmn.DELETE_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},
+		{
+			name: "delete with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id FROM users) DELETE FROM users WHERE id IN (SELECT id FROM tmp);`,
+			},
+			wantType: cmn.DELETE_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},*/
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tz := tokenizer.NewSqlTokenizer(tt.args.src)
+			tokens, err := tz.AllTokens()
+			assert.NoError(t, err)
+			for i, token := range tokens {
+				log.Println(i, token)
+			}
+
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			pctx.MaxDepth = 30
+			pctx.TraceEnable = true
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
+
+			consumed, got, err := ParseStatement()(pctx, pcTokens)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseGroup() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			assert.Equal(t, len(pcTokens), consumed, "ParseGroup() should consume all tokens")
+			assert.Equal(t, len(got), 1, "ParseGroup() should return exactly one statement")
+			assert.Equal(t, tt.wantType, got[0].Val.NewValue.Type(), "ParseGroup() should return correct node type")
+			stmt := got[0].Val.NewValue.(cmn.StatementNode)
+			assert.Equal(t, tt.wantClauses, len(stmt.Clauses()), "ParseGroup() should return correct number of clauses")
+			assert.Equal(t, tt.wantCTEs, len(stmt.CTEs()), "ParseGroup() should return correct number of CTEs")
+		})
+	}
+}
+
+func TestParseStatement_AllSelectClauses(t *testing.T) {
+	sql := `SELECT a, b, c FROM users WHERE a > 1 GROUP BY a, b HAVING COUNT(*) > 1 ORDER BY a DESC, b ASC LIMIT 10 OFFSET 5 RETURNING a, b;`
+	tz := tokenizer.NewSqlTokenizer(sql)
+	tokens, err := tz.AllTokens()
+	assert.NoError(t, err)
+	pcTokens := TokenToEntity(tokens)
+	pctx := &pc.ParseContext[Entity]{}
+	pctx.MaxDepth = 30
+	pctx.TraceEnable = true
+	pctx.OrMode = pc.OrModeTryFast
+	pctx.CheckTransformSafety = true
+
+	consumed, got, err := ParseStatement()(pctx, pcTokens)
+	assert.NoError(t, err)
+	assert.Equal(t, len(pcTokens), consumed, "should consume all tokens")
+	assert.Equal(t, 1, len(got), "should return exactly one statement")
+	stmt, ok := got[0].Val.NewValue.(cmn.StatementNode)
+	assert.True(t, ok, "should be StatementNode")
+	for i, clause := range stmt.Clauses() {
+		log.Println(i, clause.Type())
+		for _, token := range clause.RawTokens() {
+			log.Printf("   Token: %s (%s)", token.Value, token.Type)
+		}
+	}
+	assert.Equal(t, 9, len(stmt.Clauses()), "should return correct number of clauses")
+}

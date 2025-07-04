@@ -1,6 +1,9 @@
 package tokenizer
 
-import "errors"
+import (
+	"errors"
+	"strconv"
+)
 
 // Sentinel errors
 var (
@@ -70,21 +73,27 @@ const (
 	// These are not standard SQL tokens but are useful for parser clarity
 	DATE_LITERAL      // DATE '...'
 	TIMESTAMP_LITERAL // TIMESTAMP '...'
+	CAST              // CAST expression (CAST(... AS type))
 
-	// Subquery and CTE related
-	WITH     // WITH keyword
-	AS       // AS keyword
-	SELECT   // SELECT keyword
-	INSERT   // INSERT keyword
-	UPDATE   // UPDATE keyword
-	DELETE   // DELETE keyword
-	FROM     // FROM keyword
-	WHERE    // WHERE keyword
-	GROUP    // GROUP keyword
-	HAVING   // HAVING keyword
-	UNION    // UNION keyword
-	ALL      // ALL keyword
-	DISTINCT // DISTINCT keyword
+	// Statement, Clause, Subquery and CTE related
+	WITH      // WITH keyword
+	AS        // AS keyword
+	SELECT    // SELECT keyword
+	INSERT    // INSERT keyword
+	UPDATE    // UPDATE keyword
+	DELETE    // DELETE keyword
+	FROM      // FROM keyword
+	WHERE     // WHERE keyword
+	GROUP     // GROUP keyword
+	HAVING    // HAVING keyword
+	LIMIT     // LIMIT keyword
+	OFFSET    // OFFSET keyword
+	SET       // SET keyword
+	VALUES    // VALUES keyword
+	UNION     // UNION keyword
+	RETURNING // RETURNING keyword
+	ALL       // ALL keyword
+	DISTINCT  // DISTINCT keyword
 
 	// Comments
 	LINE_COMMENT  // -- line comment
@@ -197,6 +206,8 @@ func (t TokenType) String() string {
 		return "IS"
 	case NULL:
 		return "NULL"
+	case CAST:
+		return "CAST"
 	case DATE_LITERAL:
 		return "DATE_LITERAL"
 	case TIMESTAMP_LITERAL:
@@ -221,6 +232,16 @@ func (t TokenType) String() string {
 		return "GROUP"
 	case HAVING:
 		return "HAVING"
+	case LIMIT:
+		return "LIMIT"
+	case OFFSET:
+		return "OFFSET"
+	case SET:
+		return "SET"
+	case VALUES:
+		return "VALUES"
+	case RETURNING:
+		return "RETURNING"
 	case UNION:
 		return "UNION"
 	case ALL:
@@ -255,6 +276,10 @@ type Position struct {
 	Line   int
 	Column int
 	Offset int
+}
+
+func (p Position) String() string {
+	return strconv.Itoa(p.Line) + ":" + strconv.Itoa(p.Column)
 }
 
 // Token represents a token

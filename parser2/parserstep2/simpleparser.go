@@ -29,15 +29,28 @@ func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
 
 // LiteralAstNode is a minimal AST node for literals (number/string)
 type LiteralNode struct {
-	cmn.BaseAstNode
-	LiteralType tokenizer.TokenType // "NUMBER" or "STRING"
+	LiteralType tokenizer.TokenType // "NUMBER", "STRING", "BOOLEAN" or "NULL"
 	Value       string
+	rawTokens   []tokenizer.Token
 }
 
-func (l LiteralNode) Type() cmn.NodeType           { return cmn.LITERAL }
-func (l LiteralNode) Position() tokenizer.Position { return l.BaseAstNode.Position() }
-func (l LiteralNode) RawTokens() []tokenizer.Token { return l.BaseAstNode.RawTokens() }
-func (l LiteralNode) String() string               { return "Literal:" + l.Value }
+func (l LiteralNode) Type() cmn.NodeType {
+	return cmn.LITERAL
+}
+
+func (l LiteralNode) Position() tokenizer.Position {
+	return l.rawTokens[0].Position
+}
+
+func (l LiteralNode) RawTokens() []tokenizer.Token {
+	return l.rawTokens
+}
+
+func (l LiteralNode) String() string {
+	return "Literal:" + l.Value
+}
+
+var _ cmn.AstNode = (*LiteralNode)(nil)
 
 // literal parses numeric, string, boolean, or null literals and returns a LiteralAstNode.
 func literal() pc.Parser[Entity] {
@@ -53,14 +66,10 @@ func literal() pc.Parser[Entity] {
 						Pos:  t.Pos,
 						Val: Entity{
 							NewValue: &LiteralNode{
-								BaseAstNode: cmn.BaseAstNode{
-									NodeType: cmn.LITERAL,
-									Pos:      o.Position,
-								},
 								LiteralType: o.Type,
 								Value:       o.Value,
+								rawTokens:   []tokenizer.Token{o},
 							},
-							rawTokens: []tokenizer.Token{o},
 						},
 						Raw: o.Value,
 					},
@@ -127,6 +136,10 @@ func space() pc.Parser[Entity] {
 
 func comment() pc.Parser[Entity] {
 	return primitiveType("comment", tokenizer.BLOCK_COMMENT, tokenizer.LINE_COMMENT)
+}
+
+func selectKeyword() pc.Parser[Entity] {
+	return ws(primitiveType("select", tokenizer.SELECT))
 }
 
 func identifier() pc.Parser[Entity] {
@@ -211,11 +224,11 @@ func minus() pc.Parser[Entity] {
 }
 
 func parenOpen() pc.Parser[Entity] {
-	return ws(primitiveType("parenOpen", tokenizer.OPENED_PARENS))
+	return primitiveType("parenOpen", tokenizer.OPENED_PARENS)
 }
 
 func parenClose() pc.Parser[Entity] {
-	return ws(primitiveType("parenClose", tokenizer.CLOSED_PARENS))
+	return primitiveType("parenClose", tokenizer.CLOSED_PARENS)
 }
 
 func similar() pc.Parser[Entity] {
@@ -254,91 +267,79 @@ func anyIdentifier() pc.Parser[Entity] {
 	}))
 }
 
-func columnReference() pc.Parser[Entity] {
-	return ws(
-		pc.Trace("column-reference", pc.Or(
-			// Qualified column: table.column
-			pc.Trans(
-				pc.Seq(anyIdentifier(), dot(), anyIdentifier()),
-				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-					tableName := tokens[0].Val.Original.Value
-					columnName := tokens[2].Val.Original.Value
-
-					// Collect all raw tokens
-					var allTokens []tokenizer.Token
-					allTokens = append(allTokens, tokens[0].Val.Original) // table
-					allTokens = append(allTokens, tokens[1].Val.Original) // dot
-					allTokens = append(allTokens, tokens[2].Val.Original) // column
-
-					return []pc.Token[Entity]{
-						{
-							Type: "column-reference",
-							Pos:  tokens[0].Pos,
-							Val: Entity{
-								NewValue: &ColumnReferenceNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.COLUMN_REFERENCE,
-										Pos:      tokens[0].Val.Original.Position,
-									},
-									TableName:  tableName,
-									ColumnName: columnName,
-								},
-								rawTokens: allTokens,
-							},
-							Raw: tableName + "." + columnName,
-						},
-					}, nil
-				},
-			),
-			// Simple column: column
-			pc.Trans(
-				anyIdentifier(),
-				func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-					columnName := tokens[0].Val.Original.Value
-
-					return []pc.Token[Entity]{
-						{
-							Type: "column-reference",
-							Pos:  tokens[0].Pos,
-							Val: Entity{
-								NewValue: &ColumnReferenceNode{
-									BaseAstNode: cmn.BaseAstNode{
-										NodeType: cmn.COLUMN_REFERENCE,
-										Pos:      tokens[0].Val.Original.Position,
-									},
-									TableName:  "", // No table qualification
-									ColumnName: columnName,
-								},
-								rawTokens: []tokenizer.Token{tokens[0].Val.Original},
-							},
-							Raw: columnName,
-						},
-					}, nil
-				},
-			),
-		)))
+func selectStatement() pc.Parser[Entity] {
+	return primitiveType("select", tokenizer.SELECT)
 }
 
-// ColumnReferenceNode represents a column reference in SQL (e.g., "col" or "table.col")
-type ColumnReferenceNode struct {
-	cmn.BaseAstNode
-	TableName  string // Optional table qualifier (empty string if not qualified)
-	ColumnName string // Column name
+func insertStatement() pc.Parser[Entity] {
+	return primitiveType("insert", tokenizer.INSERT)
 }
 
-func (c *ColumnReferenceNode) Type() cmn.NodeType           { return cmn.COLUMN_REFERENCE }
-func (c *ColumnReferenceNode) Position() tokenizer.Position { return c.BaseAstNode.Position() }
-func (c *ColumnReferenceNode) RawTokens() []tokenizer.Token { return c.BaseAstNode.RawTokens() }
-func (c *ColumnReferenceNode) String() string {
-	if c.TableName != "" {
-		return "ColumnRef:" + c.TableName + "." + c.ColumnName
-	}
-	return "ColumnRef:" + c.ColumnName
+func updateStatement() pc.Parser[Entity] {
+	return primitiveType("update", tokenizer.UPDATE)
 }
 
-func atomic() pc.Parser[Entity] {
-	return pc.Seq(
-		pc.Optional(pc.Or(minus(), not())),
-		pc.Or(literal(), columnReference()),
-	)
+func deleteStatement() pc.Parser[Entity] {
+	return primitiveType("delete", tokenizer.DELETE)
+}
+
+// --- Clause Keyword Parsers ---
+// Each clause parser returns the clause keyword as a token, with ws wrapper.
+func withClause() pc.Parser[Entity] {
+	return ws(primitiveType("with", tokenizer.WITH))
+}
+
+func selectClause() pc.Parser[Entity] {
+	return ws(primitiveType("select", tokenizer.SELECT))
+}
+
+func fromClause() pc.Parser[Entity] {
+	return ws(primitiveType("from", tokenizer.FROM))
+}
+
+func whereClause() pc.Parser[Entity] {
+	return ws(primitiveType("where", tokenizer.WHERE))
+}
+
+func groupByClause() pc.Parser[Entity] {
+	return ws(pc.SeqWithLabel("group by clause",
+		ws(primitiveType("group", tokenizer.GROUP)),
+		primitiveType("by", tokenizer.BY),
+	))
+}
+
+func havingClause() pc.Parser[Entity] {
+	return ws(primitiveType("having", tokenizer.HAVING))
+}
+
+func orderByClause() pc.Parser[Entity] {
+	return ws(pc.SeqWithLabel("order by clause",
+		ws(primitiveType("order", tokenizer.ORDER)),
+		primitiveType("by", tokenizer.BY),
+	))
+}
+
+func limitClause() pc.Parser[Entity] {
+	return ws(primitiveType("limit", tokenizer.LIMIT))
+}
+
+func offsetClause() pc.Parser[Entity] {
+	return ws(primitiveType("offset", tokenizer.OFFSET))
+}
+
+func returningClause() pc.Parser[Entity] {
+	return ws(primitiveType("returning", tokenizer.RETURNING))
+}
+
+// --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
+func insertClause() pc.Parser[Entity] {
+	return ws(primitiveType("insert", tokenizer.INSERT))
+}
+
+func updateClause() pc.Parser[Entity] {
+	return ws(primitiveType("update", tokenizer.UPDATE))
+}
+
+func deleteClause() pc.Parser[Entity] {
+	return ws(primitiveType("delete", tokenizer.DELETE))
 }

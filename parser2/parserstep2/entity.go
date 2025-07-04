@@ -48,3 +48,11 @@ func TokenToEntity(tokens []tokenizer.Token) []pc.Token[Entity] {
 	}
 	return results
 }
+
+func EntityToToken(entities []pc.Token[Entity]) []tokenizer.Token {
+	results := make([]tokenizer.Token, len(entities))
+	for i, entity := range entities {
+		results[i] = entity.Val.Original
+	}
+	return results
+}
