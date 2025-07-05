@@ -2,7 +2,11 @@
 
 ## 目的
 
-parserstep2は、トークン列からSQL文の構造をパーサーコンビネータで解析し、AST（Abstract Syntax Tree）を生成する責務を持つ。ASTは元のSQLをほぼ完全に復元できる情報を保持し、後続の意味解析や中間形式変換の基盤となる。
+parserstep2は、トークン列からSQL文の構造をパーサーコンビネータで解析し、AST（Abstract Syntax Tree）を生成する責務を持つ。
+この段階では厳密なSQL構文の検証や細かいエラーチェックは行わず、SQL文の「おおまかな構造の把握」に特化する。
+細かいエラー検出をこの段階で行うと、ユーザーにとって解読困難なエラーメッセージが発生しやすいため、
+SnapSQLでは「パース処理を複数のステップに分割し、まずは全体構造を柔軟に捉える」設計方針を採用している。
+ASTは元のSQLをほぼ完全に復元できる情報を保持し、後続の意味解析や中間形式変換の基盤となる。
 
 ## 要件
 
@@ -16,90 +20,49 @@ parserstep2は、トークン列からSQL文の構造をパーサーコンビネ
 
 ## ASTノード設計
 
-- コアとなるAstNode:
-    - SelectStatement
-        - WithClause: OptionalClause<[]CTEDefinition>
-        - SelectClause: []SelectItem
-        - FromClause: []TableReference
-        - WhereClause: OptionalClause<Expression>
-        - GroupByClause: OptionalClause<[]FieldName> // if/endでON/OFF可能な句。条件式を保持できる
-        - HavingClause: OptionalClause<Expression>
-        - OrderByClause: OptionalClause<[]OrderByField>
-        - LimitClause: OptionalClause<Expression>
-        - OffsetClause: OptionalClause<Expression>
-    - InsertStatement
-        - WithClause: OptionalClause<[]CTEDefinition>
-        - Table: TableName
-        - Columns: []FieldName
-        - ValuesList: Values
-        - SelectStmt: Expression
-        - OnConflictClause: OptionalClause<OnConflictClause> // ON CONFLICT/ON DUPLICATE KEY UPDATE用のオプション句
-        - ReturningClause: OptionalClause<[]FieldName> // すべてのDMLで利用可能なRETURNING句
-    - UpdateStatement
-        - WithClause: OptionalClause<[]CTEDefinition>
-        - Table: TableName
-        - SetClauses: []SetClause
-        - WhereClause: OptionalClause<Expression>
-        - ReturningClause: OptionalClause<[]FieldName>
-    - DeleteStatement
-        - WithClause: OptionalClause<[]CTEDefinition>
-        - Table: TableName
-        - WhereClause: OptionalClause<Expression>
-    - MergeStatement // MERGE文は別Statementとして定義
-        - WithClause: OptionalClause<[]CTEDefinition>
-        - TargetTable: TableName
-        - SourceTable: TableName | SubQuery
-        - OnClause: Expression
-        - WhenMatched: []SetClause
-        - WhenNotMatched: []SetClause
-    - ValuesStatement // VALUES文単体
-        - Rows: [][]Expression
+## 現行のノード設計（2025-07-05時点）
 
-- サブのAstNode
-    - CTEDefinition: {Name string, Recursive bool, Query *SelectStatement, Columns []string}
-    - SelectItem:  SelectField | Expression | SubQuery | FunctionCall | ...
-    - SelectField: {TableName: Identifier, FieldName: FieldName, FieldAlias: Identifier, Window: WindowSpec}
-    - WindowSpec: {Name: Identifier, Definition: Expression}
-    - TableReference: Identifier | TableAliasDef | SubQuery | JoinClause | ...
-    - TableAliasDef: { TableName: Identifier, TableAlias: TableAlias }
-    - JoinClause: { LeftTable: TableReference, JoinType: JoinType, RightTable: TableReference, OnClause: Expression, Using: []Identifier}
-    - JoinType: INNER | LEFT | RIGHT | FULL_OUTER | CROSS
-    - SubQuery: { Query: SelectStatement, Alias: Identifier }
-    - Mapping: {Left: FieldName, Right: FieldName}
-    - TableAlias: Identifier
-    - TableLabel: TableName | TableAlias
-    - FieldName: Identifier | { TableLabel: Identifier, FieldName: Identifier }
-    - OrderByField: FieldName + Asc/Desc
-    - Values: ValueList | SelectStatement
-    - ValueList: [][]Expression
-    - OnConflictClause: {Target: []FieldName, Action: []SetClause}
+- すべてのノードは `parsercommon.AstNode` インターフェースを実装し、`RawTokens()` で元トークン列を返す。
+- ノード設計は「Clauseノード（句単位）」と「Statementノード（文単位）」の2階層を基本とし、Clauseノードは元トークン列・種別・サブノード（必要に応じて）を保持。
+- サブクエリはFROM句ではAS付き仮想テーブルとして、SET/WHERE等では値ノードとして扱う。
+- CTE（WITH句）はWithClauseノード＋CTEDefinitionノードで表現。
+- SnapSQLディレクティブもClauseノードとして扱い、if/endでON/OFF可能な句はOptionalClauseでラップ。
 
-- Expression関連のAstNode
-    - Expression: BinaryExpression | UnaryExpression | FunctionCall | FieldReference | Literal | SubQuery | CaseExpression | ...
-    - BinaryExpression: { Left: Expression, Operator: BinaryOperator, Right: Expression }
-    - UnaryExpression: { Operator: UnaryOperator, Operand: Expression }
-    - FunctionCall: { Name: Identifier, Arguments: []Expression, Window: WindowSpec, Distinct: bool }
-    - FieldReference: { TableLabel: Identifier, FieldName: Identifier } | { FieldName: Identifier }
-    - Literal: { Type: LiteralType, Value: string }
-    - CaseExpression: { WhenClauses: []WhenClause, ElseClause: Expression }
-    - WhenClause: { Condition: Expression, Result: Expression }
+### 主要ノード例
 
-- AstNodeインターフェース
-    - Type() NodeType
-    - Position() tokenizer.Position
-    - String() string
-    - RawTokens() []tokenizer.Token  // 追加: 元トークン列を返す
-- すべてのノード型はRawTokens()を実装し、ノード生成時に該当トークン列を保持する
-- 既存のBaseAstNodeにtokensフィールドを追加し、RawTokens()で返す
+- SelectStatement, InsertIntoStatement, UpdateStatement, DeleteFromStatement（Statementノード）
+- SelectClause, FromClause, WhereClause, GroupByClause, HavingClause, OrderByClause, LimitClause, OffsetClause, ReturningClause, ValuesClause, OnConflictClause, SetClause, DeleteFromClause, WithClause, OptionalClause, SubQuery（Clauseノード）
+- CTEDefinition, TableReference, JoinClause, TableAlias, FieldName, OrderByField など（サブノード）
+
+### サブクエリの扱い
+- FROM句のサブクエリは必ずASエイリアス付きの仮想テーブルとしてTableReferenceノード配下にSubQueryノードで格納
+- SET/WHERE句等のサブクエリは値ノード（Expression/Value）として扱い、エイリアスは不要
+
+### SnapSQLディレクティブ
+- if/for/end等はClauseノードとしてASTに格納
+- if/endでON/OFF可能な句はOptionalClauseノードでラップし、条件式を保持
+
+### ASTノードの共通仕様
+- すべてのノードはRawTokens()で元トークン列を返す
+- ノード生成時に該当トークン列を必ず保持
+
+---
 
 ## パーサー構成
 
-- parserstep2/step2.go
-    - パーサーコンビネータを使い、SQL文の主要構造（SELECT, INSERT, UPDATE, DELETE, 各種句、SnapSQLディレクティブ）をASTノードに変換
-    - サブパーサーを組み合わせて柔軟な構文解析を実現
-- parserstep2/step2_test.go
-    - 代表的なSQL・SnapSQLテンプレートのAST生成テスト
-    - RawTokens()の内容検証も含める
+## パーサー構成（2025-07-05時点）
+
+- parserstep2/statement.go
+    - 主要なSQL文（SELECT/INSERT/UPDATE/DELETE）のパースエントリーポイント（ParseStatement）を提供
+    - 各文種ごとにClauseノードを順次抽出し、Statementノードにまとめる
+    - clauseStart/parseClausesで句単位の分岐・ノード生成を管理
+    - サブクエリ、CTE、FOR句、ON CONFLICT句、SnapSQLディレクティブ等もここで分岐・ノード化
+- parserstep2/statement_test.go
+    - テーブル駆動テストで主要なSQL文・SnapSQLテンプレートのClause/Statementノード生成を網羅的に検証
+    - サブクエリ、CTE、FOR句、SnapSQLディレクティブのバリエーションもカバー
+    - Clause数やノード種別、RawTokensの内容も検証
+
+---
 
 ## サンプル: AstNodeインターフェース
 
@@ -164,4 +127,26 @@ func (n *BaseAstNode) RawTokens() []tokenizer.Token { return n.tokens }
 
 ---
 
-（2025-07-01 作成）
+## 実装状況（2025-07-05時点）
+
+### 実装済み
+- パーサーコンビネータによる主要DML（SELECT/INSERT/UPDATE/DELETE）文のパース・ASTノード生成
+- 主要な句（SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET, RETURNING, VALUES, ON CONFLICT, SET, etc.）のClauseノード化
+- サブクエリのパース（FROM句のAS付きサブクエリ、SET/WHERE句のスカラサブクエリ/INサブクエリ）
+- CTE（WITH句, RECURSIVE, 複数CTE, 末尾カンマ許容）のパース
+- SnapSQLディレクティブ（if/for/end等）のASTノード化
+- ClauseごとのON/OFF制御（OptionalClause）
+- トークン列の順序・内容保持（RawTokens）
+- テーブル駆動テストによる網羅的な構文検証（statement_test.go）
+- サブクエリ・CTE・FOR句バリエーションのテスト網羅
+
+### 制限・今後の課題
+- サブクエリのASTノード構造は現状簡易的（FROM句以外は値扱い、ASエイリアスはFROM句のみ）
+- HAVING句内サブクエリや複雑な式のパースは今後拡張予定
+- DDL文（CREATE/ALTER等）、MERGE文、VALUES文単体は未実装
+- SnapSQL独自拡張のさらなる対応・テスト拡充
+- ASTノードの詳細設計・最適化
+
+---
+
+（2025-07-05 更新）
