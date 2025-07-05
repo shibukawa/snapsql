@@ -262,29 +262,52 @@ func TestParseStatement(t *testing.T) {
 	}
 }
 
-func TestParseStatement_AllSelectClauses(t *testing.T) {
-	sql := `SELECT a, b, c FROM users WHERE a > 1 GROUP BY a, b HAVING COUNT(*) > 1 ORDER BY a DESC, b ASC LIMIT 10 OFFSET 5 RETURNING a, b;`
-	tz := tokenizer.NewSqlTokenizer(sql)
-	tokens, err := tz.AllTokens()
-	assert.NoError(t, err)
-	pcTokens := TokenToEntity(tokens)
-	pctx := &pc.ParseContext[Entity]{}
-	pctx.MaxDepth = 30
-	pctx.TraceEnable = true
-	pctx.OrMode = pc.OrModeTryFast
-	pctx.CheckTransformSafety = true
-
-	consumed, got, err := ParseStatement()(pctx, pcTokens)
-	assert.NoError(t, err)
-	assert.Equal(t, len(pcTokens), consumed, "should consume all tokens")
-	assert.Equal(t, 1, len(got), "should return exactly one statement")
-	stmt, ok := got[0].Val.NewValue.(cmn.StatementNode)
-	assert.True(t, ok, "should be StatementNode")
-	for i, clause := range stmt.Clauses() {
-		log.Println(i, clause.Type())
-		for _, token := range clause.RawTokens() {
-			log.Printf("   Token: %s (%s)", token.Value, token.Type)
-		}
+func TestParseStatementWithAllClauses(t *testing.T) {
+	tests := []struct {
+		name        string
+		sql         string
+		wantClauses int
+		wantType    cmn.NodeType
+	}{
+		{
+			name:        "all select clauses",
+			sql:         `SELECT a, b, c FROM users WHERE a > 1 GROUP BY a, b HAVING COUNT(*) > 1 ORDER BY a DESC, b ASC LIMIT 10 OFFSET 5 RETURNING a, b;`,
+			wantClauses: 9,
+			wantType:    cmn.SELECT_STATEMENT,
+		},
+		{
+			name:        "all insert clauses",
+			sql:         `INSERT INTO users (a, b, c) VALUES (1, 2, 3) WHERE a > 1 ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b RETURNING a, b;`,
+			wantClauses: 5,
+			wantType:    cmn.INSERT_INTO_STATEMENT,
+		},
 	}
-	assert.Equal(t, 9, len(stmt.Clauses()), "should return correct number of clauses")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tz := tokenizer.NewSqlTokenizer(tt.sql)
+			tokens, err := tz.AllTokens()
+			assert.NoError(t, err)
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			pctx.MaxDepth = 30
+			pctx.TraceEnable = true
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
+
+			consumed, got, err := ParseStatement()(pctx, pcTokens)
+			assert.NoError(t, err)
+			assert.Equal(t, len(pcTokens), consumed, "should consume all tokens")
+			assert.Equal(t, 1, len(got), "should return exactly one statement")
+			stmt, ok := got[0].Val.NewValue.(cmn.StatementNode)
+			assert.True(t, ok, "should be StatementNode")
+			for i, clause := range stmt.Clauses() {
+				log.Println(i, clause.Type())
+				for _, token := range clause.RawTokens() {
+					log.Printf("   Token: %s (%s)", token.Value, token.Type)
+				}
+			}
+			assert.Equal(t, tt.wantClauses, len(stmt.Clauses()), "should return correct number of clauses")
+			assert.Equal(t, tt.wantType, stmt.Type(), "should return correct statement type")
+		})
+	}
 }

@@ -266,6 +266,7 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"SELECT":    SELECT,
 	"INSERT":    INSERT,
 	"UPDATE":    UPDATE,
+	"INTO":      INTO,
 	"DELETE":    DELETE,
 	"FROM":      FROM,
 	"WHERE":     WHERE,
@@ -278,6 +279,8 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"VALUES":    VALUES,
 	"SET":       SET,
 	"RETURNING": RETURNING,
+	"ON":        ON,
+	"CONFLICT":  CONFLICT,
 	"AS":        AS,
 	"CAST":      CAST,
 }

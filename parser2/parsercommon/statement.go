@@ -83,51 +83,62 @@ func (s SelectStatement) String() string {
 }
 
 // InsertStatement represents INSERT statement
-type InsertStatement struct {
+type InsertIntoStatement struct {
 	WithClause       *WithClause
 	Table            TableName
 	Columns          []FieldName
-	ValuesList       *Values
+	ValuesList       *ValuesClause
 	SelectStmt       *AstNode // Expression or SelectStatement
 	OnConflictClause *OnConflictClause
 	ReturningClause  *ReturningClause
+	leadingTokens    []tokenizer.Token // Leading tokens before the SELECT statement
+	cteClauses       []CTEDefinition   // CTE definitions in the SELECT statement
+	clauses          []ClauseNode      // All clauses in the statement
+}
+
+func NewInsertIntoStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *InsertIntoStatement {
+	return &InsertIntoStatement{
+		leadingTokens: leadingTokens,
+		cteClauses:    cteClauses,
+		clauses:       clauses,
+	}
 }
 
 // Clauses implements BlockNode.
-func (n *InsertStatement) Clauses() []ClauseNode {
-	panic("unimplemented")
+func (n *InsertIntoStatement) Clauses() []ClauseNode {
+	return n.clauses
 }
 
 // LeadingTokens implements BlockNode.
-func (n *InsertStatement) LeadingTokens() []tokenizer.Token {
+func (n *InsertIntoStatement) LeadingTokens() []tokenizer.Token {
 	panic("unimplemented")
 }
 
 // Position implements BlockNode.
-func (n *InsertStatement) Position() tokenizer.Position {
+func (n *InsertIntoStatement) Position() tokenizer.Position {
 	panic("unimplemented")
 }
 
 // RawTokens implements BlockNode.
-func (n *InsertStatement) RawTokens() []tokenizer.Token {
+func (n *InsertIntoStatement) RawTokens() []tokenizer.Token {
 	panic("unimplemented")
 }
 
 // Type implements BlockNode.
-func (n *InsertStatement) Type() NodeType {
-	panic("unimplemented")
+func (n *InsertIntoStatement) Type() NodeType {
+	return INSERT_INTO_STATEMENT
 }
 
-func (n InsertStatement) String() string {
-	return "INSERT"
+func (n InsertIntoStatement) String() string {
+	return "INSERT INTO"
 }
 
 // CTEs implements BlockNode.
-func (n *InsertStatement) CTEs() []CTEDefinition {
+func (n *InsertIntoStatement) CTEs() []CTEDefinition {
 	panic("unimplemented")
 }
 
-var _ StatementNode = (*InsertStatement)(nil)
+var _ StatementNode = (*InsertIntoStatement)(nil)
 
 // UpdateStatement represents UPDATE statement
 type UpdateStatement struct {
@@ -136,6 +147,31 @@ type UpdateStatement struct {
 	SetClauses      []SetClause
 	WhereClause     *WhereClause
 	ReturningClause *ReturningClause
+}
+
+// Clauses implements StatementNode.
+func (n *UpdateStatement) Clauses() []ClauseNode {
+	panic("unimplemented")
+}
+
+// LeadingTokens implements StatementNode.
+func (n *UpdateStatement) LeadingTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// Position implements StatementNode.
+func (n *UpdateStatement) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements StatementNode.
+func (n *UpdateStatement) RawTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// Type implements StatementNode.
+func (n *UpdateStatement) Type() NodeType {
+	panic("unimplemented")
 }
 
 func (n UpdateStatement) String() string {
@@ -147,7 +183,7 @@ func (n *UpdateStatement) CTEs() []CTEDefinition {
 	panic("unimplemented")
 }
 
-var _ StatementNode = (*InsertStatement)(nil)
+var _ StatementNode = (*UpdateStatement)(nil)
 
 // DeleteStatement represents DELETE statement
 type DeleteStatement struct {

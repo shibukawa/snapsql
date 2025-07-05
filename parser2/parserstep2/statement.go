@@ -105,7 +105,11 @@ func subQuery() pc.Parser[Entity] {
 }
 
 func statementStart() pc.Parser[Entity] {
-	return pc.Or(selectStatement(), insertStatement(), updateStatement(), deleteStatement())
+	return pc.Or(
+		selectStatement(),
+		insertIntoStatement(),
+		updateStatement(),
+		deleteStatement())
 }
 
 // clauseStart is a parser that matches any SQL clause.
@@ -113,7 +117,9 @@ func statementStart() pc.Parser[Entity] {
 // Availability of clauses is checked in next step.
 func clauseStart() pc.Parser[Entity] {
 	return pc.Or(
-		selectClause(),
+		semicolon(),
+		// for select
+		selectStatement(),
 		fromClause(),
 		whereClause(),
 		groupByClause(),
@@ -122,7 +128,10 @@ func clauseStart() pc.Parser[Entity] {
 		limitClause(),
 		offsetClause(),
 		returningClause(),
-		semicolon(),
+		// for insert
+		insertIntoStatement(),
+		valuesClause(),
+		onConflictClause(),
 	)
 }
 
@@ -134,18 +143,29 @@ func ParseStatement() pc.Parser[Entity] {
 		}
 		switch match[0].Val.Original.Type {
 		case tokenizer.SELECT:
-			consume, selectStatement, err := parseSelectStatement(pctx, tokens[len(skipped):])
+			consume, clauses, err := parseClauses(pctx, tokens[len(skipped):])
 			if err != nil {
 				return 0, nil, err
 			}
 			return len(skipped) + consume, []pc.Token[Entity]{
-				pc.Token[Entity]{
+				{
 					Val: Entity{
-						NewValue: selectStatement,
+						NewValue: cmn.NewSelectStatement(EntityToToken(skipped), nil, clauses),
 					},
 				},
 			}, nil
 		case tokenizer.INSERT:
+			consume, clauses, err := parseClauses(pctx, tokens[len(skipped):])
+			if err != nil {
+				return 0, nil, err
+			}
+			return len(skipped) + consume, []pc.Token[Entity]{
+				{
+					Val: Entity{
+						NewValue: cmn.NewInsertIntoStatement(EntityToToken(skipped), nil, clauses),
+					},
+				},
+			}, nil
 		case tokenizer.UPDATE:
 		case tokenizer.DELETE:
 		default:
@@ -154,7 +174,7 @@ func ParseStatement() pc.Parser[Entity] {
 	})
 }
 
-func parseSelectStatement(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, *cmn.SelectStatement, error) {
+func parseClauses(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []cmn.ClauseNode, error) {
 	var clauseHead []pc.Token[Entity]
 	var clauses []cmn.ClauseNode
 	var consumes int
@@ -179,11 +199,16 @@ func parseSelectStatement(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entit
 				clauses = append(clauses, cmn.NewOffsetClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
 			case tokenizer.RETURNING:
 				clauses = append(clauses, cmn.NewReturningClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
+			case tokenizer.INSERT:
+				clauses = append(clauses, cmn.NewInsertIntoClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
+			case tokenizer.VALUES:
+				clauses = append(clauses, cmn.NewValuesClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
+			case tokenizer.ON:
+				clauses = append(clauses, cmn.NewOnConflictClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
 			}
 		}
 		clauseHead = clause.Match
 		consumes += clause.Consume + len(clause.Skipped)
 	}
-	return consumes, cmn.NewSelectStatement(
-		EntityToToken(clauseHead), nil, clauses), nil
+	return consumes, clauses, nil
 }

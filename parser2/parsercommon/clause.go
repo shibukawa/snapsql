@@ -427,46 +427,6 @@ func (n CTEDefinition) String() string {
 	return "CTE"
 }
 
-// TableName represents a table name
-type TableName struct {
-	Name   string
-	Schema string // Optional schema name
-}
-
-func (n TableName) String() string {
-	return "TABLE"
-}
-
-// FieldName represents a field/column name
-type FieldName struct {
-	Name      string
-	TableName string // Optional table qualifier
-}
-
-func (n FieldName) String() string {
-	return "FIELD"
-}
-
-// SelectItem represents an item in SELECT clause
-type SelectItem struct {
-	Expression AstNode // Expression, FieldName, etc.
-	Alias      string  // Optional alias
-}
-
-func (n SelectItem) String() string {
-	return "SELECT_ITEM"
-}
-
-// TableReference represents a table reference in FROM clause
-type TableReference struct {
-	Table AstNode // TableName, SubQuery, JoinClause, etc.
-	Alias string  // Optional alias
-}
-
-func (n TableReference) String() string {
-	return "TABLE_REF"
-}
-
 // OrderByField represents a field in ORDER BY clause
 type OrderByField struct {
 	Field FieldName
@@ -487,21 +447,139 @@ func (n SetClause) String() string {
 	return "SET"
 }
 
-// OnConflictClause represents ON CONFLICT clause
+type InsertIntoClause struct {
+	clauseBaseNode
+	TableName TableName
+}
+
+// ContentTokens implements ClauseNode.
+func (i *InsertIntoClause) ContentTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// IfDirective implements ClauseNode.
+func (i *InsertIntoClause) IfDirective() string {
+	panic("unimplemented")
+}
+
+// Position implements ClauseNode.
+func (i *InsertIntoClause) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements ClauseNode.
+func (i *InsertIntoClause) RawTokens() []tokenizer.Token {
+	return i.rawTokens()
+}
+
+// String implements ClauseNode.
+func (i *InsertIntoClause) String() string {
+	panic("unimplemented")
+}
+
+// Type implements ClauseNode.
+func (i *InsertIntoClause) Type() NodeType {
+	return INSERT_INTO_CLAUSE
+}
+
+func NewInsertIntoClause(heading, body []tokenizer.Token) *InsertIntoClause {
+	return &InsertIntoClause{
+		clauseBaseNode: clauseBaseNode{
+			headingTokens: heading,
+			bodyTokens:    body,
+		},
+	}
+}
+
+var _ ClauseNode = (*InsertIntoClause)(nil)
+
 type OnConflictClause struct {
+	clauseBaseNode
 	Target []FieldName
 	Action []SetClause
 }
 
-func (n OnConflictClause) String() string {
-	return "ON_CONFLICT"
+// ContentTokens implements ClauseNode.
+func (n *OnConflictClause) ContentTokens() []tokenizer.Token {
+	panic("unimplemented")
 }
 
-// Values represents VALUES in INSERT statement
-type Values struct {
+// IfDirective implements ClauseNode.
+func (n *OnConflictClause) IfDirective() string {
+	panic("unimplemented")
+}
+
+// Position implements ClauseNode.
+func (n *OnConflictClause) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements ClauseNode.
+func (n *OnConflictClause) RawTokens() []tokenizer.Token {
+	return n.rawTokens()
+}
+
+// Type implements ClauseNode.
+func (n *OnConflictClause) Type() NodeType {
+	return ON_CONFLICT_CLAUSE
+}
+
+func NewOnConflictClause(heading, body []tokenizer.Token) *OnConflictClause {
+	return &OnConflictClause{
+		clauseBaseNode: clauseBaseNode{
+			headingTokens: heading,
+			bodyTokens:    body,
+		},
+	}
+}
+
+func (n OnConflictClause) String() string {
+	return "ON_CONFLICT_CLAUSE"
+}
+
+var _ ClauseNode = (*OnConflictClause)(nil)
+
+type ValuesClause struct {
+	clauseBaseNode
 	Rows [][]AstNode // Expression
 }
 
-func (n Values) String() string {
-	return "VALUES"
+// ContentTokens implements ClauseNode.
+func (n *ValuesClause) ContentTokens() []tokenizer.Token {
+	panic("unimplemented")
 }
+
+// IfDirective implements ClauseNode.
+func (n *ValuesClause) IfDirective() string {
+	panic("unimplemented")
+}
+
+// Position implements ClauseNode.
+func (n *ValuesClause) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements ClauseNode.
+func (n *ValuesClause) RawTokens() []tokenizer.Token {
+	return n.rawTokens()
+}
+
+// Type implements ClauseNode.
+func (n *ValuesClause) Type() NodeType {
+	return VALUES_CLAUSE
+}
+
+func NewValuesClause(heading, body []tokenizer.Token) *ValuesClause {
+	return &ValuesClause{
+		clauseBaseNode: clauseBaseNode{
+			headingTokens: heading,
+			bodyTokens:    body,
+		},
+	}
+}
+
+func (n ValuesClause) String() string {
+	return "VALUES_CLAUSE"
+}
+
+var _ ClauseNode = (*ValuesClause)(nil)

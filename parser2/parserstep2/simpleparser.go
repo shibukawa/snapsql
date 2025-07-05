@@ -267,29 +267,21 @@ func anyIdentifier() pc.Parser[Entity] {
 	}))
 }
 
-func selectStatement() pc.Parser[Entity] {
-	return primitiveType("select", tokenizer.SELECT)
-}
-
-func insertStatement() pc.Parser[Entity] {
-	return primitiveType("insert", tokenizer.INSERT)
-}
-
 func updateStatement() pc.Parser[Entity] {
-	return primitiveType("update", tokenizer.UPDATE)
+	return ws(primitiveType("update", tokenizer.UPDATE))
 }
 
 func deleteStatement() pc.Parser[Entity] {
-	return primitiveType("delete", tokenizer.DELETE)
+	return ws(primitiveType("delete", tokenizer.DELETE))
 }
 
-// --- Clause Keyword Parsers ---
-// Each clause parser returns the clause keyword as a token, with ws wrapper.
 func withClause() pc.Parser[Entity] {
 	return ws(primitiveType("with", tokenizer.WITH))
 }
 
-func selectClause() pc.Parser[Entity] {
+// --- Statement Keyword Parsers (for SELECT) ---
+
+func selectStatement() pc.Parser[Entity] {
 	return ws(primitiveType("select", tokenizer.SELECT))
 }
 
@@ -332,8 +324,26 @@ func returningClause() pc.Parser[Entity] {
 }
 
 // --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
-func insertClause() pc.Parser[Entity] {
-	return ws(primitiveType("insert", tokenizer.INSERT))
+func insertIntoStatement() pc.Parser[Entity] {
+	return ws(
+		pc.SeqWithLabel("insert into statement",
+			ws(primitiveType("insert", tokenizer.INSERT)),
+			pc.Optional(primitiveType("into", tokenizer.INTO)),
+		))
+}
+
+func into() pc.Parser[Entity] {
+	return ws(primitiveType("into", tokenizer.INTO))
+}
+
+func valuesClause() pc.Parser[Entity] {
+	return ws(primitiveType("values", tokenizer.VALUES))
+}
+func onConflictClause() pc.Parser[Entity] {
+	return ws(pc.SeqWithLabel("on conflict clause",
+		ws(primitiveType("on", tokenizer.ON)),
+		primitiveType("conflict", tokenizer.CONFLICT),
+	))
 }
 
 func updateClause() pc.Parser[Entity] {

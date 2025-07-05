@@ -80,6 +80,7 @@ const (
 	AS        // AS keyword
 	SELECT    // SELECT keyword
 	INSERT    // INSERT keyword
+	INTO      // INTO keyword
 	UPDATE    // UPDATE keyword
 	DELETE    // DELETE keyword
 	FROM      // FROM keyword
