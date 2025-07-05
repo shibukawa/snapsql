@@ -1,6 +1,7 @@
 package parserstep2
 
 import (
+	"errors"
 	"fmt"
 
 	pc "github.com/shibukawa/parsercombinator"
@@ -104,6 +105,88 @@ func subQuery() pc.Parser[Entity] {
 	}
 }
 
+// firstCte returns: identity, as, subquery
+func firstCte() pc.Parser[Entity] {
+	return pc.Seq(
+		anyIdentifier(),
+		as(),
+		subQuery(),
+	)
+}
+
+// subCte returns: comma, identity, as, subquery
+func subCte() pc.Parser[Entity] {
+	return pc.Seq(
+		comma(),
+		firstCte(),
+	)
+}
+
+func parseCTE() pc.Parser[Entity] {
+	return pc.Trace("with-clause", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+		consume, heading, err := withClause()(pctx, tokens)
+		if err != nil {
+			return 0, nil, err
+		}
+		var result = &cmn.WithClause{
+			Recursive:     heading[len(heading)-1].Val.Original.Type == tokenizer.RECURSIVE,
+			HeadingTokens: EntityToToken(heading),
+		}
+		offset := consume
+
+		// first CTE
+		consume, match, err := firstCte()(pctx, tokens[offset:])
+		if err != nil {
+			if len(tokens) < offset {
+				return 0, nil, fmt.Errorf("%w: sub query is missing at last", pc.ErrCritical)
+			}
+			p := tokens[offset].Val.Original.Position
+			return 0, nil, fmt.Errorf("%w: can't parse subquery at %d:%d", pc.ErrCritical, p.Line, p.Column)
+		}
+		offset += consume
+		result.CTEs = append(result.CTEs, cmn.CTEDefinition{
+			Name:   match[0].Val.Original.Value,
+			Select: match[2].Val.NewValue,
+		})
+
+		// second and subsequent CTEs
+		for {
+			consume, match, err := subCte()(pctx, tokens[offset:])
+			if errors.Is(err, pc.ErrNotMatch) {
+				break
+			} else if err != nil {
+				if len(tokens) < offset {
+					return 0, nil, fmt.Errorf("%w: sub query is missing at last", pc.ErrCritical)
+				}
+				p := tokens[offset].Val.Original.Position
+				return 0, nil, fmt.Errorf("%w: can't parse subquery at %d:%d", pc.ErrCritical, p.Line, p.Column)
+			}
+			offset += consume
+			result.CTEs = append(result.CTEs, cmn.CTEDefinition{
+				Name:   match[1].Val.Original.Value,
+				Select: match[3].Val.NewValue,
+			})
+		}
+
+		// Extra comma
+		consume, match, err = comma()(pctx, tokens[offset:])
+		if err == nil {
+			offset += consume
+			result.TrailingTokens = EntityToToken(match)
+		}
+
+		return offset, []pc.Token[Entity]{
+			{
+				Type: "with-clause",
+				Val: Entity{
+					NewValue:  result,
+					rawTokens: EntityToToken(tokens[:offset]),
+				},
+			},
+		}, nil
+	})
+}
+
 func statementStart() pc.Parser[Entity] {
 	return pc.Or(
 		selectStatement(),
@@ -145,45 +228,55 @@ func clauseStart(tt tokenizer.TokenType) pc.Parser[Entity] {
 
 func ParseStatement() pc.Parser[Entity] {
 	return pc.Trace("statement", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		skipped, match, _, _, found := pc.Find(pctx, statementStart(), tokens)
+		consumeForCTE, cte, err := ws(parseCTE())(pctx, tokens)
+		var withClause *cmn.WithClause
+		if len(cte) > 0 {
+			if wc, ok := cte[0].Val.NewValue.(*cmn.WithClause); ok {
+				withClause = wc
+			}
+		}
+		offset := consumeForCTE
+		skipped, match, _, _, found := pc.Find(pctx, statementStart(), tokens[offset:])
 		if !found {
 			return 0, nil, pc.ErrNotMatch
 		}
+		offset += len(skipped)
 		tokenType := match[0].Val.Original.Type
-		consume, clauses, err := parseClauses(pctx, tokenType, tokens[len(skipped):])
+		consume, clauses, err := parseClauses(pctx, tokenType, withClause, tokens[offset:])
 		if err != nil {
 			return 0, nil, err
 		}
+		offset += consume
 		switch tokenType {
 		case tokenizer.SELECT:
-			return len(skipped) + consume, []pc.Token[Entity]{
+			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
-						NewValue: cmn.NewSelectStatement(EntityToToken(skipped), nil, clauses),
+						NewValue: cmn.NewSelectStatement(EntityToToken(skipped), withClause, clauses),
 					},
 				},
 			}, nil
 		case tokenizer.INSERT:
-			return len(skipped) + consume, []pc.Token[Entity]{
+			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
-						NewValue: cmn.NewInsertIntoStatement(EntityToToken(skipped), nil, clauses),
+						NewValue: cmn.NewInsertIntoStatement(EntityToToken(skipped), withClause, clauses),
 					},
 				},
 			}, nil
 		case tokenizer.UPDATE:
-			return len(skipped) + consume, []pc.Token[Entity]{
+			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
-						NewValue: cmn.NewUpdateStatement(EntityToToken(skipped), nil, clauses),
+						NewValue: cmn.NewUpdateStatement(EntityToToken(skipped), withClause, clauses),
 					},
 				},
 			}, nil
 		case tokenizer.DELETE:
-			return len(skipped) + consume, []pc.Token[Entity]{
+			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
-						NewValue: cmn.NewDeleteFromStatement(EntityToToken(skipped), nil, clauses),
+						NewValue: cmn.NewDeleteFromStatement(EntityToToken(skipped), withClause, clauses),
 					},
 				},
 			}, nil
@@ -193,9 +286,12 @@ func ParseStatement() pc.Parser[Entity] {
 	})
 }
 
-func parseClauses(pctx *pc.ParseContext[Entity], tt tokenizer.TokenType, tokens []pc.Token[Entity]) (int, []cmn.ClauseNode, error) {
+func parseClauses(pctx *pc.ParseContext[Entity], tt tokenizer.TokenType, withClause *cmn.WithClause, tokens []pc.Token[Entity]) (int, []cmn.ClauseNode, error) {
 	var clauseHead []pc.Token[Entity]
 	var clauses []cmn.ClauseNode
+	if withClause != nil {
+		clauses = append(clauses, withClause)
+	}
 	var consumes int
 	for i, clause := range pc.FindIter(pctx, clauseStart(tt), tokens) {
 		if i != 0 {

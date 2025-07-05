@@ -281,6 +281,8 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"RETURNING": RETURNING,
 	"ON":        ON,
 	"CONFLICT":  CONFLICT,
+	"WITH":      WITH,
+	"RECURSIVE": RECURSIVE,
 	"AS":        AS,
 	"CAST":      CAST,
 }

@@ -75,9 +75,12 @@ const (
 	TIMESTAMP_LITERAL // TIMESTAMP '...'
 	CAST              // CAST expression (CAST(... AS type))
 
-	// Statement, Clause, Subquery and CTE related
+	// CTE related
 	WITH      // WITH keyword
+	RECURSIVE // RECURSIVE keyword
 	AS        // AS keyword
+
+	// Statement, Clause, Subquery
 	SELECT    // SELECT keyword
 	INSERT    // INSERT keyword
 	INTO      // INTO keyword

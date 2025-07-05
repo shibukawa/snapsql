@@ -13,7 +13,10 @@ type ClauseNode interface {
 
 // WithClause represents WITH clause for CTEs
 type WithClause struct {
-	CTEs []CTEDefinition
+	Recursive      bool
+	HeadingTokens  []tokenizer.Token // Leading tokens before the WITH clause
+	CTEs           []CTEDefinition
+	TrailingTokens []tokenizer.Token // Additional tokens that may follow the CTE definitions
 }
 
 // Position implements ClauseNode.
@@ -414,13 +417,9 @@ var _ ClauseNode = (*ReturningClause)(nil)
 
 // CTEDefinition represents a Common Table Expression definition
 type CTEDefinition struct {
-	Name      string
-	Recursive bool
-	Query     *SelectStatement // SelectStatement
-
+	Name           string
+	Select         AstNode
 	TrailingTokens []tokenizer.Token
-
-	Columns []string
 }
 
 func (n CTEDefinition) String() string {

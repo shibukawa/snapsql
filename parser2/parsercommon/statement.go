@@ -8,14 +8,14 @@ import (
 
 type StatementNode interface {
 	AstNode
-	CTEs() []CTEDefinition            // Returns CTE definitions in the block
+	CTE() *WithClause                 // Returns CTE definitions in the block
 	LeadingTokens() []tokenizer.Token // Returns leading tokens of the block
 	Clauses() []ClauseNode            // Returns clauses in the block
 }
 
 type baseStatement struct {
 	leadingTokens []tokenizer.Token // Leading tokens before the SELECT statement
-	cteClauses    []CTEDefinition   // CTE definitions in the SELECT statement
+	cteClauses    *WithClause       // CTE definitions in the SELECT statement
 	clauses       []ClauseNode      // All clauses in the statement
 }
 
@@ -33,11 +33,12 @@ type SelectStatement struct {
 	OffsetClause  *OffsetClause
 }
 
-func NewSelectStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *SelectStatement {
+func NewSelectStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *SelectStatement {
+
 	return &SelectStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    cteClauses,
+			cteClauses:    withClause,
 			clauses:       clauses,
 		},
 	}
@@ -69,7 +70,7 @@ func (s *SelectStatement) Type() NodeType {
 }
 
 // CTEs implements BlockNode.
-func (s *SelectStatement) CTEs() []CTEDefinition {
+func (s *SelectStatement) CTE() *WithClause {
 	return s.cteClauses
 }
 
@@ -91,11 +92,11 @@ type InsertIntoStatement struct {
 	ReturningClause  *ReturningClause
 }
 
-func NewInsertIntoStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *InsertIntoStatement {
+func NewInsertIntoStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *InsertIntoStatement {
 	return &InsertIntoStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    cteClauses,
+			cteClauses:    withClause,
 			clauses:       clauses,
 		},
 	}
@@ -131,8 +132,8 @@ func (n InsertIntoStatement) String() string {
 }
 
 // CTEs implements BlockNode.
-func (n *InsertIntoStatement) CTEs() []CTEDefinition {
-	panic("unimplemented")
+func (n *InsertIntoStatement) CTE() *WithClause {
+	return n.cteClauses
 }
 
 var _ StatementNode = (*InsertIntoStatement)(nil)
@@ -148,11 +149,11 @@ type UpdateStatement struct {
 }
 
 // NewUpdateStatement creates a new UpdateStatement node.
-func NewUpdateStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *UpdateStatement {
+func NewUpdateStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *UpdateStatement {
 	return &UpdateStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    cteClauses,
+			cteClauses:    withClause,
 			clauses:       clauses,
 		},
 	}
@@ -188,8 +189,8 @@ func (n UpdateStatement) String() string {
 }
 
 // CTEs implements BlockNode.
-func (n *UpdateStatement) CTEs() []CTEDefinition {
-	panic("unimplemented")
+func (n *UpdateStatement) CTE() *WithClause {
+	return n.cteClauses
 }
 
 var _ StatementNode = (*UpdateStatement)(nil)
@@ -204,11 +205,11 @@ type DeleteFromStatement struct {
 }
 
 // NewDeleteFromStatement creates a new DeleteFromStatement node.
-func NewDeleteFromStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *DeleteFromStatement {
+func NewDeleteFromStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *DeleteFromStatement {
 	return &DeleteFromStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    cteClauses,
+			cteClauses:    withClause,
 			clauses:       clauses,
 		},
 	}
@@ -244,8 +245,8 @@ func (n DeleteFromStatement) String() string {
 }
 
 // CTEs implements BlockNode.
-func (n *DeleteFromStatement) CTEs() []CTEDefinition {
-	panic("unimplemented")
+func (n *DeleteFromStatement) CTE() *WithClause {
+	return n.cteClauses
 }
 
 var _ StatementNode = (*DeleteFromStatement)(nil)

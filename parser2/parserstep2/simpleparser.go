@@ -276,8 +276,21 @@ func anyIdentifier() pc.Parser[Entity] {
 	}))
 }
 
+// --- CTE (Common Table Expression) Parser ---
+
 func withClause() pc.Parser[Entity] {
-	return ws(primitiveType("with", tokenizer.WITH))
+	return pc.SeqWithLabel("with clause",
+		pc.ZeroOrMore("leading comment, space", pc.Or(comment(), space())),
+		ws(primitiveType("with", tokenizer.WITH)),
+		pc.Optional(recursive()))
+}
+
+func recursive() pc.Parser[Entity] {
+	return ws(primitiveType("recursive", tokenizer.RECURSIVE))
+}
+
+func as() pc.Parser[Entity] {
+	return ws(primitiveType("as", tokenizer.AS))
 }
 
 // --- Statement Keyword Parsers (for SELECT) ---
@@ -295,10 +308,9 @@ func whereClause() pc.Parser[Entity] {
 }
 
 func groupByClause() pc.Parser[Entity] {
-	return ws(pc.SeqWithLabel("group by clause",
+	return pc.SeqWithLabel("group by clause",
 		ws(primitiveType("group", tokenizer.GROUP)),
-		primitiveType("by", tokenizer.BY),
-	))
+		ws(primitiveType("by", tokenizer.BY)))
 }
 
 func havingClause() pc.Parser[Entity] {

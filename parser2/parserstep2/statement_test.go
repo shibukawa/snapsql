@@ -62,206 +62,6 @@ func TestSubQuery(t *testing.T) {
 	}
 }
 
-func TestParseStatement(t *testing.T) {
-	type args struct {
-		src string
-	}
-	// Remove stray closing brace so the rest of the function is inside
-	tests := []struct {
-		name        string
-		args        args
-		wantType    cmn.NodeType
-		wantClauses int
-		wantCTEs    int
-		wantErr     bool
-	}{
-		{
-			name: "simple select",
-			args: args{
-				src: `SELECT id, name FROM users;`,
-			},
-			wantType:    cmn.SELECT_STATEMENT,
-			wantClauses: 2,
-			wantCTEs:    0,
-			wantErr:     false,
-		},
-		/*{
-			name: "select with subquery",
-			args: args{
-				src: `SELECT id FROM (SELECT id FROM users) AS sub;`,
-			},
-			wantType: cmn.SELECT_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "select with CTE",
-			args: args{
-				src: `WITH tmp AS (SELECT id FROM users) SELECT * FROM tmp;`,
-			},
-			wantType: cmn.SELECT_STATEMENT,
-			wantCTEs: 1,
-			wantErr:  false,
-		},
-		{
-			name: "select with multiple CTEs",
-			args: args{
-				src: `WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a JOIN b ON a.col = b.col;`,
-			},
-			wantType: cmn.SELECT_STATEMENT,
-			wantCTEs: 2,
-			wantErr:  false,
-		},
-		{
-			name: "select with multiple CTEs (3 CTEs)",
-			args: args{
-				src: `WITH a AS (SELECT 1), b AS (SELECT 2), c AS (SELECT 3) SELECT * FROM a JOIN b ON a.col = b.col JOIN c ON b.col = c.col;`,
-			},
-			wantType: cmn.SELECT_STATEMENT,
-			wantCTEs: 3,
-			wantErr:  false,
-		},
-		{
-			name: "select for update",
-			args: args{
-				src: `SELECT id, name FROM users WHERE id = 1 FOR UPDATE;`,
-			},
-			wantType: cmn.SELECT_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "select insert",
-			args: args{
-				src: `SELECT id, name INTO archived_users FROM users WHERE deleted = 1;`,
-			},
-			wantType: cmn.SELECT_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "insert simple",
-			args: args{
-				src: `INSERT INTO users (id, name) VALUES (1, 'Alice');`,
-			},
-			wantType: cmn.INSERT_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "insert with subquery",
-			args: args{
-				src: `INSERT INTO users (id, name) SELECT id, name FROM tmp;`,
-			},
-			wantType: cmn.INSERT_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "insert with CTE",
-			args: args{
-				src: `WITH tmp AS (SELECT id, name FROM users) INSERT INTO users (id, name) SELECT id, name FROM tmp;`,
-			},
-			wantType: cmn.INSERT_STATEMENT,
-			wantCTEs: 1,
-			wantErr:  false,
-		},
-		{
-			name: "select insert",
-			args: args{
-				src: `SELECT * INTO new_users FROM users WHERE active = 1;`,
-			},
-			wantType: cmn.SELECT_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "update simple",
-			args: args{
-				src: `UPDATE users SET name = 'Bob' WHERE id = 1;`,
-			},
-			wantType: cmn.UPDATE_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "update with subquery",
-			args: args{
-				src: `UPDATE users SET name = (SELECT name FROM tmp WHERE tmp.id = users.id) WHERE id = 1;`,
-			},
-			wantType: cmn.UPDATE_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "update with CTE",
-			args: args{
-				src: `WITH tmp AS (SELECT id, name FROM users) UPDATE users SET name = (SELECT name FROM tmp WHERE tmp.id = users.id) WHERE id = 1;`,
-			},
-			wantType: cmn.UPDATE_STATEMENT,
-			wantCTEs: 1,
-			wantErr:  false,
-		},
-		{
-			name: "delete simple",
-			args: args{
-				src: `DELETE FROM users WHERE id = 2;`,
-			},
-			wantType: cmn.DELETE_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "delete with subquery",
-			args: args{
-				src: `DELETE FROM users WHERE id IN (SELECT id FROM tmp);`,
-			},
-			wantType: cmn.DELETE_STATEMENT,
-			wantCTEs: 0,
-			wantErr:  false,
-		},
-		{
-			name: "delete with CTE",
-			args: args{
-				src: `WITH tmp AS (SELECT id FROM users) DELETE FROM users WHERE id IN (SELECT id FROM tmp);`,
-			},
-			wantType: cmn.DELETE_STATEMENT,
-			wantCTEs: 1,
-			wantErr:  false,
-		},*/
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tz := tokenizer.NewSqlTokenizer(tt.args.src)
-			tokens, err := tz.AllTokens()
-			assert.NoError(t, err)
-			for i, token := range tokens {
-				log.Println(i, token)
-			}
-
-			pcTokens := TokenToEntity(tokens)
-			pctx := &pc.ParseContext[Entity]{}
-			pctx.MaxDepth = 30
-			pctx.TraceEnable = true
-			pctx.OrMode = pc.OrModeTryFast
-			pctx.CheckTransformSafety = true
-
-			consumed, got, err := ParseStatement()(pctx, pcTokens)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseGroup() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			assert.Equal(t, len(pcTokens), consumed, "ParseGroup() should consume all tokens")
-			assert.Equal(t, len(got), 1, "ParseGroup() should return exactly one statement")
-			assert.Equal(t, tt.wantType, got[0].Val.NewValue.Type(), "ParseGroup() should return correct node type")
-			stmt := got[0].Val.NewValue.(cmn.StatementNode)
-			assert.Equal(t, tt.wantClauses, len(stmt.Clauses()), "ParseGroup() should return correct number of clauses")
-			assert.Equal(t, tt.wantCTEs, len(stmt.CTEs()), "ParseGroup() should return correct number of CTEs")
-		})
-	}
-}
-
 func TestParseStatementWithAllClauses(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -275,6 +75,21 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 			wantClauses: 9, // SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET, RETURNING
 			wantType:    cmn.SELECT_STATEMENT,
 		},
+		{
+			name:        "select for update",
+			sql:         `SELECT id, name FROM users WHERE id = 1 FOR UPDATE;`,
+			wantClauses: 4, // SELECT, FROM, WHERE, FOR UPDATE
+			wantType:    cmn.SELECT_STATEMENT,
+		},
+		/*{
+			name: "select insert",
+			args: args{
+				src: `SELECT id, name INTO archived_users FROM users WHERE deleted = 1;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 0,
+			wantErr:  false,
+		},*/
 		{
 			name:        "all insert clauses",
 			sql:         `INSERT INTO users (a, b, c) VALUES (1, 2, 3) WHERE a > 1 ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b RETURNING a, b;`,
@@ -323,3 +138,163 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 		})
 	}
 }
+
+func TestParseStatementWithCTE(t *testing.T) {
+	type args struct {
+		src string
+	}
+	// Remove stray closing brace so the rest of the function is inside
+	tests := []struct {
+		name          string
+		args          args
+		wantType      cmn.NodeType
+		wantCTEs      int
+		wantRecursive bool
+		wantErr       bool
+	}{
+		{
+			name: "select with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id FROM users) SELECT * FROM tmp;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+		{
+			name: "select with multiple CTEs",
+			args: args{
+				src: `WITH a AS (SELECT 1), b AS (SELECT 2) SELECT * FROM a JOIN b ON a.col = b.col;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 2,
+			wantErr:  false,
+		},
+		{
+			name: "select with multiple CTEs (3 CTEs)",
+			args: args{
+				src: `WITH a AS (SELECT 1), b AS (SELECT 2), c AS (SELECT 3) SELECT * FROM a JOIN b ON a.col = b.col JOIN c ON b.col = c.col;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 3,
+			wantErr:  false,
+		},
+		{
+			name: "select with recursive CTE",
+			args: args{
+				src: `WITH RECURSIVE tmp AS (SELECT id FROM users) SELECT * FROM tmp;`,
+			},
+			wantType:      cmn.SELECT_STATEMENT,
+			wantCTEs:      1,
+			wantRecursive: true,
+			wantErr:       false,
+		},
+		{
+			name: "select with CTE and extra comma",
+			args: args{
+				src: `WITH tmp AS (SELECT id FROM users), SELECT * FROM tmp;`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+		{
+			name: "insert with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id, name FROM users) INSERT INTO users (id, name) SELECT id, name FROM tmp;`,
+			},
+			wantType: cmn.INSERT_INTO_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+		{
+			name: "update with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id, name FROM users) UPDATE users SET name = (SELECT name FROM tmp WHERE tmp.id = users.id) WHERE id = 1;`,
+			},
+			wantType: cmn.UPDATE_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+		{
+			name: "delete with CTE",
+			args: args{
+				src: `WITH tmp AS (SELECT id FROM users) DELETE FROM users WHERE id IN (SELECT id FROM tmp);`,
+			},
+			wantType: cmn.DELETE_FROM_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tz := tokenizer.NewSqlTokenizer(tt.args.src)
+			tokens, err := tz.AllTokens()
+			assert.NoError(t, err)
+			for i, token := range tokens {
+				log.Println(i, token)
+			}
+
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			pctx.MaxDepth = 30
+			pctx.TraceEnable = true
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
+
+			consumed, got, err := ParseStatement()(pctx, pcTokens)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseGroup() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			assert.Equal(t, len(pcTokens), consumed, "ParseGroup() should consume all tokens")
+			assert.Equal(t, len(got), 1, "ParseGroup() should return exactly one statement")
+			assert.Equal(t, tt.wantType, got[0].Val.NewValue.Type(), "ParseGroup() should return correct node type")
+			stmt := got[0].Val.NewValue.(cmn.StatementNode)
+			assert.True(t, stmt.CTE() != nil)
+			assert.Equal(t, tt.wantRecursive, stmt.CTE().Recursive, "ParseGroup() should return correct recursive flag")
+			assert.Equal(t, tt.wantCTEs, len(stmt.CTE().CTEs), "ParseGroup() should return correct number of CTEs")
+		})
+	}
+}
+
+/*
+
+	{
+		name: "select with subquery",
+		args: args{
+			src: `SELECT id FROM (SELECT id FROM users) AS sub;`,
+		},
+		wantType: cmn.SELECT_STATEMENT,
+		wantCTEs: 0,
+		wantErr:  false,
+	},
+	{
+		name: "insert with subquery",
+		args: args{
+			src: `INSERT INTO users (id, name) SELECT id, name FROM tmp;`,
+		},
+		wantType: cmn.INSERT_STATEMENT,
+		wantCTEs: 0,
+		wantErr:  false,
+	},
+	{
+		name: "update with subquery",
+		args: args{
+			src: `UPDATE users SET name = (SELECT name FROM tmp WHERE tmp.id = users.id) WHERE id = 1;`,
+		},
+		wantType: cmn.UPDATE_STATEMENT,
+		wantCTEs: 0,
+		wantErr:  false,
+	},
+	{
+		name: "delete with subquery",
+		args: args{
+			src: `DELETE FROM users WHERE id IN (SELECT id FROM tmp);`,
+		},
+		wantType: cmn.DELETE_STATEMENT,
+		wantCTEs: 0,
+		wantErr:  false,
+	},
+*/
