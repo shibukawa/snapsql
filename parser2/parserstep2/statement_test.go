@@ -281,6 +281,12 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 			wantClauses: 5,
 			wantType:    cmn.INSERT_INTO_STATEMENT,
 		},
+		{
+			name:        "all update clauses",
+			sql:         `UPDATE users SET name = 'Bob', age = 20 WHERE id = 1 RETURNING id, name;`,
+			wantClauses: 4, // UPDATE, SET, WHERE, RETURNING
+			wantType:    cmn.UPDATE_STATEMENT,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

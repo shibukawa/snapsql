@@ -1,5 +1,7 @@
 package parsercommon
 
+import "github.com/shibukawa/snapsql/tokenizer"
+
 // NodeType represents the type of AST node
 // This is used for type discrimination and debugging.
 type NodeType int
@@ -7,7 +9,6 @@ type NodeType int
 const (
 	// SQL statement structures
 	UNKNOWN NodeType = iota
-	UPDATE_STATEMENT
 	DELETE_STATEMENT
 	SUBQUERY_STATEMENT
 
@@ -21,7 +22,6 @@ const (
 	HAVING_CLAUSE
 	LIMIT_CLAUSE
 	OFFSET_CLAUSE
-	SET_CLAUSE
 	WITH_CLAUSE
 	CTE_DEFINITION
 
@@ -30,6 +30,11 @@ const (
 	INSERT_INTO_CLAUSE
 	VALUES_CLAUSE
 	ON_CONFLICT_CLAUSE
+
+	// Update clauses
+	UPDATE_STATEMENT
+	UPDATE_CLAUSE
+	SET_CLAUSE
 
 	// SnapSQL extensions
 	TEMPLATE_IF_BLOCK
@@ -59,6 +64,7 @@ const (
 // String returns string representation of NodeType
 func (n NodeType) String() string {
 	switch n {
+	// select
 	case SELECT_STATEMENT:
 		return "SELECT_STATEMENT"
 	case SELECT_CLAUSE:
@@ -77,6 +83,7 @@ func (n NodeType) String() string {
 		return "LIMIT_CLAUSE"
 	case OFFSET_CLAUSE:
 		return "OFFSET_CLAUSE"
+	// insert into
 	case INSERT_INTO_STATEMENT:
 		return "INSERT_INTO_STATEMENT"
 	case INSERT_INTO_CLAUSE:
@@ -85,8 +92,13 @@ func (n NodeType) String() string {
 		return "VALUES_CLAUSE"
 	case ON_CONFLICT_CLAUSE:
 		return "ON_CONFLICT_CLAUSE"
+	// update
 	case UPDATE_STATEMENT:
 		return "UPDATE_STATEMENT"
+	case UPDATE_CLAUSE:
+		return "UPDATE_CLAUSE"
+	case SET_CLAUSE:
+		return "SET_CLAUSE"
 	case DELETE_STATEMENT:
 		return "DELETE_STATEMENT"
 	case WITH_CLAUSE:
@@ -124,4 +136,13 @@ func (n NodeType) String() string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// AstNode represents AST (Abstract Syntax Tree) node interface
+// All AST nodes must implement this interface.
+type AstNode interface {
+	Type() NodeType
+	Position() tokenizer.Position
+	String() string
+	RawTokens() []tokenizer.Token // Returns the original token sequence
 }

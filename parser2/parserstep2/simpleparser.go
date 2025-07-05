@@ -10,6 +10,15 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+func without(flag bool, parser pc.Parser[Entity]) pc.Parser[Entity] {
+	return func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+		if flag {
+			return 0, nil, pc.ErrNotMatch
+		}
+		return parser(pctx, tokens)
+	}
+}
+
 // ws means with space. Appends trailing spaces or comments to the token.
 func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
 	return pc.Trans(
@@ -267,10 +276,6 @@ func anyIdentifier() pc.Parser[Entity] {
 	}))
 }
 
-func updateStatement() pc.Parser[Entity] {
-	return ws(primitiveType("update", tokenizer.UPDATE))
-}
-
 func deleteStatement() pc.Parser[Entity] {
 	return ws(primitiveType("delete", tokenizer.DELETE))
 }
@@ -332,10 +337,6 @@ func insertIntoStatement() pc.Parser[Entity] {
 		))
 }
 
-func into() pc.Parser[Entity] {
-	return ws(primitiveType("into", tokenizer.INTO))
-}
-
 func valuesClause() pc.Parser[Entity] {
 	return ws(primitiveType("values", tokenizer.VALUES))
 }
@@ -346,8 +347,12 @@ func onConflictClause() pc.Parser[Entity] {
 	))
 }
 
-func updateClause() pc.Parser[Entity] {
+func updateStatement() pc.Parser[Entity] {
 	return ws(primitiveType("update", tokenizer.UPDATE))
+}
+
+func setClause() pc.Parser[Entity] {
+	return ws(primitiveType("set", tokenizer.SET))
 }
 
 func deleteClause() pc.Parser[Entity] {

@@ -437,16 +437,6 @@ func (n OrderByField) String() string {
 	return "ORDER_FIELD"
 }
 
-// SetClause represents a SET clause in UPDATE statement
-type SetClause struct {
-	Field FieldName
-	Value AstNode // Expression
-}
-
-func (n SetClause) String() string {
-	return "SET"
-}
-
 type InsertIntoClause struct {
 	clauseBaseNode
 	TableName TableName
@@ -583,3 +573,96 @@ func (n ValuesClause) String() string {
 }
 
 var _ ClauseNode = (*ValuesClause)(nil)
+
+type UpdateClause struct {
+	clauseBaseNode
+	TableName TableName
+}
+
+func NewUpdateClause(heading, body []tokenizer.Token) *UpdateClause {
+	return &UpdateClause{
+		clauseBaseNode: clauseBaseNode{
+			headingTokens: heading,
+			bodyTokens:    body,
+		},
+	}
+}
+
+// ContentTokens implements ClauseNode.
+func (u *UpdateClause) ContentTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// IfDirective implements ClauseNode.
+func (u *UpdateClause) IfDirective() string {
+	panic("unimplemented")
+}
+
+// Position implements ClauseNode.
+func (u *UpdateClause) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements ClauseNode.
+func (u *UpdateClause) RawTokens() []tokenizer.Token {
+	return u.rawTokens()
+}
+
+// String implements ClauseNode.
+func (u *UpdateClause) String() string {
+	panic("unimplemented")
+}
+
+// Type implements ClauseNode.
+func (u *UpdateClause) Type() NodeType {
+	return UPDATE_CLAUSE
+}
+
+var _ ClauseNode = (*UpdateClause)(nil)
+
+// SetClause represents a SET clause in UPDATE statement
+type SetClause struct {
+	clauseBaseNode
+	Field FieldName
+	Value AstNode // Expression
+}
+
+// ContentTokens implements ClauseNode.
+func (n *SetClause) ContentTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// IfDirective implements ClauseNode.
+func (n *SetClause) IfDirective() string {
+	panic("unimplemented")
+}
+
+// Position implements ClauseNode.
+func (n *SetClause) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements ClauseNode.
+func (n *SetClause) RawTokens() []tokenizer.Token {
+	return n.rawTokens()
+}
+
+// Type implements ClauseNode.
+func (n *SetClause) Type() NodeType {
+	return SET_CLAUSE
+}
+
+func NewSetClause(heading, body []tokenizer.Token) *SetClause {
+	return &SetClause{
+		clauseBaseNode: clauseBaseNode{
+			headingTokens: heading,
+			bodyTokens:    body,
+		},
+	}
+}
+
+func (n SetClause) String() string {
+	return "SET"
+}
+
+var _ ClauseNode = (*SetClause)(nil)

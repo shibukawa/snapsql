@@ -4,15 +4,6 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// AstNode represents AST (Abstract Syntax Tree) node interface
-// All AST nodes must implement this interface.
-type AstNode interface {
-	Type() NodeType
-	Position() tokenizer.Position
-	String() string
-	RawTokens() []tokenizer.Token // Returns the original token sequence
-}
-
 // DML Statement structures
 
 type StatementNode interface {
@@ -22,8 +13,15 @@ type StatementNode interface {
 	Clauses() []ClauseNode            // Returns clauses in the block
 }
 
+type baseStatement struct {
+	leadingTokens []tokenizer.Token // Leading tokens before the SELECT statement
+	cteClauses    []CTEDefinition   // CTE definitions in the SELECT statement
+	clauses       []ClauseNode      // All clauses in the statement
+}
+
 // SelectStatement represents SELECT statement
 type SelectStatement struct {
+	baseStatement
 	WithClause    *WithClause
 	SelectClause  *SelectClause
 	FromClause    *FromClause
@@ -33,16 +31,15 @@ type SelectStatement struct {
 	OrderByClause *OrderByClause
 	LimitClause   *LimitClause
 	OffsetClause  *OffsetClause
-	leadingTokens []tokenizer.Token // Leading tokens before the SELECT statement
-	cteClauses    []CTEDefinition   // CTE definitions in the SELECT statement
-	clauses       []ClauseNode      // All clauses in the statement
 }
 
 func NewSelectStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *SelectStatement {
 	return &SelectStatement{
-		leadingTokens: leadingTokens,
-		cteClauses:    cteClauses,
-		clauses:       clauses,
+		baseStatement: baseStatement{
+			leadingTokens: leadingTokens,
+			cteClauses:    cteClauses,
+			clauses:       clauses,
+		},
 	}
 }
 
@@ -84,6 +81,7 @@ func (s SelectStatement) String() string {
 
 // InsertStatement represents INSERT statement
 type InsertIntoStatement struct {
+	baseStatement
 	WithClause       *WithClause
 	Table            TableName
 	Columns          []FieldName
@@ -91,16 +89,15 @@ type InsertIntoStatement struct {
 	SelectStmt       *AstNode // Expression or SelectStatement
 	OnConflictClause *OnConflictClause
 	ReturningClause  *ReturningClause
-	leadingTokens    []tokenizer.Token // Leading tokens before the SELECT statement
-	cteClauses       []CTEDefinition   // CTE definitions in the SELECT statement
-	clauses          []ClauseNode      // All clauses in the statement
 }
 
 func NewInsertIntoStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *InsertIntoStatement {
 	return &InsertIntoStatement{
-		leadingTokens: leadingTokens,
-		cteClauses:    cteClauses,
-		clauses:       clauses,
+		baseStatement: baseStatement{
+			leadingTokens: leadingTokens,
+			cteClauses:    cteClauses,
+			clauses:       clauses,
+		},
 	}
 }
 
@@ -142,6 +139,7 @@ var _ StatementNode = (*InsertIntoStatement)(nil)
 
 // UpdateStatement represents UPDATE statement
 type UpdateStatement struct {
+	baseStatement
 	WithClause      *WithClause
 	Table           TableName
 	SetClauses      []SetClause
@@ -149,9 +147,20 @@ type UpdateStatement struct {
 	ReturningClause *ReturningClause
 }
 
+// NewUpdateStatement creates a new UpdateStatement node.
+func NewUpdateStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *UpdateStatement {
+	return &UpdateStatement{
+		baseStatement: baseStatement{
+			leadingTokens: leadingTokens,
+			cteClauses:    cteClauses,
+			clauses:       clauses,
+		},
+	}
+}
+
 // Clauses implements StatementNode.
 func (n *UpdateStatement) Clauses() []ClauseNode {
-	panic("unimplemented")
+	return n.clauses
 }
 
 // LeadingTokens implements StatementNode.
@@ -171,7 +180,7 @@ func (n *UpdateStatement) RawTokens() []tokenizer.Token {
 
 // Type implements StatementNode.
 func (n *UpdateStatement) Type() NodeType {
-	panic("unimplemented")
+	return UPDATE_STATEMENT
 }
 
 func (n UpdateStatement) String() string {
