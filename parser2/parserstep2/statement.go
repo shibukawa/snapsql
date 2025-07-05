@@ -3,10 +3,11 @@ package parserstep2
 import (
 	"errors"
 	"fmt"
+	"log"
 
 	pc "github.com/shibukawa/parsercombinator"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	"github.com/shibukawa/snapsql/tokenizer"
+	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
 var SUB_QUERY cmn.NodeType = cmn.LAST_NODE_TYPE + 1
@@ -20,14 +21,14 @@ func (sq *SubQuery) Type() cmn.NodeType {
 	return SUB_QUERY
 }
 
-func (sq SubQuery) Position() tokenizer.Position { panic("not implemented") }
-func (sq SubQuery) RawTokens() []tokenizer.Token { panic("not implemented") }
-func (sq SubQuery) String() string               { panic("not implemented") }
+func (sq SubQuery) Position() tok.Position { panic("not implemented") }
+func (sq SubQuery) RawTokens() []tok.Token { panic("not implemented") }
+func (sq SubQuery) String() string         { panic("not implemented") }
 
 var _ cmn.AstNode = (*SubQuery)(nil)
 
 type IncompleteSubQueryError struct {
-	Pos           tokenizer.Position
+	Pos           tok.Position
 	MissingParent int
 	Reason        string
 }
@@ -72,9 +73,9 @@ func subQuery() pc.Parser[Entity] {
 				break
 			}
 			switch part.Match[0].Val.Original.Type {
-			case tokenizer.OPENED_PARENS:
+			case tok.OPENED_PARENS:
 				stack++
-			case tokenizer.CLOSED_PARENS:
+			case tok.CLOSED_PARENS:
 				stack--
 				if stack == 0 {
 					current += len(part.Skipped) + part.Consume
@@ -89,7 +90,7 @@ func subQuery() pc.Parser[Entity] {
 						},
 					}, nil
 				}
-			case tokenizer.SEMICOLON:
+			case tok.SEMICOLON:
 				return 0, nil, &IncompleteSubQueryError{
 					Pos:           t[0].Val.Original.Position,
 					MissingParent: stack,
@@ -129,7 +130,7 @@ func parseCTE() pc.Parser[Entity] {
 			return 0, nil, err
 		}
 		var result = &cmn.WithClause{
-			Recursive:     heading[len(heading)-1].Val.Original.Type == tokenizer.RECURSIVE,
+			Recursive:     heading[len(heading)-1].Val.Original.Type == tok.RECURSIVE,
 			HeadingTokens: EntityToToken(heading),
 		}
 		offset := consume
@@ -198,9 +199,12 @@ func statementStart() pc.Parser[Entity] {
 // clauseStart is a parser that matches any SQL clause.
 // It matches all clauses that can appear in a SQL statement.
 // Availability of clauses is checked in next step.
-func clauseStart(tt tokenizer.TokenType) pc.Parser[Entity] {
+func clauseStart(tt tok.TokenType) pc.Parser[Entity] {
 	return pc.Or(
 		semicolon(),
+		// for subquery
+		subQuery(),
+
 		// for select
 		selectStatement(),
 		fromClause(),
@@ -218,8 +222,8 @@ func clauseStart(tt tokenizer.TokenType) pc.Parser[Entity] {
 		onConflictClause(),
 
 		// for update
-		without(tt == tokenizer.INSERT, updateStatement()),
-		without(tt == tokenizer.INSERT, setClause()),
+		when(tt != tok.INSERT, updateStatement()),
+		when(tt != tok.INSERT, setClause()),
 
 		// for delete
 		deleteFromStatement(),
@@ -248,7 +252,7 @@ func ParseStatement() pc.Parser[Entity] {
 		}
 		offset += consume
 		switch tokenType {
-		case tokenizer.SELECT:
+		case tok.SELECT:
 			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
@@ -256,7 +260,7 @@ func ParseStatement() pc.Parser[Entity] {
 					},
 				},
 			}, nil
-		case tokenizer.INSERT:
+		case tok.INSERT:
 			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
@@ -264,7 +268,7 @@ func ParseStatement() pc.Parser[Entity] {
 					},
 				},
 			}, nil
-		case tokenizer.UPDATE:
+		case tok.UPDATE:
 			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
@@ -272,7 +276,7 @@ func ParseStatement() pc.Parser[Entity] {
 					},
 				},
 			}, nil
-		case tokenizer.DELETE:
+		case tok.DELETE:
 			return offset, []pc.Token[Entity]{
 				{
 					Val: Entity{
@@ -286,8 +290,9 @@ func ParseStatement() pc.Parser[Entity] {
 	})
 }
 
-func parseClauses(pctx *pc.ParseContext[Entity], tt tokenizer.TokenType, withClause *cmn.WithClause, tokens []pc.Token[Entity]) (int, []cmn.ClauseNode, error) {
+func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *cmn.WithClause, tokens []pc.Token[Entity]) (int, []cmn.ClauseNode, error) {
 	var clauseHead []pc.Token[Entity]
+	var clauseBody []pc.Token[Entity]
 	var clauses []cmn.ClauseNode
 	if withClause != nil {
 		clauses = append(clauses, withClause)
@@ -295,42 +300,84 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tokenizer.TokenType, withCla
 	var consumes int
 	for i, clause := range pc.FindIter(pctx, clauseStart(tt), tokens) {
 		if i != 0 {
-			switch clauseHead[0].Val.Original.Type {
-			// Select
-			case tokenizer.SELECT:
-				clauses = append(clauses, cmn.NewSelectClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.FROM:
-				clauses = append(clauses, cmn.NewFromClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.WHERE:
-				clauses = append(clauses, cmn.NewWhereClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.GROUP:
-				clauses = append(clauses, cmn.NewGroupByClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.HAVING:
-				clauses = append(clauses, cmn.NewHavingClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.ORDER:
-				clauses = append(clauses, cmn.NewOrderByClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.LIMIT:
-				clauses = append(clauses, cmn.NewLimitClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.OFFSET:
-				clauses = append(clauses, cmn.NewOffsetClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.RETURNING:
-				clauses = append(clauses, cmn.NewReturningClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			// Insert
-			case tokenizer.INSERT:
-				clauses = append(clauses, cmn.NewInsertIntoClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.VALUES:
-				clauses = append(clauses, cmn.NewValuesClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.ON:
-				clauses = append(clauses, cmn.NewOnConflictClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			// Update
-			case tokenizer.UPDATE:
-				clauses = append(clauses, cmn.NewUpdateClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			case tokenizer.SET:
-				clauses = append(clauses, cmn.NewSetClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
-			// Delete
-			case tokenizer.DELETE:
-				clauses = append(clauses, cmn.NewDeleteFromClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
+			ct := clauseHead[0].Val.Original.Type
+			if ct == tok.OPENED_PARENS {
+				log.Println("detected subquery")
+				// Subquery
+				clauseBody = append(clauseBody, clause.Skipped...)
+				clauseBody = append(clauseBody, clause.Match...)
+				continue
 			}
+			switch ct {
+			// Select
+			case tok.SELECT:
+				clauses = append(clauses,
+					cmn.NewSelectClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.FROM:
+				clauses = append(clauses,
+					cmn.NewFromClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.WHERE:
+				clauses = append(clauses,
+					cmn.NewWhereClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.GROUP:
+				clauses = append(clauses,
+					cmn.NewGroupByClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.HAVING:
+				clauses = append(clauses,
+					cmn.NewHavingClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.ORDER:
+				clauses = append(clauses,
+					cmn.NewOrderByClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.LIMIT:
+				clauses = append(clauses,
+					cmn.NewLimitClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.OFFSET:
+				clauses = append(clauses,
+					cmn.NewOffsetClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.RETURNING:
+				clauses = append(clauses,
+					cmn.NewReturningClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+
+			// Insert
+			case tok.INSERT:
+				clauses = append(clauses,
+					cmn.NewInsertIntoClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.VALUES:
+				clauses = append(clauses,
+					cmn.NewValuesClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.ON:
+				clauses = append(clauses,
+					cmn.NewOnConflictClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+
+			// Update
+			case tok.UPDATE:
+				clauses = append(clauses,
+					cmn.NewUpdateClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.SET:
+				clauses = append(clauses,
+					cmn.NewSetClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+
+			// Delete
+			case tok.DELETE:
+				clauses = append(clauses,
+					cmn.NewDeleteFromClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			}
+			clauseBody = nil
 		}
 		clauseHead = clause.Match
 		consumes += clause.Consume + len(clause.Skipped)

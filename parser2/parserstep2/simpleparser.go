@@ -10,9 +10,9 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-func without(flag bool, parser pc.Parser[Entity]) pc.Parser[Entity] {
+func when(flag bool, parser pc.Parser[Entity]) pc.Parser[Entity] {
 	return func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		if flag {
+		if !flag {
 			return 0, nil, pc.ErrNotMatch
 		}
 		return parser(pctx, tokens)

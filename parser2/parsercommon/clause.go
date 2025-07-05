@@ -32,12 +32,15 @@ func (n *WithClause) RawTokens() []tokenizer.Token {
 func (n *WithClause) ContentTokens() []tokenizer.Token {
 	panic("not implemented")
 }
+
 func (n *WithClause) IfDirective() string {
 	panic("not implemented")
 }
+
 func (n *WithClause) Type() NodeType {
 	return WITH_CLAUSE
 }
+
 func (n WithClause) String() string {
 	return "WITH"
 }

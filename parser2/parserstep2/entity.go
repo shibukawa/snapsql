@@ -2,19 +2,19 @@ package parserstep2
 
 import (
 	pc "github.com/shibukawa/parsercombinator"
-	"github.com/shibukawa/snapsql/parser2/parsercommon"
-	"github.com/shibukawa/snapsql/tokenizer"
+	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
 type Entity struct {
-	Original  tokenizer.Token      // The original token from the tokenizer
-	NewValue  parsercommon.AstNode // The parsed AST node (can be nil if not yet parsed)
-	rawTokens []tokenizer.Token    // Tokens that are part of the same row (e.g., SELECT statement)
-	spaces    [][]tokenizer.Token  // Tokens that represent spaces or comments before this entity
+	Original  tok.Token     // The original token from the tokenizer
+	NewValue  cmn.AstNode   // The parsed AST node (can be nil if not yet parsed)
+	rawTokens []tok.Token   // Tokens that are part of the same row (e.g., SELECT statement)
+	spaces    [][]tok.Token // Tokens that represent spaces or comments before this entity
 }
 
-func (e *Entity) RawTokens() []tokenizer.Token {
-	var result []tokenizer.Token
+func (e *Entity) RawTokens() []tok.Token {
+	var result []tok.Token
 	for i, t := range e.rawTokens {
 		result = append(result, t)
 		for _, space := range e.spaces[i] {
@@ -24,15 +24,15 @@ func (e *Entity) RawTokens() []tokenizer.Token {
 	return result
 }
 
-func TokenToEntity(tokens []tokenizer.Token) []pc.Token[Entity] {
+func TokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
 	results := make([]pc.Token[Entity], 0, len(tokens))
 	for _, token := range tokens {
-		if token.Type == tokenizer.EOF {
+		if token.Type == tok.EOF {
 			continue
 		}
 		entity := Entity{
 			Original:  token,
-			rawTokens: []tokenizer.Token{token},
+			rawTokens: []tok.Token{token},
 		}
 		pcToken := pc.Token[Entity]{
 			Type: "raw",
@@ -49,10 +49,18 @@ func TokenToEntity(tokens []tokenizer.Token) []pc.Token[Entity] {
 	return results
 }
 
-func EntityToToken(entities []pc.Token[Entity]) []tokenizer.Token {
-	results := make([]tokenizer.Token, len(entities))
+func EntityToToken(entities []pc.Token[Entity]) []tok.Token {
+	results := make([]tok.Token, len(entities))
 	for i, entity := range entities {
 		results[i] = entity.Val.Original
 	}
 	return results
+}
+
+var subqueryCanBeIn = map[tok.TokenType]bool{
+	tok.SELECT: true, // in SELECT statement
+	tok.FROM:   true, // in SELECT statement
+	tok.WHERE:  true, // in SELECT, UPDATE, DELETE statement
+	tok.HAVING: true, // in SELECT statement
+	tok.SET:    true, // in UPDATE statement
 }
