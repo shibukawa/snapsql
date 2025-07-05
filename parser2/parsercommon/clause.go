@@ -666,3 +666,49 @@ func (n SetClause) String() string {
 }
 
 var _ ClauseNode = (*SetClause)(nil)
+
+type DeleteFromClause struct {
+	clauseBaseNode
+	TableName TableName
+}
+
+// ContentTokens implements ClauseNode.
+func (d *DeleteFromClause) ContentTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// IfDirective implements ClauseNode.
+func (d *DeleteFromClause) IfDirective() string {
+	panic("unimplemented")
+}
+
+// Position implements ClauseNode.
+func (d *DeleteFromClause) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements ClauseNode.
+func (d *DeleteFromClause) RawTokens() []tokenizer.Token {
+	return d.rawTokens()
+}
+
+// String implements ClauseNode.
+func (d *DeleteFromClause) String() string {
+	panic("unimplemented")
+}
+
+// Type implements ClauseNode.
+func (d *DeleteFromClause) Type() NodeType {
+	return DELETE_FROM_CLAUSE
+}
+
+func NewDeleteFromClause(heading, body []tokenizer.Token) *DeleteFromClause {
+	return &DeleteFromClause{
+		clauseBaseNode: clauseBaseNode{
+			headingTokens: heading,
+			bodyTokens:    body,
+		},
+	}
+}
+
+var _ ClauseNode = (*DeleteFromClause)(nil)

@@ -9,7 +9,6 @@ type NodeType int
 const (
 	// SQL statement structures
 	UNKNOWN NodeType = iota
-	DELETE_STATEMENT
 	SUBQUERY_STATEMENT
 
 	// Select statement
@@ -25,16 +24,20 @@ const (
 	WITH_CLAUSE
 	CTE_DEFINITION
 
-	// Insert clauses
+	// Insert statement
 	INSERT_INTO_STATEMENT
 	INSERT_INTO_CLAUSE
 	VALUES_CLAUSE
 	ON_CONFLICT_CLAUSE
 
-	// Update clauses
+	// Update statement
 	UPDATE_STATEMENT
 	UPDATE_CLAUSE
 	SET_CLAUSE
+
+	// Delete statement
+	DELETE_FROM_CLAUSE
+	DELETE_FROM_STATEMENT
 
 	// SnapSQL extensions
 	TEMPLATE_IF_BLOCK
@@ -99,8 +102,12 @@ func (n NodeType) String() string {
 		return "UPDATE_CLAUSE"
 	case SET_CLAUSE:
 		return "SET_CLAUSE"
-	case DELETE_STATEMENT:
-		return "DELETE_STATEMENT"
+	// delete
+	case DELETE_FROM_STATEMENT:
+		return "DELETE_FROM_STATEMENT"
+	case DELETE_FROM_CLAUSE:
+		return "DELETE_FROM_CLAUSE"
+	// CTE and subquery
 	case WITH_CLAUSE:
 		return "WITH_CLAUSE"
 	case CTE_DEFINITION:

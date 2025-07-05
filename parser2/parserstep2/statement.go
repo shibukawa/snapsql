@@ -109,7 +109,7 @@ func statementStart() pc.Parser[Entity] {
 		selectStatement(),
 		insertIntoStatement(),
 		updateStatement(),
-		deleteStatement())
+		deleteFromStatement())
 }
 
 // clauseStart is a parser that matches any SQL clause.
@@ -128,6 +128,7 @@ func clauseStart(tt tokenizer.TokenType) pc.Parser[Entity] {
 		limitClause(),
 		offsetClause(),
 		returningClause(),
+
 		// for insert
 		insertIntoStatement(),
 		valuesClause(),
@@ -136,6 +137,9 @@ func clauseStart(tt tokenizer.TokenType) pc.Parser[Entity] {
 		// for update
 		without(tt == tokenizer.INSERT, updateStatement()),
 		without(tt == tokenizer.INSERT, setClause()),
+
+		// for delete
+		deleteFromStatement(),
 	)
 }
 
@@ -176,6 +180,13 @@ func ParseStatement() pc.Parser[Entity] {
 				},
 			}, nil
 		case tokenizer.DELETE:
+			return len(skipped) + consume, []pc.Token[Entity]{
+				{
+					Val: Entity{
+						NewValue: cmn.NewDeleteFromStatement(EntityToToken(skipped), nil, clauses),
+					},
+				},
+			}, nil
 		default:
 		}
 		return 0, nil, pc.ErrNotMatch
@@ -220,6 +231,9 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tokenizer.TokenType, tokens 
 				clauses = append(clauses, cmn.NewUpdateClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
 			case tokenizer.SET:
 				clauses = append(clauses, cmn.NewSetClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
+			// Delete
+			case tokenizer.DELETE:
+				clauses = append(clauses, cmn.NewDeleteFromClause(EntityToToken(clauseHead), EntityToToken(clause.Skipped)))
 			}
 		}
 		clauseHead = clause.Match

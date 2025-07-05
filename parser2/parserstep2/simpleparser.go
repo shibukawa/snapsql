@@ -276,10 +276,6 @@ func anyIdentifier() pc.Parser[Entity] {
 	}))
 }
 
-func deleteStatement() pc.Parser[Entity] {
-	return ws(primitiveType("delete", tokenizer.DELETE))
-}
-
 func withClause() pc.Parser[Entity] {
 	return ws(primitiveType("with", tokenizer.WITH))
 }
@@ -330,23 +326,21 @@ func returningClause() pc.Parser[Entity] {
 
 // --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
 func insertIntoStatement() pc.Parser[Entity] {
-	return ws(
-		pc.SeqWithLabel("insert into statement",
-			ws(primitiveType("insert", tokenizer.INSERT)),
-			pc.Optional(primitiveType("into", tokenizer.INTO)),
-		))
+	return pc.SeqWithLabel("insert into statement",
+		ws(primitiveType("insert", tokenizer.INSERT)),
+		ws(pc.Optional(primitiveType("into", tokenizer.INTO))))
 }
 
 func valuesClause() pc.Parser[Entity] {
 	return ws(primitiveType("values", tokenizer.VALUES))
 }
 func onConflictClause() pc.Parser[Entity] {
-	return ws(pc.SeqWithLabel("on conflict clause",
+	return pc.SeqWithLabel("on conflict clause",
 		ws(primitiveType("on", tokenizer.ON)),
-		primitiveType("conflict", tokenizer.CONFLICT),
-	))
+		ws(primitiveType("conflict", tokenizer.CONFLICT)))
 }
 
+// --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
 func updateStatement() pc.Parser[Entity] {
 	return ws(primitiveType("update", tokenizer.UPDATE))
 }
@@ -355,6 +349,10 @@ func setClause() pc.Parser[Entity] {
 	return ws(primitiveType("set", tokenizer.SET))
 }
 
-func deleteClause() pc.Parser[Entity] {
-	return ws(primitiveType("delete", tokenizer.DELETE))
+// --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
+
+func deleteFromStatement() pc.Parser[Entity] {
+	return pc.SeqWithLabel("on conflict clause",
+		ws(primitiveType("delete", tokenizer.DELETE)),
+		ws(primitiveType("from", tokenizer.FROM)))
 }

@@ -195,45 +195,57 @@ func (n *UpdateStatement) CTEs() []CTEDefinition {
 var _ StatementNode = (*UpdateStatement)(nil)
 
 // DeleteStatement represents DELETE statement
-type DeleteStatement struct {
+type DeleteFromStatement struct {
+	baseStatement
 	WithClause      *WithClause
 	Table           TableName
 	WhereClause     *WhereClause
 	ReturningClause *ReturningClause
 }
 
+// NewDeleteFromStatement creates a new DeleteFromStatement node.
+func NewDeleteFromStatement(leadingTokens []tokenizer.Token, cteClauses []CTEDefinition, clauses []ClauseNode) *DeleteFromStatement {
+	return &DeleteFromStatement{
+		baseStatement: baseStatement{
+			leadingTokens: leadingTokens,
+			cteClauses:    cteClauses,
+			clauses:       clauses,
+		},
+	}
+}
+
 // Clauses implements BlockNode.
-func (n *DeleteStatement) Clauses() []ClauseNode {
-	panic("unimplemented")
+func (n *DeleteFromStatement) Clauses() []ClauseNode {
+	return n.clauses
 }
 
 // LeadingTokens implements BlockNode.
-func (n *DeleteStatement) LeadingTokens() []tokenizer.Token {
+func (n *DeleteFromStatement) LeadingTokens() []tokenizer.Token {
 	panic("unimplemented")
 }
 
 // Position implements BlockNode.
-func (n *DeleteStatement) Position() tokenizer.Position {
+func (n *DeleteFromStatement) Position() tokenizer.Position {
 	panic("unimplemented")
 }
 
 // RawTokens implements BlockNode.
-func (n *DeleteStatement) RawTokens() []tokenizer.Token {
+func (n *DeleteFromStatement) RawTokens() []tokenizer.Token {
 	panic("unimplemented")
 }
 
 // Type implements BlockNode.
-func (n *DeleteStatement) Type() NodeType {
-	panic("unimplemented")
+func (n *DeleteFromStatement) Type() NodeType {
+	return DELETE_FROM_STATEMENT
 }
 
-func (n DeleteStatement) String() string {
-	return "DELETE"
+func (n DeleteFromStatement) String() string {
+	return "DELETE_FROM"
 }
 
 // CTEs implements BlockNode.
-func (n *DeleteStatement) CTEs() []CTEDefinition {
+func (n *DeleteFromStatement) CTEs() []CTEDefinition {
 	panic("unimplemented")
 }
 
-var _ StatementNode = (*DeleteStatement)(nil)
+var _ StatementNode = (*DeleteFromStatement)(nil)

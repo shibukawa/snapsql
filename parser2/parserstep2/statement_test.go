@@ -272,13 +272,13 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 		{
 			name:        "all select clauses",
 			sql:         `SELECT a, b, c FROM users WHERE a > 1 GROUP BY a, b HAVING COUNT(*) > 1 ORDER BY a DESC, b ASC LIMIT 10 OFFSET 5 RETURNING a, b;`,
-			wantClauses: 9,
+			wantClauses: 9, // SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET, RETURNING
 			wantType:    cmn.SELECT_STATEMENT,
 		},
 		{
 			name:        "all insert clauses",
 			sql:         `INSERT INTO users (a, b, c) VALUES (1, 2, 3) WHERE a > 1 ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b RETURNING a, b;`,
-			wantClauses: 5,
+			wantClauses: 5, // INSERT INTO, VALUES, WHERE, ON CONFLICT, RETURNING
 			wantType:    cmn.INSERT_INTO_STATEMENT,
 		},
 		{
@@ -286,6 +286,12 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 			sql:         `UPDATE users SET name = 'Bob', age = 20 WHERE id = 1 RETURNING id, name;`,
 			wantClauses: 4, // UPDATE, SET, WHERE, RETURNING
 			wantType:    cmn.UPDATE_STATEMENT,
+		},
+		{
+			name:        "all delete clauses",
+			sql:         `DELETE FROM users WHERE id = 1 RETURNING id, name;`,
+			wantClauses: 3, // DELETE FROM, WHERE, RETURNING
+			wantType:    cmn.DELETE_FROM_STATEMENT,
 		},
 	}
 	for _, tt := range tests {
