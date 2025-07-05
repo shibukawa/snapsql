@@ -3,7 +3,6 @@ package parserstep2
 import (
 	"errors"
 	"fmt"
-	"log"
 
 	pc "github.com/shibukawa/parsercombinator"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
@@ -214,6 +213,7 @@ func clauseStart(tt tok.TokenType) pc.Parser[Entity] {
 		havingClause(),
 		limitClause(),
 		offsetClause(),
+		forClause(),
 		returningClause(),
 
 		// for insert
@@ -222,7 +222,9 @@ func clauseStart(tt tok.TokenType) pc.Parser[Entity] {
 		onConflictClause(),
 
 		// for update
-		when(tt != tok.INSERT, updateStatement()),
+		// on conflict do update, for update
+		when(tt != tok.INSERT && tt != tok.SELECT, updateStatement()),
+		// on conflict do update set
 		when(tt != tok.INSERT, setClause()),
 
 		// for delete
@@ -302,7 +304,6 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 		if i != 0 {
 			ct := clauseHead[0].Val.Original.Type
 			if ct == tok.OPENED_PARENS {
-				log.Println("detected subquery")
 				// Subquery
 				clauseBody = append(clauseBody, clause.Skipped...)
 				clauseBody = append(clauseBody, clause.Match...)
@@ -341,6 +342,10 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 			case tok.OFFSET:
 				clauses = append(clauses,
 					cmn.NewOffsetClause(EntityToToken(clauseHead),
+						EntityToToken(append(clauseBody, clause.Skipped...))))
+			case tok.FOR:
+				clauses = append(clauses,
+					cmn.NewForClause(EntityToToken(clauseHead),
 						EntityToToken(append(clauseBody, clause.Skipped...))))
 			case tok.RETURNING:
 				clauses = append(clauses,

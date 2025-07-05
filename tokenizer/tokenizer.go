@@ -259,15 +259,13 @@ func (t *tokenizer) readWhitespace() Token {
 }
 
 var keywordLikeTokenTypeMap = map[string]TokenType{
-	"AND":       AND,
-	"OR":        OR,
-	"NOT":       NOT,
-	"NULL":      NULL,
+	// Row locking and concurrency control
+	"AND":  AND,
+	"OR":   OR,
+	"NOT":  NOT,
+	"NULL": NULL,
+
 	"SELECT":    SELECT,
-	"INSERT":    INSERT,
-	"UPDATE":    UPDATE,
-	"INTO":      INTO,
-	"DELETE":    DELETE,
 	"FROM":      FROM,
 	"WHERE":     WHERE,
 	"ORDER":     ORDER,
@@ -276,15 +274,30 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"HAVING":    HAVING,
 	"LIMIT":     LIMIT,
 	"OFFSET":    OFFSET,
-	"VALUES":    VALUES,
-	"SET":       SET,
+	"FOR":       FOR,
+	"SHARE":     SHARE,
+	"NO":        NO,
+	"NOWAIT":    NOWAIT,
+	"SKIP":      SKIP,
+	"LOCKED":    LOCKED,
 	"RETURNING": RETURNING,
-	"ON":        ON,
-	"CONFLICT":  CONFLICT,
+
+	"INSERT": INSERT,
+	"INTO":   INTO,
+	"VALUES": VALUES,
+
+	"UPDATE":   UPDATE,
+	"SET":      SET,
+	"ON":       ON,
+	"CONFLICT": CONFLICT,
+
+	"DELETE": DELETE,
+
 	"WITH":      WITH,
 	"RECURSIVE": RECURSIVE,
 	"AS":        AS,
-	"CAST":      CAST,
+
+	"CAST": CAST,
 }
 
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking

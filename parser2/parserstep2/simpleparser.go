@@ -139,30 +139,6 @@ func primitiveType(typeName string, types ...tokenizer.TokenType) pc.Parser[Enti
 	})
 }
 
-func space() pc.Parser[Entity] {
-	return primitiveType("space", tokenizer.WHITESPACE)
-}
-
-func comment() pc.Parser[Entity] {
-	return primitiveType("comment", tokenizer.BLOCK_COMMENT, tokenizer.LINE_COMMENT)
-}
-
-func selectKeyword() pc.Parser[Entity] {
-	return ws(primitiveType("select", tokenizer.SELECT))
-}
-
-func identifier() pc.Parser[Entity] {
-	return primitiveType("identifier", tokenizer.IDENTIFIER)
-}
-
-func number() pc.Parser[Entity] {
-	return ws(primitiveType("number", tokenizer.NUMBER))
-}
-
-func str() pc.Parser[Entity] {
-	return ws(primitiveType("string", tokenizer.STRING))
-}
-
 // booleanLiteral parses TRUE or FALSE with case-insensitive comparison
 func boolean() pc.Parser[Entity] {
 	return ws(pc.Trace("boolean", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
@@ -186,18 +162,6 @@ func boolean() pc.Parser[Entity] {
 	}))
 }
 
-func comma() pc.Parser[Entity] {
-	return ws(primitiveType("comma", tokenizer.COMMA))
-}
-
-func semicolon() pc.Parser[Entity] {
-	return ws(primitiveType("semicolon", tokenizer.SEMICOLON))
-}
-
-func between() pc.Parser[Entity] {
-	return ws(primitiveType("between", tokenizer.BETWEEN))
-}
-
 // This parser passes invalid combination like "NOT IS" or "LIKE NOT".
 // This check will be done in later step.
 func operator() pc.Parser[Entity] {
@@ -214,43 +178,6 @@ func operator() pc.Parser[Entity] {
 		pc.Seq(p, not()),
 		p,
 	)
-}
-
-func andOp() pc.Parser[Entity] {
-	return ws(primitiveType("and", tokenizer.AND))
-}
-
-func null() pc.Parser[Entity] {
-	return ws(primitiveType("null", tokenizer.NULL))
-}
-
-func not() pc.Parser[Entity] {
-	return ws(primitiveType("not", tokenizer.NOT))
-}
-
-func minus() pc.Parser[Entity] {
-	return ws(primitiveType("minus", tokenizer.MINUS))
-}
-
-func parenOpen() pc.Parser[Entity] {
-	return primitiveType("parenOpen", tokenizer.OPENED_PARENS)
-}
-
-func parenClose() pc.Parser[Entity] {
-	return primitiveType("parenClose", tokenizer.CLOSED_PARENS)
-}
-
-func similar() pc.Parser[Entity] {
-	return ws(primitiveType("similar", tokenizer.SIMILAR))
-}
-
-func to() pc.Parser[Entity] {
-	return ws(primitiveType("to", tokenizer.TO))
-}
-
-// dot parses dot operator without ws wrapper (no spaces allowed)
-func dot() pc.Parser[Entity] {
-	return ws(primitiveType("dot", tokenizer.DOT))
 }
 
 // anyIdentifier parses any valid identifier (including contextual and quoted)
@@ -285,36 +212,12 @@ func withClause() pc.Parser[Entity] {
 		pc.Optional(recursive()))
 }
 
-func recursive() pc.Parser[Entity] {
-	return ws(primitiveType("recursive", tokenizer.RECURSIVE))
-}
-
-func as() pc.Parser[Entity] {
-	return ws(primitiveType("as", tokenizer.AS))
-}
-
 // --- Statement Keyword Parsers (for SELECT) ---
-
-func selectStatement() pc.Parser[Entity] {
-	return ws(primitiveType("select", tokenizer.SELECT))
-}
-
-func fromClause() pc.Parser[Entity] {
-	return ws(primitiveType("from", tokenizer.FROM))
-}
-
-func whereClause() pc.Parser[Entity] {
-	return ws(primitiveType("where", tokenizer.WHERE))
-}
 
 func groupByClause() pc.Parser[Entity] {
 	return pc.SeqWithLabel("group by clause",
 		ws(primitiveType("group", tokenizer.GROUP)),
 		ws(primitiveType("by", tokenizer.BY)))
-}
-
-func havingClause() pc.Parser[Entity] {
-	return ws(primitiveType("having", tokenizer.HAVING))
 }
 
 func orderByClause() pc.Parser[Entity] {
@@ -324,19 +227,8 @@ func orderByClause() pc.Parser[Entity] {
 	))
 }
 
-func limitClause() pc.Parser[Entity] {
-	return ws(primitiveType("limit", tokenizer.LIMIT))
-}
+// --- Statement Keyword Parsers (for INSERT) ---
 
-func offsetClause() pc.Parser[Entity] {
-	return ws(primitiveType("offset", tokenizer.OFFSET))
-}
-
-func returningClause() pc.Parser[Entity] {
-	return ws(primitiveType("returning", tokenizer.RETURNING))
-}
-
-// --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
 func insertIntoStatement() pc.Parser[Entity] {
 	return pc.SeqWithLabel("insert into statement",
 		ws(primitiveType("insert", tokenizer.INSERT)),
@@ -352,16 +244,7 @@ func onConflictClause() pc.Parser[Entity] {
 		ws(primitiveType("conflict", tokenizer.CONFLICT)))
 }
 
-// --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
-func updateStatement() pc.Parser[Entity] {
-	return ws(primitiveType("update", tokenizer.UPDATE))
-}
-
-func setClause() pc.Parser[Entity] {
-	return ws(primitiveType("set", tokenizer.SET))
-}
-
-// --- Statement Keyword Parsers (for INSERT, UPDATE, DELETE) ---
+// --- Statement Keyword Parsers (for DELETE) ---
 
 func deleteFromStatement() pc.Parser[Entity] {
 	return pc.SeqWithLabel("on conflict clause",

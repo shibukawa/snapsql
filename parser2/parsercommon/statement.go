@@ -15,30 +15,31 @@ type StatementNode interface {
 
 type baseStatement struct {
 	leadingTokens []tokenizer.Token // Leading tokens before the SELECT statement
-	cteClauses    *WithClause       // CTE definitions in the SELECT statement
+	with          *WithClause       // CTE definitions in the SELECT statement
 	clauses       []ClauseNode      // All clauses in the statement
 }
 
 // SelectStatement represents SELECT statement
 type SelectStatement struct {
 	baseStatement
-	WithClause    *WithClause
-	SelectClause  *SelectClause
-	FromClause    *FromClause
-	WhereClause   *WhereClause
-	GroupByClause *GroupByClause
-	HavingClause  *HavingClause
-	OrderByClause *OrderByClause
-	LimitClause   *LimitClause
-	OffsetClause  *OffsetClause
+	With    *WithClause
+	Select  *SelectClause
+	From    *FromClause
+	Where   *WhereClause
+	GroupBy *GroupByClause
+	Having  *HavingClause
+	OrderBy *OrderByClause
+	Limit   *LimitClause
+	Offset  *OffsetClause
+	For     *ForClause
 }
 
-func NewSelectStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *SelectStatement {
+func NewSelectStatement(leadingTokens []tokenizer.Token, with *WithClause, clauses []ClauseNode) *SelectStatement {
 
 	return &SelectStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    withClause,
+			with:          with,
 			clauses:       clauses,
 		},
 	}
@@ -71,7 +72,7 @@ func (s *SelectStatement) Type() NodeType {
 
 // CTEs implements BlockNode.
 func (s *SelectStatement) CTE() *WithClause {
-	return s.cteClauses
+	return s.with
 }
 
 var _ StatementNode = (*SelectStatement)(nil)
@@ -83,20 +84,28 @@ func (s SelectStatement) String() string {
 // InsertStatement represents INSERT statement
 type InsertIntoStatement struct {
 	baseStatement
-	WithClause       *WithClause
-	Table            TableName
-	Columns          []FieldName
-	ValuesList       *ValuesClause
-	SelectStmt       *AstNode // Expression or SelectStatement
-	OnConflictClause *OnConflictClause
-	ReturningClause  *ReturningClause
+	With       *WithClause
+	Table      TableName
+	Columns    []FieldName
+	ValuesList *ValuesClause
+	Select     *SelectClause
+	From       *FromClause
+	Where      *WhereClause
+	GroupBy    *GroupByClause
+	Having     *HavingClause
+	OrderBy    *OrderByClause
+	Limit      *LimitClause
+	Offset     *OffsetClause
+
+	OnConflict *OnConflictClause
+	Returning  *ReturningClause
 }
 
-func NewInsertIntoStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *InsertIntoStatement {
+func NewInsertIntoStatement(leadingTokens []tokenizer.Token, with *WithClause, clauses []ClauseNode) *InsertIntoStatement {
 	return &InsertIntoStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    withClause,
+			with:          with,
 			clauses:       clauses,
 		},
 	}
@@ -133,7 +142,7 @@ func (n InsertIntoStatement) String() string {
 
 // CTEs implements BlockNode.
 func (n *InsertIntoStatement) CTE() *WithClause {
-	return n.cteClauses
+	return n.with
 }
 
 var _ StatementNode = (*InsertIntoStatement)(nil)
@@ -141,19 +150,19 @@ var _ StatementNode = (*InsertIntoStatement)(nil)
 // UpdateStatement represents UPDATE statement
 type UpdateStatement struct {
 	baseStatement
-	WithClause      *WithClause
-	Table           TableName
-	SetClauses      []SetClause
-	WhereClause     *WhereClause
-	ReturningClause *ReturningClause
+	With      *WithClause
+	Table     TableName
+	Sets      []SetClause
+	Where     *WhereClause
+	Returning *ReturningClause
 }
 
 // NewUpdateStatement creates a new UpdateStatement node.
-func NewUpdateStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *UpdateStatement {
+func NewUpdateStatement(leadingTokens []tokenizer.Token, with *WithClause, clauses []ClauseNode) *UpdateStatement {
 	return &UpdateStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    withClause,
+			with:          with,
 			clauses:       clauses,
 		},
 	}
@@ -190,7 +199,7 @@ func (n UpdateStatement) String() string {
 
 // CTEs implements BlockNode.
 func (n *UpdateStatement) CTE() *WithClause {
-	return n.cteClauses
+	return n.with
 }
 
 var _ StatementNode = (*UpdateStatement)(nil)
@@ -198,18 +207,18 @@ var _ StatementNode = (*UpdateStatement)(nil)
 // DeleteStatement represents DELETE statement
 type DeleteFromStatement struct {
 	baseStatement
-	WithClause      *WithClause
-	Table           TableName
-	WhereClause     *WhereClause
-	ReturningClause *ReturningClause
+	With      *WithClause
+	Table     TableName
+	Where     *WhereClause
+	Returning *ReturningClause
 }
 
 // NewDeleteFromStatement creates a new DeleteFromStatement node.
-func NewDeleteFromStatement(leadingTokens []tokenizer.Token, withClause *WithClause, clauses []ClauseNode) *DeleteFromStatement {
+func NewDeleteFromStatement(leadingTokens []tokenizer.Token, with *WithClause, clauses []ClauseNode) *DeleteFromStatement {
 	return &DeleteFromStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
-			cteClauses:    withClause,
+			with:          with,
 			clauses:       clauses,
 		},
 	}
@@ -246,7 +255,7 @@ func (n DeleteFromStatement) String() string {
 
 // CTEs implements BlockNode.
 func (n *DeleteFromStatement) CTE() *WithClause {
-	return n.cteClauses
+	return n.with
 }
 
 var _ StatementNode = (*DeleteFromStatement)(nil)

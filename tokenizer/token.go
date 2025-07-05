@@ -99,6 +99,14 @@ const (
 	ALL       // ALL keyword
 	DISTINCT  // DISTINCT keyword
 
+	// Row locking and concurrency control
+	FOR    // FOR keyword
+	SHARE  // SHARE keyword
+	NO     // NO keyword
+	NOWAIT // NOWAIT keyword
+	SKIP   // SKIP keyword
+	LOCKED // LOCKED keyword
+
 	// Comments
 	LINE_COMMENT  // -- line comment
 	BLOCK_COMMENT // /* block comment */ (including SnapSQL extensions)

@@ -439,6 +439,52 @@ func (n OrderByField) String() string {
 	return "ORDER_FIELD"
 }
 
+type ForClause struct {
+	clauseBaseNode
+	TableName TableName
+}
+
+// ContentTokens implements ClauseNode.
+func (f *ForClause) ContentTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// IfDirective implements ClauseNode.
+func (f *ForClause) IfDirective() string {
+	panic("unimplemented")
+}
+
+// Position implements ClauseNode.
+func (f *ForClause) Position() tokenizer.Position {
+	panic("unimplemented")
+}
+
+// RawTokens implements ClauseNode.
+func (f *ForClause) RawTokens() []tokenizer.Token {
+	panic("unimplemented")
+}
+
+// String implements ClauseNode.
+func (f *ForClause) String() string {
+	panic("unimplemented")
+}
+
+// Type implements ClauseNode.
+func (f *ForClause) Type() NodeType {
+	panic("unimplemented")
+}
+
+func NewForClause(heading, body []tokenizer.Token) *ForClause {
+	return &ForClause{
+		clauseBaseNode: clauseBaseNode{
+			headingTokens: heading,
+			bodyTokens:    body,
+		},
+	}
+}
+
+var _ ClauseNode = (*ForClause)(nil)
+
 type InsertIntoClause struct {
 	clauseBaseNode
 	TableName TableName

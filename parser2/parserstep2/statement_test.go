@@ -70,12 +70,6 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 		wantType    cmn.NodeType
 	}{
 		{
-			name:        "insert into select",
-			sql:         `INSERT INTO users (id, name) SELECT id, name FROM tmp WHERE id > 10 ORDER BY id DESC LIMIT 5 OFFSET 2;`,
-			wantClauses: 6, // INSERT INTO, SELECT, WHERE, ORDER BY, LIMIT, OFFSET
-			wantType:    cmn.INSERT_INTO_STATEMENT,
-		},
-		{
 			name:        "all select clauses",
 			sql:         `SELECT a, b, c FROM users WHERE a > 1 GROUP BY a, b HAVING COUNT(*) > 1 ORDER BY a DESC, b ASC LIMIT 10 OFFSET 5 RETURNING a, b;`,
 			wantClauses: 9, // SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET, RETURNING
@@ -130,6 +124,12 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 			name:        "all insert clauses",
 			sql:         `INSERT INTO users (a, b, c) VALUES (1, 2, 3) WHERE a > 1 ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b RETURNING a, b;`,
 			wantClauses: 5, // INSERT INTO, VALUES, WHERE, ON CONFLICT, RETURNING
+			wantType:    cmn.INSERT_INTO_STATEMENT,
+		},
+		{
+			name:        "insert into select",
+			sql:         `INSERT INTO users (id, name) SELECT id, name FROM tmp WHERE id > 10 ORDER BY id DESC LIMIT 5 OFFSET 2;`,
+			wantClauses: 7, // INSERT INTO, SELECT, FROM, WHERE, ORDER BY, LIMIT, OFFSET
 			wantType:    cmn.INSERT_INTO_STATEMENT,
 		},
 		{

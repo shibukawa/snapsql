@@ -13,6 +13,8 @@ type KeywordInfo struct {
 // This file provides a unified keyword set for parser-level reserved word checks.
 // No dialect logic, just a single set.
 var KeywordSet = map[string]KeywordInfo{
+	// Row locking and concurrency control
+	"SHARE": {true, true}, "NO": {true, true}, "NOWAIT": {true, true}, "SKIP": {true, true}, "LOCKED": {true, true},
 	// --- Common SQL reserved words (strictest union of PostgreSQL, MySQL, SQLite) ---
 	"ALL": {true, true}, "ALTER": {true, true}, "AND": {true, true}, "AS": {true, true}, "ASC": {true, true}, "BETWEEN": {true, true}, "BY": {true, true},
 	"CASE": {true, true}, "CHECK": {true, true}, "COLUMN": {true, false}, "CONSTRAINT": {true, true}, "CREATE": {true, true}, "CROSS": {true, true},
