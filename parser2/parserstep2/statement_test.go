@@ -7,7 +7,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	pc "github.com/shibukawa/parsercombinator"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	"github.com/shibukawa/snapsql/tokenizer"
+	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
 func init() {
@@ -42,8 +42,7 @@ func TestSubQuery(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tz := tokenizer.NewSqlTokenizer(tt.src)
-			tokens, err := tz.AllTokens()
+			tokens, err := tok.Tokenize(tt.src)
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
@@ -147,8 +146,7 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tz := tokenizer.NewSqlTokenizer(tt.sql)
-			tokens, err := tz.AllTokens()
+			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
@@ -258,8 +256,7 @@ func TestParseStatementWithCTE(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tz := tokenizer.NewSqlTokenizer(tt.args.src)
-			tokens, err := tz.AllTokens()
+			tokens, err := tok.Tokenize(tt.args.src)
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
@@ -327,8 +324,7 @@ func TestParseStatementWithSubQuery(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tz := tokenizer.NewSqlTokenizer(tt.args.src)
-			tokens, err := tz.AllTokens()
+			tokens, err := tok.Tokenize(tt.args.src)
 			assert.NoError(t, err)
 			pcTokens := TokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}

@@ -4,13 +4,8 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	tokenizer "github.com/shibukawa/snapsql/tokenizer"
+	"github.com/shibukawa/snapsql/tokenizer"
 )
-
-func tokenize(sql string) ([]tokenizer.Token, error) {
-	tok := tokenizer.NewSqlTokenizer(sql)
-	return tok.AllTokens()
-}
 
 // TestValidateParentheses tests various cases of parentheses validation.
 func TestValidateParentheses(t *testing.T) {
@@ -43,7 +38,7 @@ func TestValidateParentheses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := tokenize(tt.input)
+			tokens, err := tokenizer.Tokenize(tt.input)
 			assert.NoError(t, err)
 			err = validateParentheses(tokens)
 			if tt.wantErr {
@@ -141,7 +136,7 @@ func TestValidateSnapSQLDirectives(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := tokenize(tt.input)
+			tokens, err := tokenizer.Tokenize(tt.input)
 			assert.NoError(t, err)
 			err = validateSnapSQLDirectives(tokens)
 			if tt.wantErr {

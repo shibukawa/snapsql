@@ -99,6 +99,12 @@ func (t *SqlTokenizer) AllTokens() ([]Token, error) {
 	return tokens, lastError
 }
 
+// Tokenize is a helper that tokenizes SQL and returns all tokens (for tests).
+func Tokenize(sql string) ([]Token, error) {
+	t := NewSqlTokenizer(sql)
+	return t.AllTokens()
+}
+
 // Internal tokenizer implementation
 type tokenizer struct {
 	input    string
