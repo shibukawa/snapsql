@@ -7,20 +7,18 @@ import (
 )
 
 type Entity struct {
-	Original  tok.Token     // The original token from the tokenizer
-	NewValue  cmn.AstNode   // The parsed AST node (can be nil if not yet parsed)
-	rawTokens []tok.Token   // Tokens that are part of the same row (e.g., SELECT statement)
-	spaces    [][]tok.Token // Tokens that represent spaces or comments before this entity
+	Original  tok.Token   // The original token from the tokenizer
+	NewValue  cmn.AstNode // The parsed AST node (can be nil if not yet parsed)
+	rawTokens []tok.Token // Tokens that are part of the same row (e.g., SELECT statement)
+	spaces    []tok.Token // Tokens that represent spaces or comments before this entity
 }
 
 func (e *Entity) RawTokens() []tok.Token {
-	var result []tok.Token
-	for i, t := range e.rawTokens {
+	result := make([]tok.Token, 0, len(e.rawTokens))
+	for _, t := range e.rawTokens {
 		result = append(result, t)
-		for _, space := range e.spaces[i] {
-			result = append(result, space)
-		}
 	}
+	result = append(result, e.spaces...)
 	return result
 }
 
@@ -49,18 +47,10 @@ func TokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
 	return results
 }
 
-func EntityToToken(entities []pc.Token[Entity]) []tok.Token {
+func entityToToken(entities []pc.Token[Entity]) []tok.Token {
 	results := make([]tok.Token, len(entities))
 	for i, entity := range entities {
 		results[i] = entity.Val.Original
 	}
 	return results
-}
-
-var subqueryCanBeIn = map[tok.TokenType]bool{
-	tok.SELECT: true, // in SELECT statement
-	tok.FROM:   true, // in SELECT statement
-	tok.WHERE:  true, // in SELECT, UPDATE, DELETE statement
-	tok.HAVING: true, // in SELECT statement
-	tok.SET:    true, // in UPDATE statement
 }

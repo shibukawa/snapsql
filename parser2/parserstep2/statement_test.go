@@ -50,7 +50,7 @@ func TestSubQuery(t *testing.T) {
 			pctx.TraceEnable = true
 			pctx.OrMode = pc.OrModeTryFast
 			pctx.CheckTransformSafety = true
-			consumed, _, err := subQuery()(pctx, pcTokens)
+			consumed, _, err := subQuery(pctx, pcTokens)
 			if tt.wantErr != nil {
 				assert.IsError(t, err, tt.wantErr)
 			} else {
@@ -163,6 +163,59 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 			assert.True(t, ok, "should be StatementNode")
 			assert.Equal(t, tt.wantClauses, len(stmt.Clauses()), "should return correct number of clauses")
 			assert.Equal(t, tt.wantType, stmt.Type(), "should return correct statement type")
+		})
+	}
+}
+
+func TestClauseSourceText(t *testing.T) {
+	tests := []struct {
+		name         string
+		sql          string
+		wantSrcTexts []string
+		wantClauses  int
+		wantType     cmn.NodeType
+	}{
+		{
+			name:         "all select clauses",
+			sql:          `select a, b, c from users where a > 1 group BY a, b having COUNT(*) > 1 order BY a DESC, b ASC limit 10 offset 5 returning a, b;`,
+			wantSrcTexts: []string{"select", "from", "where", "group BY", "having", "order BY", "limit", "offset", "returning"},
+		},
+		{
+			name:         "all insert clauses",
+			sql:          `INSERT INTO users (a, b, c) VALUES (1, 2, 3) WHERE a > 1 ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b RETURNING a, b;`,
+			wantSrcTexts: []string{"INTO", "VALUES", "WHERE", "ON CONFLICT", "RETURNING"},
+		},
+		{
+			name:         "all update clauses",
+			sql:          `UPDATE users SET name = 'Bob', age = 20 WHERE id = 1 RETURNING id, name;`,
+			wantSrcTexts: []string{"UPDATE", "SET", "WHERE", "RETURNING"},
+		},
+		{
+			name:         "all delete clauses",
+			sql:          `DELETE FROM users WHERE id = 1 RETURNING id, name;`,
+			wantSrcTexts: []string{"FROM", "WHERE", "RETURNING"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens, err := tok.Tokenize(tt.sql)
+			assert.NoError(t, err)
+			pcTokens := TokenToEntity(tokens)
+			pctx := &pc.ParseContext[Entity]{}
+			pctx.MaxDepth = 30
+			pctx.TraceEnable = true
+			pctx.OrMode = pc.OrModeTryFast
+			pctx.CheckTransformSafety = true
+
+			consumed, got, err := ParseStatement()(pctx, pcTokens)
+			assert.NoError(t, err)
+			assert.Equal(t, len(pcTokens), consumed, "should consume all tokens")
+			assert.Equal(t, 1, len(got), "should return exactly one statement")
+			stmt, ok := got[0].Val.NewValue.(cmn.StatementNode)
+			assert.True(t, ok, "should be StatementNode")
+			for i, clause := range stmt.Clauses() {
+				assert.Equal(t, tt.wantSrcTexts[i], clause.SourceText(), "should return correct source text for clause %d", i)
+			}
 		})
 	}
 }
@@ -295,12 +348,40 @@ func TestParseStatementWithSubQuery(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name: "select with subquery",
+			name: "select with subquery in select clause",
+			args: args{
+				src: `SELECT id, (SELECT name FROM users WHERE id = 1) AS name FROM users;`,
+			},
+			wantType:    cmn.SELECT_STATEMENT,
+			wantClauses: 2,
+			wantErr:     false,
+		},
+		{
+			name: "select with subquery in from clause",
 			args: args{
 				src: `SELECT id FROM (SELECT id FROM users) AS sub;`,
 			},
 			wantType:    cmn.SELECT_STATEMENT,
 			wantClauses: 2,
+			wantErr:     false,
+		},
+		{
+			name: "select with subquery in where clause",
+			args: args{
+				src: `SELECT id FROM users WHERE id IN (SELECT id FROM tmp);`,
+			},
+			wantType:    cmn.SELECT_STATEMENT,
+			wantClauses: 3,
+			wantErr:     false,
+		},
+		{
+			name: "select with subquery in having clause",
+			args: args{
+				src: `SELECT id FROM users GROUP BY id HAVING id IN (SELECT id FROM
+tmp);`,
+			},
+			wantType:    cmn.SELECT_STATEMENT,
+			wantClauses: 4,
 			wantErr:     false,
 		},
 		{

@@ -24,15 +24,18 @@ func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
 	return pc.Trans(
 		pc.SeqWithLabel("token with comment or space",
 			token,
-			pc.ZeroOrMore("comment or space", pc.Or(space(), comment())),
+			pc.ZeroOrMore("comment or space", pc.Or(space, comment)),
 		),
 		func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
-			var spaces []tokenizer.Token
-			for _, t := range tokens[1:] {
-				spaces = append(spaces, t.Val.Original)
+			spaceStart := len(tokens)
+			for i := len(tokens) - 1; i >= 1; i-- {
+				if tokens[i].Type == "comment" || tokens[i].Type == "space" {
+					spaceStart--
+				}
 			}
-			tokens[0].Val.spaces = [][]tokenizer.Token{spaces}
-			return tokens[:1], nil
+
+			tokens[spaceStart-1].Val.spaces = entityToToken(tokens[spaceStart:])
+			return tokens[:spaceStart], nil
 		})
 }
 
@@ -181,8 +184,8 @@ func operator() pc.Parser[Entity] {
 }
 
 // anyIdentifier parses any valid identifier (including contextual and quoted)
-func anyIdentifier() pc.Parser[Entity] {
-	return ws(pc.Trace("any-identifier", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
+var anyIdentifier = ws(
+	pc.Trace("any-identifier", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
 		if len(tokens) > 0 && tokens[0].Type == "raw" {
 			o := tokens[0].Val.Original
 			if o.Type == tokenizer.IDENTIFIER ||
@@ -201,53 +204,40 @@ func anyIdentifier() pc.Parser[Entity] {
 		}
 		return 0, nil, pc.ErrNotMatch
 	}))
-}
 
-// --- CTE (Common Table Expression) Parser ---
-
-func withClause() pc.Parser[Entity] {
-	return pc.SeqWithLabel("with clause",
-		pc.ZeroOrMore("leading comment, space", pc.Or(comment(), space())),
+var (
+	// --- CTE (Common Table Expression) Parser ---
+	withClause = pc.SeqWithLabel("with clause",
+		pc.ZeroOrMore("leading comment, space", pc.Or(comment, space)),
 		ws(primitiveType("with", tokenizer.WITH)),
-		pc.Optional(recursive()))
-}
+		pc.Optional(recursive))
 
-// --- Statement Keyword Parsers (for SELECT) ---
+	// --- Statement Keyword Parsers (for SELECT) ---
 
-func groupByClause() pc.Parser[Entity] {
-	return pc.SeqWithLabel("group by clause",
+	groupByClause = pc.SeqWithLabel("group by clause",
 		ws(primitiveType("group", tokenizer.GROUP)),
 		ws(primitiveType("by", tokenizer.BY)))
-}
 
-func orderByClause() pc.Parser[Entity] {
-	return ws(pc.SeqWithLabel("order by clause",
+	orderByClause = ws(pc.SeqWithLabel("order by clause",
 		ws(primitiveType("order", tokenizer.ORDER)),
 		primitiveType("by", tokenizer.BY),
 	))
-}
 
-// --- Statement Keyword Parsers (for INSERT) ---
-
-func insertIntoStatement() pc.Parser[Entity] {
-	return pc.SeqWithLabel("insert into statement",
+	// --- Statement Keyword Parsers (for INSERT) ---
+	insertIntoStatement = pc.SeqWithLabel("insert into statement",
 		ws(primitiveType("insert", tokenizer.INSERT)),
 		ws(pc.Optional(primitiveType("into", tokenizer.INTO))))
-}
 
-func valuesClause() pc.Parser[Entity] {
-	return ws(primitiveType("values", tokenizer.VALUES))
-}
-func onConflictClause() pc.Parser[Entity] {
-	return pc.SeqWithLabel("on conflict clause",
+	// valuesClause
+	valuesClause = ws(primitiveType("values", tokenizer.VALUES))
+
+	onConflictClause = pc.SeqWithLabel("on conflict clause",
 		ws(primitiveType("on", tokenizer.ON)),
 		ws(primitiveType("conflict", tokenizer.CONFLICT)))
-}
 
-// --- Statement Keyword Parsers (for DELETE) ---
-
-func deleteFromStatement() pc.Parser[Entity] {
-	return pc.SeqWithLabel("on conflict clause",
+	deleteFromStatement = pc.SeqWithLabel("delete from clause",
 		ws(primitiveType("delete", tokenizer.DELETE)),
 		ws(primitiveType("from", tokenizer.FROM)))
-}
+
+	// --- Statement Keyword Parsers (for DELETE) ---
+)
