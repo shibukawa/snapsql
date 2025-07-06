@@ -3,123 +3,64 @@ package parserstep3
 import (
 	"testing"
 
+	"github.com/alecthomas/assert/v2"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	step2 "github.com/shibukawa/snapsql/parser2/parserstep2"
-	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
-func TestClauseOrderValidation(t *testing.T) {
+// parseClausesFromSQL is now in test_helper.go
+
+func TestValidateClauseOrder(t *testing.T) {
 	tests := []struct {
 		name      string
+		statement cmn.NodeType
 		sql       string
 		wantErr   bool
-		wantOrder []cmn.NodeType
+		wantMsg   string
 	}{
 		{
-			name:    "SELECT correct order",
-			sql:     "SELECT id FROM users WHERE id = 1 ORDER BY id LIMIT 10 OFFSET 2 RETURNING id",
-			wantErr: false,
-			wantOrder: []cmn.NodeType{
-				cmn.SELECT_CLAUSE, cmn.FROM_CLAUSE, cmn.WHERE_CLAUSE, cmn.ORDER_BY_CLAUSE, cmn.LIMIT_CLAUSE, cmn.OFFSET_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
+			name:      "SELECT valid order",
+			statement: cmn.SELECT_STATEMENT,
+			sql:       "SELECT id FROM t WHERE id > 0 GROUP BY id HAVING count(id) > 1 ORDER BY id LIMIT 10",
+			wantErr:   false,
 		},
 		{
-			name:    "SELECT wrong order",
-			sql:     "SELECT id FROM users ORDER BY id WHERE id = 1 LIMIT 10 OFFSET 2 RETURNING id",
-			wantErr: true,
-			wantOrder: []cmn.NodeType{
-				cmn.SELECT_CLAUSE, cmn.FROM_CLAUSE, cmn.ORDER_BY_CLAUSE, cmn.WHERE_CLAUSE, cmn.LIMIT_CLAUSE, cmn.OFFSET_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
+			name:      "SELECT invalid order (LIMIT before FROM)",
+			statement: cmn.SELECT_STATEMENT,
+			sql:       "SELECT id LIMIT 10 from t WHERE id > 0",
+			wantErr:   true,
+			wantMsg:   "clause order violation: Please move 'from' at 1:20 clause before 'LIMIT' clause at 1:11",
 		},
 		{
-			name:    "INSERT VALUES correct order",
-			sql:     "INSERT INTO users (id) VALUES (1) RETURNING id",
-			wantErr: false,
-			wantOrder: []cmn.NodeType{
-				cmn.INSERT_INTO_CLAUSE, cmn.VALUES_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
+			name:      "INSERT INTO VALUES valid order",
+			statement: cmn.INSERT_INTO_STATEMENT,
+			sql:       "INSERT INTO t (id) VALUES (1)",
+			wantErr:   false,
 		},
 		{
-			name:    "INSERT VALUES wrong order",
-			sql:     "INSERT INTO users (id) RETURNING id VALUES (1)",
-			wantErr: true,
-			wantOrder: []cmn.NodeType{
-				cmn.INSERT_INTO_CLAUSE, cmn.RETURNING_CLAUSE, cmn.VALUES_CLAUSE,
-			},
+			name:      "INSERT INTO SELECT valid order",
+			statement: cmn.INSERT_INTO_STATEMENT,
+			sql:       "INSERT INTO t (id) SELECT id FROM t2 WHERE id > 0",
+			wantErr:   false,
 		},
 		{
-			name:    "INSERT SELECT correct order",
-			sql:     "INSERT INTO users (id) SELECT id FROM tmp WHERE id > 1 ORDER BY id LIMIT 5 OFFSET 2 RETURNING id",
-			wantErr: false,
-			wantOrder: []cmn.NodeType{
-				cmn.INSERT_INTO_CLAUSE, cmn.SELECT_CLAUSE, cmn.FROM_CLAUSE, cmn.WHERE_CLAUSE, cmn.ORDER_BY_CLAUSE, cmn.LIMIT_CLAUSE, cmn.OFFSET_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
-		},
-		{
-			name:    "INSERT SELECT wrong order",
-			sql:     "INSERT INTO users (id) SELECT id FROM tmp ORDER BY id WHERE id > 1 LIMIT 5 OFFSET 2 RETURNING id",
-			wantErr: true,
-			wantOrder: []cmn.NodeType{
-				cmn.INSERT_INTO_CLAUSE, cmn.SELECT_CLAUSE, cmn.FROM_CLAUSE, cmn.ORDER_BY_CLAUSE, cmn.WHERE_CLAUSE, cmn.LIMIT_CLAUSE, cmn.OFFSET_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
-		},
-		{
-			name:    "UPDATE correct order",
-			sql:     "UPDATE users SET name = 'a' WHERE id = 1 RETURNING id",
-			wantErr: false,
-			wantOrder: []cmn.NodeType{
-				cmn.UPDATE_CLAUSE, cmn.SET_CLAUSE, cmn.WHERE_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
-		},
-		{
-			name:    "UPDATE wrong order",
-			sql:     "UPDATE users WHERE id = 1 SET name = 'a' RETURNING id",
-			wantErr: true,
-			wantOrder: []cmn.NodeType{
-				cmn.UPDATE_CLAUSE, cmn.WHERE_CLAUSE, cmn.SET_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
-		},
-		{
-			name:    "DELETE correct order",
-			sql:     "DELETE FROM users WHERE id = 1 RETURNING id",
-			wantErr: false,
-			wantOrder: []cmn.NodeType{
-				cmn.DELETE_FROM_CLAUSE, cmn.WHERE_CLAUSE, cmn.RETURNING_CLAUSE,
-			},
-		},
-		{
-			name:    "DELETE wrong order",
-			sql:     "DELETE FROM users RETURNING id WHERE id = 1",
-			wantErr: true,
-			wantOrder: []cmn.NodeType{
-				cmn.DELETE_FROM_CLAUSE, cmn.RETURNING_CLAUSE, cmn.WHERE_CLAUSE,
-			},
+			name:      "INSERT INTO SELECT invalid order (RETURNING before SELECT)",
+			statement: cmn.INSERT_INTO_STATEMENT,
+			sql:       "INSERT INTO t (id) RETURNING id select id WHERE id > 0 ",
+			wantErr:   true,
+			wantMsg:   "clause order violation: Please move 'select' at 1:33 clause before 'RETURNING' clause at 1:20",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokens, err := tok.Tokenize(tt.sql)
-			if err != nil {
-				t.Fatalf("tokenize error: %v", err)
-			}
-			node, err := step2.Execute(tokens)
-			if err != nil {
-				t.Fatalf("parserstep2 error: %v", err)
-			}
+			clauses := parseClausesFromSQL(t, tt.sql)
 			var perr cmn.ParseError
-			clauses := ValidateClausePresence(node.Type(), node.Clauses(), &perr)
-			var gotOrder []cmn.NodeType
-			for _, c := range clauses {
-				gotOrder = append(gotOrder, c.Type())
-			}
-			if len(gotOrder) != len(tt.wantOrder) {
-				t.Errorf("clause count mismatch: got %v, want %v", gotOrder, tt.wantOrder)
-			}
-			for i := range gotOrder {
-				if gotOrder[i] != tt.wantOrder[i] {
-					t.Errorf("clause order mismatch at %d: got %v, want %v", i, gotOrder[i], tt.wantOrder[i])
-				}
+			ValidateClauseOrder(tt.statement, clauses, &perr)
+			if tt.wantErr {
+				assert.Equal(t, 1, len(perr.Errors), "expected 1 error, got %d: %v", len(perr.Errors), perr.Errors)
+				assert.Equal(t, tt.wantMsg, perr.Errors[0].Error())
+			} else {
+				assert.Equal(t, 0, len(perr.Errors), "expected no errors, got %d: %v", len(perr.Errors), perr.Errors)
 			}
 		})
 	}

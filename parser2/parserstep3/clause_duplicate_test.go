@@ -8,15 +8,41 @@ import (
 )
 
 func TestCheckClauseDuplicates(t *testing.T) {
-	t.Run("no duplicates", func(t *testing.T) {
-		var perr cmn.ParseError
-		ValidateClauseDuplicates(clauseNodes(cmn.SELECT_CLAUSE, cmn.FROM_CLAUSE, cmn.WHERE_CLAUSE), &perr)
-		assert.Equal(t, 0, len(perr.Errors))
-	})
-	t.Run("with duplicates", func(t *testing.T) {
-		var perr cmn.ParseError
-		ValidateClauseDuplicates(clauseNodes(cmn.SELECT_CLAUSE, cmn.FROM_CLAUSE, cmn.SELECT_CLAUSE), &perr)
-		assert.NotEqual(t, 0, len(perr.Errors))
-		assert.Contains(t, perr.Error(), "duplicate clause")
-	})
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr bool
+		msg     string
+	}{
+		{
+			name:    "no duplicates",
+			sql:     "SELECT id FROM t WHERE id > 0",
+			wantErr: false,
+			msg:     "No duplicate clause should not error",
+		},
+		{
+			name:    "with duplicates",
+			sql:     "SELECT id FROM t SELECT id",
+			wantErr: true,
+			msg:     "Duplicate SELECT clause should error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clauses := parseClausesFromSQL(t, tt.sql)
+			var perr cmn.ParseError
+			ValidateClauseDuplicates(clauses, &perr)
+			if tt.wantErr {
+				if len(perr.Errors) == 0 {
+					t.Errorf("%s: want error but got none", tt.msg)
+				}
+				assert.Contains(t, perr.Error(), "duplicate clause")
+			} else {
+				if len(perr.Errors) != 0 {
+					t.Errorf("%s: got error(s): %v", tt.msg, perr.Errors)
+				}
+			}
+		})
+	}
 }

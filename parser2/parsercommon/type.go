@@ -72,47 +72,47 @@ func (n NodeType) String() string {
 	case SELECT_STATEMENT:
 		return "SELECT_STATEMENT"
 	case SELECT_CLAUSE:
-		return "SELECT_CLAUSE"
+		return "SELECT"
 	case FROM_CLAUSE:
-		return "FROM_CLAUSE"
+		return "FROM"
 	case WHERE_CLAUSE:
-		return "WHERE_CLAUSE"
+		return "WHERE"
 	case ORDER_BY_CLAUSE:
-		return "ORDER_BY_CLAUSE"
+		return "ORDER BY"
 	case GROUP_BY_CLAUSE:
-		return "GROUP_BY_CLAUSE"
+		return "GROUP BY"
 	case HAVING_CLAUSE:
-		return "HAVING_CLAUSE"
+		return "HAVING"
 	case LIMIT_CLAUSE:
-		return "LIMIT_CLAUSE"
+		return "LIMIT"
 	case OFFSET_CLAUSE:
-		return "OFFSET_CLAUSE"
+		return "OFFSET"
 	case FOR_CLAUSE:
-		return "FOR_CLAUSE"
+		return "FOR"
 	// insert into
 	case INSERT_INTO_STATEMENT:
 		return "INSERT_INTO_STATEMENT"
 	case INSERT_INTO_CLAUSE:
-		return "INSERT_INTO_CLAUSE"
+		return "INSERT_INTO"
 	case VALUES_CLAUSE:
-		return "VALUES_CLAUSE"
+		return "VALUES"
 	case ON_CONFLICT_CLAUSE:
-		return "ON_CONFLICT_CLAUSE"
+		return "ON_CONFLICT"
 	// update
 	case UPDATE_STATEMENT:
 		return "UPDATE_STATEMENT"
 	case UPDATE_CLAUSE:
-		return "UPDATE_CLAUSE"
+		return "UPDATE"
 	case SET_CLAUSE:
-		return "SET_CLAUSE"
+		return "SET"
 	// delete
 	case DELETE_FROM_STATEMENT:
 		return "DELETE_FROM_STATEMENT"
 	case DELETE_FROM_CLAUSE:
-		return "DELETE_FROM_CLAUSE"
+		return "DELETE_FROM"
 	// CTE and subquery
 	case WITH_CLAUSE:
-		return "WITH_CLAUSE"
+		return "WITH"
 	case CTE_DEFINITION:
 		return "CTE_DEFINITION"
 	case TEMPLATE_IF_BLOCK:
@@ -140,7 +140,7 @@ func (n NodeType) String() string {
 	case OTHER_NODE:
 		return "OTHER_NODE"
 	case RETURNING_CLAUSE:
-		return "RETURNING_CLAUSE"
+		return "RETURNING"
 	case COLUMN_REFERENCE:
 		return "COLUMN_REFERENCE"
 	default:

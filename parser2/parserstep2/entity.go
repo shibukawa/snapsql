@@ -22,7 +22,7 @@ func (e *Entity) RawTokens() []tok.Token {
 	return result
 }
 
-func TokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
+func tokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
 	results := make([]pc.Token[Entity], 0, len(tokens))
 	for _, token := range tokens {
 		if token.Type == tok.EOF {
@@ -48,9 +48,9 @@ func TokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
 }
 
 func entityToToken(entities []pc.Token[Entity]) []tok.Token {
-	results := make([]tok.Token, len(entities))
-	for i, entity := range entities {
-		results[i] = entity.Val.Original
+	results := make([]tok.Token, 0, len(entities))
+	for _, entity := range entities {
+		results = append(results, entity.Val.RawTokens()...)
 	}
 	return results
 }

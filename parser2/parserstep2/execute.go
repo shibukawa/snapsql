@@ -9,7 +9,7 @@ import (
 // Execute is the entry point for parserstep2. It parses a token slice and returns a StatementNode.
 // Execute parses a slice of tokenizer.Token and returns a StatementNode and error.
 func Execute(tokens []tok.Token) (cmn.StatementNode, error) {
-	entityTokens := TokenToEntity(tokens)
+	entityTokens := tokenToEntity(tokens)
 	pctx := pc.NewParseContext[Entity]()
 	_, parsed, err := ParseStatement()(pctx, entityTokens)
 	if err != nil {

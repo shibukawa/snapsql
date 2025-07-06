@@ -23,7 +23,7 @@ type WithClause struct {
 
 // SourceText implements ClauseNode.
 func (n *WithClause) SourceText() string {
-	panic("unimplemented")
+	return n.clauseSourceText
 }
 
 // Position implements ClauseNode.
@@ -33,11 +33,11 @@ func (n *WithClause) Position() tokenizer.Position {
 
 // RawTokens implements ClauseNode.
 func (n *WithClause) RawTokens() []tokenizer.Token {
-	panic("unimplemented")
+	return n.rawTokens()
 }
 
 func (n *WithClause) ContentTokens() []tokenizer.Token {
-	panic("not implemented")
+	return n.bodyTokens
 }
 
 func (n *WithClause) IfDirective() string {
@@ -48,7 +48,7 @@ func (n *WithClause) Type() NodeType {
 	return WITH_CLAUSE
 }
 
-func (n WithClause) String() string {
+func (n *WithClause) String() string {
 	return "WITH"
 }
 
@@ -87,7 +87,7 @@ func (n *SelectClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *SelectClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -104,7 +104,7 @@ func (n *SelectClause) IfDirective() string {
 func (n *SelectClause) Type() NodeType {
 	return SELECT_CLAUSE
 }
-func (n SelectClause) String() string {
+func (n *SelectClause) String() string {
 	return "SELECT"
 }
 
@@ -133,7 +133,7 @@ func (n *FromClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *FromClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -150,7 +150,7 @@ func (n *FromClause) IfDirective() string {
 func (n *FromClause) Type() NodeType {
 	return FROM_CLAUSE
 }
-func (n FromClause) String() string {
+func (n *FromClause) String() string {
 	return "FROM"
 }
 
@@ -179,7 +179,7 @@ func (n *WhereClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *WhereClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -225,7 +225,7 @@ func (n *GroupByClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *GroupByClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -271,7 +271,7 @@ func (n *HavingClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *HavingClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -317,7 +317,7 @@ func (n *OrderByClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *OrderByClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -363,7 +363,7 @@ func (n *LimitClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *LimitClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -409,7 +409,7 @@ func (n *OffsetClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *OffsetClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -455,7 +455,7 @@ func (n *ReturningClause) SourceText() string {
 
 // Position implements ClauseNode.
 func (n *ReturningClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -518,12 +518,12 @@ func NewForClause(srcText string, heading, body []tokenizer.Token) *ForClause {
 
 // SourceText implements ClauseNode.
 func (f *ForClause) SourceText() string {
-	panic("unimplemented")
+	return f.clauseSourceText
 }
 
 // ContentTokens implements ClauseNode.
 func (f *ForClause) ContentTokens() []tokenizer.Token {
-	panic("unimplemented")
+	return f.bodyTokens
 }
 
 // IfDirective implements ClauseNode.
@@ -533,7 +533,7 @@ func (f *ForClause) IfDirective() string {
 
 // Position implements ClauseNode.
 func (f *ForClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return f.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -575,7 +575,7 @@ func (i *InsertIntoClause) SourceText() string {
 
 // ContentTokens implements ClauseNode.
 func (i *InsertIntoClause) ContentTokens() []tokenizer.Token {
-	panic("unimplemented")
+	return i.bodyTokens
 }
 
 // IfDirective implements ClauseNode.
@@ -585,7 +585,7 @@ func (i *InsertIntoClause) IfDirective() string {
 
 // Position implements ClauseNode.
 func (i *InsertIntoClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return i.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -628,7 +628,7 @@ func (n *OnConflictClause) SourceText() string {
 
 // ContentTokens implements ClauseNode.
 func (n *OnConflictClause) ContentTokens() []tokenizer.Token {
-	panic("unimplemented")
+	return n.bodyTokens
 }
 
 // IfDirective implements ClauseNode.
@@ -638,7 +638,7 @@ func (n *OnConflictClause) IfDirective() string {
 
 // Position implements ClauseNode.
 func (n *OnConflictClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -679,7 +679,7 @@ func (n *ValuesClause) SourceText() string {
 
 // ContentTokens implements ClauseNode.
 func (n *ValuesClause) ContentTokens() []tokenizer.Token {
-	panic("unimplemented")
+	return n.bodyTokens
 }
 
 // IfDirective implements ClauseNode.
@@ -689,7 +689,7 @@ func (n *ValuesClause) IfDirective() string {
 
 // Position implements ClauseNode.
 func (n *ValuesClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -730,7 +730,7 @@ func (u *UpdateClause) SourceText() string {
 
 // ContentTokens implements ClauseNode.
 func (u *UpdateClause) ContentTokens() []tokenizer.Token {
-	panic("unimplemented")
+	return u.bodyTokens
 }
 
 // IfDirective implements ClauseNode.
@@ -740,7 +740,7 @@ func (u *UpdateClause) IfDirective() string {
 
 // Position implements ClauseNode.
 func (u *UpdateClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return u.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -794,7 +794,7 @@ func (n *SetClause) IfDirective() string {
 
 // Position implements ClauseNode.
 func (n *SetClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return n.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.
@@ -835,7 +835,7 @@ func (d *DeleteFromClause) SourceText() string {
 
 // ContentTokens implements ClauseNode.
 func (d *DeleteFromClause) ContentTokens() []tokenizer.Token {
-	panic("unimplemented")
+	return d.bodyTokens
 }
 
 // IfDirective implements ClauseNode.
@@ -845,7 +845,7 @@ func (d *DeleteFromClause) IfDirective() string {
 
 // Position implements ClauseNode.
 func (d *DeleteFromClause) Position() tokenizer.Position {
-	panic("unimplemented")
+	return d.headingTokens[0].Position
 }
 
 // RawTokens implements ClauseNode.

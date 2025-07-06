@@ -44,7 +44,7 @@ func TestSubQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.src)
 			assert.NoError(t, err)
-			pcTokens := TokenToEntity(tokens)
+			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
 			pctx.TraceEnable = true
@@ -148,7 +148,7 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
-			pcTokens := TokenToEntity(tokens)
+			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
 			pctx.TraceEnable = true
@@ -200,7 +200,7 @@ func TestClauseSourceText(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
-			pcTokens := TokenToEntity(tokens)
+			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
 			pctx.TraceEnable = true
@@ -311,7 +311,7 @@ func TestParseStatementWithCTE(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.args.src)
 			assert.NoError(t, err)
-			pcTokens := TokenToEntity(tokens)
+			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
 			pctx.TraceEnable = true
@@ -407,7 +407,7 @@ tmp);`,
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.args.src)
 			assert.NoError(t, err)
-			pcTokens := TokenToEntity(tokens)
+			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
 			pctx.TraceEnable = true

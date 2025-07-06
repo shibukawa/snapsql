@@ -51,6 +51,10 @@ func clauseKeywordFromTokens(node cmn.ClauseNode) string {
 // ErrClauseOrderViolation is returned when clause order is invalid
 var ErrClauseOrderViolation = fmt.Errorf("clause order violation")
 
+func toPosText(node cmn.ClauseNode) string {
+	return fmt.Sprintf("%d:%d", node.Position().Line, node.Position().Column)
+}
+
 // ValidateClauseOrder validates the order of clauses for a given statement type.
 // It appends errors to the provided ParseError pointer, does not return error.
 func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode, perr *cmn.ParseError) {
@@ -91,15 +95,13 @@ func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode, perr *
 					minJ = j
 				}
 			}
-			if perr != nil {
-				if minJ != -1 {
-					perr.Add(fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clauses[minJ])))
-				} else if i+1 < len(clauses) {
-					perr.Add(fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clauses[i+1])))
-				} else {
-					perr.Add(fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clause)))
-				}
+			var target cmn.ClauseNode
+			if minJ != -1 {
+				target = clauses[minJ]
+			} else {
+				target = clauses[i+1]
 			}
+			perr.Add(fmt.Errorf("%w: Please move '%s' at %s clause before '%s' clause at %s", ErrClauseOrderViolation, clause.SourceText(), toPosText(clause), target.SourceText(), toPosText(target)))
 			return
 		}
 		prevOrder = order
