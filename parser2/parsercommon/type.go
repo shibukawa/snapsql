@@ -22,6 +22,7 @@ const (
 	LIMIT_CLAUSE
 	OFFSET_CLAUSE
 	WITH_CLAUSE
+	FOR_CLAUSE
 	CTE_DEFINITION
 
 	// Insert statement
@@ -86,6 +87,8 @@ func (n NodeType) String() string {
 		return "LIMIT_CLAUSE"
 	case OFFSET_CLAUSE:
 		return "OFFSET_CLAUSE"
+	case FOR_CLAUSE:
+		return "FOR_CLAUSE"
 	// insert into
 	case INSERT_INTO_STATEMENT:
 		return "INSERT_INTO_STATEMENT"
