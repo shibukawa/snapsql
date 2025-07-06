@@ -46,7 +46,7 @@ func clauseNodes(types ...cmn.NodeType) []cmn.ClauseNode {
 	return nodes
 }
 
-func TestCheckClauseOrder_Select(t *testing.T) {
+func TestValidateClauseOrder_Select(t *testing.T) {
 	// Valid order: SELECT -> FROM -> WHERE -> GROUP BY -> HAVING -> ORDER BY -> LIMIT
 	valid := clauseNodes(
 		cmn.SELECT_CLAUSE,
@@ -57,7 +57,7 @@ func TestCheckClauseOrder_Select(t *testing.T) {
 		cmn.ORDER_BY_CLAUSE,
 		cmn.LIMIT_CLAUSE,
 	)
-	err := CheckClauseOrder(cmn.SELECT_STATEMENT, valid)
+	err := ValidateClauseOrder(cmn.SELECT_STATEMENT, valid)
 	assert.NoError(t, err)
 
 	// Invalid order: WHERE before FROM, and FROM before LIMIT
@@ -67,7 +67,7 @@ func TestCheckClauseOrder_Select(t *testing.T) {
 		cmn.FROM_CLAUSE,
 		cmn.WHERE_CLAUSE,
 	)
-	err = CheckClauseOrder(cmn.SELECT_STATEMENT, invalid)
+	err = ValidateClauseOrder(cmn.SELECT_STATEMENT, invalid)
 	assert.Error(t, err)
 	// Only the first misplaced clause after the current one should be reported
 	// In this case, FROM_CLAUSE should be moved before LIMIT_CLAUSE
@@ -79,13 +79,13 @@ func TestCheckClauseOrder_Select(t *testing.T) {
 	// (simulate by calling once and checking error is not a multi-error)
 }
 
-func TestCheckClauseOrder_InsertValues(t *testing.T) {
+func TestValidateClauseOrder_InsertValues(t *testing.T) {
 	// Valid order: INSERT INTO -> VALUES
 	valid := clauseNodes(
 		cmn.INSERT_INTO_CLAUSE,
 		cmn.VALUES_CLAUSE,
 	)
-	err := CheckClauseOrder(cmn.INSERT_INTO_STATEMENT, valid)
+	err := ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, valid)
 	assert.NoError(t, err)
 
 	// Invalid order: VALUES before INSERT INTO, and INSERT INTO before RETURNING
@@ -94,7 +94,7 @@ func TestCheckClauseOrder_InsertValues(t *testing.T) {
 		cmn.RETURNING_CLAUSE,
 		cmn.INSERT_INTO_CLAUSE,
 	)
-	err = CheckClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid)
+	err = ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid)
 	assert.Error(t, err)
 	// Only the first misplaced clause after the current one should be reported
 	assert.Contains(t, err.Error(), "Please move INSERT_INTO_CLAUSE clause before VALUES_CLAUSE clause")
@@ -102,7 +102,7 @@ func TestCheckClauseOrder_InsertValues(t *testing.T) {
 	assert.Contains(t, err.Error(), "VALUES_CLAUSE")
 }
 
-func TestCheckClauseOrder_InsertSelect(t *testing.T) {
+func TestValidateClauseOrder_InsertSelect(t *testing.T) {
 	// Valid order: INSERT INTO -> SELECT -> FROM -> WHERE
 	valid := clauseNodes(
 		cmn.INSERT_INTO_CLAUSE,
@@ -110,7 +110,7 @@ func TestCheckClauseOrder_InsertSelect(t *testing.T) {
 		cmn.FROM_CLAUSE,
 		cmn.WHERE_CLAUSE,
 	)
-	err := CheckClauseOrder(cmn.INSERT_INTO_STATEMENT, valid)
+	err := ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, valid)
 	assert.NoError(t, err)
 
 	// Invalid order: SELECT before INSERT INTO, and INSERT INTO before WHERE
@@ -119,7 +119,7 @@ func TestCheckClauseOrder_InsertSelect(t *testing.T) {
 		cmn.WHERE_CLAUSE,
 		cmn.INSERT_INTO_CLAUSE,
 	)
-	err = CheckClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid)
+	err = ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid)
 	assert.Error(t, err)
 	// Only the first misplaced clause after the current one should be reported
 	assert.Contains(t, err.Error(), "Please move INSERT_INTO_CLAUSE clause before SELECT_CLAUSE clause")

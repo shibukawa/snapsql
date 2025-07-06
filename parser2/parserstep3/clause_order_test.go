@@ -108,7 +108,7 @@ func TestClauseOrderValidation(t *testing.T) {
 				t.Fatalf("parserstep2 error: %v", err)
 			}
 			var perr cmn.ParseError
-			clauses := ValidateStatementClausePresence(node.Type(), node.Clauses(), &perr)
+			clauses := ValidateClausePresence(node.Type(), node.Clauses(), &perr)
 			var gotOrder []cmn.NodeType
 			for _, c := range clauses {
 				gotOrder = append(gotOrder, c.Type())
