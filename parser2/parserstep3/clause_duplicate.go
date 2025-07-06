@@ -10,15 +10,17 @@ import (
 // Sentinel error for duplicate clause detection
 var ErrDuplicateClause = errors.New("duplicate clause detected")
 
-// Check for duplicate clauses in the clause list
-func ValidateClauseDuplicates(clauses []cmn.ClauseNode) error {
+// ValidateClauseDuplicates checks for duplicate clauses in the clause list.
+// It appends errors to the provided ParseError pointer, does not return error.
+func ValidateClauseDuplicates(clauses []cmn.ClauseNode, perr *cmn.ParseError) {
 	seen := make(map[cmn.NodeType]int)
 	for _, clause := range clauses {
 		seen[clause.Type()]++
 		if seen[clause.Type()] > 1 {
-			// Wrap with sentinel error
-			return fmt.Errorf("%w: %s", ErrDuplicateClause, clauseKeywordFromTokens(clause))
+			if perr != nil {
+				perr.Add(fmt.Errorf("%w: %s", ErrDuplicateClause, clauseKeywordFromTokens(clause)))
+			}
+			return
 		}
 	}
-	return nil
 }

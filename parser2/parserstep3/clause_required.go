@@ -13,7 +13,9 @@ import (
 // Sentinel error for required clause missing
 var ErrRequiredClauseMissing = errors.New("required clause missing")
 
-func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode) error {
+// ValidateClauseRequired checks for required (mandatory) clauses for a given statement type.
+// It appends errors to the provided ParseError pointer, does not return error.
+func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode, perr *cmn.ParseError) {
 	var key string
 	switch stmtType {
 	case cmn.SELECT_STATEMENT:
@@ -29,10 +31,10 @@ func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode) err
 	case cmn.DELETE_FROM_STATEMENT:
 		key = "DELETE"
 	default:
-		return nil // No check for other types
+		return // No check for other types
 	}
 	if _, ok := clauseOrder[key]; !ok {
-		return nil
+		return
 	}
 	// Define required clauses for each statement type
 	required := map[string][]cmn.NodeType{
@@ -44,7 +46,7 @@ func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode) err
 	}
 	req, ok := required[key]
 	if !ok {
-		return nil
+		return
 	}
 	found := make(map[cmn.NodeType]bool)
 	for _, clause := range clauses {
@@ -54,10 +56,11 @@ func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode) err
 		if !found[r] {
 			// Use a dummy ClauseNode to get the keyword for error message
 			dummy := &dummyClauseNode{nodeType: r}
-			return fmt.Errorf("%w: %s", ErrRequiredClauseMissing, clauseKeywordFromTokens(dummy))
+			if perr != nil {
+				perr.Add(fmt.Errorf("%w: %s", ErrRequiredClauseMissing, clauseKeywordFromTokens(dummy)))
+			}
 		}
 	}
-	return nil
 }
 
 // dummyClauseNode is used only for error message keyword extraction

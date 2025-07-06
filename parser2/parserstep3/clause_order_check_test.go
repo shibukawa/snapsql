@@ -57,8 +57,9 @@ func TestValidateClauseOrder_Select(t *testing.T) {
 		cmn.ORDER_BY_CLAUSE,
 		cmn.LIMIT_CLAUSE,
 	)
-	err := ValidateClauseOrder(cmn.SELECT_STATEMENT, valid)
-	assert.NoError(t, err)
+	var perr cmn.ParseError
+	ValidateClauseOrder(cmn.SELECT_STATEMENT, valid, &perr)
+	assert.Equal(t, 0, len(perr.Errors))
 
 	// Invalid order: WHERE before FROM, and FROM before LIMIT
 	invalid := clauseNodes(
@@ -67,14 +68,15 @@ func TestValidateClauseOrder_Select(t *testing.T) {
 		cmn.FROM_CLAUSE,
 		cmn.WHERE_CLAUSE,
 	)
-	err = ValidateClauseOrder(cmn.SELECT_STATEMENT, invalid)
-	assert.Error(t, err)
+	perr = cmn.ParseError{}
+	ValidateClauseOrder(cmn.SELECT_STATEMENT, invalid, &perr)
+	assert.NotEqual(t, 0, len(perr.Errors))
 	// Only the first misplaced clause after the current one should be reported
 	// In this case, FROM_CLAUSE should be moved before LIMIT_CLAUSE
-	assert.Contains(t, err.Error(), "Please move FROM_CLAUSE clause before LIMIT_CLAUSE clause")
+	assert.Contains(t, perr.Error(), "Please move FROM_CLAUSE clause before LIMIT_CLAUSE clause")
 	// The error should mention both clause names
-	assert.Contains(t, err.Error(), "FROM_CLAUSE")
-	assert.Contains(t, err.Error(), "LIMIT_CLAUSE")
+	assert.Contains(t, perr.Error(), "FROM_CLAUSE")
+	assert.Contains(t, perr.Error(), "LIMIT_CLAUSE")
 	// Only one error should be reported
 	// (simulate by calling once and checking error is not a multi-error)
 }
@@ -85,8 +87,9 @@ func TestValidateClauseOrder_InsertValues(t *testing.T) {
 		cmn.INSERT_INTO_CLAUSE,
 		cmn.VALUES_CLAUSE,
 	)
-	err := ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, valid)
-	assert.NoError(t, err)
+	var perr cmn.ParseError
+	ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, valid, &perr)
+	assert.Equal(t, 0, len(perr.Errors))
 
 	// Invalid order: VALUES before INSERT INTO, and INSERT INTO before RETURNING
 	invalid := clauseNodes(
@@ -94,12 +97,13 @@ func TestValidateClauseOrder_InsertValues(t *testing.T) {
 		cmn.RETURNING_CLAUSE,
 		cmn.INSERT_INTO_CLAUSE,
 	)
-	err = ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid)
-	assert.Error(t, err)
+	perr = cmn.ParseError{}
+	ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid, &perr)
+	assert.NotEqual(t, 0, len(perr.Errors))
 	// Only the first misplaced clause after the current one should be reported
-	assert.Contains(t, err.Error(), "Please move INSERT_INTO_CLAUSE clause before VALUES_CLAUSE clause")
-	assert.Contains(t, err.Error(), "INSERT_INTO_CLAUSE")
-	assert.Contains(t, err.Error(), "VALUES_CLAUSE")
+	assert.Contains(t, perr.Error(), "Please move INSERT_INTO_CLAUSE clause before VALUES_CLAUSE clause")
+	assert.Contains(t, perr.Error(), "INSERT_INTO_CLAUSE")
+	assert.Contains(t, perr.Error(), "VALUES_CLAUSE")
 }
 
 func TestValidateClauseOrder_InsertSelect(t *testing.T) {
@@ -110,8 +114,9 @@ func TestValidateClauseOrder_InsertSelect(t *testing.T) {
 		cmn.FROM_CLAUSE,
 		cmn.WHERE_CLAUSE,
 	)
-	err := ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, valid)
-	assert.NoError(t, err)
+	var perr cmn.ParseError
+	ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, valid, &perr)
+	assert.Equal(t, 0, len(perr.Errors))
 
 	// Invalid order: SELECT before INSERT INTO, and INSERT INTO before WHERE
 	invalid := clauseNodes(
@@ -119,10 +124,11 @@ func TestValidateClauseOrder_InsertSelect(t *testing.T) {
 		cmn.WHERE_CLAUSE,
 		cmn.INSERT_INTO_CLAUSE,
 	)
-	err = ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid)
-	assert.Error(t, err)
+	perr = cmn.ParseError{}
+	ValidateClauseOrder(cmn.INSERT_INTO_STATEMENT, invalid, &perr)
+	assert.NotEqual(t, 0, len(perr.Errors))
 	// Only the first misplaced clause after the current one should be reported
-	assert.Contains(t, err.Error(), "Please move INSERT_INTO_CLAUSE clause before SELECT_CLAUSE clause")
-	assert.Contains(t, err.Error(), "INSERT_INTO_CLAUSE")
-	assert.Contains(t, err.Error(), "SELECT_CLAUSE")
+	assert.Contains(t, perr.Error(), "Please move INSERT_INTO_CLAUSE clause before SELECT_CLAUSE clause")
+	assert.Contains(t, perr.Error(), "INSERT_INTO_CLAUSE")
+	assert.Contains(t, perr.Error(), "SELECT_CLAUSE")
 }

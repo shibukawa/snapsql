@@ -52,8 +52,8 @@ func clauseKeywordFromTokens(node cmn.ClauseNode) string {
 var ErrClauseOrderViolation = fmt.Errorf("clause order violation")
 
 // ValidateClauseOrder validates the order of clauses for a given statement type.
-// Returns nil if order is valid, otherwise returns an error.
-func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode) error {
+// It appends errors to the provided ParseError pointer, does not return error.
+func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode, perr *cmn.ParseError) {
 	var key string
 	switch stmtType {
 	case cmn.SELECT_STATEMENT:
@@ -69,11 +69,11 @@ func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode) error 
 	case cmn.DELETE_FROM_STATEMENT:
 		key = "DELETE"
 	default:
-		return nil // No order check for other types
+		return // No order check for other types
 	}
 	allowed, ok := clauseOrder[key]
 	if !ok {
-		return nil
+		return
 	}
 	prevOrder := -1
 	for i, clause := range clauses {
@@ -91,15 +91,17 @@ func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode) error 
 					minJ = j
 				}
 			}
-			if minJ != -1 {
-				return fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clauses[minJ]))
+			if perr != nil {
+				if minJ != -1 {
+					perr.Add(fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clauses[minJ])))
+				} else if i+1 < len(clauses) {
+					perr.Add(fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clauses[i+1])))
+				} else {
+					perr.Add(fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clause)))
+				}
 			}
-			if i+1 < len(clauses) {
-				return fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clauses[i+1]))
-			}
-			return fmt.Errorf("%w: Please move %s clause before %s clause", ErrClauseOrderViolation, clauseKeywordFromTokens(clause), clauseKeywordFromTokens(clause))
+			return
 		}
 		prevOrder = order
 	}
-	return nil
 }

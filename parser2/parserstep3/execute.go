@@ -4,18 +4,14 @@ import (
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
 )
 
-// Execute runs all clause checks (duplicate, required, order) for a statement node.
-// Returns error if any check fails.
 func Execute(stmt cmn.StatementNode) error {
-	clauses := stmt.Clauses()
-	if err := ValidateClauseDuplicates(clauses); err != nil {
-		return err
-	}
-	if err := ValidateClauseRequired(stmt.Type(), clauses); err != nil {
-		return err
-	}
-	if err := ValidateClauseOrder(stmt.Type(), clauses); err != nil {
-		return err
+	perr := &cmn.ParseError{}
+	clauses := ValidateClausePresence(stmt.Type(), stmt.Clauses(), perr)
+	ValidateClauseDuplicates(clauses, perr)
+	ValidateClauseRequired(stmt.Type(), clauses, perr)
+	ValidateClauseOrder(stmt.Type(), clauses, perr)
+	if len(perr.Errors) > 0 {
+		return perr
 	}
 	return nil
 }
