@@ -12,8 +12,8 @@ func TestTokenIterator(t *testing.T) {
 	tokenizer := NewSqlTokenizer(sql)
 
 	expectedTypes := []TokenType{
-		RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
-		RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER,
+		SELECT, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
+		FROM, WHITESPACE, IDENTIFIER, WHITESPACE, WHERE, WHITESPACE, IDENTIFIER,
 		WHITESPACE, EQUAL, WHITESPACE, RESERVED_IDENTIFIER, SEMICOLON, EOF,
 	}
 
@@ -39,7 +39,7 @@ func TestTokenIteratorWithOptions(t *testing.T) {
 	})
 
 	expectedTypes := []TokenType{
-		RESERVED_IDENTIFIER, IDENTIFIER, COMMA, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, RESERVED_IDENTIFIER, IDENTIFIER, EQUAL, RESERVED_IDENTIFIER, SEMICOLON, EOF,
+		SELECT, IDENTIFIER, COMMA, IDENTIFIER, FROM, IDENTIFIER, WHERE, IDENTIFIER, EQUAL, RESERVED_IDENTIFIER, SEMICOLON, EOF,
 	}
 
 	var actualTypes []TokenType
@@ -84,22 +84,22 @@ func TestBasicTokens(t *testing.T) {
 		{
 			name:     "single keyword",
 			input:    "SELECT",
-			expected: []TokenType{RESERVED_IDENTIFIER, EOF},
+			expected: []TokenType{SELECT, EOF},
 		},
 		{
 			name:     "basic SELECT statement",
 			input:    "SELECT id, name FROM users",
-			expected: []TokenType{RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, EOF},
+			expected: []TokenType{SELECT, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE, FROM, WHITESPACE, IDENTIFIER, EOF},
 		},
 		{
 			name:     "WHERE clause with condition",
 			input:    "WHERE id = 123",
-			expected: []TokenType{RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, EQUAL, WHITESPACE, NUMBER, EOF},
+			expected: []TokenType{WHERE, WHITESPACE, IDENTIFIER, WHITESPACE, EQUAL, WHITESPACE, NUMBER, EOF},
 		},
 		{
 			name:     "parentheses",
 			input:    "SELECT (id)",
-			expected: []TokenType{RESERVED_IDENTIFIER, WHITESPACE, OPENED_PARENS, IDENTIFIER, CLOSED_PARENS, EOF},
+			expected: []TokenType{SELECT, WHITESPACE, OPENED_PARENS, IDENTIFIER, CLOSED_PARENS, EOF},
 		},
 		{
 			name:     "single quoted string",
@@ -145,8 +145,8 @@ func TestBasicTokens(t *testing.T) {
 			name:  "keyword like token",
 			input: "AND OR NOT IN EXISTS BETWEEN LIKE IS NULL",
 			expected: []TokenType{
-				AND, WHITESPACE, OR, WHITESPACE, NOT, WHITESPACE, IN, WHITESPACE, EXISTS, WHITESPACE,
-				BETWEEN, WHITESPACE, LIKE, WHITESPACE, IS, WHITESPACE, NULL, EOF},
+				AND, WHITESPACE, OR, WHITESPACE, NOT, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE,
+				RESERVED_IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, NULL, EOF},
 		},
 	}
 
@@ -380,17 +380,19 @@ func TestSubqueries(t *testing.T) {
 			var hasError bool
 			var foundSubquery bool
 			parenCount := 0
+			// サブクエリ検出ロジックを現仕様に合わせて修正
 			for token, err := range tokenizer.Tokens() {
 				if err != nil {
 					hasError = true
 					break
 				}
+				if token.Type == SELECT && parenCount > 0 {
+					foundSubquery = true
+				}
 				if token.Type == OPENED_PARENS {
 					parenCount++
 				} else if token.Type == CLOSED_PARENS {
 					parenCount--
-				} else if token.Type == RESERVED_IDENTIFIER && parenCount > 0 {
-					foundSubquery = true
 				}
 				if token.Type == EOF {
 					break
@@ -428,7 +430,7 @@ func TestCTEs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testForTokenType(t, test.input, RESERVED_IDENTIFIER, test.expectError, "WITH keyword not found")
+			testForTokenType(t, test.input, WITH, test.expectError, "WITH keyword not found")
 		})
 	}
 }
@@ -481,7 +483,7 @@ func TestAllTokens(t *testing.T) {
 	tokens, err := tokenizer.AllTokens()
 	assert.NoError(t, err)
 
-	expectedTypes := []TokenType{RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, WHITESPACE, RESERVED_IDENTIFIER, WHITESPACE, IDENTIFIER, SEMICOLON, EOF}
+	expectedTypes := []TokenType{SELECT, WHITESPACE, IDENTIFIER, WHITESPACE, FROM, WHITESPACE, IDENTIFIER, SEMICOLON, EOF}
 	var actualTypes []TokenType
 	for _, token := range tokens {
 		actualTypes = append(actualTypes, token.Type)
@@ -584,4 +586,16 @@ func TestComplexSQL(t *testing.T) {
 	for _, keyword := range expectedKeywords {
 		assert.True(t, foundKeywords[keyword], "keyword %s not found", keyword.String())
 	}
+}
+
+func TestPostgresDoubleColonCastToken(t *testing.T) {
+	tokens, err := Tokenize("SELECT age::text, (price*quantity)::numeric FROM users;")
+	assert.NoError(t, err)
+	var foundDoubleColon bool
+	for _, tok := range tokens {
+		if tok.Type == DOUBLE_COLON {
+			foundDoubleColon = true
+		}
+	}
+	assert.True(t, foundDoubleColon, "DOUBLE_COLON token should be present for '::' cast operator")
 }

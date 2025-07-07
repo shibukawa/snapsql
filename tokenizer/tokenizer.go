@@ -152,6 +152,14 @@ func (t *tokenizer) nextToken() (Token, error) {
 			token := t.newToken(MINUS, string(t.current))
 			t.readChar()
 			return token, nil
+		case ':':
+			// PostgreSQL-style cast operator ::
+			if t.peekChar() == ':' {
+				t.readChar() // consume first
+				t.readChar() // consume second
+				return t.newToken(DOUBLE_COLON, "::"), nil
+			}
+			return Token{}, fmt.Errorf("%w: invalid ':' at line %d, column %d", ErrInvalidSingleColon, t.line, t.column-1)
 		case '/':
 			if t.peekChar() == '*' {
 				return t.readBlockComment()
@@ -303,7 +311,9 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"RECURSIVE": RECURSIVE,
 	"AS":        AS,
 
-	"CAST": CAST,
+	"CAST":     CAST,
+	"DISTINCT": DISTINCT,
+	"ALL":      ALL,
 }
 
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking

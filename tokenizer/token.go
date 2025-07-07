@@ -11,6 +11,7 @@ var (
 	ErrUnterminatedString  = errors.New("unterminated string literal")
 	ErrUnterminatedComment = errors.New("unterminated block comment")
 	ErrInvalidNumber       = errors.New("invalid number format")
+	ErrInvalidSingleColon  = errors.New("invalid single colon")
 )
 
 // TokenType represents the type of a token
@@ -39,6 +40,7 @@ const (
 	PLUS          // +
 	MINUS         // -
 	MULTIPLY      // *
+	DOUBLE_COLON  // :: (PostgreSQL cast)
 	DIVIDE        // /
 
 	// Window function related
@@ -128,6 +130,8 @@ const (
 // String returns the string representation of TokenType
 func (t TokenType) String() string {
 	switch t {
+	case DOUBLE_COLON:
+		return "DOUBLE_COLON"
 	case EOF:
 		return "EOF"
 	case WHITESPACE:
