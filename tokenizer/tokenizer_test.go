@@ -14,7 +14,7 @@ func TestTokenIterator(t *testing.T) {
 	expectedTypes := []TokenType{
 		SELECT, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
 		FROM, WHITESPACE, IDENTIFIER, WHITESPACE, WHERE, WHITESPACE, IDENTIFIER,
-		WHITESPACE, EQUAL, WHITESPACE, RESERVED_IDENTIFIER, SEMICOLON, EOF,
+		WHITESPACE, EQUAL, WHITESPACE, BOOLEAN, SEMICOLON, EOF,
 	}
 
 	var actualTypes []TokenType
@@ -39,7 +39,7 @@ func TestTokenIteratorWithOptions(t *testing.T) {
 	})
 
 	expectedTypes := []TokenType{
-		SELECT, IDENTIFIER, COMMA, IDENTIFIER, FROM, IDENTIFIER, WHERE, IDENTIFIER, EQUAL, RESERVED_IDENTIFIER, SEMICOLON, EOF,
+		SELECT, IDENTIFIER, COMMA, IDENTIFIER, FROM, IDENTIFIER, WHERE, IDENTIFIER, EQUAL, BOOLEAN, SEMICOLON, EOF,
 	}
 
 	var actualTypes []TokenType
@@ -598,4 +598,16 @@ func TestPostgresDoubleColonCastToken(t *testing.T) {
 		}
 	}
 	assert.True(t, foundDoubleColon, "DOUBLE_COLON token should be present for '::' cast operator")
+}
+
+func TestPostgresJSONOperators(t *testing.T) {
+	tokens, err := Tokenize("col->'key', col->>'key', col#>'{a,b}', col#>>'{a,b}'")
+	assert.NoError(t, err)
+	var found []string
+	for _, tok := range tokens {
+		if tok.Type == JSON_OPERATOR {
+			found = append(found, tok.Value)
+		}
+	}
+	assert.Equal(t, []string{"->", "->>", "#>", "#>>"}, found)
 }

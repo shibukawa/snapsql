@@ -67,7 +67,9 @@ var _ ClauseNode = (*WithClause)(nil)
 // SelectClause represents SELECT clause
 type SelectClause struct {
 	clauseBaseNode
-	Items []SelectItem
+	Distinct   bool
+	DistinctOn []FieldName // DISTINCT ON fields
+	Fields     []SelectField
 }
 
 func NewSelectClause(srcText string, heading, body []tokenizer.Token) *SelectClause {

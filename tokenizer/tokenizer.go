@@ -146,10 +146,36 @@ func (t *tokenizer) nextToken() (Token, error) {
 		case '\'', '"', '`':
 			return t.readString(t.current)
 		case '-':
+			// PostgreSQL JSON operators: ->, ->>
+			if t.peekChar() == '>' {
+				t.readChar() // consume '-'
+				if t.peekChar() == '>' {
+					t.readChar() // consume first '>'
+					t.readChar() // consume second '>'
+					return t.newToken(JSON_OPERATOR, "->>"), nil
+				}
+				t.readChar() // consume '>'
+				return t.newToken(JSON_OPERATOR, "->"), nil
+			}
 			if t.peekChar() == '-' {
 				return t.readLineComment()
 			}
 			token := t.newToken(MINUS, string(t.current))
+			t.readChar()
+			return token, nil
+		case '#':
+			// PostgreSQL JSON operators: #>, #>>
+			if t.peekChar() == '>' {
+				t.readChar() // consume '#'
+				if t.peekChar() == '>' {
+					t.readChar() // consume first '>'
+					t.readChar() // consume second '>'
+					return t.newToken(JSON_OPERATOR, "#>>"), nil
+				}
+				t.readChar() // consume '>'
+				return t.newToken(JSON_OPERATOR, "#>"), nil
+			}
+			token := t.newToken(OTHER, string(t.current))
 			t.readChar()
 			return token, nil
 		case ':':
@@ -274,10 +300,12 @@ func (t *tokenizer) readWhitespace() Token {
 
 var keywordLikeTokenTypeMap = map[string]TokenType{
 	// Row locking and concurrency control
-	"AND":  AND,
-	"OR":   OR,
-	"NOT":  NOT,
-	"NULL": NULL,
+	"AND":   AND,
+	"OR":    OR,
+	"NOT":   NOT,
+	"NULL":  NULL,
+	"TRUE":  BOOLEAN,
+	"FALSE": BOOLEAN,
 
 	"SELECT":    SELECT,
 	"FROM":      FROM,

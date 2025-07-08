@@ -18,45 +18,40 @@ var (
 type TokenType int
 
 const (
-	// Basic tokens
+	// --- Basic tokens ---
 	EOF TokenType = iota + 1
 	WHITESPACE
 	STRING        // string literals ('text')
 	IDENTIFIER    // quoted identifiers ("col")
 	NUMBER        // numeric literals
+	BOOLEAN       // boolean literals (true, false)
 	OPENED_PARENS // (
 	CLOSED_PARENS // )
 	COMMA         // ,
 	SEMICOLON     // ;
 	DOT           // .
 
-	// SQL operators
+	// --- Arithmetic operators ---
+	PLUS     // +
+	MINUS    // -
+	MULTIPLY // *
+	DIVIDE   // /
+
+	// --- Comparison operators ---
 	EQUAL         // =
 	NOT_EQUAL     // <>, !=
 	LESS_THAN     // <
 	GREATER_THAN  // >
 	LESS_EQUAL    // <=
 	GREATER_EQUAL // >=
-	PLUS          // +
-	MINUS         // -
-	MULTIPLY      // *
-	DOUBLE_COLON  // :: (PostgreSQL cast)
-	DIVIDE        // /
 
-	// Window function related
-	OVER      // OVER keyword
-	PARTITION // PARTITION keyword
-	ORDER     // ORDER keyword
-	BY        // BY keyword
-	ROWS      // ROWS keyword
-	RANGE     // RANGE keyword
-	UNBOUNDED // UNBOUNDED keyword
-	PRECEDING // PRECEDING keyword
-	FOLLOWING // FOLLOWING keyword
-	CURRENT   // CURRENT keyword
-	ROW       // ROW keyword
+	// --- Special operators ---
+	JSON_OPERATOR // PostgreSQL JSON operators (->, ->>, #>, #>>)
 
-	// Logical operators and conditional expressions
+	// --- Type cast ---
+	DOUBLE_COLON // :: (PostgreSQL cast)
+
+	// --- Logical/conditional operators ---
 	AND     // AND keyword
 	OR      // OR keyword
 	NOT     // NOT keyword
@@ -71,18 +66,31 @@ const (
 	ILIKE   // ILIKE keyword (PostgreSQL)
 	IS      // IS keyword
 	NULL    // NULL keyword
-	// Typed literal tokens (for e.g. DATE '...', TIMESTAMP '...')
-	// These are not standard SQL tokens but are useful for parser clarity
+
+	// --- Typed literal tokens ---
 	DATE_LITERAL      // DATE '...'
 	TIMESTAMP_LITERAL // TIMESTAMP '...'
 	CAST              // CAST expression (CAST(... AS type))
 
-	// CTE related
+	// --- Window function related ---
+	OVER      // OVER keyword
+	PARTITION // PARTITION keyword
+	ORDER     // ORDER keyword
+	BY        // BY keyword
+	ROWS      // ROWS keyword
+	RANGE     // RANGE keyword
+	UNBOUNDED // UNBOUNDED keyword
+	PRECEDING // PRECEDING keyword
+	FOLLOWING // FOLLOWING keyword
+	CURRENT   // CURRENT keyword
+	ROW       // ROW keyword
+
+	// --- CTE related ---
 	WITH      // WITH keyword
 	RECURSIVE // RECURSIVE keyword
 	AS        // AS keyword
 
-	// Statement, Clause, Subquery
+	// --- Statement, Clause, Subquery ---
 	SELECT    // SELECT keyword
 	INSERT    // INSERT keyword
 	INTO      // INTO keyword
@@ -101,7 +109,7 @@ const (
 	ALL       // ALL keyword
 	DISTINCT  // DISTINCT keyword
 
-	// Row locking and concurrency control
+	// --- Row locking and concurrency control ---
 	FOR    // FOR keyword
 	SHARE  // SHARE keyword
 	NO     // NO keyword
@@ -109,20 +117,20 @@ const (
 	SKIP   // SKIP keyword
 	LOCKED // LOCKED keyword
 
-	// Comments
+	// --- Comments ---
 	LINE_COMMENT  // -- line comment
 	BLOCK_COMMENT // /* block comment */ (including SnapSQL extensions)
 
-	// Others
+	// --- Others ---
 	OTHER // complex expressions, database-specific syntax
 
-	// SnapSQL extensions
+	// --- SnapSQL extensions ---
 	DUPLICATE // DUPLICATE keyword
 	KEY       // KEY keyword
 	ON        // ON keyword
 	CONFLICT  // CONFLICT keyword
 
-	// Extended token types
+	// --- Extended token types ---
 	CONTEXTUAL_IDENTIFIER // Non-reserved keyword used as identifier
 	RESERVED_IDENTIFIER   // Strictly reserved keyword used as identifier (quoted)
 )
@@ -138,6 +146,8 @@ func (t TokenType) String() string {
 		return "WHITESPACE"
 	case STRING:
 		return "STRING"
+	case BOOLEAN:
+		return "BOOLEAN"
 	case IDENTIFIER:
 		return "IDENTIFIER"
 	case NUMBER:
@@ -220,6 +230,8 @@ func (t TokenType) String() string {
 		return "ILIKE"
 	case IS:
 		return "IS"
+	case JSON_OPERATOR:
+		return "JSON_OPERATOR"
 	case NULL:
 		return "NULL"
 	case CAST:

@@ -1,5 +1,7 @@
 package parsercommon
 
+import tok "github.com/shibukawa/snapsql/tokenizer"
+
 // TableName represents a table name
 type TableName struct {
 	Name   string
@@ -14,19 +16,52 @@ func (n TableName) String() string {
 type FieldName struct {
 	Name      string
 	TableName string // Optional table qualifier
+	Pos       tok.Position
 }
 
 func (n FieldName) String() string {
 	return "FIELD"
 }
 
-// SelectItem represents an item in SELECT clause
-type SelectItem struct {
-	Expression AstNode // Expression, FieldName, etc.
-	Alias      string  // Optional alias
+type FieldType int
+
+const (
+	SingleField   FieldType = iota + 1 // Single field (e.g., "field")
+	TableField                         // Field with table name (e.g., "table.field")
+	FunctionField                      // Function field (e.g., "COUNT(field)")
+	ComplexField                       // Complex field (e.g., "table.field->'key'")
+	LiteralField                       // Literal field (e.g., "123", "'string'", "NULL")
+)
+
+func (ft FieldType) String() string {
+	switch ft {
+	case SingleField:
+		return "SingleField"
+	case TableField:
+		return "TableField"
+	case FunctionField:
+		return "FunctionField"
+	case ComplexField:
+		return "ComplexField"
+	case LiteralField:
+		return "LiteralField"
+	default:
+		return "UnknownFieldType"
+	}
 }
 
-func (n SelectItem) String() string {
+// SelectField represents an item in SELECT clause
+type SelectField struct {
+	FieldKind    FieldType
+	Expression   []tok.Token // Expression, FieldName, etc
+	TypeName     string      // Optional cast type
+	ExplicitType bool
+	FieldName    string
+	ExplicitName bool
+	Pos          tok.Position
+}
+
+func (n SelectField) String() string {
 	return "SELECT_ITEM"
 }
 
