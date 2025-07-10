@@ -18,16 +18,6 @@ var (
 )
 
 var (
-	distinct       = cmn.WS2(cmn.PrimitiveType("distinct", tok.DISTINCT))
-	all            = cmn.WS2(cmn.PrimitiveType("all", tok.ALL))
-	on             = cmn.WS2(cmn.PrimitiveType("on", tok.ON))
-	as             = cmn.WS2(cmn.PrimitiveType("as", tok.AS))
-	subQuery       = cmn.WS2(cmn.PrimitiveType("select", tok.SELECT))
-	cast           = cmn.PrimitiveType("cast", tok.CAST)
-	postgreSQLCast = cmn.PrimitiveType("postgresqlCast", tok.DOUBLE_COLON)
-	asterisk       = cmn.PrimitiveType("asterisk", tok.MULTIPLY)
-	jsonOperator   = cmn.WS2(cmn.PrimitiveType("jsonOperator", tok.JSON_OPERATOR))
-
 	distinctQualifier = pc.Or(
 		pc.Seq(distinct, on, cmn.WS2(cmn.ParenOpen)),
 		pc.Seq(distinct, all),
@@ -59,10 +49,6 @@ var (
 		pc.Seq(cmn.Identifier, cmn.ParenOpen, cmn.SP),
 		// sub query
 		pc.Seq(cmn.ParenOpen, cmn.SP, subQuery),
-	)
-	alias = pc.Or(
-		pc.Seq(cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS),             // alias without AS
-		pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS), // alias with AS
 	)
 	standardCastStart   = pc.Seq(cast, cmn.ParenOpen, cmn.SP)
 	standardCastEnd     = pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.ParenClose, cmn.SP, cmn.EOS)

@@ -342,6 +342,16 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"CAST":     CAST,
 	"DISTINCT": DISTINCT,
 	"ALL":      ALL,
+
+	"JOIN":    JOIN,
+	"INNER":   INNER,
+	"OUTER":   OUTER,
+	"LEFT":    LEFT,
+	"RIGHT":   RIGHT,
+	"FULL":    FULL,
+	"USING":   USING,
+	"NATURAL": NATURAL,
+	"CROSS":   CROSS,
 }
 
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking

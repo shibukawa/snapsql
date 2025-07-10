@@ -3,15 +3,6 @@ package parsercommon
 import tok "github.com/shibukawa/snapsql/tokenizer"
 
 // TableName represents a table name
-type TableName struct {
-	Name   string
-	Schema string // Optional schema name
-}
-
-func (n TableName) String() string {
-	return "TABLE"
-}
-
 // FieldName represents a field/column name
 type FieldName struct {
 	Name      string
@@ -66,11 +57,63 @@ func (n SelectField) String() string {
 }
 
 // TableReference represents a table reference in FROM clause
+
+// JoinType constants for TableReference
+type JoinType int
+
+const (
+	JoinNone JoinType = iota
+	JoinInner
+	JoinLeft
+	JoinRight
+	JoinFull
+	JoinCross
+	// Natural join is invalid for SnapSQL
+	// JoinNaturalInner
+	// JoinNaturalLeft
+	// JoinNaturalRight
+	// JoinNaturalFull
+	JoinInvalid
+)
+
+func (jt JoinType) String() string {
+	switch jt {
+	case JoinNone:
+		return "NO JOIN"
+	case JoinInner:
+		return "INNER JOIN"
+	case JoinLeft:
+		return "LEFT OUTER JOIN"
+	case JoinRight:
+		return "RIGHT OUTER JOIN"
+	case JoinFull:
+		return "FULL OUTER JOIN"
+	case JoinCross:
+		return "CROSS JOIN"
+	case JoinInvalid:
+		return "invalid JOIN"
+	default:
+		return "unknown JOIN"
+	}
+}
+
+// TableReference represents a table or join in FROM clause
 type TableReference struct {
-	Table AstNode // TableName, SubQuery, JoinClause, etc.
-	Alias string  // Optional alias
+	Name          string      // Table name or alias (if present, otherwise original name)
+	SchemaName    string      // Optional schema name (e.g., "schema.table")
+	TableName     string      // Original table name before alias (empty for subquery)
+	ExplicitName  bool        // true if table name is explicitly specified (e.g., "AS alias")
+	JoinType      JoinType    // Join type (see constants)
+	JoinCondition []tok.Token // ON/USING clause tokens
+	IsSubquery    bool        // true if this is a subquery
+	Expression    []tok.Token // Optional expression for complex references
 }
 
 func (n TableReference) String() string {
 	return "TABLE_REF"
+}
+
+type TableName struct {
+	Name   string
+	Schema string
 }

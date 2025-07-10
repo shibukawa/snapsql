@@ -18,7 +18,6 @@ func TestFinalizeFromClause(t *testing.T) {
 		wantTable []string
 		wantOrig  []string
 		wantJoin  []cmn.JoinType
-		wantSubq  []bool
 	}{
 		{
 			name:      "single table",
@@ -27,7 +26,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"users"},
 			wantOrig:  []string{"users"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone},
-			wantSubq:  []bool{false},
 		},
 		{
 			name:      "single table with alias",
@@ -36,7 +34,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"u"},
 			wantOrig:  []string{"users"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone},
-			wantSubq:  []bool{false},
 		},
 		{
 			name:      "single table with alias(no AS)",
@@ -45,16 +42,14 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"u"},
 			wantOrig:  []string{"users"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone},
-			wantSubq:  []bool{false},
 		},
 		{
 			name:      "subquery with alias",
-			sql:       "SELECT * FROM (SELECT id FROM users) u",
+			sql:       "SELECT * FROM (SELECT id FROM users) AS u",
 			wantError: false,
 			wantTable: []string{"u"},
 			wantOrig:  []string{""},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone},
-			wantSubq:  []bool{true},
 		},
 		{
 			name:      "subquery without alias",
@@ -73,7 +68,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"users", "orders"},
 			wantOrig:  []string{"users", "orders"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinInner},
-			wantSubq:  []bool{false, false},
 		},
 		{
 			name:      "left join with alias",
@@ -82,7 +76,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"u", "o"},
 			wantOrig:  []string{"users", "orders"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinLeft},
-			wantSubq:  []bool{false, false},
 		},
 		{
 			name:      "right join",
@@ -91,7 +84,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"users", "orders"},
 			wantOrig:  []string{"users", "orders"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinRight},
-			wantSubq:  []bool{false, false},
 		},
 		{
 			name:      "full join",
@@ -100,7 +92,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"users", "orders"},
 			wantOrig:  []string{"users", "orders"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinFull},
-			wantSubq:  []bool{false, false},
 		},
 		{
 			name:      "cross join",
@@ -109,7 +100,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"users", "orders"},
 			wantOrig:  []string{"users", "orders"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinCross},
-			wantSubq:  []bool{false, false},
 		},
 		{
 			name:      "two left joins",
@@ -118,7 +108,6 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"u", "o", "p"},
 			wantOrig:  []string{"users", "orders", "payments"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinLeft, cmn.JoinLeft},
-			wantSubq:  []bool{false, false, false},
 		},
 		{
 			name:      "three left joins",
@@ -127,7 +116,40 @@ func TestFinalizeFromClause(t *testing.T) {
 			wantTable: []string{"u", "o", "p", "r"},
 			wantOrig:  []string{"users", "orders", "payments", "refunds"},
 			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinLeft, cmn.JoinLeft, cmn.JoinLeft},
-			wantSubq:  []bool{false, false, false, false},
+		},
+		{
+			name:      "Subquery after JOIN",
+			sql:       "SELECT * FROM users JOIN (SELECT * FROM orders) o ON users.id = o.user_id",
+			wantError: false,
+			wantTable: []string{"users", "o"},
+			wantOrig:  []string{"users", ""},
+			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinInner},
+		},
+		{
+			name:      "Subquery after JOIN without alias",
+			sql:       "SELECT * FROM users JOIN (SELECT * FROM orders) ON users.id = orders.user_id",
+			wantError: true,
+		},
+		{
+			name:      "Multiple subqueries after JOIN",
+			sql:       "SELECT * FROM (SELECT * FROM users) AS u JOIN (SELECT * FROM orders) AS o ON u.id = o.user_id",
+			wantError: false,
+			wantTable: []string{"u", "o"},
+			wantOrig:  []string{"", ""},
+			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinInner},
+		},
+		{
+			name:      "Table then subquery after JOIN",
+			sql:       "SELECT * FROM users JOIN (SELECT * FROM orders) AS o ON users.id = o.user_id JOIN payments AS p ON o.id = p.order_id",
+			wantError: false,
+			wantTable: []string{"users", "o", "p"},
+			wantOrig:  []string{"users", "", "payments"},
+			wantJoin:  []cmn.JoinType{cmn.JoinNone, cmn.JoinInner, cmn.JoinInner},
+		},
+		{
+			name:      "Table then subquery after JOIN without alias",
+			sql:       "SELECT * FROM users JOIN (SELECT * FROM orders) ON users.id = orders.user_id JOIN payments p ON orders.id = p.order_id",
+			wantError: true,
 		},
 	}
 
@@ -153,19 +175,73 @@ func TestFinalizeFromClause(t *testing.T) {
 					gotTable := make([]string, len(got))
 					gotOrig := make([]string, len(got))
 					gotJoin := make([]cmn.JoinType, len(got))
-					gotSubq := make([]bool, len(got))
 					for i := range got {
-						gotTable[i] = got[i].Table.Name
-						gotOrig[i] = got[i].OriginalTable
+						gotTable[i] = got[i].Name
+						gotOrig[i] = got[i].TableName
 						gotJoin[i] = got[i].JoinType
-						gotSubq[i] = got[i].IsSubquery
 					}
 					assert.Equal(t, tc.wantTable, gotTable, "table name")
 					assert.Equal(t, tc.wantOrig, gotOrig, "original table")
 					assert.Equal(t, tc.wantJoin, gotJoin, "join type")
-					assert.Equal(t, tc.wantSubq, gotSubq, "is subquery")
 				}
 			}
+		})
+	}
+}
+
+func TestFinalizeFromClause_InvalidJoinCombinations(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+	}{
+		{"JOIN at start", "SELECT * FROM JOIN users u"},
+		{"Double JOIN", "SELECT * FROM users JOIN JOIN orders"},
+		{"Double INNER", "SELECT * FROM users INNER INNER JOIN orders"},
+		{"Double LEFT", "SELECT * FROM users LEFT LEFT JOIN orders"},
+		{"Double OUTER", "SELECT * FROM users OUTER OUTER JOIN orders"},
+		{"CROSS with INNER", "SELECT * FROM users CROSS INNER JOIN orders"},
+		{"CROSS with LEFT", "SELECT * FROM users CROSS LEFT JOIN orders"},
+		{"Double NATURAL", "SELECT * FROM users NATURAL NATURAL JOIN orders"},
+		{"NATURAL CROSS", "SELECT * FROM users NATURAL CROSS JOIN orders"},
+		{"OUTER only", "SELECT * FROM users OUTER JOIN orders"},
+		{"INNER only", "SELECT * FROM users INNER orders"},
+		{"OUTER before LEFT", "SELECT * FROM users OUTER LEFT JOIN orders"},
+		{"RIGHT before NATURAL", "SELECT * FROM users RIGHT NATURAL JOIN orders"},
+		{"USING with CROSS JOIN", "SELECT * FROM users CROSS JOIN orders USING (id)"},
+		{"USING with NATURAL JOIN", "SELECT * FROM users NATURAL JOIN orders USING (id)"},
+		{"USING with NATURAL LEFT JOIN", "SELECT * FROM users NATURAL LEFT JOIN orders USING (id)"},
+		{"USING with NATURAL RIGHT JOIN", "SELECT * FROM users NATURAL RIGHT JOIN orders USING (id)"},
+		{"USING with NATURAL FULL JOIN", "SELECT * FROM users NATURAL FULL JOIN orders USING (id)"},
+		{"No ON/USING with INNER JOIN", "SELECT * FROM users INNER JOIN orders"},
+		{"No ON/USING with LEFT JOIN", "SELECT * FROM users LEFT JOIN orders"},
+		{"No ON/USING with RIGHT JOIN", "SELECT * FROM users RIGHT JOIN orders"},
+		{"No ON/USING with FULL JOIN", "SELECT * FROM users FULL JOIN orders"},
+		{"Empty from", "SELECT * FROM"},
+		{"No table name", "SELECT * FROM AS u"},
+		{"invalid for table name before alias", "SELECT * FROM 1 AS u"},
+		{"invalid for table name before alias (No AS)", "SELECT * FROM 1 u"},
+		{"invalid for table name", "SELECT * FROM 1"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tokens, _ := tok.Tokenize(tc.sql)
+			stmt, err := parserstep2.Execute(tokens)
+			if err != nil {
+				return // 文法エラーは除外
+			}
+			err = parserstep3.Execute(stmt)
+			if err != nil {
+				return // 文法エラーは除外
+			}
+			selectStmt, ok := stmt.(*cmn.SelectStatement)
+			if !ok {
+				return
+			}
+			fromClause := selectStmt.From
+			perr := &cmn.ParseError{}
+			FinalizeFromClause(fromClause, perr)
+			assert.NotEqual(t, 0, len(perr.Errors), "should have parse error for invalid join combination")
 		})
 	}
 }

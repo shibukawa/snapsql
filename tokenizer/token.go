@@ -21,6 +21,7 @@ const (
 	// --- Basic tokens ---
 	EOF TokenType = iota + 1
 	WHITESPACE
+
 	STRING        // string literals ('text')
 	IDENTIFIER    // quoted identifiers ("col")
 	NUMBER        // numeric literals
@@ -30,6 +31,10 @@ const (
 	COMMA         // ,
 	SEMICOLON     // ;
 	DOT           // .
+
+	// --- Comments ---
+	LINE_COMMENT  // -- line comment
+	BLOCK_COMMENT // /* block comment */ (including SnapSQL extensions)
 
 	// --- Arithmetic operators ---
 	PLUS     // +
@@ -90,24 +95,36 @@ const (
 	RECURSIVE // RECURSIVE keyword
 	AS        // AS keyword
 
-	// --- Statement, Clause, Subquery ---
-	SELECT    // SELECT keyword
-	INSERT    // INSERT keyword
-	INTO      // INTO keyword
-	UPDATE    // UPDATE keyword
-	DELETE    // DELETE keyword
-	FROM      // FROM keyword
+	// --- Select ---
+	SELECT // SELECT keyword
+
+	ALL      // ALL keyword
+	DISTINCT // DISTINCT keyword
+
 	WHERE     // WHERE keyword
 	GROUP     // GROUP keyword
 	HAVING    // HAVING keyword
 	LIMIT     // LIMIT keyword
 	OFFSET    // OFFSET keyword
-	SET       // SET keyword
-	VALUES    // VALUES keyword
-	UNION     // UNION keyword
 	RETURNING // RETURNING keyword
-	ALL       // ALL keyword
-	DISTINCT  // DISTINCT keyword
+
+	// --- Insert ---
+
+	INSERT // INSERT keyword
+	INTO   // INTO keyword
+	VALUES // VALUES keyword
+
+	// --- Update ---
+	UPDATE    // UPDATE keyword
+	SET       // SET keyword
+	ON        // ON keyword
+	DUPLICATE // DUPLICATE keyword
+	KEY       // KEY keyword
+	CONFLICT  // CONFLICT keyword
+
+	// --- Delete ---
+	DELETE // DELETE keyword
+	FROM   // FROM keyword
 
 	// --- Row locking and concurrency control ---
 	FOR    // FOR keyword
@@ -117,18 +134,20 @@ const (
 	SKIP   // SKIP keyword
 	LOCKED // LOCKED keyword
 
-	// --- Comments ---
-	LINE_COMMENT  // -- line comment
-	BLOCK_COMMENT // /* block comment */ (including SnapSQL extensions)
+	// --- Join ---
+	JOIN    // JOIN keyword
+	INNER   // INNER keyword
+	OUTER   // OUTER keyword
+	LEFT    // LEFT keyword
+	RIGHT   // RIGHT keyword
+	FULL    // FULL keyword
+	CROSS   // CROSS keyword
+	USING   // USING keyword (for join conditions)
+	NATURAL // NATURAL keyword (for natural joins)
 
 	// --- Others ---
 	OTHER // complex expressions, database-specific syntax
-
-	// --- SnapSQL extensions ---
-	DUPLICATE // DUPLICATE keyword
-	KEY       // KEY keyword
-	ON        // ON keyword
-	CONFLICT  // CONFLICT keyword
+	UNION // UNION keyword
 
 	// --- Extended token types ---
 	CONTEXTUAL_IDENTIFIER // Non-reserved keyword used as identifier
@@ -290,6 +309,36 @@ func (t TokenType) String() string {
 		return "DUPLICATE"
 	case KEY:
 		return "KEY"
+	case FOR:
+		return "FOR"
+	case SHARE:
+		return "SHARE"
+	case NO:
+		return "NO"
+	case NOWAIT:
+		return "NOWAIT"
+	case SKIP:
+		return "SKIP"
+	case LOCKED:
+		return "LOCKED"
+	case JOIN:
+		return "JOIN"
+	case INNER:
+		return "INNER"
+	case OUTER:
+		return "OUTER"
+	case LEFT:
+		return "LEFT"
+	case RIGHT:
+		return "RIGHT"
+	case FULL:
+		return "FULL"
+	case CROSS:
+		return "CROSS"
+	case USING:
+		return "USING"
+	case NATURAL:
+		return "NATURAL"
 	case CONTEXTUAL_IDENTIFIER:
 		return "CONTEXTUAL_IDENTIFIER"
 	case RESERVED_IDENTIFIER:
