@@ -85,7 +85,7 @@ func (s SelectStatement) String() string {
 type InsertIntoStatement struct {
 	baseStatement
 	With       *WithClause
-	Table      TableName
+	InsertInto *InsertIntoClause
 	Columns    []FieldName
 	ValuesList *ValuesClause
 	Select     *SelectClause

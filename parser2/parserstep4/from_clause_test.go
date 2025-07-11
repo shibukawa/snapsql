@@ -228,15 +228,15 @@ func TestFinalizeFromClause_InvalidJoinCombinations(t *testing.T) {
 			tokens, _ := tok.Tokenize(tc.sql)
 			stmt, err := parserstep2.Execute(tokens)
 			if err != nil {
-				return // 文法エラーは除外
+				panic("unexpected error: " + err.Error())
 			}
 			err = parserstep3.Execute(stmt)
 			if err != nil {
-				return // 文法エラーは除外
+				panic("unexpected error: " + err.Error())
 			}
 			selectStmt, ok := stmt.(*cmn.SelectStatement)
 			if !ok {
-				return
+				panic("cast should be success")
 			}
 			fromClause := selectStmt.From
 			perr := &cmn.ParseError{}

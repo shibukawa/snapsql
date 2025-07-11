@@ -82,7 +82,7 @@ func assignInsertStatementFields(stmt *cmn.InsertIntoStatement, clauses []cmn.Cl
 		case cmn.INSERT_INTO_CLAUSE:
 			// TableNameはINSERT_INTO_CLAUSEから取得
 			if v, ok := c.(*cmn.InsertIntoClause); ok {
-				stmt.Table = v.TableName
+				stmt.InsertInto = v
 			}
 		case cmn.VALUES_CLAUSE:
 			if v, ok := c.(*cmn.ValuesClause); ok {

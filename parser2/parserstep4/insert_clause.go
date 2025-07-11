@@ -1,0 +1,70 @@
+package parserstep4
+
+import (
+	"fmt"
+
+	pc "github.com/shibukawa/parsercombinator"
+	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	tok "github.com/shibukawa/snapsql/tokenizer"
+)
+
+var (
+	insertIntoClauseTableName = cmn.WS2(pc.Or(
+		pc.Seq(cmn.Identifier, cmn.Dot, cmn.Identifier),
+		pc.Seq(cmn.Identifier),
+	))
+	columnListStart     = pc.Seq(cmn.ParenOpen, cmn.SP)
+	columnListSeparator = cmn.WS2(pc.Or(
+		cmn.Comma,
+		cmn.ParenClose,
+	))
+	columnName    = pc.Seq(cmn.Identifier, cmn.SP)
+	columnListEnd = pc.Seq(cmn.SP, cmn.EOS)
+)
+
+func FinalizeInertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.SelectClause, perr *cmn.ParseError) {
+	clause.Columns = []string{}
+	tokens := clause.ContentTokens()
+
+	pctx := pc.NewParseContext[tok.Token]()
+	pTokens := cmn.ToParserToken(tokens)
+
+	consume, match, err := insertIntoClauseTableName(pctx, pTokens)
+	if err != nil {
+		perr.Add(fmt.Errorf("%w at %s: table name is required", cmn.ErrInvalidSQL, tokens[0].Position.String()))
+		return
+	}
+	switch len(match) {
+	case 1:
+		clause.Table.Name = match[0].Val.Value
+	case 3:
+		clause.Table.Schema = match[0].Val.Value
+		clause.Table.Name = match[2].Val.Value
+	}
+	pTokens = pTokens[consume:]
+	consume, _, err = columnListStart(pctx, pTokens)
+	if err != nil {
+		if selectClause != nil {
+			return // No column list, valid for INSERT ... SELECT
+		}
+		perr.Add(fmt.Errorf("%w at %s: column list is required unless select clause", cmn.ErrInvalidForSnapSQL, tokens[0].Position.String()))
+		return
+	}
+	pTokens = pTokens[consume:]
+	for _, part := range pc.FindIter(pctx, columnListSeparator, pTokens) {
+		pTokens = pTokens[part.Consume+len(part.Skipped):]
+		_, columnName, err := columnName(pctx, part.Skipped)
+		if err != nil {
+			perr.Add(fmt.Errorf("%w at %s: invalid column name", cmn.ErrInvalidSQL, part.Skipped[0].Val.Position.String()))
+			continue
+		}
+		clause.Columns = append(clause.Columns, columnName[0].Val.Value)
+		if part.Match[0].Val.Type == tok.CLOSED_PARENS {
+			break
+		}
+	}
+	if _, _, err = columnListEnd(pctx, pTokens); err != nil {
+		perr.Add(fmt.Errorf("%w at %s: unnecessary token is at after column list", cmn.ErrInvalidSQL, tokens[len(tokens)-1].Position.String()))
+		return
+	}
+}

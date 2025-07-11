@@ -557,7 +557,8 @@ var _ ClauseNode = (*ForClause)(nil)
 
 type InsertIntoClause struct {
 	clauseBaseNode
-	TableName TableName
+	Table   TableName
+	Columns []string
 }
 
 func NewInsertIntoClause(srcText string, heading, body []tokenizer.Token) *InsertIntoClause {

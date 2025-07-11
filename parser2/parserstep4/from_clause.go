@@ -19,7 +19,7 @@ var (
 )
 
 var (
-	tableName = pc.Or(
+	fromClauseTableName = pc.Or(
 		pc.Seq(cmn.Identifier, cmn.Dot, cmn.Identifier, cmn.EOS),
 		pc.Seq(cmn.ParenOpen, cmn.SP, subQuery),
 		pc.Seq(cmn.Identifier, cmn.EOS),
@@ -171,7 +171,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 				result.Name = alias[0].Val.Value
 				result.ExplicitName = true
 				result.Expression = cmn.ToToken(beforeAlias)
-				_, match, err := tableName(pctx, beforeAlias)
+				_, match, err := fromClauseTableName(pctx, beforeAlias)
 				if err != nil {
 					v := beforeAlias[0].Val
 					return cmn.TableReference{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
@@ -195,7 +195,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 			}
 		case 2:
 			// as alias
-			_, match, err := tableName(pctx, beforeAlias)
+			_, match, err := fromClauseTableName(pctx, beforeAlias)
 			if err != nil {
 				v := body[0].Val
 				return cmn.TableReference{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
@@ -216,7 +216,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 		}
 	} else {
 		// No Alias
-		_, match, err := tableName(pctx, body)
+		_, match, err := fromClauseTableName(pctx, body)
 		if err != nil {
 			if len(body) == 0 {
 				h := head[0].Val
