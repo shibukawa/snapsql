@@ -86,6 +86,11 @@ func TestInsertWithoutColumnList(t *testing.T) {
 			sql:     "INSERT INTO users ('id', name, age) VALUES (1, 'Alice', 20);",
 			wantErr: true,
 		},
+		{
+			name:    "insert with duplicate column names",
+			sql:     "INSERT INTO users (id, id, name) VALUES (1, 2, 'Alice');",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

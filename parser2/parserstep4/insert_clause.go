@@ -2,6 +2,7 @@ package parserstep4
 
 import (
 	"fmt"
+	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
@@ -50,7 +51,10 @@ func FinalizeInertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Sel
 		perr.Add(fmt.Errorf("%w at %s: column list is required unless select clause", cmn.ErrInvalidForSnapSQL, tokens[0].Position.String()))
 		return
 	}
+
+	nameToPos := make(map[string][]string)
 	pTokens = pTokens[consume:]
+
 	for _, part := range pc.FindIter(pctx, columnListSeparator, pTokens) {
 		pTokens = pTokens[part.Consume+len(part.Skipped):]
 		_, columnName, err := columnName(pctx, part.Skipped)
@@ -58,7 +62,9 @@ func FinalizeInertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Sel
 			perr.Add(fmt.Errorf("%w at %s: invalid column name", cmn.ErrInvalidSQL, part.Skipped[0].Val.Position.String()))
 			continue
 		}
-		clause.Columns = append(clause.Columns, columnName[0].Val.Value)
+		n := columnName[0].Val
+		clause.Columns = append(clause.Columns, n.Value)
+		nameToPos[n.Value] = append(nameToPos[n.Value], n.Position.String())
 		if part.Match[0].Val.Type == tok.CLOSED_PARENS {
 			break
 		}
@@ -66,5 +72,10 @@ func FinalizeInertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Sel
 	if _, _, err = columnListEnd(pctx, pTokens); err != nil {
 		perr.Add(fmt.Errorf("%w at %s: unnecessary token is at after column list", cmn.ErrInvalidSQL, tokens[len(tokens)-1].Position.String()))
 		return
+	}
+	for name, pos := range nameToPos {
+		if len(pos) > 1 {
+			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))
+		}
 	}
 }
