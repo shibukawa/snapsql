@@ -91,7 +91,7 @@ func FinalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
 
-	fieldNames := make(map[string]string)
+	nameToPos := make(map[string][]string)
 	for _, part := range orderByFieldIter(pTokens) {
 		field := cmn.OrderByField{
 			Expression: cmn.ToToken(part.Skipped),
@@ -133,11 +133,12 @@ func FinalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 				switch len(fieldIdentifier) {
 				case 1: // single field
 					fieldName = fieldIdentifier[0].Val.Value
-					fieldNames[fieldName] = fieldIdentifier[0].Pos.String()
+					nameToPos[fieldName] = append(nameToPos[fieldName], fieldIdentifier[0].Pos.String())
 				case 3: // table.field field
 					tableName := fieldIdentifier[0].Val.Value
 					field.Field.TableName = tableName
-					fieldNames[tableName+"."+fieldName] = fieldIdentifier[0].Pos.String()
+					fullName := tableName + "." + fieldName
+					nameToPos[fullName] = append(nameToPos[fullName], fieldIdentifier[0].Pos.String())
 				}
 				field.Field.Name = fieldName
 				clause.Fields = append(clause.Fields, field)
@@ -156,13 +157,19 @@ func FinalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 				tableName := match[0].Val.Value
 				fieldName = match[2].Val.Value
 				field.Field.TableName = tableName
-				fieldNames[tableName+"."+fieldName] = match[0].Pos.String()
+				fullName := tableName + "." + fieldName
+				nameToPos[fullName] = append(nameToPos[fullName], match[0].Pos.String())
 			} else {
 				fieldName = match[0].Val.Value
-				fieldNames[fieldName] = match[0].Pos.String()
+				nameToPos[fieldName] = append(nameToPos[fieldName], match[0].Pos.String())
 			}
 			field.Field.Name = fieldName
 			clause.Fields = append(clause.Fields, field)
+		}
+	}
+	for name, pos := range nameToPos {
+		if len(pos) > 1 {
+			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))
 		}
 	}
 }

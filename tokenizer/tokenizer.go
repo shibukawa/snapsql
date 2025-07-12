@@ -363,6 +363,12 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"THEN": THEN,
 	"ELSE": ELSE,
 	"END":  END,
+
+	// Group By keywords
+	"ROLLUP":   ROLLUP,
+	"CUBE":     CUBE,
+	"GROUPING": GROUPING,
+	"SETS":     SETS,
 }
 
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking

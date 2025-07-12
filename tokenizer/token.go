@@ -161,6 +161,12 @@ const (
 	ELSE // ELSE keyword
 	END  // END keyword
 
+	// --- Group By ---
+	ROLLUP
+	CUBE
+	GROUPING
+	SETS
+
 	// --- Extended token types ---
 	CONTEXTUAL_IDENTIFIER // Non-reserved keyword used as identifier
 	RESERVED_IDENTIFIER   // Strictly reserved keyword used as identifier (quoted)
@@ -368,6 +374,15 @@ func (t TokenType) String() string {
 		return "ELSE"
 	case END:
 		return "END"
+	// --- Group By ---
+	case ROLLUP:
+		return "ROLLUP"
+	case CUBE:
+		return "CUBE"
+	case GROUPING:
+		return "GROUPING"
+	case SETS:
+		return "SETS"
 	case CONTEXTUAL_IDENTIFIER:
 		return "CONTEXTUAL_IDENTIFIER"
 	case RESERVED_IDENTIFIER:

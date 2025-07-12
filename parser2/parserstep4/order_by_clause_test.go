@@ -64,6 +64,11 @@ func TestFinalizeOrderByClause(t *testing.T) {
 			wantDescs:      []bool{false, true},
 		},
 		{
+			name:    "ORDER BY multiple columns, but have same names",
+			input:   "SELECT id, name FROM users ORDER BY name, name DESC",
+			wantErr: true,
+		},
+		{
 			name:           "ORDER BY with NULLS FIRST",
 			input:          "SELECT id, name FROM users ORDER BY age DESC NULLS FIRST",
 			wantErr:        false,

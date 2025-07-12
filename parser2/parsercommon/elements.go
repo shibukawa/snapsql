@@ -2,12 +2,12 @@ package parsercommon
 
 import tok "github.com/shibukawa/snapsql/tokenizer"
 
-// TableName represents a table name
 // FieldName represents a field/column name
 type FieldName struct {
-	Name      string
-	TableName string // Optional table qualifier
-	Pos       tok.Position
+	Name       string
+	TableName  string // Optional table qualifier
+	Pos        tok.Position
+	Expression []tok.Token // Optional expression for complex fields (e.g., "table.field->'key'")
 }
 
 func (n FieldName) String() string {
@@ -55,8 +55,6 @@ type SelectField struct {
 func (n SelectField) String() string {
 	return "SELECT_ITEM"
 }
-
-// TableReference represents a table reference in FROM clause
 
 // JoinType constants for TableReference
 type JoinType int

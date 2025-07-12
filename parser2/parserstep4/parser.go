@@ -38,6 +38,12 @@ var (
 	first = cmn.WS2(cmn.KeywordType("first", "FIRST"))
 	last  = cmn.WS2(cmn.KeywordType("last", "LAST"))
 
+	// Group By
+	rollup   = cmn.WS2(cmn.PrimitiveType("rollup", tok.ROLLUP))
+	cube     = cmn.WS2(cmn.PrimitiveType("cube", tok.CUBE))
+	grouping = cmn.WS2(cmn.PrimitiveType("grouping", tok.GROUPING))
+	sets     = cmn.WS2(cmn.PrimitiveType("sets", tok.SETS))
+
 	// Expression
 	caseKeyword = cmn.WS2(cmn.PrimitiveType("case", tok.CASE))
 	whenKeyword = cmn.WS2(cmn.PrimitiveType("when", tok.WHEN))

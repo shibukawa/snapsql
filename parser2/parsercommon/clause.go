@@ -210,7 +210,9 @@ var _ ClauseNode = (*WhereClause)(nil)
 // GroupByClause represents GROUP BY clause
 type GroupByClause struct {
 	clauseBaseNode
-	Fields []FieldName
+	Null             bool // Indicates if NULL is used in GROUP BY
+	AdvancedGrouping bool // Indicates if advanced grouping features like ROLLUP, CUBE, GROUPING SETS are used
+	Fields           []FieldName
 }
 
 func NewGroupByClause(srcText string, heading, body []tokenizer.Token) *GroupByClause {
@@ -247,7 +249,7 @@ func (n *GroupByClause) IfDirective() string {
 func (n *GroupByClause) Type() NodeType {
 	return GROUP_BY_CLAUSE
 }
-func (n GroupByClause) String() string {
+func (n *GroupByClause) String() string {
 	return "GROUP BY"
 }
 
