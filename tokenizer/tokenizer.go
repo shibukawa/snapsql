@@ -352,6 +352,17 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 	"USING":   USING,
 	"NATURAL": NATURAL,
 	"CROSS":   CROSS,
+
+	"ASC":     ASC,
+	"DESC":    DESC,
+	"COLLATE": COLLATE,
+
+	// Expression keywords
+	"CASE": CASE,
+	"WHEN": WHEN,
+	"THEN": THEN,
+	"ELSE": ELSE,
+	"END":  END,
 }
 
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking

@@ -145,9 +145,21 @@ const (
 	USING   // USING keyword (for join conditions)
 	NATURAL // NATURAL keyword (for natural joins)
 
+	// --- Order By ---
+	ASC     // ASC keyword
+	DESC    // DESC keyword
+	COLLATE // COLLATE keyword
+
 	// --- Others ---
 	OTHER // complex expressions, database-specific syntax
 	UNION // UNION keyword
+
+	// --- Expression ---
+	CASE // CASE expression
+	WHEN // WHEN keyword
+	THEN // THEN keyword
+	ELSE // ELSE keyword
+	END  // END keyword
 
 	// --- Extended token types ---
 	CONTEXTUAL_IDENTIFIER // Non-reserved keyword used as identifier
@@ -339,6 +351,23 @@ func (t TokenType) String() string {
 		return "USING"
 	case NATURAL:
 		return "NATURAL"
+	case ASC:
+		return "ASC"
+	case DESC:
+		return "DESC"
+	case COLLATE:
+		return "COLLATE"
+	// --- Expression ---
+	case CASE:
+		return "CASE"
+	case WHEN:
+		return "WHEN"
+	case THEN:
+		return "THEN"
+	case ELSE:
+		return "ELSE"
+	case END:
+		return "END"
 	case CONTEXTUAL_IDENTIFIER:
 		return "CONTEXTUAL_IDENTIFIER"
 	case RESERVED_IDENTIFIER:

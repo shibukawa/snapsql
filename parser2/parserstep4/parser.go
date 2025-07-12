@@ -28,6 +28,22 @@ var (
 	cross   = cmn.WS2(cmn.PrimitiveType("cross", tok.CROSS))
 	join    = cmn.WS2(cmn.PrimitiveType("join", tok.JOIN))
 	using   = cmn.WS2(cmn.PrimitiveType("using", tok.USING))
+
+	// Order By
+	asc     = cmn.WS2(cmn.PrimitiveType("asc", tok.ASC))
+	desc    = cmn.WS2(cmn.PrimitiveType("desc", tok.DESC))
+	collate = cmn.WS2(cmn.PrimitiveType("collate", tok.COLLATE))
+
+	nulls = cmn.WS2(cmn.KeywordType("nulls", "NULLS"))
+	first = cmn.WS2(cmn.KeywordType("first", "FIRST"))
+	last  = cmn.WS2(cmn.KeywordType("last", "LAST"))
+
+	// Expression
+	caseKeyword = cmn.WS2(cmn.PrimitiveType("case", tok.CASE))
+	whenKeyword = cmn.WS2(cmn.PrimitiveType("when", tok.WHEN))
+	thenKeyword = cmn.WS2(cmn.PrimitiveType("then", tok.THEN))
+	elseKeyword = cmn.WS2(cmn.PrimitiveType("else", tok.ELSE))
+	endKeyword  = cmn.WS2(cmn.PrimitiveType("end", tok.END))
 )
 
 var (
@@ -36,3 +52,12 @@ var (
 		pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS), // alias with AS
 	)
 )
+
+func tag(typeStr string, p ...pc.Parser[tok.Token]) pc.Parser[tok.Token] {
+	return pc.Trans(pc.Seq(p...), func(pctx *pc.ParseContext[tok.Token], src []pc.Token[tok.Token]) (converted []pc.Token[tok.Token], err error) {
+		if len(src) > 0 {
+			src[0].Type = typeStr
+		}
+		return src, nil
+	})
+}

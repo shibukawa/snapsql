@@ -29,6 +29,8 @@ var KeywordSet = map[string]KeywordInfo{
 	"TO": {true, true}, "UNION": {true, true}, "UNIQUE": {true, true}, "USING": {true, true},
 	"VIEW": {true, true}, "WHEN": {true, true},
 
+	"NULLS": {true, false}, "FIRST": {true, false}, "LAST": {true, false},
+
 	// --- PostgreSQL/extended (strict reserved) ---
 	"SIMILAR": {true, true}, "OVER": {true, true}, "PARTITION": {true, true}, "RANGE": {true, true}, "ROWS": {true, true},
 	"UNBOUNDED": {true, true}, "PRECEDING": {true, true}, "FOLLOWING": {true, true}, "CURRENT": {true, true}, "ROW": {true, true},

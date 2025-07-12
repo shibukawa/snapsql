@@ -1,6 +1,9 @@
 package parsercommon
 
-import "github.com/shibukawa/snapsql/tokenizer"
+import (
+	"github.com/shibukawa/snapsql/tokenizer"
+	tok "github.com/shibukawa/snapsql/tokenizer"
+)
 
 // Clause structures
 
@@ -495,8 +498,11 @@ func (n CTEDefinition) String() string {
 
 // OrderByField represents a field in ORDER BY clause
 type OrderByField struct {
-	Field FieldName
-	Desc  bool // true for DESC, false for ASC
+	Field      FieldName
+	Cast       string // Optional cast type
+	Desc       bool   // true for DESC, false for ASC
+	Extras     []tok.Token
+	Expression []tok.Token // Expression for ORDER BY
 }
 
 func (n OrderByField) String() string {

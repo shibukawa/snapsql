@@ -2,6 +2,7 @@ package parsercommon
 
 import (
 	"slices"
+	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
 	tok "github.com/shibukawa/snapsql/tokenizer"
@@ -65,6 +66,20 @@ func PrimitiveType(typeName string, types ...tok.TokenType) pc.Parser[tok.Token]
 	return func(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Token]) (int, []pc.Token[tok.Token], error) {
 		if len(tokens) > 0 && slices.Contains(types, tokens[0].Val.Type) {
 			return 1, tokens[:1], nil
+		}
+		return 0, nil, pc.ErrNotMatch
+	}
+}
+
+func KeywordType(typeName string, word ...string) pc.Parser[tok.Token] {
+	return func(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Token]) (int, []pc.Token[tok.Token], error) {
+		if len(tokens) > 0 && (tokens[0].Val.Type == tok.IDENTIFIER || tokens[0].Val.Type == tok.RESERVED_IDENTIFIER) {
+			v := tokens[0].Val.Value
+			for _, w := range word {
+				if strings.EqualFold(v, w) {
+					return 1, tokens[:1], nil
+				}
+			}
 		}
 		return 0, nil, pc.ErrNotMatch
 	}

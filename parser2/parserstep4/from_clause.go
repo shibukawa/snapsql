@@ -41,7 +41,6 @@ func FinalizeFromClause(clause *cmn.FromClause, perr *cmn.ParseError) {
 	var joinHead []pc.Token[tok.Token]
 
 	tokens := clause.ContentTokens()
-
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
 
