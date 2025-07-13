@@ -1,7 +1,6 @@
 package parserstep2
 
 import (
-	pc "github.com/shibukawa/parsercombinator"
 	"github.com/shibukawa/snapsql/tokenizer"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
@@ -14,30 +13,6 @@ var (
 	parenOpen  = primitiveType("parenOpen", tokenizer.OPENED_PARENS)
 	parenClose = primitiveType("parenClose", tokenizer.CLOSED_PARENS)
 )
-
-func number() pc.Parser[Entity] {
-	return ws(primitiveType("number", tok.NUMBER))
-}
-
-func str() pc.Parser[Entity] {
-	return ws(primitiveType("string", tok.STRING))
-}
-
-func null() pc.Parser[Entity] {
-	return ws(primitiveType("null", tokenizer.NULL))
-}
-
-func not() pc.Parser[Entity] {
-	return ws(primitiveType("not", tokenizer.NOT))
-}
-
-func similar() pc.Parser[Entity] {
-	return ws(primitiveType("similar", tokenizer.SIMILAR))
-}
-
-func to() pc.Parser[Entity] {
-	return ws(primitiveType("to", tokenizer.TO))
-}
 
 // CTE tokens
 

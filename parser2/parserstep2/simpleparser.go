@@ -3,7 +3,6 @@ package parserstep2
 
 import (
 	"slices"
-	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
@@ -64,31 +63,6 @@ func (l LiteralNode) String() string {
 
 var _ cmn.AstNode = (*LiteralNode)(nil)
 
-// literal parses numeric, string, boolean, or null literals and returns a LiteralAstNode.
-func literal() pc.Parser[Entity] {
-	return ws(pc.Trace("literal",
-		pc.Trans(
-			pc.Or(str(), number(), boolean(), null()),
-			func(pctx *pc.ParseContext[Entity], src []pc.Token[Entity]) (converted []pc.Token[Entity], err error) {
-				t := src[0]
-				o := t.Val.Original
-				return []pc.Token[Entity]{
-					{
-						Type: "literal",
-						Pos:  t.Pos,
-						Val: Entity{
-							NewValue: &LiteralNode{
-								LiteralType: o.Type,
-								Value:       o.Value,
-								rawTokens:   []tokenizer.Token{o},
-							},
-						},
-						Raw: o.Value,
-					},
-				}, nil
-			})))
-}
-
 // --- Primitive Parsers ---
 
 func primitiveType(typeName string, types ...tokenizer.TokenType) pc.Parser[Entity] {
@@ -111,47 +85,6 @@ func primitiveType(typeName string, types ...tokenizer.TokenType) pc.Parser[Enti
 		}
 		return 0, nil, pc.ErrNotMatch
 	})
-}
-
-// booleanLiteral parses TRUE or FALSE with case-insensitive comparison
-func boolean() pc.Parser[Entity] {
-	return ws(pc.Trace("boolean", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
-		if len(tokens) > 0 && tokens[0].Type == "raw" {
-			o := tokens[0].Val.Original
-			if (o.Type == tokenizer.RESERVED_IDENTIFIER || o.Type == tokenizer.IDENTIFIER) &&
-				(strings.EqualFold(o.Value, "TRUE") || strings.EqualFold(o.Value, "FALSE")) { // Case-insensitive
-				return 1, []pc.Token[Entity]{
-					{
-						Type: "boolean",
-						Pos:  tokens[0].Pos,
-						Val: Entity{
-							Original: o,
-						},
-						Raw: o.Value, // Preserve original case
-					},
-				}, nil
-			}
-		}
-		return 0, nil, pc.ErrNotMatch
-	}))
-}
-
-// This parser passes invalid combination like "NOT IS" or "LIKE NOT".
-// This check will be done in later step.
-func operator() pc.Parser[Entity] {
-	p := ws(primitiveType("operator",
-		tokenizer.EQUAL, tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.LESS_EQUAL,
-		tokenizer.GREATER_THAN, tokenizer.GREATER_EQUAL, tokenizer.PLUS, tokenizer.MINUS,
-		tokenizer.MULTIPLY, tokenizer.DIVIDE,
-		tokenizer.AND, tokenizer.OR, tokenizer.IN, tokenizer.IS,
-		tokenizer.LIKE, tokenizer.ILIKE, tokenizer.RLIKE, tokenizer.REGEXP))
-
-	return pc.Or(
-		pc.Seq(pc.Optional(not()), similar(), to()),
-		pc.Seq(not(), p),
-		pc.Seq(p, not()),
-		p,
-	)
 }
 
 // anyIdentifier parses any valid identifier (including contextual and quoted)

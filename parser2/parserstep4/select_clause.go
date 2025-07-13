@@ -1,20 +1,12 @@
 package parserstep4
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
 	tok "github.com/shibukawa/snapsql/tokenizer"
-)
-
-var (
-	ErrDistinctParse    = errors.New("error at parsing DISTINCT qualifier")
-	ErrAsteriskInSelect = errors.New("asterisk (*) is not allowed in SELECT clause")
-	ErrLiteralInSelect  = errors.New("literal (boolean/number/string/null) is not allowed in SELECT clause")
-	ErrDistinctOnAlias  = errors.New("alias name is not allowed in DISTINCT ON list")
 )
 
 var (
@@ -105,7 +97,7 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		case "distinct": // DISTINCT
 			clause.Distinct = true
 		case "distinct-all": // DISTINCT ALL -> error
-			perr.Add(fmt.Errorf("%w: ALL is not allowed in DISTINCT clause", ErrDistinctParse))
+			perr.Add(fmt.Errorf("%w at %s: ALL is not allowed in DISTINCT clause", cmn.ErrInvalidSQL, match[0].Val.Position.String()))
 			return
 		case "distinct-on": // DISTINCT ON (
 			clause.Distinct = true
@@ -231,7 +223,7 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 				if match[2].Val.Type == tok.MULTIPLY {
 					// t.*
 					p := match[0].Val.Position
-					perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %s in SELECT clause", ErrAsteriskInSelect, p.String()))
+					perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %s in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
 				} else {
 					// t.field
 					if fieldName == "" {
@@ -277,13 +269,13 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 			})
 		case "asterisk": // asterisk (*)
 			p := v.Position
-			perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %d:%d in SELECT clause", ErrAsteriskInSelect, p.Line, p.Column))
+			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow asterisk (*) in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
 		case "literal": // literal (boolean/number/string/null)
 			p := v.Position
-			perr.Add(fmt.Errorf("%w: snapsql doesn't allow literal('%s') at %s in SELECT clause", ErrLiteralInSelect, v.Value, p.String()))
+			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow literal('%s') in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String(), v.Value))
 		case "not *": // not null/true/false
 			p := match[0].Val.Position
-			perr.Add(fmt.Errorf("%w: snapsql doesn't allow literal at %s in SELECT clause", ErrLiteralInSelect, p.String()))
+			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow literal in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
 		default:
 			panic(fmt.Sprintf("unexpected match length: %d", len(match)))
 		}
@@ -295,8 +287,7 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		}
 		for _, f := range clause.Fields {
 			if f.FieldName == d.Name && f.ExplicitName {
-				perr.Add(fmt.Errorf("%w: only field name is allowed but %s at %d:%d in SELECT clause points alias at %d:%d", ErrDistinctOnAlias,
-					d.Name, d.Pos.Line, d.Pos.Column, f.Pos.Line, f.Pos.Column))
+				perr.Add(fmt.Errorf("%w at %s: only field name is allowed but %s in SELECT clause points alias", cmn.ErrInvalidSQL, f.Pos.String(), d.Name))
 			}
 		}
 	}
