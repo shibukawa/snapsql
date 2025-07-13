@@ -54,8 +54,8 @@ var (
 
 var (
 	alias = pc.Or(
-		pc.Seq(cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS),             // alias without AS
-		pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS), // alias with AS
+		tag("without-as", pc.Seq(cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS)), // alias without AS
+		tag("with-as", pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS)),
 	)
 )
 

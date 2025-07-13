@@ -19,10 +19,10 @@ var (
 
 var (
 	distinctQualifier = pc.Or(
-		pc.Seq(distinct, on, cmn.WS2(cmn.ParenOpen)),
-		pc.Seq(distinct, all),
-		distinct,
-		all,
+		tag("distinct-on", pc.Seq(distinct, on, cmn.WS2(cmn.ParenOpen))),
+		tag("distinct-all", pc.Seq(distinct, all)),
+		tag("distinct", distinct),
+		tag("all", all),
 	)
 
 	commaOrParenClose = pc.Or(
@@ -34,21 +34,21 @@ var (
 
 	fieldItemStart = pc.Or(
 		// *
-		pc.Seq(asterisk, cmn.SP, cmn.EOS),
+		tag("asterisk", pc.Seq(asterisk, cmn.SP, cmn.EOS)),
 		// string, number, boolean, null
-		pc.Seq(cmn.Literal, cmn.SP, cmn.EOS),
+		tag("literal", pc.Seq(cmn.Literal, cmn.SP, cmn.EOS)),
 		// not null/true/false
-		pc.Seq(cmn.Not, pc.Or(cmn.Null, cmn.Boolean), cmn.EOS),
+		tag("not *", pc.Seq(cmn.Not, pc.Or(cmn.Null, cmn.Boolean), cmn.EOS)),
 		// negative number
-		pc.Seq(cmn.Minus, cmn.Number, cmn.EOS),
+		tag("literal", pc.Seq(cmn.Minus, cmn.Number, cmn.EOS)),
 		// field
-		pc.Seq(cmn.Identifier,
+		tag("field", pc.Seq(cmn.Identifier,
 			pc.Optional(pc.Seq(cmn.Dot, pc.Or(cmn.Identifier, asterisk))),
-		),
+		)),
 		// function call
-		pc.Seq(cmn.Identifier, cmn.ParenOpen, cmn.SP),
+		tag("function", pc.Seq(cmn.Identifier, cmn.ParenOpen, cmn.SP)),
 		// sub query
-		pc.Seq(cmn.ParenOpen, cmn.SP, subQuery),
+		tag("subquery", pc.Seq(cmn.ParenOpen, cmn.SP, subQuery)),
 	)
 	standardCastStart   = pc.Seq(cast, cmn.ParenOpen, cmn.SP)
 	standardCastEnd     = pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.ParenClose, cmn.SP, cmn.EOS)
@@ -101,15 +101,13 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 	// DISTINCT found
 	if err == nil {
 		pTokens = pTokens[consume:]
-		switch len(match) {
-		case 1: // DISTINCT or ALL
-			if match[0].Val.Type == tok.DISTINCT {
-				clause.Distinct = true
-			}
-		case 2: // DISTINCT ALL -> error
+		switch match[0].Type {
+		case "distinct": // DISTINCT
+			clause.Distinct = true
+		case "distinct-all": // DISTINCT ALL -> error
 			perr.Add(fmt.Errorf("%w: ALL is not allowed in DISTINCT clause", ErrDistinctParse))
 			return
-		case 3: // DISTINCT ON (
+		case "distinct-on": // DISTINCT ON (
 			clause.Distinct = true
 			consume, fields := parseFieldItems(pctx, pTokens)
 			clause.DistinctOn = fields
@@ -142,21 +140,23 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		// Alias
 		var fieldName string
 		var explicitName bool
-		beforeAlias, match, _, _, _ := pc.Find(pctx, alias, fieldTokens)
-		switch len(match) {
-		case 1: // alias without AS, but it requires before the word
-			if len(beforeAlias) > 0 {
-				lastType := beforeAlias[len(beforeAlias)-1].Val.Type
-				if lastType != tok.DOUBLE_COLON && lastType != tok.DOT {
-					fieldName = match[0].Val.Value
-					fieldTokens = beforeAlias
-					explicitName = true
+		beforeAlias, match, _, _, ok := pc.Find(pctx, alias, fieldTokens)
+		if ok {
+			switch match[0].Type {
+			case "without-as": // it requires before the word
+				if len(beforeAlias) > 0 {
+					lastType := beforeAlias[len(beforeAlias)-1].Val.Type
+					if lastType != tok.DOUBLE_COLON && lastType != tok.DOT {
+						fieldName = match[0].Val.Value
+						fieldTokens = beforeAlias
+						explicitName = true
+					}
 				}
+			case "with-as":
+				fieldName = match[1].Val.Value
+				fieldTokens = beforeAlias
+				explicitName = true
 			}
-		case 2:
-			fieldName = match[1].Val.Value
-			fieldTokens = beforeAlias
-			explicitName = true
 		}
 
 		// Cast
@@ -202,18 +202,15 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 			continue
 		}
 
-		consume, match, err = fieldItemStart(pctx, fieldTokens)
+		_, match, err = fieldItemStart(pctx, fieldTokens)
 		if err != nil {
 			continue // todo: panic
 		}
-		switch len(match) {
-		case 1: // asterisk (*), identity
-			v := match[0].Val
-			switch v.Type {
-			case tok.MULTIPLY:
-				p := v.Position
-				perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %d:%d in SELECT clause", ErrAsteriskInSelect, p.Line, p.Column))
-			case tok.IDENTIFIER:
+		v := match[0].Val
+		switch match[0].Type {
+		case "field": // identifier(column name)
+			switch len(match) {
+			case 1:
 				if fieldName == "" {
 					fieldName = v.Value // use identity as alias
 				}
@@ -226,30 +223,32 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 					ExplicitType: explicitType,
 					Pos:          v.Position,
 				})
-			default: // literal
-				p := v.Position
-				perr.Add(fmt.Errorf("%w: snapsql doesn't allow literal at %d:%d in SELECT clause", ErrLiteralInSelect, p.Line, p.Column))
-			}
-		case 2: // sub query, function call
-			// function call
-			var fieldKind cmn.FieldType
-			if match[0].Val.Type == tok.NOT || match[0].Val.Type == tok.MINUS {
-				p := match[0].Val.Position
-				perr.Add(fmt.Errorf("%w: snapsql doesn't allow literal at %d:%d in SELECT clause", ErrLiteralInSelect, p.Line, p.Column))
-			}
-			if match[1].Val.Type == tok.OPENED_PARENS {
-
-				if !explicitType {
-					if returnType, ok := fixedFunctionReturnTypes[strings.ToLower(match[0].Val.Value)]; ok {
-						fieldType = returnType
-					}
+			case 3:
+				if match[2].Val.Type == tok.MULTIPLY {
+					// t.*
+					p := match[0].Val.Position
+					perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %s in SELECT clause", ErrAsteriskInSelect, p.String()))
+				} else {
+					// t.field
+					clause.Fields = append(clause.Fields, cmn.SelectField{
+						FieldKind:    cmn.TableField,
+						Expression:   cmn.ToToken(match[:3]),
+						FieldName:    fieldName,
+						ExplicitName: explicitName,
+						TypeName:     fieldType,
+						ExplicitType: explicitType,
+						Pos:          match[0].Val.Position,
+					})
 				}
-				fieldKind = cmn.FunctionField
-			} else {
-				fieldKind = cmn.ComplexField
+			}
+		case "function": // function call
+			if !explicitType {
+				if returnType, ok := fixedFunctionReturnTypes[strings.ToLower(match[0].Val.Value)]; ok {
+					fieldType = returnType
+				}
 			}
 			clause.Fields = append(clause.Fields, cmn.SelectField{
-				FieldKind:    fieldKind,
+				FieldKind:    cmn.FunctionField,
 				Expression:   cmn.ToToken(match),
 				FieldName:    fieldName,
 				ExplicitName: explicitName,
@@ -257,23 +256,25 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 				ExplicitType: explicitType,
 				Pos:          match[0].Val.Position,
 			})
-		case 3: // identity with table name
-			if match[2].Val.Type == tok.MULTIPLY {
-				// t.*
-				p := match[0].Val.Position
-				perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %d:%d in SELECT clause", ErrAsteriskInSelect, p.Line, p.Column))
-			} else {
-				// t.field
-				clause.Fields = append(clause.Fields, cmn.SelectField{
-					FieldKind:    cmn.TableField,
-					Expression:   cmn.ToToken(match[:3]),
-					FieldName:    fieldName,
-					ExplicitName: explicitName,
-					TypeName:     fieldType,
-					ExplicitType: explicitType,
-					Pos:          match[0].Val.Position,
-				})
-			}
+		case "subquery": // sub query
+			clause.Fields = append(clause.Fields, cmn.SelectField{
+				FieldKind:    cmn.ComplexField,
+				Expression:   cmn.ToToken(match),
+				FieldName:    fieldName,
+				ExplicitName: explicitName,
+				TypeName:     fieldType,
+				ExplicitType: explicitType,
+				Pos:          match[0].Val.Position,
+			})
+		case "asterisk": // asterisk (*)
+			p := v.Position
+			perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %d:%d in SELECT clause", ErrAsteriskInSelect, p.Line, p.Column))
+		case "literal": // literal (boolean/number/string/null)
+			p := v.Position
+			perr.Add(fmt.Errorf("%w: snapsql doesn't allow literal('%s') at %s in SELECT clause", ErrLiteralInSelect, v.Value, p.String()))
+		case "not *": // not null/true/false
+			p := match[0].Val.Position
+			perr.Add(fmt.Errorf("%w: snapsql doesn't allow literal at %s in SELECT clause", ErrLiteralInSelect, p.String()))
 		default:
 			panic(fmt.Sprintf("unexpected match length: %d", len(match)))
 		}

@@ -20,9 +20,9 @@ var (
 
 var (
 	fromClauseTableName = pc.Or(
-		pc.Seq(cmn.Identifier, cmn.Dot, cmn.Identifier, cmn.EOS),
-		pc.Seq(cmn.ParenOpen, cmn.SP, subQuery),
-		pc.Seq(cmn.Identifier, cmn.EOS),
+		tag("table with schema", cmn.Identifier, cmn.Dot, cmn.Identifier, cmn.EOS),
+		tag("subquery", cmn.ParenOpen, cmn.SP, subQuery),
+		tag("table", cmn.Identifier, cmn.EOS),
 	)
 
 	fromClauseSplitter = pc.Or(
@@ -175,16 +175,16 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 					v := beforeAlias[0].Val
 					return cmn.TableReference{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
 				}
-				switch len(match) {
-				case 1: // table alias (no AS)
+				switch match[0].Type {
+				case "table":
 					result.Name = alias[0].Val.Value
 					result.TableName = match[0].Val.Value
-				case 2: // subquery
-					result.Name = alias[0].Val.Value
-				case 3: // table with schema
+				case "table with schema":
 					result.Name = alias[0].Val.Value
 					result.SchemaName = match[0].Val.Value
 					result.TableName = match[1].Val.Value
+				case "subquery":
+					result.Name = alias[0].Val.Value
 				}
 			} else {
 				// no alias: identifier
