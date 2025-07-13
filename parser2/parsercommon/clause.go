@@ -350,7 +350,7 @@ var _ ClauseNode = (*OrderByClause)(nil)
 // LimitClause represents LIMIT clause
 type LimitClause struct {
 	clauseBaseNode
-	Count AstNode // Expression
+	Count int // Expression
 }
 
 func NewLimitClause(srcText string, heading, body []tokenizer.Token) *LimitClause {
@@ -387,7 +387,7 @@ func (n *LimitClause) IfDirective() string {
 func (n *LimitClause) Type() NodeType {
 	return LIMIT_CLAUSE
 }
-func (n LimitClause) String() string {
+func (n *LimitClause) String() string {
 	return "LIMIT"
 }
 
@@ -396,7 +396,7 @@ var _ ClauseNode = (*LimitClause)(nil)
 // OffsetClause represents OFFSET clause
 type OffsetClause struct {
 	clauseBaseNode
-	Count AstNode // Expression
+	Count int // Expression
 }
 
 func NewOffsetClause(srcText string, heading, body []tokenizer.Token) *OffsetClause {
