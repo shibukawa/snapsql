@@ -116,6 +116,8 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		// empty or ALL is valid
 	}
 
+	nameToPos := make(map[string][]string)
+
 	// field analysis
 	// supported::
 	//   1. type casts
@@ -215,14 +217,16 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 					fieldName = v.Value // use identity as alias
 				}
 				clause.Fields = append(clause.Fields, cmn.SelectField{
-					FieldKind:    cmn.SingleField,
-					Expression:   cmn.ToToken(match[:1]),
-					FieldName:    fieldName,
-					ExplicitName: explicitName,
-					TypeName:     fieldType,
-					ExplicitType: explicitType,
-					Pos:          v.Position,
+					FieldKind:     cmn.SingleField,
+					TableName:     "",
+					OriginalField: v.Value,
+					FieldName:     fieldName,
+					ExplicitName:  explicitName,
+					TypeName:      fieldType,
+					ExplicitType:  explicitType,
+					Pos:           v.Position,
 				})
+				nameToPos[fieldName] = append(nameToPos[fieldName], v.Position.String())
 			case 3:
 				if match[2].Val.Type == tok.MULTIPLY {
 					// t.*
@@ -230,15 +234,20 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 					perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %s in SELECT clause", ErrAsteriskInSelect, p.String()))
 				} else {
 					// t.field
+					if fieldName == "" {
+						fieldName = match[2].Val.Value // use identity as alias
+					}
 					clause.Fields = append(clause.Fields, cmn.SelectField{
-						FieldKind:    cmn.TableField,
-						Expression:   cmn.ToToken(match[:3]),
-						FieldName:    fieldName,
-						ExplicitName: explicitName,
-						TypeName:     fieldType,
-						ExplicitType: explicitType,
-						Pos:          match[0].Val.Position,
+						FieldKind:     cmn.TableField,
+						TableName:     match[0].Val.Value,
+						OriginalField: v.Value + "." + match[2].Val.Value,
+						FieldName:     fieldName,
+						ExplicitName:  explicitName,
+						TypeName:      fieldType,
+						ExplicitType:  explicitType,
+						Pos:           match[0].Val.Position,
 					})
+					nameToPos[fieldName] = append(nameToPos[fieldName], v.Position.String())
 				}
 			}
 		case "function": // function call
@@ -289,6 +298,12 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 				perr.Add(fmt.Errorf("%w: only field name is allowed but %s at %d:%d in SELECT clause points alias at %d:%d", ErrDistinctOnAlias,
 					d.Name, d.Pos.Line, d.Pos.Column, f.Pos.Line, f.Pos.Column))
 			}
+		}
+	}
+
+	for name, pos := range nameToPos {
+		if len(pos) > 1 {
+			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))
 		}
 	}
 }

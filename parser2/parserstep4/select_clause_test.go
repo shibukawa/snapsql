@@ -173,7 +173,7 @@ func TestFinalizeSelectClause(t *testing.T) {
 			sql:               "SELECT u.age::text FROM users u",
 			wantError:         false,
 			wantFieldTypes:    []cmn.FieldType{cmn.TableField},
-			wantFieldNames:    []string{""},
+			wantFieldNames:    []string{"age"},
 			wantExplicitNames: []bool{false},
 			wantTypeName:      []string{"text"},
 			wantExplicitTypes: []bool{true},
@@ -279,7 +279,7 @@ func TestFinalizeSelectClause(t *testing.T) {
 			distinct:          true,
 			distinctOn:        []string{"t.name"},
 			wantFieldTypes:    []cmn.FieldType{cmn.TableField, cmn.TableField},
-			wantFieldNames:    []string{"name2", ""},
+			wantFieldNames:    []string{"name2", "age"},
 			wantExplicitNames: []bool{true, false},
 			wantTypeName:      []string{"", ""},
 			wantExplicitTypes: []bool{false, false},
@@ -320,6 +320,31 @@ func TestFinalizeSelectClause(t *testing.T) {
 			wantExplicitNames: []bool{false},
 			wantTypeName:      []string{"integer"},
 			wantExplicitTypes: []bool{false},
+		},
+		{
+			name:      "DISTINCT with duplicate column name is forbidden",
+			sql:       "SELECT DISTINCT name, name FROM users",
+			wantError: true,
+		},
+		{
+			name:      "duplicate column name is forbidden",
+			sql:       "SELECT name, name FROM users",
+			wantError: true,
+		},
+		{
+			name:      "duplicate column name is forbidden even if table name qualified",
+			sql:       "SELECT users.name, name FROM users",
+			wantError: true,
+		},
+		{
+			name:      "duplicate column name is forbidden even if table name qualified (2)",
+			sql:       "SELECT users.name, members.name FROM users LEFT OUTER JOIN members ON users.id = members.user_id",
+			wantError: true,
+		},
+		{
+			name:      "duplicate column name is forbidden even if on of the name is alias",
+			sql:       "SELECT name, family_name as name FROM users",
+			wantError: true,
 		},
 	}
 	for _, tc := range tests {

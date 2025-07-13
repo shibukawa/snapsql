@@ -43,13 +43,15 @@ func (ft FieldType) String() string {
 
 // SelectField represents an item in SELECT clause
 type SelectField struct {
-	FieldKind    FieldType
-	Expression   []tok.Token // Expression, FieldName, etc
-	TypeName     string      // Optional cast type
-	ExplicitType bool
-	FieldName    string
-	ExplicitName bool
-	Pos          tok.Position
+	FieldKind     FieldType
+	OriginalField string
+	TableName     string
+	Expression    []tok.Token // For function fields or complex expressions
+	TypeName      string      // Optional cast type
+	ExplicitType  bool
+	FieldName     string
+	ExplicitName  bool
+	Pos           tok.Position
 }
 
 func (n SelectField) String() string {
