@@ -1,4 +1,4 @@
-package parser
+package parsercommon
 
 import (
 	"fmt"
@@ -10,31 +10,33 @@ import (
 
 // Namespace manages namespace information and CEL functionality in an integrated manner
 type Namespace struct {
-	Constants    map[string]any `yaml:"env"`
-	Schema       *InterfaceSchema
-	celVariables map[string]any // CEL evaluation variables
-	envCEL       *cel.Env       // CEL environment for environment variables
-	paramCEL     *cel.Env       // CEL environment for parameters
-	dummyData    map[string]any // dummy data environment
+	Constants   map[string]any `yaml:"env"`
+	Schema      *FunctionDefinition
+	environment map[string]any // CEL evaluation variables
+	envCEL      *cel.Env       // CEL environment for environment variables
+	paramCEL    *cel.Env       // CEL environment for parameters
+	param       map[string]any // dummy data environment
 }
 
 // NewNamespace creates a new namespace
 // If schema is nil, creates an empty InterfaceSchema
-func NewNamespace(schema *InterfaceSchema) *Namespace {
+func NewNamespace(schema *FunctionDefinition, environment, param map[string]any) *Namespace {
 	// Create empty schema if nil
 	if schema == nil {
-		schema = &InterfaceSchema{
+		schema = &FunctionDefinition{
 			Parameters: make(map[string]any),
 		}
 	}
 
-	dummyData := generateDummyDataFromSchema(schema)
+	if param == nil {
+		param = generateDummyDataFromSchema(schema)
+	}
 
 	ns := &Namespace{
-		Constants:    make(map[string]any),
-		celVariables: make(map[string]any),
-		Schema:       schema,
-		dummyData:    dummyData,
+		Constants:   make(map[string]any),
+		environment: make(map[string]any),
+		Schema:      schema,
+		param:       param,
 	}
 
 	// Initialize CEL engines
@@ -83,7 +85,7 @@ func (ns *Namespace) RemoveLoopVariable(variable string) {
 // Copy creates a copy of the namespace
 func (ns *Namespace) Copy() *Namespace {
 	// Copy schema
-	schemaCopy := &InterfaceSchema{
+	schemaCopy := &FunctionDefinition{
 		Name:        ns.Schema.Name,
 		Description: ns.Schema.Description,
 		Parameters:  make(map[string]any),
@@ -101,17 +103,17 @@ func (ns *Namespace) Copy() *Namespace {
 	}
 
 	// Copy dummy data
-	dummyDataCopy := make(map[string]any)
-	for k, v := range ns.dummyData {
-		dummyDataCopy[k] = v
+	copiedParam := make(map[string]any)
+	for k, v := range ns.param {
+		copiedParam[k] = v
 	}
 
 	// Create new namespace
 	newNs := &Namespace{
-		Constants:    constantsCopy,
-		Schema:       schemaCopy,
-		celVariables: make(map[string]any),
-		dummyData:    dummyDataCopy,
+		Constants:   constantsCopy,
+		Schema:      schemaCopy,
+		environment: make(map[string]any),
+		param:       copiedParam,
 	}
 
 	// CELエンジンを初期化
@@ -136,13 +138,13 @@ func (ns *Namespace) GetConstant(key string) (any, bool) {
 }
 
 // SetSchema sets the schema and initializes CEL engines
-func (ns *Namespace) SetSchema(schema *InterfaceSchema) error {
+func (ns *Namespace) SetSchema(schema *FunctionDefinition) error {
 	ns.Schema = schema
 
 	// Add parameters as CEL variables
 	if schema != nil {
 		for key, value := range schema.Parameters {
-			ns.celVariables[key] = value
+			ns.environment[key] = value
 		}
 	}
 
@@ -228,8 +230,8 @@ func (ns *Namespace) createParameterCEL() error {
 	}
 
 	// Register using dummy data as CEL variables
-	if ns.dummyData != nil {
-		ns.addDummyDataVariables("", ns.dummyData, &envOptions)
+	if ns.param != nil {
+		ns.addDummyDataVariables("", ns.param, &envOptions)
 	}
 
 	env, err := cel.NewEnv(envOptions...)
@@ -436,7 +438,7 @@ func (ns *Namespace) AddLoopVariableWithEvaluation(variable string, listExpr str
 	newNs.Schema.Parameters[variable] = elementType
 
 	// Add loop variable to dummy data
-	newNs.dummyData[variable] = elementValue
+	newNs.param[variable] = elementValue
 
 	// CELエンジンを再初期化
 	if err := newNs.initializeCELEngines(); err != nil {
@@ -465,7 +467,7 @@ func (ns *Namespace) EvaluateParameterExpression(expression string) (any, error)
 	}
 
 	// ダミーデータを使用して評価
-	result, _, err := program.Eval(ns.dummyData)
+	result, _, err := program.Eval(ns.param)
 	if err != nil {
 		return nil, fmt.Errorf("CEL evaluation error: %w", err)
 	}
@@ -535,7 +537,7 @@ func (ns *Namespace) inferTypeFromValue(value any) string {
 }
 
 // generateDummyDataFromSchema はスキーマからダミーデータ環境を生成する（関数スタイル）
-func generateDummyDataFromSchema(schema *InterfaceSchema) map[string]any {
+func generateDummyDataFromSchema(schema *FunctionDefinition) map[string]any {
 	if schema == nil || schema.Parameters == nil {
 		return make(map[string]any)
 	}

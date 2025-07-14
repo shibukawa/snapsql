@@ -1,4 +1,4 @@
-package parser
+package parsercommon
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestNamespace(t *testing.T) {
-	ifs := &InterfaceSchema{
+	ifs := &FunctionDefinition{
 		Parameters: map[string]any{
 			"user_id": "int",
 			"filters": map[string]any{
@@ -16,7 +16,7 @@ func TestNamespace(t *testing.T) {
 			},
 		},
 	}
-	ns := NewNamespace(ifs)
+	ns := NewNamespace(ifs, map[string]any{}, nil)
 	ns.SetConstant("table_suffix", "prod")
 	ns.SetConstant("tenant_id", "12345")
 
@@ -41,7 +41,7 @@ func TestNamespace(t *testing.T) {
 }
 
 func TestValueToLiteral(t *testing.T) {
-	ns := NewNamespace(nil)
+	ns := NewNamespace(nil, map[string]any{}, nil)
 
 	tests := []struct {
 		name     string
@@ -102,7 +102,7 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		schema        *InterfaceSchema
+		schema        *FunctionDefinition
 		variable      string
 		listExpr      string
 		expectError   bool
@@ -111,7 +111,7 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 	}{
 		{
 			name: "create loop variable from string list",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"fields": []any{"str"},
 				},
@@ -124,7 +124,7 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 		},
 		{
 			name: "create loop variable from integer list",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"numbers": []any{"int"},
 				},
@@ -137,7 +137,7 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 		},
 		{
 			name: "complex expression evaluation",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"users":  []any{"str"},
 					"active": "bool",
@@ -151,7 +151,7 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 		},
 		{
 			name: "error with nonexistent variable",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"fields": []any{"str"},
 				},
@@ -165,7 +165,7 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 名前空間を作成
-			ns := NewNamespace(tt.schema)
+			ns := NewNamespace(tt.schema, map[string]any{}, nil)
 			assert.NotZero(t, ns)
 
 			// AddLoopVariableWithEvaluationをexecution
@@ -187,9 +187,9 @@ func TestAddLoopVariableWithEvaluation(t *testing.T) {
 			assert.Equal(t, tt.expectedType, newNs.Schema.Parameters[tt.variable].(string))
 
 			// Verify loop variable is added to dummy data
-			_, exists = newNs.dummyData[tt.variable]
+			_, exists = newNs.param[tt.variable]
 			assert.True(t, exists, "loop variable should be added to dummy data")
-			assert.Equal(t, tt.expectedValue, newNs.dummyData[tt.variable])
+			assert.Equal(t, tt.expectedValue, newNs.param[tt.variable])
 
 			// Verify loop variable can be validated with CEL
 			err = newNs.ValidateParameterExpression(tt.variable)
@@ -203,14 +203,14 @@ func TestEvaluateParameterExpression(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		schema         *InterfaceSchema
+		schema         *FunctionDefinition
 		expression     string
 		expectedResult any
 		expectError    bool
 	}{
 		{
 			name: "simple variable reference",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"name": "str",
 				},
@@ -221,7 +221,7 @@ func TestEvaluateParameterExpression(t *testing.T) {
 		},
 		{
 			name: "list variable reference",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"fields": []any{"str"},
 				},
@@ -232,7 +232,7 @@ func TestEvaluateParameterExpression(t *testing.T) {
 		},
 		{
 			name: "error with nonexistent variable",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"name": "str",
 				},
@@ -245,7 +245,7 @@ func TestEvaluateParameterExpression(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 名前空間を作成
-			ns := NewNamespace(tt.schema)
+			ns := NewNamespace(tt.schema, map[string]any{}, nil)
 			assert.NotZero(t, ns)
 
 			// 式を評価
@@ -266,7 +266,7 @@ func TestEvaluateParameterExpression(t *testing.T) {
 func TestExtractElementFromList(t *testing.T) {
 	// t.Skip("temporarily skipped - investigating infinite loop issue")
 
-	ns := NewNamespace(nil)
+	ns := NewNamespace(nil, map[string]any{}, nil)
 
 	tests := []struct {
 		name          string
@@ -331,12 +331,12 @@ func TestDummyDataGeneration(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		schema   *InterfaceSchema
+		schema   *FunctionDefinition
 		expected map[string]any
 	}{
 		{
 			name: "basic type dummy data generation",
-			schema: &InterfaceSchema{
+			schema: &FunctionDefinition{
 				Parameters: map[string]any{
 					"name":    "str",
 					"age":     "int",

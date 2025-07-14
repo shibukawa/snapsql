@@ -6,7 +6,7 @@ import (
 
 // Execute runs clause-level validation for parserstep4
 // Returns *ParseError (nil if no error)
-func Execute(stmt cmn.StatementNode) *cmn.ParseError {
+func Execute(stmt cmn.StatementNode) error {
 	perr := &cmn.ParseError{}
 
 	switch s := stmt.(type) {
@@ -28,8 +28,11 @@ func Execute(stmt cmn.StatementNode) *cmn.ParseError {
 		if s.OrderBy != nil {
 			finalizeOrderByClause(s.OrderBy, perr)
 		}
-		if s.Limit != nil || s.Offset != nil {
+		if s.Limit != nil {
 			finalizeLimitOffsetClause(s.Limit, s.Offset, perr)
+		} else if s.Offset != nil {
+			// OFFSET without LIMIT: validate OFFSET clause individually
+			finalizeOffsetClause(s.Offset, perr)
 		}
 		if s.For != nil {
 			emptyCheck(s.For, perr)
@@ -54,8 +57,11 @@ func Execute(stmt cmn.StatementNode) *cmn.ParseError {
 			if s.OrderBy != nil {
 				finalizeOrderByClause(s.OrderBy, perr)
 			}
-			if s.Limit != nil || s.Offset != nil {
+			if s.Limit != nil {
 				finalizeLimitOffsetClause(s.Limit, s.Offset, perr)
+			} else if s.Offset != nil {
+				// OFFSET without LIMIT: validate OFFSET clause individually
+				finalizeOffsetClause(s.Offset, perr)
 			}
 		}
 		if s.Returning != nil {

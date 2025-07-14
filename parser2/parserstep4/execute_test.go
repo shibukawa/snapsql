@@ -3,6 +3,8 @@ package parserstep4
 import (
 	"testing"
 
+	"github.com/alecthomas/assert/v2"
+	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
 	"github.com/shibukawa/snapsql/parser2/parserstep2"
 	"github.com/shibukawa/snapsql/parser2/parserstep3"
 	"github.com/shibukawa/snapsql/tokenizer"
@@ -41,15 +43,13 @@ func TestExecuteParserStep4(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parserstep3 error: %v", err)
 			}
-			perr := Execute(ast)
+			err = Execute(ast)
 			if tc.wantError {
-				if perr == nil || len(perr.Errors) == 0 {
-					t.Errorf("expected error, got none")
-				}
+				perr, ok := cmn.AsParseError(err)
+				assert.True(t, ok, "expected *ParseError, got %v", err)
+				assert.NotEqual(t, 0, len(perr.Errors), "expected errors, got none")
 			} else {
-				if perr != nil && len(perr.Errors) > 0 {
-					t.Errorf("unexpected error: %v", perr.Errors)
-				}
+				assert.NoError(t, err)
 			}
 		})
 	}
