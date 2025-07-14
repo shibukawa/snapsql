@@ -613,3 +613,124 @@ func TestPostgresJSONOperators(t *testing.T) {
 	}
 	assert.Equal(t, []string{"->", "->>", "#>", "#>>"}, found)
 }
+
+func TestTokenizerDirectives(t *testing.T) {
+	sql := `SELECT /*= user.name */'default_name' FROM users`
+
+	// Test raw tokenizer output
+	tokens, err := Tokenize(sql)
+	assert.NoError(t, err)
+
+	t.Logf("Raw tokenizer output for: %s", sql)
+	for i, token := range tokens {
+		if token.Directive != nil {
+			t.Logf("Token[%d]: %s = %q (Directive: %s, Condition: %q)",
+				i, token.Type, token.Value, token.Directive.Type, token.Directive.Condition)
+		} else {
+			t.Logf("Token[%d]: %s = %q", i, token.Type, token.Value)
+		}
+	}
+
+	// Check if directive token is present
+	foundDirective := false
+	for _, token := range tokens {
+		if token.Directive != nil && token.Directive.Type == "variable" {
+			foundDirective = true
+			break
+		}
+	}
+
+	assert.True(t, foundDirective, "Should find variable directive in raw tokens")
+}
+
+func TestTokenizerSnapSQLDirectives(t *testing.T) {
+	tests := []struct {
+		name               string
+		sql                string
+		expectedDirectives []struct {
+			type_     string
+			condition string
+		}
+	}{
+		{
+			name: "Variable directive",
+			sql:  `SELECT /*= user.name */'default' FROM users`,
+			expectedDirectives: []struct {
+				type_     string
+				condition string
+			}{
+				{type_: "variable", condition: ""},
+			},
+		},
+		{
+			name: "Environment directive",
+			sql:  `SELECT /*$ env.table */default_table FROM users`,
+			expectedDirectives: []struct {
+				type_     string
+				condition string
+			}{
+				{type_: "const", condition: ""},
+			},
+		},
+		{
+			name: "If directive with condition",
+			sql:  `SELECT id /*# if user.active */FROM users/*# end */`,
+			expectedDirectives: []struct {
+				type_     string
+				condition string
+			}{
+				{type_: "if", condition: "user.active"},
+				{type_: "end", condition: ""},
+			},
+		},
+		{
+			name: "Multiple directive types",
+			sql:  `SELECT /*= user.id */123, /*$ env.table */default /*# if status */WHERE active = 1/*# end */`,
+			expectedDirectives: []struct {
+				type_     string
+				condition string
+			}{
+				{type_: "variable", condition: ""},
+				{type_: "const", condition: ""},
+				{type_: "if", condition: "status"},
+				{type_: "end", condition: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens, err := Tokenize(tt.sql)
+			assert.NoError(t, err)
+
+			var foundDirectives []struct {
+				type_     string
+				condition string
+			}
+
+			for _, token := range tokens {
+				if token.Directive != nil {
+					foundDirectives = append(foundDirectives, struct {
+						type_     string
+						condition string
+					}{
+						type_:     token.Directive.Type,
+						condition: token.Directive.Condition,
+					})
+				}
+			}
+
+			assert.Equal(t, len(tt.expectedDirectives), len(foundDirectives),
+				"Number of directives should match")
+
+			for i, expected := range tt.expectedDirectives {
+				if i < len(foundDirectives) {
+					assert.Equal(t, expected.type_, foundDirectives[i].type_,
+						"Directive type should match at index %d", i)
+					assert.Equal(t, expected.condition, foundDirectives[i].condition,
+						"Directive condition should match at index %d", i)
+				}
+			}
+		})
+	}
+}

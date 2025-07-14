@@ -2,6 +2,7 @@ package parsercommon
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 
@@ -9,13 +10,18 @@ import (
 )
 
 // Namespace manages namespace information and CEL functionality in an integrated manner
+
+type frame struct {
+	cel        *cel.Env
+	param      map[string]any
+	loopTarget []any
+	loopIndex  int
+	loopVar    string
+}
 type Namespace struct {
-	Constants   map[string]any `yaml:"env"`
-	Schema      *FunctionDefinition
 	environment map[string]any // CEL evaluation variables
 	envCEL      *cel.Env       // CEL environment for environment variables
-	paramCEL    *cel.Env       // CEL environment for parameters
-	param       map[string]any // dummy data environment
+	stack       []frame        // CEL environment for parameters
 }
 
 // NewNamespace creates a new namespace
@@ -32,131 +38,102 @@ func NewNamespace(schema *FunctionDefinition, environment, param map[string]any)
 		param = generateDummyDataFromSchema(schema)
 	}
 
+	// Register environment constants directly as CEL variables (no prefix)
+	envOptions := []cel.EnvOption{
+		cel.HomogeneousAggregateLiterals(),
+		cel.EagerlyValidateDeclarations(true),
+	}
+	for key := range environment {
+		envOptions = append(envOptions, cel.Variable(key, cel.DynType))
+	}
+
+	envCEL, err := cel.NewEnv(envOptions...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	paramOptions := []cel.EnvOption{
+		cel.HomogeneousAggregateLiterals(),
+		cel.EagerlyValidateDeclarations(true),
+	}
+	for key := range param {
+		paramOptions = append(paramOptions, cel.Variable(key, cel.DynType))
+	}
+	paramCEL, err := cel.NewEnv(paramOptions...)
+	if err != nil {
+		panic(err.Error())
+	}
+
 	ns := &Namespace{
-		Constants:   make(map[string]any),
-		environment: make(map[string]any),
-		Schema:      schema,
-		param:       param,
+		environment: environment,
+		stack: []frame{
+			{
+				cel:   paramCEL,
+				param: param,
+			},
+		},
+		envCEL: envCEL,
 	}
-
-	// Initialize CEL engines
-	if err := ns.initializeCELEngines(); err != nil {
-		panic(err)
-	}
-
 	return ns
 }
 
-// SetConstant sets a namespace constant
-func (ns *Namespace) SetConstant(key string, value any) {
-	ns.Constants[key] = value
-
-	// Reinitialize CEL engines if they are already initialized
-	if ns.envCEL != nil {
-		ns.createEnvironmentCEL()
-	}
-}
-
-// AddLoopVariable temporarily adds a loop variable
-func (ns *Namespace) AddLoopVariable(variable string, valueType string) {
-	if ns.Schema.Parameters == nil {
-		ns.Schema.Parameters = make(map[string]any)
-	}
-	ns.Schema.Parameters[variable] = valueType
-
-	// Reinitialize CEL engines
-	if err := ns.initializeCELEngines(); err != nil {
-		// Debug: output error
-		fmt.Printf("DEBUG: CEL engine initialization failed in AddLoopVariable: %v\n", err)
-	}
-}
-
-// RemoveLoopVariable removes a loop variable
-func (ns *Namespace) RemoveLoopVariable(variable string) {
-	if ns.Schema.Parameters != nil {
-		delete(ns.Schema.Parameters, variable)
-	}
-
-	if err := ns.initializeCELEngines(); err != nil {
-		panic(err)
-	}
-}
-
 // Copy creates a copy of the namespace
-func (ns *Namespace) Copy() *Namespace {
-	// Copy schema
-	schemaCopy := &FunctionDefinition{
-		Name:        ns.Schema.Name,
-		Description: ns.Schema.Description,
-		Parameters:  make(map[string]any),
+func (ns *Namespace) EnterLoop(varName string, loopTarget []any) bool {
+	if len(loopTarget) == 0 {
+		return false
+	}
+	last := ns.stack[len(ns.stack)-1]
+	newParam := maps.Clone(last.param)
+	newParam[varName] = loopTarget[0] // Set first element as initial value
+	paramOptions := []cel.EnvOption{
+		cel.HomogeneousAggregateLiterals(),
+		cel.EagerlyValidateDeclarations(true),
+	}
+	for key := range newParam {
+		paramOptions = append(paramOptions, cel.Variable(key, cel.DynType))
+	}
+	paramCEL, err := cel.NewEnv(paramOptions...)
+	if err != nil {
+		return false
 	}
 
-	// Copy parameters
-	for k, v := range ns.Schema.Parameters {
-		schemaCopy.Parameters[k] = v
+	newFrame := frame{
+		cel:        paramCEL,
+		loopTarget: loopTarget,
+		loopIndex:  0,
+		loopVar:    varName,
+		param:      newParam,
 	}
-
-	// Copy constants
-	constantsCopy := make(map[string]any)
-	for k, v := range ns.Constants {
-		constantsCopy[k] = v
-	}
-
-	// Copy dummy data
-	copiedParam := make(map[string]any)
-	for k, v := range ns.param {
-		copiedParam[k] = v
-	}
-
-	// Create new namespace
-	newNs := &Namespace{
-		Constants:   constantsCopy,
-		Schema:      schemaCopy,
-		environment: make(map[string]any),
-		param:       copiedParam,
-	}
-
-	// CELエンジンを初期化
-	if err := newNs.initializeCELEngines(); err != nil {
-		panic(err)
-	}
-
-	return newNs
+	ns.stack = append(ns.stack, newFrame)
+	return true
 }
 
-// AddLoopVariableToNew creates a new namespace with added loop variable
-func (ns *Namespace) AddLoopVariableToNew(variable string, valueType string) *Namespace {
-	newNs := ns.Copy()
-	newNs.AddLoopVariable(variable, valueType)
-	return newNs
-}
-
-// GetConstant retrieves namespace constants
-func (ns *Namespace) GetConstant(key string) (any, bool) {
-	value, exists := ns.Constants[key]
-	return value, exists
-}
-
-// SetSchema sets the schema and initializes CEL engines
-func (ns *Namespace) SetSchema(schema *FunctionDefinition) error {
-	ns.Schema = schema
-
-	// Add parameters as CEL variables
-	if schema != nil {
-		for key, value := range schema.Parameters {
-			ns.environment[key] = value
-		}
+func (ns *Namespace) Next() bool {
+	if len(ns.stack) == 0 {
+		return false
+	}
+	last := ns.stack[len(ns.stack)-1]
+	if last.loopIndex+1 >= len(last.loopTarget) {
+		return false // No more elements in loop
 	}
 
-	// CELエンジンを初期化
-	return ns.initializeCELEngines()
+	// Move to next element in loop
+	last.loopIndex++
+	last.param[last.loopVar] = last.loopTarget[last.loopIndex]
+	return true
 }
 
-// valueToLiteral は値をSQLリテラルに変換する
+func (ns *Namespace) LeaveLoop() {
+	if len(ns.stack) > 1 {
+		ns.stack = ns.stack[:len(ns.stack)-1]
+	}
+}
+
+// valueToLiteral converts values to SQL literals
 func (ns *Namespace) valueToLiteral(value any) string {
 	switch v := value.(type) {
 	case string:
-		// 文字列はシングルクォートで囲む
+		// Escape single quotes in strings
 		return fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
 	case int, int32, int64:
 		return fmt.Sprintf("%d", v)
@@ -168,7 +145,7 @@ func (ns *Namespace) valueToLiteral(value any) string {
 		}
 		return "false"
 	case []any:
-		// 配列をカンマ区切りのリテラルに変換
+		// Convert array to comma-separated literals
 		var literals []string
 		for _, item := range v {
 			literals = append(literals, ns.valueToLiteral(item))
@@ -186,130 +163,13 @@ func (ns *Namespace) valueToLiteral(value any) string {
 	}
 }
 
-// initializeCELEngines initializes both environment and parameter CEL engines
-func (ns *Namespace) initializeCELEngines() error {
-	// Create environment CEL engine
-	if err := ns.createEnvironmentCEL(); err != nil {
-		return fmt.Errorf("failed to create environment CEL: %w", err)
-	}
-
-	// Create parameter CEL engine
-	if err := ns.createParameterCEL(); err != nil {
-		return fmt.Errorf("failed to create parameter CEL: %w", err)
-	}
-
-	return nil
-}
-
-// createEnvironmentCEL creates CEL environment for environment constants (/*@ */)
-func (ns *Namespace) createEnvironmentCEL() error {
-	envOptions := []cel.EnvOption{
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-	}
-
-	// Register environment constants directly as CEL variables (no prefix)
-	for key := range ns.Constants {
-		envOptions = append(envOptions, cel.Variable(key, cel.DynType))
-	}
-
-	env, err := cel.NewEnv(envOptions...)
-	if err != nil {
-		return fmt.Errorf("failed to create environment CEL: %w", err)
-	}
-
-	ns.envCEL = env
-	return nil
-}
-
-// createParameterCEL creates CEL environment for parameters (/*= */ and /*# */)
-func (ns *Namespace) createParameterCEL() error {
-	envOptions := []cel.EnvOption{
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-	}
-
-	// Register using dummy data as CEL variables
-	if ns.param != nil {
-		ns.addDummyDataVariables("", ns.param, &envOptions)
-	}
-
-	env, err := cel.NewEnv(envOptions...)
-	if err != nil {
-		return fmt.Errorf("failed to create parameter CEL: %w", err)
-	}
-
-	ns.paramCEL = env
-	return nil
-}
-
-// ValidateEnvironmentExpression validates environment constant expressions (/*@ */)
-func (ns *Namespace) ValidateEnvironmentExpression(expression string) error {
-	if ns.envCEL == nil {
-		return ErrEnvironmentCELNotInit
-	}
-
-	// CEL式をコンパイル
-	ast, issues := ns.envCEL.Compile(expression)
-	if issues != nil && issues.Err() != nil {
-		return fmt.Errorf("CEL compilation error: %w", issues.Err())
-	}
-
-	// 型チェック（出力型が存在することを確認）
-	if ast.OutputType() == nil {
-		return ErrNoOutputType
-	}
-
-	return nil
-}
-
-// ValidateParameterExpression validates parameter expressions (/*= */ and /*# */)
-func (ns *Namespace) ValidateParameterExpression(expression string) error {
-	if ns.paramCEL == nil {
-		return ErrParameterCELNotInit
-	}
-
-	// CEL式をコンパイル
-	ast, issues := ns.paramCEL.Compile(expression)
-	if issues != nil && issues.Err() != nil {
-		return fmt.Errorf("CEL compilation error: %w", issues.Err())
-	}
-
-	// 型チェック（出力型が存在することを確認）
-	if ast.OutputType() == nil {
-		return ErrNoOutputType
-	}
-
-	return nil
-}
-
-// ValidateExpression validates the validity of CEL expressions (general purpose)
-func (ns *Namespace) ValidateExpression(expr string) error {
-	// First try validation as environment constant expression
-	if ns.envCEL != nil {
-		if err := ns.ValidateEnvironmentExpression(expr); err == nil {
-			return nil
-		}
-	}
-
-	// If failed as environment constant expression, try validation as parameter expression
-	if ns.paramCEL != nil {
-		if err := ns.ValidateParameterExpression(expr); err == nil {
-			return nil
-		}
-	}
-
-	// 両方とも失敗した場合はエラー
-	return ErrExpressionValidationFailed
-}
-
 // EvaluateEnvironmentExpression evaluates environment constant expressions (/*@ */)
 func (ns *Namespace) EvaluateEnvironmentExpression(expression string) (any, error) {
 	if ns.envCEL == nil {
 		return nil, ErrEnvironmentCELNotInit
 	}
 
-	// CEL式をコンパイル
+	// Compile CEL expression
 	ast, issues := ns.envCEL.Compile(expression)
 	if issues != nil && issues.Err() != nil {
 		return nil, fmt.Errorf("CEL compilation error: %w", issues.Err())
@@ -321,14 +181,8 @@ func (ns *Namespace) EvaluateEnvironmentExpression(expression string) (any, erro
 		return nil, fmt.Errorf("failed to create CEL program: %w", err)
 	}
 
-	// Prepare environment constant values
-	envConstants := make(map[string]any)
-	for key, value := range ns.Constants {
-		envConstants[key] = value
-	}
-
-	// 式を評価
-	result, _, err := program.Eval(envConstants)
+	// Evaluate expression
+	result, _, err := program.Eval(ns.environment)
 	if err != nil {
 		return nil, fmt.Errorf("CEL evaluation error: %w", err)
 	}
@@ -342,23 +196,7 @@ type ParameterDefinition struct {
 	Type string `yaml:"type"`
 }
 
-// addDummyDataVariables adds dummy data as CEL variables
-func (ns *Namespace) addDummyDataVariables(prefix string, data map[string]any, envOptions *[]cel.EnvOption) {
-	for key, value := range data {
-		varName := key
-		if prefix != "" {
-			varName = prefix + "." + key
-		}
-
-		// Declare CEL variables based on value type
-		celType := ns.getCELTypeFromValue(value)
-		if celType != nil {
-			*envOptions = append(*envOptions, cel.Variable(varName, celType))
-		}
-	}
-}
-
-// getCELTypeFromValue は値からCEL型を取得する
+// getCELTypeFromValue gets CEL type from value
 func (ns *Namespace) getCELTypeFromValue(value any) *cel.Type {
 	if value == nil {
 		return cel.AnyType
@@ -384,7 +222,7 @@ func (ns *Namespace) getCELTypeFromValue(value any) *cel.Type {
 	case []bool:
 		return cel.ListType(cel.BoolType)
 	case []any:
-		// 要素の型を推定
+		// Infer element type
 		if len(v) > 0 {
 			elementType := ns.getCELTypeFromValue(v[0])
 			if elementType != nil {
@@ -393,15 +231,10 @@ func (ns *Namespace) getCELTypeFromValue(value any) *cel.Type {
 		}
 		return cel.ListType(cel.AnyType)
 	case map[string]any:
-		// ネストしたオブジェクトの場合、各フィールドの型を定義
-		fieldTypes := make(map[string]*cel.Type)
-		for key, fieldValue := range v {
-			fieldTypes[key] = ns.getCELTypeFromValue(fieldValue)
-		}
-		// CELでは複雑なオブジェクト型の定義が困難なため、MapTypeを使用
+		// For nested objects, use MapType (complex object type definition is difficult in CEL)
 		return cel.MapType(cel.StringType, cel.AnyType)
 	default:
-		// リフレクションを使用してより詳細な型判定
+		// Use reflection for more detailed type inference
 		rv := reflect.ValueOf(value)
 		switch rv.Kind() {
 		case reflect.Slice, reflect.Array:
@@ -414,60 +247,23 @@ func (ns *Namespace) getCELTypeFromValue(value any) *cel.Type {
 	}
 }
 
-// AddLoopVariableWithEvaluation creates a new namespace with loop variable added through CEL evaluation
-func (ns *Namespace) AddLoopVariableWithEvaluation(variable string, listExpr string) (*Namespace, error) {
-	// Evaluate CEL expression in dummy data environment
-	result, err := ns.EvaluateParameterExpression(listExpr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate list expression '%s': %w", listExpr, err)
-	}
-
-	// 評価結果から要素の型と値を取得
-	elementValue, elementType, err := ns.extractElementFromList(result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract element from list result: %w", err)
-	}
-
-	// Create new namespace
-	newNs := ns.Copy()
-
-	// Add loop variable to schema
-	if newNs.Schema.Parameters == nil {
-		newNs.Schema.Parameters = make(map[string]any)
-	}
-	newNs.Schema.Parameters[variable] = elementType
-
-	// Add loop variable to dummy data
-	newNs.param[variable] = elementValue
-
-	// CELエンジンを再初期化
-	if err := newNs.initializeCELEngines(); err != nil {
-		return nil, fmt.Errorf("failed to reinitialize CEL engines: %w", err)
-	}
-
-	return newNs, nil
-}
-
-// EvaluateParameterExpression はパラメータ式をダミーデータ環境で評価する
+// EvaluateParameterExpression evaluates parameter expressions in dummy data environment
 func (ns *Namespace) EvaluateParameterExpression(expression string) (any, error) {
-	if ns.paramCEL == nil {
-		return nil, ErrParameterCELNotInit
-	}
-
-	// CEL式をコンパイル
-	ast, issues := ns.paramCEL.Compile(expression)
+	// Compile CEL expression
+	last := ns.stack[len(ns.stack)-1]
+	ast, issues := last.cel.Compile(expression)
 	if issues != nil && issues.Err() != nil {
 		return nil, fmt.Errorf("CEL compilation error: %w", issues.Err())
 	}
 
 	// Create program
-	program, err := ns.paramCEL.Program(ast)
+	program, err := last.cel.Program(ast)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL program: %w", err)
 	}
 
-	// ダミーデータを使用して評価
-	result, _, err := program.Eval(ns.param)
+	// Evaluate using dummy data
+	result, _, err := program.Eval(last.param)
 	if err != nil {
 		return nil, fmt.Errorf("CEL evaluation error: %w", err)
 	}
@@ -475,7 +271,7 @@ func (ns *Namespace) EvaluateParameterExpression(expression string) (any, error)
 	return result.Value(), nil
 }
 
-// extractElementFromList はリスト結果から要素の値と型を抽出する
+// extractElementFromList extracts element value and type from list result
 func (ns *Namespace) extractElementFromList(listResult any) (elementValue any, elementType string, err error) {
 	switch list := listResult.(type) {
 	case []any:
@@ -483,7 +279,7 @@ func (ns *Namespace) extractElementFromList(listResult any) (elementValue any, e
 			element := list[0]
 			return element, ns.inferTypeFromValue(element), nil
 		}
-		return "", "str", nil // 空リストの場合はデフォルト
+		return "", "str", nil // Default for empty list
 	case []string:
 		if len(list) > 0 {
 			return list[0], "str", nil
@@ -510,12 +306,12 @@ func (ns *Namespace) extractElementFromList(listResult any) (elementValue any, e
 		}
 		return false, "bool", nil
 	default:
-		// リストでない場合はエラー
+		// Error if not a list
 		return nil, "", ErrExpressionNotList
 	}
 }
 
-// inferTypeFromValue は値から型を推論する
+// inferTypeFromValue infers type from value
 func (ns *Namespace) inferTypeFromValue(value any) string {
 	switch value.(type) {
 	case string:
@@ -527,7 +323,7 @@ func (ns *Namespace) inferTypeFromValue(value any) string {
 	case bool:
 		return "bool"
 	case map[string]any:
-		// ネストしたオブジェクトの場合、オブジェクト型として返す
+		// For nested objects, return as object type
 		return "object"
 	case []any:
 		return "list"
@@ -536,38 +332,38 @@ func (ns *Namespace) inferTypeFromValue(value any) string {
 	}
 }
 
-// generateDummyDataFromSchema はスキーマからダミーデータ環境を生成する（関数スタイル）
+// generateDummyDataFromSchema generates dummy data environment from schema (function style)
 func generateDummyDataFromSchema(schema *FunctionDefinition) map[string]any {
 	if schema == nil || schema.Parameters == nil {
 		return make(map[string]any)
 	}
 
 	result := make(map[string]any)
-	visited := make(map[string]bool) // パスベースで循環参照を防ぐ
+	visited := make(map[string]bool) // Prevent circular references using path-based tracking
 	for key, typeInfo := range schema.Parameters {
 		result[key] = generateDummyValueWithPath(typeInfo, visited, key)
 	}
 	return result
 }
 
-// generateDummyValueWithPath はパスベースで循環参照を検出しながらダミー値を生成する
+// generateDummyValueWithPath generates dummy value while detecting circular references by path
 func generateDummyValueWithPath(typeInfo any, visited map[string]bool, path string) any {
-	// パスベースで循環参照をチェック
+	// Check for circular reference by path
 	if visited[path] {
-		return "" // 循環参照の場合はデフォルト値を返す
+		return "" // Return default value for circular reference
 	}
 	visited[path] = true
-	defer delete(visited, path) // 処理完了後にvisitedから削除
+	defer delete(visited, path) // Remove from visited after processing
 
 	switch t := typeInfo.(type) {
 	case string:
 		return generateDummyValueFromString(t)
 	case []any:
-		// 配列型の場合、最初の要素をテンプレートとして使用
+		// For array types, use first element as template
 		if len(t) > 0 {
 			elementTemplate := t[0]
 			elementValue := generateDummyValueWithPath(elementTemplate, visited, path+"[0]")
-			// 要素の型に応じて適切な配列型を返す
+			// Return appropriate array type based on element type
 			switch elementTemplate {
 			case "str", "string":
 				return []string{"dummy"}
@@ -595,7 +391,7 @@ func generateDummyValueWithPath(typeInfo any, visited map[string]bool, path stri
 	}
 }
 
-// generateDummyValueFromString は文字列型定義からダミー値を生成する
+// generateDummyValueFromString generates dummy value from string type definition
 func generateDummyValueFromString(typeStr string) any {
 	switch typeStr {
 	case "str", "string":
@@ -617,13 +413,13 @@ func generateDummyValueFromString(typeStr string) any {
 	case "map[str]", "map[string]any":
 		return map[string]any{"": ""}
 	default:
-		// list[T] パターンの解析
+		// Parse list[T] pattern
 		if len(typeStr) > 5 && typeStr[:5] == "list[" && typeStr[len(typeStr)-1] == ']' {
 			elementType := typeStr[5 : len(typeStr)-1]
 			elementValue := generateDummyValueFromString(elementType)
 			return []any{elementValue}
 		}
-		// デフォルトは空文字列
+		// Default to empty string
 		return ""
 	}
 }

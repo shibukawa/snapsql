@@ -16,27 +16,35 @@ func TestNamespace(t *testing.T) {
 			},
 		},
 	}
-	ns := NewNamespace(ifs, map[string]any{}, nil)
-	ns.SetConstant("table_suffix", "prod")
-	ns.SetConstant("tenant_id", "12345")
 
-	// 環境constant のvalidation
-	err := ns.ValidateExpression("table_suffix")
+	environment := map[string]any{
+		"table_suffix": "prod",
+		"tenant_id":    "12345",
+	}
+
+	ns := NewNamespace(ifs, environment, nil)
+
+	// Environment constant evaluation
+	result, err := ns.EvaluateEnvironmentExpression("table_suffix")
 	assert.NoError(t, err)
+	assert.Equal(t, "prod", result)
 
 	// Non-existent environment constant
-	err = ns.ValidateExpression("nonexistent")
+	_, err = ns.EvaluateEnvironmentExpression("nonexistent")
 	assert.Error(t, err)
 
-	// parameter のvalidation
-	err = ns.ValidateExpression("user_id")
+	// Parameter evaluation
+	result, err = ns.EvaluateParameterExpression("user_id")
 	assert.NoError(t, err)
+	assert.Equal(t, 0, result) // Dummy value for int
 
-	err = ns.ValidateExpression("filters.active")
+	// Nested parameter evaluation
+	result, err = ns.EvaluateParameterExpression("filters.active")
 	assert.NoError(t, err)
+	assert.Equal(t, false, result) // Dummy value for bool
 
 	// Non-existent parameter
-	err = ns.ValidateExpression("nonexistent_param")
+	_, err = ns.EvaluateParameterExpression("nonexistent_param")
 	assert.Error(t, err)
 }
 
@@ -49,7 +57,7 @@ func TestValueToLiteral(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "string ",
+			name:     "string",
 			value:    "test",
 			expected: "'test'",
 		},
@@ -79,12 +87,12 @@ func TestValueToLiteral(t *testing.T) {
 			expected: "false",
 		},
 		{
-			name:     "string array ",
+			name:     "string array",
 			value:    []string{"admin", "user"},
 			expected: "'admin', 'user'",
 		},
 		{
-			name:     "anyarray ",
+			name:     "any array",
 			value:    []any{"admin", 123, true},
 			expected: "'admin', 123, true",
 		},
@@ -97,175 +105,76 @@ func TestValueToLiteral(t *testing.T) {
 		})
 	}
 }
-func TestAddLoopVariableWithEvaluation(t *testing.T) {
-	t.Skip("temporarily skipped - investigating infinite loop issue")
 
-	tests := []struct {
-		name          string
-		schema        *FunctionDefinition
-		variable      string
-		listExpr      string
-		expectError   bool
-		expectedType  string
-		expectedValue any
-	}{
-		{
-			name: "create loop variable from string list",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"fields": []any{"str"},
+func TestLoopVariableManagement(t *testing.T) {
+	schema := &FunctionDefinition{
+		Parameters: map[string]any{
+			"fields": []map[string]any{
+				{
+					"name":  "test_field",
+					"type":  "str",
+					"users": []string{"dummy"},
 				},
 			},
-			variable:      "field",
-			listExpr:      "fields",
-			expectError:   false,
-			expectedType:  "str",
-			expectedValue: "dummy",
-		},
-		{
-			name: "create loop variable from integer list",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"numbers": []any{"int"},
-				},
-			},
-			variable:      "num",
-			listExpr:      "numbers",
-			expectError:   false,
-			expectedType:  "int",
-			expectedValue: 0,
-		},
-		{
-			name: "complex expression evaluation",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"users":  []any{"str"},
-					"active": "bool",
-				},
-			},
-			variable:      "user",
-			listExpr:      "users",
-			expectError:   false,
-			expectedType:  "str",
-			expectedValue: "dummy",
-		},
-		{
-			name: "error with nonexistent variable",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"fields": []any{"str"},
-				},
-			},
-			variable:    "field",
-			listExpr:    "nonexistent",
-			expectError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// 名前空間を作成
-			ns := NewNamespace(tt.schema, map[string]any{}, nil)
-			assert.NotZero(t, ns)
+	ns := NewNamespace(schema, map[string]any{}, nil)
 
-			// AddLoopVariableWithEvaluationをexecution
-			newNs, err := ns.AddLoopVariableWithEvaluation(tt.variable, tt.listExpr)
+	// Initially should have base variables
+	result, err := ns.EvaluateParameterExpression("fields")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"dummy"}, result.([]string))
 
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.Zero(t, newNs)
-				return
-			}
+	// Enter loop - add loop variable
+	ns.EnterLoop("field", []any{"str"})
 
-			// Verify no error
-			assert.NoError(t, err)
-			assert.NotZero(t, newNs)
+	// Should be able to access loop variable
+	result, err = ns.EvaluateParameterExpression("field")
+	assert.NoError(t, err)
+	assert.Equal(t, "test_field", result)
 
-			// Verify loop variable is added to schema
-			_, exists := newNs.Schema.Parameters[tt.variable]
-			assert.True(t, exists, "loop variable should be added to schema")
-			assert.Equal(t, tt.expectedType, newNs.Schema.Parameters[tt.variable].(string))
+	// Should still be able to access original variables
+	result, err = ns.EvaluateParameterExpression("fields")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"dummy"}, result.([]string))
 
-			// Verify loop variable is added to dummy data
-			_, exists = newNs.param[tt.variable]
-			assert.True(t, exists, "loop variable should be added to dummy data")
-			assert.Equal(t, tt.expectedValue, newNs.param[tt.variable])
+	// Enter nested loop
+	ns.EnterLoop("users", []any{"dummy"})
 
-			// Verify loop variable can be validated with CEL
-			err = newNs.ValidateParameterExpression(tt.variable)
-			assert.NoError(t, err, "loop variable should be recognized by CEL")
-		})
-	}
-}
+	// Should be able to access both loop variables
+	result, err = ns.EvaluateParameterExpression("field")
+	assert.NoError(t, err)
+	assert.Equal(t, "test_field", result)
 
-func TestEvaluateParameterExpression(t *testing.T) {
-	t.Skip("temporarily skipped - investigating infinite loop issue")
+	result, err = ns.EvaluateParameterExpression("user")
+	assert.NoError(t, err)
+	assert.Equal(t, "dummy", result)
 
-	tests := []struct {
-		name           string
-		schema         *FunctionDefinition
-		expression     string
-		expectedResult any
-		expectError    bool
-	}{
-		{
-			name: "simple variable reference",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"name": "str",
-				},
-			},
-			expression:     "name",
-			expectedResult: "",
-			expectError:    false,
-		},
-		{
-			name: "list variable reference",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"fields": []any{"str"},
-				},
-			},
-			expression:     "fields",
-			expectedResult: []string{"dummy"},
-			expectError:    false,
-		},
-		{
-			name: "error with nonexistent variable",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"name": "str",
-				},
-			},
-			expression:  "nonexistent",
-			expectError: true,
-		},
-	}
+	// Leave nested loop
+	ns.LeaveLoop()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// 名前空間を作成
-			ns := NewNamespace(tt.schema, map[string]any{}, nil)
-			assert.NotZero(t, ns)
+	// Should still have first loop variable but not second
+	result, err = ns.EvaluateParameterExpression("field")
+	assert.NoError(t, err)
+	assert.Equal(t, "test_field", result)
 
-			// 式を評価
-			result, err := ns.EvaluateParameterExpression(tt.expression)
+	_, err = ns.EvaluateParameterExpression("user")
+	assert.Error(t, err) // Should no longer be accessible
 
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
+	// Leave first loop
+	ns.LeaveLoop()
 
-			// Verify no error
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedResult, result)
-		})
-	}
+	// Should be back to original state
+	_, err = ns.EvaluateParameterExpression("field")
+	assert.Error(t, err) // Should no longer be accessible
+
+	result, err = ns.EvaluateParameterExpression("fields")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"dummy"}, result.([]string))
 }
 
 func TestExtractElementFromList(t *testing.T) {
-	// t.Skip("temporarily skipped - investigating infinite loop issue")
-
 	ns := NewNamespace(nil, map[string]any{}, nil)
 
 	tests := []struct {
@@ -276,7 +185,7 @@ func TestExtractElementFromList(t *testing.T) {
 		expectError   bool
 	}{
 		{
-			name:          "string list ",
+			name:          "string list",
 			listResult:    []string{"hello", "world"},
 			expectedValue: "hello",
 			expectedType:  "str",
@@ -290,7 +199,7 @@ func TestExtractElementFromList(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name:          "empty string list ",
+			name:          "empty string list",
 			listResult:    []string{},
 			expectedValue: "",
 			expectedType:  "str",
@@ -327,8 +236,6 @@ func TestExtractElementFromList(t *testing.T) {
 }
 
 func TestDummyDataGeneration(t *testing.T) {
-	// t.Skip("temporarily skipped - investigating infinite loop issue")
-
 	tests := []struct {
 		name     string
 		schema   *FunctionDefinition
@@ -368,4 +275,46 @@ func TestDummyDataGeneration(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEnvironmentAndParameterSeparation(t *testing.T) {
+	schema := &FunctionDefinition{
+		Parameters: map[string]any{
+			"user_id": "int",
+			"name":    "str",
+		},
+	}
+
+	environment := map[string]any{
+		"table_name": "users",
+		"env_flag":   true,
+	}
+
+	ns := NewNamespace(schema, environment, nil)
+
+	// Test environment variable evaluation
+	result, err := ns.EvaluateEnvironmentExpression("table_name")
+	assert.NoError(t, err)
+	assert.Equal(t, "users", result)
+
+	result, err = ns.EvaluateEnvironmentExpression("env_flag")
+	assert.NoError(t, err)
+	assert.Equal(t, true, result)
+
+	// Test parameter evaluation
+	result, err = ns.EvaluateParameterExpression("user_id")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, result) // Dummy value
+
+	result, err = ns.EvaluateParameterExpression("name")
+	assert.NoError(t, err)
+	assert.Equal(t, "", result) // Dummy value
+
+	// Environment variables should not be accessible from parameter evaluation
+	_, err = ns.EvaluateParameterExpression("table_name")
+	assert.Error(t, err)
+
+	// Parameters should not be accessible from environment evaluation
+	_, err = ns.EvaluateEnvironmentExpression("user_id")
+	assert.Error(t, err)
 }

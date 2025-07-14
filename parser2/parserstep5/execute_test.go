@@ -55,12 +55,8 @@ func TestExecute(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Execute parserstep5 (includes parserstep3 and parserstep4)
-			processedStatement, err := Execute(statement)
+			err = Execute(statement)
 			assert.NoError(t, err)
-			assert.NotZero(t, processedStatement)
-
-			// Verify the statement is the same object (should be modified in place)
-			assert.Equal(t, statement, processedStatement)
 		})
 	}
 }
