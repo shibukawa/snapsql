@@ -15,6 +15,24 @@ type ClauseNode interface {
 	Type() NodeType
 }
 
+type clauseBaseNode struct {
+	clauseSourceText string
+	headingTokens    []tokenizer.Token // Leading tokens before the clause
+	bodyTokens       []tokenizer.Token // Raw tokens that make up the clause
+}
+
+func (n *clauseBaseNode) rawTokens() []tokenizer.Token {
+	return append(n.headingTokens, n.bodyTokens...)
+}
+
+func (n *clauseBaseNode) RawTokens() []tokenizer.Token {
+	return append(n.headingTokens, n.bodyTokens...)
+}
+
+func (n *clauseBaseNode) ContentTokens() []tokenizer.Token {
+	return n.bodyTokens
+}
+
 // WithClause represents WITH clause for CTEs
 type WithClause struct {
 	clauseBaseNode
@@ -34,15 +52,6 @@ func (n *WithClause) Position() tokenizer.Position {
 	panic("unimplemented")
 }
 
-// RawTokens implements ClauseNode.
-func (n *WithClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *WithClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
-
 func (n *WithClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -53,16 +62,6 @@ func (n *WithClause) Type() NodeType {
 
 func (n *WithClause) String() string {
 	return "WITH"
-}
-
-type clauseBaseNode struct {
-	clauseSourceText string
-	headingTokens    []tokenizer.Token // Leading tokens before the clause
-	bodyTokens       []tokenizer.Token // Raw tokens that make up the clause
-}
-
-func (n *clauseBaseNode) rawTokens() []tokenizer.Token {
-	return append(n.headingTokens, n.bodyTokens...)
 }
 
 var _ ClauseNode = (*WithClause)(nil)
@@ -95,20 +94,14 @@ func (n *SelectClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *SelectClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *SelectClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *SelectClause) IfDirective() string {
 	panic("not implemented")
 }
+
 func (n *SelectClause) Type() NodeType {
 	return SELECT_CLAUSE
 }
+
 func (n *SelectClause) String() string {
 	return "SELECT"
 }
@@ -118,7 +111,7 @@ var _ ClauseNode = (*SelectClause)(nil)
 // FromClause represents FROM clause
 type FromClause struct {
 	clauseBaseNode
-	Tables []TableReference
+	Tables []TableReferenceForFrom
 }
 
 func NewFromClause(srcText string, heading, body []tokenizer.Token) *FromClause {
@@ -141,14 +134,6 @@ func (n *FromClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *FromClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *FromClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *FromClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -187,14 +172,6 @@ func (n *WhereClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *WhereClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *WhereClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *WhereClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -235,14 +212,6 @@ func (n *GroupByClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *GroupByClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *GroupByClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *GroupByClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -281,14 +250,6 @@ func (n *HavingClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *HavingClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *HavingClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *HavingClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -327,14 +288,6 @@ func (n *OrderByClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *OrderByClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *OrderByClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *OrderByClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -373,14 +326,6 @@ func (n *LimitClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *LimitClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *LimitClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *LimitClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -419,14 +364,6 @@ func (n *OffsetClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *OffsetClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *OffsetClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *OffsetClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -465,14 +402,6 @@ func (n *ReturningClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *ReturningClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
-func (n *ReturningClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
 func (n *ReturningClause) IfDirective() string {
 	panic("not implemented")
 }
@@ -513,7 +442,7 @@ func (n OrderByField) String() string {
 
 type ForClause struct {
 	clauseBaseNode
-	TableName TableName
+	TableName TableReference
 }
 
 func NewForClause(srcText string, heading, body []tokenizer.Token) *ForClause {
@@ -531,11 +460,6 @@ func (f *ForClause) SourceText() string {
 	return f.clauseSourceText
 }
 
-// ContentTokens implements ClauseNode.
-func (f *ForClause) ContentTokens() []tokenizer.Token {
-	return f.bodyTokens
-}
-
 // IfDirective implements ClauseNode.
 func (f *ForClause) IfDirective() string {
 	panic("unimplemented")
@@ -544,11 +468,6 @@ func (f *ForClause) IfDirective() string {
 // Position implements ClauseNode.
 func (f *ForClause) Position() tokenizer.Position {
 	return f.headingTokens[0].Position
-}
-
-// RawTokens implements ClauseNode.
-func (f *ForClause) RawTokens() []tokenizer.Token {
-	panic("unimplemented")
 }
 
 // String implements ClauseNode.
@@ -565,7 +484,7 @@ var _ ClauseNode = (*ForClause)(nil)
 
 type InsertIntoClause struct {
 	clauseBaseNode
-	Table   TableName
+	Table   TableReference
 	Columns []string
 }
 
@@ -584,11 +503,6 @@ func (i *InsertIntoClause) SourceText() string {
 	return i.clauseSourceText
 }
 
-// ContentTokens implements ClauseNode.
-func (i *InsertIntoClause) ContentTokens() []tokenizer.Token {
-	return i.bodyTokens
-}
-
 // IfDirective implements ClauseNode.
 func (i *InsertIntoClause) IfDirective() string {
 	panic("unimplemented")
@@ -597,11 +511,6 @@ func (i *InsertIntoClause) IfDirective() string {
 // Position implements ClauseNode.
 func (i *InsertIntoClause) Position() tokenizer.Position {
 	return i.headingTokens[0].Position
-}
-
-// RawTokens implements ClauseNode.
-func (i *InsertIntoClause) RawTokens() []tokenizer.Token {
-	return i.rawTokens()
 }
 
 // String implements ClauseNode.
@@ -637,11 +546,6 @@ func (n *OnConflictClause) SourceText() string {
 	return n.clauseSourceText
 }
 
-// ContentTokens implements ClauseNode.
-func (n *OnConflictClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
-
 // IfDirective implements ClauseNode.
 func (n *OnConflictClause) IfDirective() string {
 	panic("unimplemented")
@@ -650,11 +554,6 @@ func (n *OnConflictClause) IfDirective() string {
 // Position implements ClauseNode.
 func (n *OnConflictClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
-}
-
-// RawTokens implements ClauseNode.
-func (n *OnConflictClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
 }
 
 // Type implements ClauseNode.
@@ -688,11 +587,6 @@ func (n *ValuesClause) SourceText() string {
 	return n.clauseSourceText
 }
 
-// ContentTokens implements ClauseNode.
-func (n *ValuesClause) ContentTokens() []tokenizer.Token {
-	return n.bodyTokens
-}
-
 // IfDirective implements ClauseNode.
 func (n *ValuesClause) IfDirective() string {
 	panic("unimplemented")
@@ -701,11 +595,6 @@ func (n *ValuesClause) IfDirective() string {
 // Position implements ClauseNode.
 func (n *ValuesClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
-}
-
-// RawTokens implements ClauseNode.
-func (n *ValuesClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
 }
 
 // Type implements ClauseNode.
@@ -721,7 +610,7 @@ var _ ClauseNode = (*ValuesClause)(nil)
 
 type UpdateClause struct {
 	clauseBaseNode
-	TableName TableName
+	Table TableReference
 }
 
 func NewUpdateClause(srcText string, heading, body []tokenizer.Token) *UpdateClause {
@@ -739,11 +628,6 @@ func (u *UpdateClause) SourceText() string {
 	return u.clauseSourceText
 }
 
-// ContentTokens implements ClauseNode.
-func (u *UpdateClause) ContentTokens() []tokenizer.Token {
-	return u.bodyTokens
-}
-
 // IfDirective implements ClauseNode.
 func (u *UpdateClause) IfDirective() string {
 	panic("unimplemented")
@@ -752,11 +636,6 @@ func (u *UpdateClause) IfDirective() string {
 // Position implements ClauseNode.
 func (u *UpdateClause) Position() tokenizer.Position {
 	return u.headingTokens[0].Position
-}
-
-// RawTokens implements ClauseNode.
-func (u *UpdateClause) RawTokens() []tokenizer.Token {
-	return u.rawTokens()
 }
 
 // String implements ClauseNode.
@@ -774,8 +653,7 @@ var _ ClauseNode = (*UpdateClause)(nil)
 // SetClause represents a SET clause in UPDATE statement
 type SetClause struct {
 	clauseBaseNode
-	Field FieldName
-	Value AstNode // Expression
+	Assigns []SetAssign // List of field assignments
 }
 
 func NewSetClause(srcText string, heading, body []tokenizer.Token) *SetClause {
@@ -793,11 +671,6 @@ func (n *SetClause) SourceText() string {
 	return n.clauseSourceText
 }
 
-// ContentTokens implements ClauseNode.
-func (n *SetClause) ContentTokens() []tokenizer.Token {
-	panic("unimplemented")
-}
-
 // IfDirective implements ClauseNode.
 func (n *SetClause) IfDirective() string {
 	panic("unimplemented")
@@ -808,17 +681,12 @@ func (n *SetClause) Position() tokenizer.Position {
 	return n.headingTokens[0].Position
 }
 
-// RawTokens implements ClauseNode.
-func (n *SetClause) RawTokens() []tokenizer.Token {
-	return n.rawTokens()
-}
-
 // Type implements ClauseNode.
 func (n *SetClause) Type() NodeType {
 	return SET_CLAUSE
 }
 
-func (n SetClause) String() string {
+func (n *SetClause) String() string {
 	return "SET"
 }
 
@@ -826,7 +694,7 @@ var _ ClauseNode = (*SetClause)(nil)
 
 type DeleteFromClause struct {
 	clauseBaseNode
-	TableName TableName
+	Table TableReference
 }
 
 func NewDeleteFromClause(srcText string, heading, body []tokenizer.Token) *DeleteFromClause {
@@ -844,11 +712,6 @@ func (d *DeleteFromClause) SourceText() string {
 	return d.clauseSourceText
 }
 
-// ContentTokens implements ClauseNode.
-func (d *DeleteFromClause) ContentTokens() []tokenizer.Token {
-	return d.bodyTokens
-}
-
 // IfDirective implements ClauseNode.
 func (d *DeleteFromClause) IfDirective() string {
 	panic("unimplemented")
@@ -857,11 +720,6 @@ func (d *DeleteFromClause) IfDirective() string {
 // Position implements ClauseNode.
 func (d *DeleteFromClause) Position() tokenizer.Position {
 	return d.headingTokens[0].Position
-}
-
-// RawTokens implements ClauseNode.
-func (d *DeleteFromClause) RawTokens() []tokenizer.Token {
-	return d.rawTokens()
 }
 
 // String implements ClauseNode.

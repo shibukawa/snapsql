@@ -97,23 +97,27 @@ func (jt JoinType) String() string {
 	}
 }
 
-// TableReference represents a table or join in FROM clause
-type TableReference struct {
-	Name          string      // Table name or alias (if present, otherwise original name)
-	SchemaName    string      // Optional schema name (e.g., "schema.table")
-	TableName     string      // Original table name before alias (empty for subquery)
-	ExplicitName  bool        // true if table name is explicitly specified (e.g., "AS alias")
+// TableReferenceForFrom represents a table or join in FROM clause
+type TableReferenceForFrom struct {
+	TableReference
 	JoinType      JoinType    // Join type (see constants)
 	JoinCondition []tok.Token // ON/USING clause tokens
 	IsSubquery    bool        // true if this is a subquery
 	Expression    []tok.Token // Optional expression for complex references
 }
 
-func (n TableReference) String() string {
+func (n TableReferenceForFrom) String() string {
 	return "TABLE_REF"
 }
 
-type TableName struct {
-	Name   string
-	Schema string
+type TableReference struct {
+	Name         string // Table name or alias (if present, otherwise original name)
+	SchemaName   string // Optional schema name (e.g., "schema.table")
+	TableName    string // Original table name before alias (empty for subquery)
+	ExplicitName bool   // true if table name is explicitly specified (e.g., "AS alias")
+}
+
+type SetAssign struct {
+	FieldName string
+	Value     []tok.Token
 }

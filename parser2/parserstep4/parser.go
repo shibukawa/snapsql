@@ -1,6 +1,9 @@
 package parserstep4
 
 import (
+	"fmt"
+	"iter"
+
 	pc "github.com/shibukawa/parsercombinator"
 	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
 	tok "github.com/shibukawa/snapsql/tokenizer"
@@ -50,6 +53,7 @@ var (
 	thenKeyword = cmn.WS2(cmn.PrimitiveType("then", tok.THEN))
 	elseKeyword = cmn.WS2(cmn.PrimitiveType("else", tok.ELSE))
 	endKeyword  = cmn.WS2(cmn.PrimitiveType("end", tok.END))
+	equal       = cmn.WS2(cmn.PrimitiveType("equal", tok.EQUAL))
 )
 
 var (
@@ -66,4 +70,68 @@ func tag(typeStr string, p ...pc.Parser[tok.Token]) pc.Parser[tok.Token] {
 		}
 		return src, nil
 	})
+}
+
+func parseTableName(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Token], withAlias bool) (int, cmn.TableReference, error) {
+	consume, match, err := insertIntoClauseTableName(pctx, tokens)
+	if err != nil {
+		return 0, cmn.TableReference{}, err
+	}
+	if len(match) == 0 {
+		return 0, cmn.TableReference{}, fmt.Errorf("%w: table name is required", cmn.ErrInvalidSQL)
+	}
+
+	tableRef := cmn.TableReference{}
+	switch len(match) {
+	case 1:
+		tableRef.Name = match[0].Val.Value
+	case 3:
+		tableRef.SchemaName = match[0].Val.Value
+		tableRef.Name = match[2].Val.Value
+	}
+	return consume, tableRef, nil
+}
+
+func fieldIter(tokens []pc.Token[tok.Token]) iter.Seq2[int, pc.Consume[tok.Token]] {
+	splitter := cmn.WS2(pc.Or(cmn.Comma, cmn.ParenOpen, cmn.ParenClose))
+
+	return func(yield func(index int, consume pc.Consume[tok.Token]) bool) {
+		count := 0
+		nest := 0
+		var skipped []pc.Token[tok.Token]
+		for _, part := range pc.FindIter(pc.NewParseContext[tok.Token](), splitter, tokens) {
+			if part.Last {
+				yield(count, pc.Consume[tok.Token]{
+					Consume: part.Consume + len(skipped),
+					Skipped: append(skipped, part.Skipped...),
+					Match:   nil,
+					Last:    true,
+				})
+			} else if nest > 0 {
+				switch part.Match[0].Val.Type {
+				case tok.OPENED_PARENS:
+					nest++
+				case tok.CLOSED_PARENS:
+					nest--
+				}
+				skipped = append(skipped, part.Skipped...)
+				skipped = append(skipped, part.Match...)
+			} else {
+				if part.Match[0].Val.Type == tok.OPENED_PARENS {
+					skipped = append(skipped, part.Skipped...)
+					skipped = append(skipped, part.Match...)
+					nest = 1
+				} else {
+					yield(count, pc.Consume[tok.Token]{
+						Consume: part.Consume + len(skipped),
+						Skipped: append(skipped, part.Skipped...),
+						Match:   part.Match,
+						Last:    part.Last,
+					})
+					skipped = nil
+					count++
+				}
+			}
+		}
+	}
 }

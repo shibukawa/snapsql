@@ -2,7 +2,6 @@ package parserstep4
 
 import (
 	"fmt"
-	"iter"
 	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
@@ -42,57 +41,13 @@ var (
 	fieldNamePattern = pc.Seq(cmn.Identifier, pc.Optional(pc.Seq(cmn.Dot, cmn.Identifier)))
 )
 
-func orderByFieldIter(tokens []pc.Token[tok.Token]) iter.Seq2[int, pc.Consume[tok.Token]] {
-	splitter := cmn.WS2(pc.Or(cmn.Comma, cmn.ParenOpen, cmn.ParenClose))
-
-	return func(yield func(index int, consume pc.Consume[tok.Token]) bool) {
-		count := 0
-		nest := 0
-		var skipped []pc.Token[tok.Token]
-		for _, part := range pc.FindIter(pc.NewParseContext[tok.Token](), splitter, tokens) {
-			if part.Last {
-				yield(count, pc.Consume[tok.Token]{
-					Consume: part.Consume + len(skipped),
-					Skipped: append(skipped, part.Skipped...),
-					Match:   nil,
-					Last:    true,
-				})
-			} else if nest > 0 {
-				switch part.Match[0].Val.Type {
-				case tok.OPENED_PARENS:
-					nest++
-				case tok.CLOSED_PARENS:
-					nest--
-				}
-				skipped = append(skipped, part.Skipped...)
-				skipped = append(skipped, part.Match...)
-			} else {
-				if part.Match[0].Val.Type == tok.OPENED_PARENS {
-					skipped = append(skipped, part.Skipped...)
-					skipped = append(skipped, part.Match...)
-					nest = 1
-				} else {
-					yield(count, pc.Consume[tok.Token]{
-						Consume: part.Consume + len(skipped),
-						Skipped: append(skipped, part.Skipped...),
-						Match:   part.Match,
-						Last:    part.Last,
-					})
-					skipped = nil
-					count++
-				}
-			}
-		}
-	}
-}
-
 func FinalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 	tokens := clause.ContentTokens()
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
 
 	nameToPos := make(map[string][]string)
-	for _, part := range orderByFieldIter(pTokens) {
+	for _, part := range fieldIter(pTokens) {
 		field := cmn.OrderByField{
 			Expression: cmn.ToToken(part.Skipped),
 		}

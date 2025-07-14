@@ -35,7 +35,6 @@ type SelectStatement struct {
 }
 
 func NewSelectStatement(leadingTokens []tokenizer.Token, with *WithClause, clauses []ClauseNode) *SelectStatement {
-
 	return &SelectStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
@@ -77,7 +76,7 @@ func (s *SelectStatement) CTE() *WithClause {
 
 var _ StatementNode = (*SelectStatement)(nil)
 
-func (s SelectStatement) String() string {
+func (s *SelectStatement) String() string {
 	return "SELECT"
 }
 
@@ -85,7 +84,7 @@ func (s SelectStatement) String() string {
 type InsertIntoStatement struct {
 	baseStatement
 	With       *WithClause
-	InsertInto *InsertIntoClause
+	Into       *InsertIntoClause
 	Columns    []FieldName
 	ValuesList *ValuesClause
 	Select     *SelectClause
@@ -136,7 +135,7 @@ func (n *InsertIntoStatement) Type() NodeType {
 	return INSERT_INTO_STATEMENT
 }
 
-func (n InsertIntoStatement) String() string {
+func (n *InsertIntoStatement) String() string {
 	return "INSERT INTO"
 }
 
@@ -151,8 +150,8 @@ var _ StatementNode = (*InsertIntoStatement)(nil)
 type UpdateStatement struct {
 	baseStatement
 	With      *WithClause
-	Table     TableName
-	Sets      []SetClause
+	Update    *UpdateClause
+	Set       *SetClause
 	Where     *WhereClause
 	Returning *ReturningClause
 }
@@ -193,7 +192,7 @@ func (n *UpdateStatement) Type() NodeType {
 	return UPDATE_STATEMENT
 }
 
-func (n UpdateStatement) String() string {
+func (n *UpdateStatement) String() string {
 	return "UPDATE"
 }
 
@@ -208,7 +207,7 @@ var _ StatementNode = (*UpdateStatement)(nil)
 type DeleteFromStatement struct {
 	baseStatement
 	With      *WithClause
-	Table     TableName
+	From      *DeleteFromClause
 	Where     *WhereClause
 	Returning *ReturningClause
 }
@@ -249,7 +248,7 @@ func (n *DeleteFromStatement) Type() NodeType {
 	return DELETE_FROM_STATEMENT
 }
 
-func (n DeleteFromStatement) String() string {
+func (n *DeleteFromStatement) String() string {
 	return "DELETE_FROM"
 }
 

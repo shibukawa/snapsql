@@ -80,9 +80,8 @@ func assignInsertStatementFields(stmt *cmn.InsertIntoStatement, clauses []cmn.Cl
 	for _, c := range clauses {
 		switch c.Type() {
 		case cmn.INSERT_INTO_CLAUSE:
-			// TableNameはINSERT_INTO_CLAUSEから取得
 			if v, ok := c.(*cmn.InsertIntoClause); ok {
-				stmt.InsertInto = v
+				stmt.Into = v
 			}
 		case cmn.VALUES_CLAUSE:
 			if v, ok := c.(*cmn.ValuesClause); ok {
@@ -137,11 +136,11 @@ func assignUpdateStatementFields(stmt *cmn.UpdateStatement, clauses []cmn.Clause
 		switch c.Type() {
 		case cmn.UPDATE_CLAUSE:
 			if v, ok := c.(*cmn.UpdateClause); ok {
-				stmt.Table = v.TableName
+				stmt.Update = v
 			}
 		case cmn.SET_CLAUSE:
 			if v, ok := c.(*cmn.SetClause); ok {
-				stmt.Sets = append(stmt.Sets, *v)
+				stmt.Set = v
 			}
 		case cmn.WHERE_CLAUSE:
 			if v, ok := c.(*cmn.WhereClause); ok {
@@ -160,7 +159,7 @@ func assignDeleteStatementFields(stmt *cmn.DeleteFromStatement, clauses []cmn.Cl
 		switch c.Type() {
 		case cmn.DELETE_FROM_CLAUSE:
 			if v, ok := c.(*cmn.DeleteFromClause); ok {
-				stmt.Table = v.TableName
+				stmt.From = v
 			}
 		case cmn.WHERE_CLAUSE:
 			if v, ok := c.(*cmn.WhereClause); ok {

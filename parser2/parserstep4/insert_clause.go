@@ -23,26 +23,19 @@ var (
 	columnListEnd = pc.Seq(cmn.SP, cmn.EOS)
 )
 
-func FinalizeInertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.SelectClause, perr *cmn.ParseError) {
+func FinalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.SelectClause, perr *cmn.ParseError) {
 	clause.Columns = []string{}
 	tokens := clause.ContentTokens()
 
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
-
-	consume, match, err := insertIntoClauseTableName(pctx, pTokens)
+	consume, tableName, err := parseTableName(pctx, pTokens, false)
 	if err != nil {
-		perr.Add(fmt.Errorf("%w at %s: table name is required", cmn.ErrInvalidSQL, tokens[0].Position.String()))
-		return
-	}
-	switch len(match) {
-	case 1:
-		clause.Table.Name = match[0].Val.Value
-	case 3:
-		clause.Table.Schema = match[0].Val.Value
-		clause.Table.Name = match[2].Val.Value
+		perr.Add(err)
 	}
 	pTokens = pTokens[consume:]
+	clause.Table = tableName
+
 	consume, _, err = columnListStart(pctx, pTokens)
 	if err != nil {
 		if selectClause != nil {

@@ -130,35 +130,35 @@ func parseJoin(pToken []pc.Token[tok.Token]) (cmn.JoinType, error) {
 	panic("should not reach here")
 }
 
-func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token[tok.Token]) (cmn.TableReference, error) {
+func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token[tok.Token]) (cmn.TableReferenceForFrom, error) {
 	// head: semi-colon, JOIN clause
 	// body: join type and ON/USING clause
-	result := cmn.TableReference{}
+	result := cmn.TableReferenceForFrom{}
 
 	// Join
 	if head != nil {
 		if len(body) == 0 {
-			return cmn.TableReference{}, fmt.Errorf("%w: at %s", ErrTargetTableIsEmpty, head[0].Val.Position.String())
+			return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: at %s", ErrTargetTableIsEmpty, head[0].Val.Position.String())
 		}
 		joinType, err := parseJoin(head)
 		if err != nil {
-			return cmn.TableReference{}, err
+			return cmn.TableReferenceForFrom{}, err
 		}
 		result.JoinType = joinType
 		skipped, matched, _, remained, ok := pc.Find(pctx, pc.Or(on, using), body)
 		if ok {
 			if joinType == cmn.JoinCross {
 				cond := skipped[0].Val
-				return cmn.TableReference{}, fmt.Errorf("%w: CROSS JOIN can't have '%s' condition at %s", cmn.ErrInvalidSQL, cond.Value, cond.Position.String())
+				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: CROSS JOIN can't have '%s' condition at %s", cmn.ErrInvalidSQL, cond.Value, cond.Position.String())
 			}
 			body = skipped
 		} else if joinType != cmn.JoinCross {
-			return cmn.TableReference{}, fmt.Errorf("%w: %s should have condition at %s", cmn.ErrInvalidSQL, joinType, head[0].Val.Position.String())
+			return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: %s should have condition at %s", cmn.ErrInvalidSQL, joinType, head[0].Val.Position.String())
 		}
 		result.JoinCondition = cmn.ToToken(append(matched, remained...))
 	}
 	if len(head) == 0 && len(body) == 0 {
-		return cmn.TableReference{}, fmt.Errorf("%w: JOIN can't be use for first table reference", ErrInvalidJoinType)
+		return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: JOIN can't be use for first table reference", ErrInvalidJoinType)
 	}
 
 	beforeAlias, alias, _, _, ok := pc.Find(pctx, alias, body)
@@ -173,7 +173,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 				_, match, err := fromClauseTableName(pctx, beforeAlias)
 				if err != nil {
 					v := beforeAlias[0].Val
-					return cmn.TableReference{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
+					return cmn.TableReferenceForFrom{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
 				}
 				switch match[0].Type {
 				case "table":
@@ -197,7 +197,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 			_, match, err := fromClauseTableName(pctx, beforeAlias)
 			if err != nil {
 				v := body[0].Val
-				return cmn.TableReference{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
+				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
 			}
 			switch len(match) {
 			case 1: // id as alias
@@ -219,10 +219,10 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 		if err != nil {
 			if len(body) == 0 {
 				h := head[0].Val
-				return cmn.TableReference{}, fmt.Errorf("%w at %s: table name is empty", cmn.ErrInvalidSQL, h.Value)
+				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w at %s: table name is empty", cmn.ErrInvalidSQL, h.Value)
 			} else {
 				v := body[0].Val
-				return cmn.TableReference{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
+				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
 			}
 		} else {
 			switch len(match) {
@@ -230,7 +230,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 				result.Name = alias[1].Val.Value
 				result.TableName = match[0].Val.Value
 			case 2: // subquery without alias
-				return cmn.TableReference{}, fmt.Errorf("%w: at %s", ErrSubQueryNeedsAlias, body[0].Val.Position.String())
+				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: at %s", ErrSubQueryNeedsAlias, body[0].Val.Position.String())
 			case 3: // table with schema
 				result.Name = alias[0].Val.Value
 				result.SchemaName = match[0].Val.Value

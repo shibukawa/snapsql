@@ -16,7 +16,7 @@ func TestInsertWithoutColumnList(t *testing.T) {
 		name        string
 		sql         string
 		wantErr     bool
-		wantTable   cmn.TableName
+		wantTable   cmn.TableReference
 		wantColumns []string
 	}{
 		{
@@ -28,42 +28,42 @@ func TestInsertWithoutColumnList(t *testing.T) {
 			name:        "insert with column list",
 			sql:         "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 20);",
 			wantErr:     false,
-			wantTable:   cmn.TableName{Name: "users"},
+			wantTable:   cmn.TableReference{Name: "users"},
 			wantColumns: []string{"id", "name", "age"},
 		},
 		{
 			name:        "insert with select without column list",
 			sql:         "INSERT INTO users SELECT id, name, age FROM tmp;",
 			wantErr:     false,
-			wantTable:   cmn.TableName{Name: "users"},
+			wantTable:   cmn.TableReference{Name: "users"},
 			wantColumns: []string{},
 		},
 		{
 			name:        "insert with select with column list",
 			sql:         "INSERT INTO users (id, name, age) SELECT id, name, age FROM tmp;",
 			wantErr:     false,
-			wantTable:   cmn.TableName{Name: "users"},
+			wantTable:   cmn.TableReference{Name: "users"},
 			wantColumns: []string{"id", "name", "age"},
 		},
 		{
 			name:        "insert with schema.table",
 			sql:         "INSERT INTO public.users (id, name, age) VALUES (1, 'Alice', 20);",
 			wantErr:     false,
-			wantTable:   cmn.TableName{Schema: "public", Name: "users"},
+			wantTable:   cmn.TableReference{SchemaName: "public", Name: "users"},
 			wantColumns: []string{"id", "name", "age"},
 		},
 		{
 			name:        "insert with db.table (MySQL/SQLite)",
 			sql:         "INSERT INTO mydb.users (id, name, age) VALUES (2, 'Bob', 30);",
 			wantErr:     false,
-			wantTable:   cmn.TableName{Schema: "mydb", Name: "users"},
+			wantTable:   cmn.TableReference{SchemaName: "mydb", Name: "users"},
 			wantColumns: []string{"id", "name", "age"},
 		},
 		{
 			name:        "insert with quoted schema and table",
 			sql:         "INSERT INTO \"public\".\"users\" (id, name, age) VALUES (3, 'Carol', 25);",
 			wantErr:     false,
-			wantTable:   cmn.TableName{Schema: `"public"`, Name: `"users"`},
+			wantTable:   cmn.TableReference{SchemaName: `"public"`, Name: `"users"`},
 			wantColumns: []string{"id", "name", "age"},
 		},
 		{
@@ -109,7 +109,7 @@ func TestInsertWithoutColumnList(t *testing.T) {
 				panic("cast should be success")
 			}
 			perr := &cmn.ParseError{}
-			FinalizeInertIntoClause(insertStmt.InsertInto, insertStmt.Select, perr)
+			FinalizeInsertIntoClause(insertStmt.Into, insertStmt.Select, perr)
 			if tt.wantErr {
 				assert.NotEqual(t, 0, len(perr.Errors))
 			} else {
@@ -117,8 +117,8 @@ func TestInsertWithoutColumnList(t *testing.T) {
 					t.Logf("Error: %s", e.Error())
 				}
 				assert.Equal(t, 0, len(perr.Errors))
-				assert.Equal(t, tt.wantTable, insertStmt.InsertInto.Table)
-				assert.Equal(t, tt.wantColumns, insertStmt.InsertInto.Columns)
+				assert.Equal(t, tt.wantTable, insertStmt.Into.Table)
+				assert.Equal(t, tt.wantColumns, insertStmt.Into.Columns)
 			}
 		})
 	}
