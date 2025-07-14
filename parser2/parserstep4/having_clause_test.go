@@ -41,7 +41,7 @@ func TestFinalizeHavingClause(t *testing.T) {
 			havingClause := selectStmt.Having
 			groupByClause := selectStmt.GroupBy
 			perr := &cmn.ParseError{}
-			FinalizeHavingClause(havingClause, groupByClause, perr)
+			finalizeHavingClause(havingClause, groupByClause, perr)
 			if tc.wantError {
 				assert.NotEqual(t, 0, len(perr.Errors), "should return error")
 			} else {

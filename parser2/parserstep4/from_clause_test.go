@@ -164,7 +164,7 @@ func TestFinalizeFromClause(t *testing.T) {
 			assert.True(t, ok)
 			fromClause := selectStmt.From
 			perr := &cmn.ParseError{}
-			FinalizeFromClause(fromClause, perr)
+			finalizeFromClause(fromClause, perr)
 			if tc.wantError {
 				assert.NotEqual(t, 0, len(perr.Errors), "should have parse error")
 			} else {
@@ -240,7 +240,7 @@ func TestFinalizeFromClause_InvalidJoinCombinations(t *testing.T) {
 			}
 			fromClause := selectStmt.From
 			perr := &cmn.ParseError{}
-			FinalizeFromClause(fromClause, perr)
+			finalizeFromClause(fromClause, perr)
 			assert.NotEqual(t, 0, len(perr.Errors), "should have parse error for invalid join combination")
 		})
 	}

@@ -20,8 +20,8 @@ var (
 	)
 )
 
-// FinalizeLimitOffsetClause finalizes the LIMIT and OFFSET clauses.
-func FinalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.OffsetClause, perr *cmn.ParseError) {
+// finalizeLimitOffsetClause finalizes the LIMIT and OFFSET clauses.
+func finalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.OffsetClause, perr *cmn.ParseError) {
 	pctx := pc.NewParseContext[tok.Token]()
 
 	inputs := [][]pc.Token[tok.Token]{

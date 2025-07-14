@@ -31,7 +31,7 @@ var (
 	)
 )
 
-func FinalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
+func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 	tokens := clause.ContentTokens()
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)

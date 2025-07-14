@@ -109,7 +109,7 @@ func TestInsertWithoutColumnList(t *testing.T) {
 				panic("cast should be success")
 			}
 			perr := &cmn.ParseError{}
-			FinalizeInsertIntoClause(insertStmt.Into, insertStmt.Select, perr)
+			finalizeInsertIntoClause(insertStmt.Into, insertStmt.Select, perr)
 			if tt.wantErr {
 				assert.NotEqual(t, 0, len(perr.Errors))
 			} else {

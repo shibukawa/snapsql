@@ -105,7 +105,7 @@ func TestFinalizeGroupByClause(t *testing.T) {
 			groupByClause := selectStmt.GroupBy
 			perr := &cmn.ParseError{}
 
-			FinalizeGroupByClause(groupByClause, perr)
+			finalizeGroupByClause(groupByClause, perr)
 			if tt.wantErr {
 				assert.NotEqual(t, 0, len(perr.Errors), "should have errors")
 			} else {

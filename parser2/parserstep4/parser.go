@@ -61,6 +61,13 @@ var (
 		tag("without-as", pc.Seq(cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS)), // alias without AS
 		tag("with-as", pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS)),
 	)
+
+	standardCastStart   = pc.Seq(cast, cmn.ParenOpen, cmn.SP)
+	standardCastEnd     = pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.ParenClose, cmn.SP, cmn.EOS)
+	postgreSQLCastStart = pc.Seq(cmn.ParenOpen, cmn.SP)
+	postgreSQLCastEnd   = pc.Seq(
+		pc.Optional(pc.Seq(cmn.SP, cmn.ParenClose)),
+		cmn.SP, postgreSQLCast, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS)
 )
 
 func tag(typeStr string, p ...pc.Parser[tok.Token]) pc.Parser[tok.Token] {

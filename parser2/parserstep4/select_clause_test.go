@@ -360,7 +360,7 @@ func TestFinalizeSelectClause(t *testing.T) {
 			assert.True(t, ok)
 			selectClause := selectStmt.Select
 			perr := &parsercommon.ParseError{}
-			FinalizeSelectClause(selectClause, perr)
+			finalizeSelectClause(selectClause, perr)
 			if tc.wantError {
 				assert.True(t, len(perr.Errors) > 0, "should return error")
 			} else {

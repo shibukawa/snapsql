@@ -9,45 +9,45 @@ import (
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
-// FinalizeDeleteFromClause validates DeleteFromClause
-func FinalizeDeleteFromClause(clause *cmn.DeleteFromClause, perr *cmn.ParseError) {
-	tokens := clause.ContentTokens()
-
-	pctx := pc.NewParseContext[tok.Token]()
-	pTokens := cmn.ToParserToken(tokens)
-	consume, tableName, err := parseTableName(pctx, pTokens, false)
-	if err != nil {
-		perr.Add(err)
-	}
-	clause.Table = tableName
-	if consume != len(pTokens) {
-		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
-	}
-}
-
-// FinalizeUpdateClause validates UpdateClause
-func FinalizeUpdateClause(clause *cmn.UpdateClause, perr *cmn.ParseError) {
-	tokens := clause.ContentTokens()
-
-	pctx := pc.NewParseContext[tok.Token]()
-	pTokens := cmn.ToParserToken(tokens)
-	consume, tableName, err := parseTableName(pctx, pTokens, false)
-	if err != nil {
-		perr.Add(err)
-	}
-	clause.Table = tableName
-	if consume != len(pTokens) {
-		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
-	}
-}
-
 var (
-	assign = pc.Seq(
-		cmn.Identifier, cmn.SP, equal)
+	assign      = pc.Seq(cmn.Identifier, cmn.SP, equal)
+	singleField = pc.Seq(cmn.Identifier, cmn.SP, cmn.EOS)
 )
 
-// FinalizeSetClause validates SetClause for UPDATE
-func FinalizeSetClause(clause *cmn.SetClause, perr *cmn.ParseError) {
+// finalizeDeleteFromClause validates DeleteFromClause
+func finalizeDeleteFromClause(clause *cmn.DeleteFromClause, perr *cmn.ParseError) {
+	tokens := clause.ContentTokens()
+
+	pctx := pc.NewParseContext[tok.Token]()
+	pTokens := cmn.ToParserToken(tokens)
+	consume, tableName, err := parseTableName(pctx, pTokens, false)
+	if err != nil {
+		perr.Add(err)
+	}
+	clause.Table = tableName
+	if consume != len(pTokens) {
+		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
+	}
+}
+
+// finalizeUpdateClause validates UpdateClause
+func finalizeUpdateClause(clause *cmn.UpdateClause, perr *cmn.ParseError) {
+	tokens := clause.ContentTokens()
+
+	pctx := pc.NewParseContext[tok.Token]()
+	pTokens := cmn.ToParserToken(tokens)
+	consume, tableName, err := parseTableName(pctx, pTokens, false)
+	if err != nil {
+		perr.Add(err)
+	}
+	clause.Table = tableName
+	if consume != len(pTokens) {
+		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
+	}
+}
+
+// finalizeSetClause validates SetClause for UPDATE
+func finalizeSetClause(clause *cmn.SetClause, perr *cmn.ParseError) {
 	tokens := clause.ContentTokens()
 	if len(tokens) == 0 {
 		perr.Add(fmt.Errorf("%w: SET clause must not be empty", cmn.ErrInvalidSQL))
@@ -82,7 +82,44 @@ func FinalizeSetClause(clause *cmn.SetClause, perr *cmn.ParseError) {
 	}
 }
 
-func EmptyCheck(clause cmn.ClauseNode, perr *cmn.ParseError) {
+// finalizeReturningClause validates ReturningClause
+func finalizeReturningClause(clause *cmn.ReturningClause, perr *cmn.ParseError) {
+	tokens := clause.ContentTokens()
+	if len(tokens) == 0 {
+		perr.Add(fmt.Errorf("%w: RETURNING clause must not be empty", cmn.ErrInvalidSQL))
+		return
+	}
+	pTokens := cmn.ToParserToken(tokens)
+	nameToPos := make(map[string][]string)
+	pctx := pc.NewParseContext[tok.Token]()
+	for _, part := range fieldIter(pTokens) {
+		if len(part.Skipped) == 0 {
+			continue
+		}
+		field, fieldTokens := parseFieldQualifier(part.Skipped)
+		// standard single field
+		if _, match, err := singleField(pctx, fieldTokens); err == nil {
+			if field.FieldName == "" {
+				field.FieldName = match[0].Val.Value // use identity as alias
+			}
+			field.FieldKind = cmn.SingleField
+			field.OriginalField = match[0].Val.Value
+			nameToPos[field.FieldName] = append(nameToPos[field.FieldName], field.Pos.String())
+		} else {
+			// complex field
+			field.FieldKind = cmn.ComplexField
+			field.Expression = cmn.ToToken(fieldTokens)
+		}
+		clause.Fields = append(clause.Fields, field)
+	}
+	for name, pos := range nameToPos {
+		if len(pos) > 1 {
+			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))
+		}
+	}
+}
+
+func emptyCheck(clause cmn.ClauseNode, perr *cmn.ParseError) {
 	if len(clause.ContentTokens()) == 0 {
 		rawToken := clause.RawTokens()[0]
 		perr.Add(fmt.Errorf("%w: at %s: %s clause must not be empty", cmn.ErrInvalidSQL, rawToken.Position.String(), rawToken.Value))

@@ -35,9 +35,9 @@ var (
 	)
 )
 
-// FinalizeFromClause checks if a FROM clause contains a subquery without an alias.
+// finalizeFromClause checks if a FROM clause contains a subquery without an alias.
 // If found, it adds an error to perr. No return value.
-func FinalizeFromClause(clause *cmn.FromClause, perr *cmn.ParseError) {
+func finalizeFromClause(clause *cmn.FromClause, perr *cmn.ParseError) {
 	var joinHead []pc.Token[tok.Token]
 
 	tokens := clause.ContentTokens()

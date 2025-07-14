@@ -41,7 +41,7 @@ var (
 	fieldNamePattern = pc.Seq(cmn.Identifier, pc.Optional(pc.Seq(cmn.Dot, cmn.Identifier)))
 )
 
-func FinalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
+func finalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 	tokens := clause.ContentTokens()
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)

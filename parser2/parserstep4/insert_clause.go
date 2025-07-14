@@ -23,7 +23,7 @@ var (
 	columnListEnd = pc.Seq(cmn.SP, cmn.EOS)
 )
 
-func FinalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.SelectClause, perr *cmn.ParseError) {
+func finalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.SelectClause, perr *cmn.ParseError) {
 	clause.Columns = []string{}
 	tokens := clause.ContentTokens()
 

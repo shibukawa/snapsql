@@ -73,7 +73,7 @@ func TestFinalizeLimitOffsetClause(t *testing.T) {
 			selectStmt, ok := stmt.(*cmn.SelectStatement)
 			assert.True(t, ok)
 			perr := &cmn.ParseError{}
-			FinalizeLimitOffsetClause(selectStmt.Limit, selectStmt.Offset, perr)
+			finalizeLimitOffsetClause(selectStmt.Limit, selectStmt.Offset, perr)
 			if tt.wantErr {
 				assert.NotEqual(t, 0, len(perr.Errors), "should have errors")
 			} else {

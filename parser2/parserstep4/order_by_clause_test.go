@@ -279,7 +279,7 @@ func TestFinalizeOrderByClause(t *testing.T) {
 			orderByClause := selectStmt.OrderBy
 			perr := &cmn.ParseError{}
 
-			FinalizeOrderByClause(orderByClause, perr)
+			finalizeOrderByClause(orderByClause, perr)
 			if tt.wantErr {
 				assert.NotEqual(t, 0, len(perr.Errors), "should have errors")
 			} else {

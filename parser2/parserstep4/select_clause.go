@@ -42,12 +42,6 @@ var (
 		// sub query
 		tag("subquery", pc.Seq(cmn.ParenOpen, cmn.SP, subQuery)),
 	)
-	standardCastStart   = pc.Seq(cast, cmn.ParenOpen, cmn.SP)
-	standardCastEnd     = pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.ParenClose, cmn.SP, cmn.EOS)
-	postgreSQLCastStart = pc.Seq(cmn.ParenOpen, cmn.SP)
-	postgreSQLCastEnd   = pc.Seq(
-		pc.Optional(pc.Seq(cmn.SP, cmn.ParenClose)),
-		cmn.SP, postgreSQLCast, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS)
 )
 
 func parseFieldItems(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Token]) (int, []cmn.FieldName) {
@@ -81,9 +75,9 @@ func parseFieldItems(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Tok
 	return consume, fields
 }
 
-// FinalizeSelectClause parses and validates the SELECT clause, populating Items and checking for asterisk usage.
+// finalizeSelectClause parses and validates the SELECT clause, populating Items and checking for asterisk usage.
 // It appends errors to perr if asterisk is found.
-func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
+func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 	tokens := clause.ContentTokens()
 
 	pctx := pc.NewParseContext[tok.Token]()
@@ -129,70 +123,15 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 			continue
 		}
 
-		fieldTokens := token.Skipped
-
-		// Alias
-		var fieldName string
-		var explicitName bool
-		beforeAlias, match, _, _, ok := pc.Find(pctx, alias, fieldTokens)
-		if ok {
-			switch match[0].Type {
-			case "without-as": // it requires before the word
-				if len(beforeAlias) > 0 {
-					lastType := beforeAlias[len(beforeAlias)-1].Val.Type
-					if lastType != tok.DOUBLE_COLON && lastType != tok.DOT {
-						fieldName = match[0].Val.Value
-						fieldTokens = beforeAlias
-						explicitName = true
-					}
-				}
-			case "with-as":
-				fieldName = match[1].Val.Value
-				fieldTokens = beforeAlias
-				explicitName = true
-			}
-		}
-
-		// Cast
-		var fieldType string
-		var explicitType bool
-		consume, _, err := standardCastStart(pctx, fieldTokens)
-		if err == nil {
-			fieldTokens = fieldTokens[consume:]
-			// as type)
-			fieldTokens, match, _, _, _ = pc.Find(pctx, standardCastEnd, fieldTokens)
-			fieldType = match[1].Val.Value
-			explicitType = true
-		} else {
-			var ok bool
-			newFieldToken, match, _, _, ok := pc.Find(pctx, postgreSQLCastEnd, fieldTokens)
-			if ok {
-				switch len(match) {
-				case 3: // )::type
-					consume, _, _ = postgreSQLCastStart(pctx, newFieldToken)
-					fieldTokens = fieldTokens[consume:]
-					fieldType = match[2].Val.Value
-					explicitType = true
-				case 2: // ::type
-					fieldTokens = newFieldToken
-					fieldType = match[1].Val.Value
-					explicitType = true
-				}
-			}
-		}
+		field, fieldTokens := parseFieldQualifier(token.Skipped)
 
 		// Main Part
 		// JSON operator: it should be any type
 		if _, _, _, _, ok := pc.Find(pctx, jsonOperator, fieldTokens); ok {
-			clause.Fields = append(clause.Fields, cmn.SelectField{
-				FieldKind:    cmn.ComplexField,
-				Expression:   cmn.ToToken(fieldTokens),
-				FieldName:    fieldName,
-				ExplicitName: explicitName,
-				TypeName:     fieldType,
-				ExplicitType: explicitType,
-				Pos:          fieldTokens[0].Val.Position,
-			})
+			field.FieldKind = cmn.ComplexField
+			field.Expression = cmn.ToToken(fieldTokens)
+			clause.Fields = append(clause.Fields, field)
+			nameToPos[field.FieldName] = append(nameToPos[field.FieldName], field.Pos.String())
 			continue
 		}
 
@@ -205,20 +144,14 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		case "field": // identifier(column name)
 			switch len(match) {
 			case 1:
-				if fieldName == "" {
-					fieldName = v.Value // use identity as alias
+				if field.FieldName == "" {
+					field.FieldName = v.Value // use identity as alias
 				}
-				clause.Fields = append(clause.Fields, cmn.SelectField{
-					FieldKind:     cmn.SingleField,
-					TableName:     "",
-					OriginalField: v.Value,
-					FieldName:     fieldName,
-					ExplicitName:  explicitName,
-					TypeName:      fieldType,
-					ExplicitType:  explicitType,
-					Pos:           v.Position,
-				})
-				nameToPos[fieldName] = append(nameToPos[fieldName], v.Position.String())
+				field.FieldKind = cmn.SingleField
+				field.TableName = ""
+				field.OriginalField = v.Value
+				clause.Fields = append(clause.Fields, field)
+				nameToPos[field.FieldName] = append(nameToPos[field.FieldName], field.Pos.String())
 			case 3:
 				if match[2].Val.Type == tok.MULTIPLY {
 					// t.*
@@ -226,47 +159,29 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 					perr.Add(fmt.Errorf("%w: snapsql doesn't allow asterisk (*) at %s in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
 				} else {
 					// t.field
-					if fieldName == "" {
-						fieldName = match[2].Val.Value // use identity as alias
+					if field.FieldName == "" {
+						field.FieldName = match[2].Val.Value // use identity as alias
 					}
-					clause.Fields = append(clause.Fields, cmn.SelectField{
-						FieldKind:     cmn.TableField,
-						TableName:     match[0].Val.Value,
-						OriginalField: v.Value + "." + match[2].Val.Value,
-						FieldName:     fieldName,
-						ExplicitName:  explicitName,
-						TypeName:      fieldType,
-						ExplicitType:  explicitType,
-						Pos:           match[0].Val.Position,
-					})
-					nameToPos[fieldName] = append(nameToPos[fieldName], v.Position.String())
+					field.FieldKind = cmn.TableField
+					field.TableName = match[0].Val.Value
+					field.OriginalField = v.Value + "." + match[2].Val.Value
+					clause.Fields = append(clause.Fields, field)
+					nameToPos[field.FieldName] = append(nameToPos[field.FieldName], field.Pos.String())
 				}
 			}
 		case "function": // function call
-			if !explicitType {
+			if !field.ExplicitType {
 				if returnType, ok := fixedFunctionReturnTypes[strings.ToLower(match[0].Val.Value)]; ok {
-					fieldType = returnType
+					field.TypeName = returnType
 				}
 			}
-			clause.Fields = append(clause.Fields, cmn.SelectField{
-				FieldKind:    cmn.FunctionField,
-				Expression:   cmn.ToToken(match),
-				FieldName:    fieldName,
-				ExplicitName: explicitName,
-				TypeName:     fieldType,
-				ExplicitType: explicitType,
-				Pos:          match[0].Val.Position,
-			})
+			field.FieldKind = cmn.FunctionField
+			field.Expression = cmn.ToToken(match)
+			clause.Fields = append(clause.Fields, field)
 		case "subquery": // sub query
-			clause.Fields = append(clause.Fields, cmn.SelectField{
-				FieldKind:    cmn.ComplexField,
-				Expression:   cmn.ToToken(match),
-				FieldName:    fieldName,
-				ExplicitName: explicitName,
-				TypeName:     fieldType,
-				ExplicitType: explicitType,
-				Pos:          match[0].Val.Position,
-			})
+			field.FieldKind = cmn.ComplexField
+			field.Expression = cmn.ToToken(match)
+			clause.Fields = append(clause.Fields, field)
 		case "asterisk": // asterisk (*)
 			p := v.Position
 			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow asterisk (*) in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
@@ -297,4 +212,57 @@ func FinalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))
 		}
 	}
+}
+
+func parseFieldQualifier(fieldTokens []pc.Token[tok.Token]) (cmn.SelectField, []pc.Token[tok.Token]) {
+	result := cmn.SelectField{
+		Pos: fieldTokens[0].Val.Position,
+	}
+	// Alias
+	pctx := pc.NewParseContext[tok.Token]()
+	beforeAlias, match, _, _, ok := pc.Find(pctx, alias, fieldTokens)
+	if ok {
+		switch match[0].Type {
+		case "without-as": // it requires before the word
+			if len(beforeAlias) > 0 {
+				lastType := beforeAlias[len(beforeAlias)-1].Val.Type
+				if lastType != tok.DOUBLE_COLON && lastType != tok.DOT {
+					result.FieldName = match[0].Val.Value
+					fieldTokens = beforeAlias
+					result.ExplicitName = true
+				}
+			}
+		case "with-as":
+			result.FieldName = match[1].Val.Value
+			fieldTokens = beforeAlias
+			result.ExplicitName = true
+		}
+	}
+
+	// Cast
+	consume, _, err := standardCastStart(pctx, fieldTokens)
+	if err == nil {
+		fieldTokens = fieldTokens[consume:]
+		// as type)
+		fieldTokens, match, _, _, _ = pc.Find(pctx, standardCastEnd, fieldTokens)
+		result.TypeName = match[1].Val.Value
+		result.ExplicitType = true
+	} else {
+		var ok bool
+		newFieldToken, match, _, _, ok := pc.Find(pctx, postgreSQLCastEnd, fieldTokens)
+		if ok {
+			switch len(match) {
+			case 3: // )::type
+				consume, _, _ = postgreSQLCastStart(pctx, newFieldToken)
+				fieldTokens = fieldTokens[consume:]
+				result.TypeName = match[2].Val.Value
+				result.ExplicitType = true
+			case 2: // ::type
+				fieldTokens = newFieldToken
+				result.TypeName = match[1].Val.Value
+				result.ExplicitType = true
+			}
+		}
+	}
+	return result, fieldTokens
 }
