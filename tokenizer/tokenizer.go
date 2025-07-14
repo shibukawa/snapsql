@@ -655,9 +655,17 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) *Directive {
 		content := strings.TrimSpace(trimmed[3 : len(trimmed)-2])
 
 		if strings.HasPrefix(content, "if") && (len(content) == 2 || content[2] == ' ') {
-			return &Directive{Type: "if"}
+			condition := ""
+			if len(content) > 2 && content[2] == ' ' {
+				condition = strings.TrimSpace(content[3:])
+			}
+			return &Directive{Type: "if", Condition: condition}
 		} else if strings.HasPrefix(content, "elseif") && (len(content) == 6 || content[6] == ' ') {
-			return &Directive{Type: "elseif"}
+			condition := ""
+			if len(content) > 6 && content[6] == ' ' {
+				condition = strings.TrimSpace(content[7:])
+			}
+			return &Directive{Type: "elseif", Condition: condition}
 		} else if content == "else" {
 			return &Directive{Type: "else"}
 		} else if strings.HasPrefix(content, "for") && (len(content) == 3 || content[3] == ' ') {

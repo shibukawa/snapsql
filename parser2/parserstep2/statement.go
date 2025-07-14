@@ -285,9 +285,108 @@ func clauseTokenSourceText(start, last int, tokens []pc.Token[Entity]) string {
 	return strings.Join(result, " ")
 }
 
+// extractIfCondition extracts if condition from clause tokens if the clause is wrapped with if/end directives
+// Also removes the if/end directive tokens from the token slices
+func extractIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Token[Entity], prevClauseBody []pc.Token[Entity]) (string, []pc.Token[Entity], []pc.Token[Entity]) {
+	// Check if this clause type supports conditional behavior (WHERE, ORDER BY, LIMIT, OFFSET)
+	if len(clauseHead) == 0 {
+		return "", clauseBody, prevClauseBody
+	}
+
+	clauseType := clauseHead[0].Val.Original.Type
+	supportedTypes := []tok.TokenType{tok.WHERE, tok.ORDER, tok.LIMIT, tok.OFFSET}
+	isSupported := false
+	for _, t := range supportedTypes {
+		if clauseType == t {
+			isSupported = true
+			break
+		}
+	}
+	if !isSupported {
+		return "", clauseBody, prevClauseBody
+	}
+
+	// Find if directive at the end of previous clause (excluding whitespace and non-directive comments)
+	ifCondition := ""
+	ifIndex := -1
+	if len(prevClauseBody) > 0 {
+		for i := len(prevClauseBody) - 1; i >= 0; i-- {
+			token := prevClauseBody[i]
+			// Skip whitespace and non-directive comments
+			if token.Val.Original.Type == tok.WHITESPACE ||
+				(token.Val.Original.Type == tok.BLOCK_COMMENT && token.Val.Original.Directive == nil) ||
+				(token.Val.Original.Type == tok.LINE_COMMENT && token.Val.Original.Directive == nil) {
+				continue
+			}
+			// Check if this is an if directive
+			if token.Val.Original.Directive != nil && token.Val.Original.Directive.Type == "if" {
+				ifCondition = token.Val.Original.Directive.Condition
+				ifIndex = i
+				break
+			}
+			// If we found a non-whitespace, non-comment token, stop looking
+			break
+		}
+	}
+
+	// Find end directive at the end of current clause body (excluding whitespace and non-directive comments)
+	// If the last token is an if directive, look before it
+	foundEnd := false
+	endIndex := -1
+	if len(clauseBody) > 0 {
+		startIdx := len(clauseBody) - 1
+		// If the last token is an if directive, start looking before it
+		if clauseBody[startIdx].Val.Original.Directive != nil && clauseBody[startIdx].Val.Original.Directive.Type == "if" {
+			startIdx--
+		}
+
+		for i := startIdx; i >= 0; i-- {
+			token := clauseBody[i]
+			// Skip whitespace and non-directive comments
+			if token.Val.Original.Type == tok.WHITESPACE ||
+				(token.Val.Original.Type == tok.BLOCK_COMMENT && token.Val.Original.Directive == nil) ||
+				(token.Val.Original.Type == tok.LINE_COMMENT && token.Val.Original.Directive == nil) {
+				continue
+			}
+			// Check if this is an end directive
+			if token.Val.Original.Directive != nil && token.Val.Original.Directive.Type == "end" {
+				foundEnd = true
+				endIndex = i
+				break
+			}
+			// If we found a non-whitespace, non-comment token, stop looking
+			break
+		}
+	}
+
+	// Only return the condition and remove tokens if we found both if and end directives
+	if ifCondition != "" && foundEnd {
+		// Remove if directive from previous clause body
+		newPrevClauseBody := make([]pc.Token[Entity], 0, len(prevClauseBody))
+		for i, token := range prevClauseBody {
+			if i != ifIndex {
+				newPrevClauseBody = append(newPrevClauseBody, token)
+			}
+		}
+
+		// Remove end directive from current clause body
+		newClauseBody := make([]pc.Token[Entity], 0, len(clauseBody))
+		for i, token := range clauseBody {
+			if i != endIndex {
+				newClauseBody = append(newClauseBody, token)
+			}
+		}
+
+		return ifCondition, newClauseBody, newPrevClauseBody
+	}
+
+	return "", clauseBody, prevClauseBody
+}
+
 func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *cmn.WithClause, tokens []pc.Token[Entity]) (int, []cmn.ClauseNode, error) {
 	var clauseHead []pc.Token[Entity]
 	var clauseBody []pc.Token[Entity]
+	var prevClauseBody []pc.Token[Entity]
 	var clauses []cmn.ClauseNode
 	if withClause != nil {
 		clauses = append(clauses, withClause)
@@ -302,7 +401,8 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 				continue
 			}
 			clauseBody = append(clauseBody, clause.Skipped...)
-			clauses = append(clauses, newClauseNode(clauseHead, clauseBody))
+			clauses = append(clauses, newClauseNode(clauseHead, clauseBody, prevClauseBody))
+			prevClauseBody = clauseBody
 			clauseBody = nil
 		}
 		clauseHead = clause.Match
@@ -310,96 +410,104 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 	return consumes, clauses, nil
 }
 
-func newClauseNode(clauseHead []pc.Token[Entity], clauseBody []pc.Token[Entity]) cmn.ClauseNode {
+func newClauseNode(clauseHead []pc.Token[Entity], clauseBody []pc.Token[Entity], prevClauseBody []pc.Token[Entity]) cmn.ClauseNode {
 	var clauseNode cmn.ClauseNode
+
+	// Extract if condition for conditional clauses and remove if/end directives
+	ifCondition, newClauseBody, _ := extractIfCondition(clauseHead, clauseBody, prevClauseBody)
+
 	switch clauseHead[0].Val.Original.Type {
 	// Select
 	case tok.SELECT:
 		clauseNode = cmn.NewSelectClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.FROM:
 		clauseNode = cmn.NewFromClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.WHERE:
 		clauseNode = cmn.NewWhereClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody),
+			ifCondition)
 	case tok.GROUP:
 		clauseNode = cmn.NewGroupByClause(
 			clauseTokenSourceText(0, 1, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.HAVING:
 		clauseNode = cmn.NewHavingClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.ORDER:
 		clauseNode = cmn.NewOrderByClause(
 			clauseTokenSourceText(0, 1, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody),
+			ifCondition)
 	case tok.LIMIT:
 		clauseNode = cmn.NewLimitClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody),
+			ifCondition)
 	case tok.OFFSET:
 		clauseNode = cmn.NewOffsetClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody),
+			ifCondition)
 	case tok.FOR:
 		clauseNode = cmn.NewForClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.RETURNING:
 		clauseNode = cmn.NewReturningClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 
 	// Insert
 	case tok.INSERT:
 		clauseNode = cmn.NewInsertIntoClause(
 			clauseTokenSourceText(1, 1, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.VALUES:
 		clauseNode = cmn.NewValuesClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.ON:
 		clauseNode = cmn.NewOnConflictClause(
 			clauseTokenSourceText(0, 1, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 
 	// Update
 	case tok.UPDATE:
 		clauseNode = cmn.NewUpdateClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 	case tok.SET:
 		clauseNode = cmn.NewSetClause(
 			clauseTokenSourceText(0, 0, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 
 	// Delete
 	case tok.DELETE:
 		clauseNode = cmn.NewDeleteFromClause(
 			clauseTokenSourceText(1, 1, clauseHead),
 			entityToToken(clauseHead),
-			entityToToken(clauseBody))
+			entityToToken(newClauseBody))
 
 	default:
 		panic("unknown clause type")

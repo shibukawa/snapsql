@@ -20,7 +20,8 @@ import (
 func DetectDummyRanges(stmt cmn.StatementNode) {
 	// Process all clauses in the statement
 	for _, clause := range stmt.Clauses() {
-		detectDummyRangesInTokens(clause.ContentTokens())
+		// Use RawTokens() which includes directive tokens
+		detectDummyRangesInTokens(clause.RawTokens())
 	}
 }
 

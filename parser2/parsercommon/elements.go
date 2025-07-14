@@ -121,3 +121,16 @@ type SetAssign struct {
 	FieldName string
 	Value     []tok.Token
 }
+
+// OrderByField represents a field in ORDER BY clause
+type OrderByField struct {
+	Field      FieldName
+	Cast       string // Optional cast type
+	Desc       bool   // true for DESC, false for ASC
+	Extras     []tok.Token
+	Expression []tok.Token // Expression for ORDER BY
+}
+
+func (n OrderByField) String() string {
+	return "ORDER_FIELD"
+}

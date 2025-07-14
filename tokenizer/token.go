@@ -425,4 +425,5 @@ type Directive struct {
 	Type       string // "if", "elseif", "else", "for", "end", "const", "variable"
 	NextIndex  int    // Index of next directive token in block chain (if->elseif->else->end, for->end)
 	DummyRange []int
+	Condition  string // Condition expression for if/elseif directives
 }

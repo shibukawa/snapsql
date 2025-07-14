@@ -2,7 +2,6 @@ package parsercommon
 
 import (
 	"github.com/shibukawa/snapsql/tokenizer"
-	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
 // Clause structures
@@ -11,16 +10,16 @@ type ClauseNode interface {
 	AstNode
 	SourceText() string               // Return case sensitive source text of the clause
 	ContentTokens() []tokenizer.Token // Returns tokens that make up the clause
-	ImplicitIfCondition() string
-	SetImplicitIfCondition(condition string) // Set implicit if condition for the clause
+	IfCondition() string              // Returns implicit if condition for the clause
+	SetIfCondition(condition string)  // Sets implicit if condition for the clause
 	Type() NodeType
 }
 
 type clauseBaseNode struct {
-	clauseSourceText    string
-	headingTokens       []tokenizer.Token // Leading tokens before the clause
-	bodyTokens          []tokenizer.Token // Raw tokens that make up the clause
-	implicitIfCondition string
+	clauseSourceText string
+	headingTokens    []tokenizer.Token // Leading tokens before the clause
+	bodyTokens       []tokenizer.Token // Raw tokens that make up the clause
+	ifCondition      string
 }
 
 // SourceText implements ClauseNode.
@@ -40,12 +39,12 @@ func (cbn *clauseBaseNode) Position() tokenizer.Position {
 	return cbn.headingTokens[0].Position
 }
 
-func (cbn *clauseBaseNode) ImplicitIfCondition() string {
-	return cbn.implicitIfCondition
+func (cbn *clauseBaseNode) IfCondition() string {
+	return cbn.ifCondition
 }
 
-func (cbn *clauseBaseNode) SetImplicitIfCondition(condition string) {
-	cbn.implicitIfCondition = condition
+func (cbn *clauseBaseNode) SetIfCondition(condition string) {
+	cbn.ifCondition = condition
 }
 
 // WithClause represents WITH clause for CTEs
@@ -126,12 +125,13 @@ type WhereClause struct {
 	Condition AstNode // Expression
 }
 
-func NewWhereClause(srcText string, heading, body []tokenizer.Token) *WhereClause {
+func NewWhereClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *WhereClause {
 	return &WhereClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
+			ifCondition:      ifCondition,
 		},
 	}
 }
@@ -203,12 +203,13 @@ type OrderByClause struct {
 	Fields []OrderByField
 }
 
-func NewOrderByClause(srcText string, heading, body []tokenizer.Token) *OrderByClause {
+func NewOrderByClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *OrderByClause {
 	return &OrderByClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
+			ifCondition:      ifCondition,
 		},
 	}
 }
@@ -228,12 +229,13 @@ type LimitClause struct {
 	Count int // Expression
 }
 
-func NewLimitClause(srcText string, heading, body []tokenizer.Token) *LimitClause {
+func NewLimitClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *LimitClause {
 	return &LimitClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
+			ifCondition:      ifCondition,
 		},
 	}
 }
@@ -253,19 +255,17 @@ type OffsetClause struct {
 	Count int // Expression
 }
 
-func NewOffsetClause(srcText string, heading, body []tokenizer.Token) *OffsetClause {
+func NewOffsetClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *OffsetClause {
 	return &OffsetClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
+			ifCondition:      ifCondition,
 		},
 	}
 }
 
-func (n *OffsetClause) IfDirective() string {
-	panic("not implemented")
-}
 func (n *OffsetClause) Type() NodeType {
 	return OFFSET_CLAUSE
 }
@@ -311,19 +311,6 @@ type CTEDefinition struct {
 
 func (n CTEDefinition) String() string {
 	return "CTE"
-}
-
-// OrderByField represents a field in ORDER BY clause
-type OrderByField struct {
-	Field      FieldName
-	Cast       string // Optional cast type
-	Desc       bool   // true for DESC, false for ASC
-	Extras     []tok.Token
-	Expression []tok.Token // Expression for ORDER BY
-}
-
-func (n OrderByField) String() string {
-	return "ORDER_FIELD"
 }
 
 type ForClause struct {
@@ -402,7 +389,7 @@ func (n *OnConflictClause) Type() NodeType {
 	return ON_CONFLICT_CLAUSE
 }
 
-func (n OnConflictClause) String() string {
+func (n *OnConflictClause) String() string {
 	return "ON_CONFLICT_CLAUSE"
 }
 
