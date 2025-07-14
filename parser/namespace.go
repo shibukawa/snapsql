@@ -28,7 +28,6 @@ func NewNamespace(schema *InterfaceSchema) *Namespace {
 		}
 	}
 
-	// ダミーデータ環境を生成
 	dummyData := generateDummyDataFromSchema(schema)
 
 	ns := &Namespace{
@@ -76,7 +75,6 @@ func (ns *Namespace) RemoveLoopVariable(variable string) {
 		delete(ns.Schema.Parameters, variable)
 	}
 
-	// CELエンジンを再初期化
 	if err := ns.initializeCELEngines(); err != nil {
 		panic(err)
 	}
@@ -91,7 +89,7 @@ func (ns *Namespace) Copy() *Namespace {
 		Parameters:  make(map[string]any),
 	}
 
-	// パラメータのコピー
+	// Copy parameters
 	for k, v := range ns.Schema.Parameters {
 		schemaCopy.Parameters[k] = v
 	}
@@ -102,7 +100,7 @@ func (ns *Namespace) Copy() *Namespace {
 		constantsCopy[k] = v
 	}
 
-	// ダミーデータのコピー
+	// Copy dummy data
 	dummyDataCopy := make(map[string]any)
 	for k, v := range ns.dummyData {
 		dummyDataCopy[k] = v

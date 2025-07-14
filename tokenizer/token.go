@@ -419,3 +419,10 @@ func (t Token) String() string {
 	}
 	return t.Type.String() + ": " + t.Value
 }
+
+// SnapSQL directive structure
+type Directive struct {
+	Type       string // "if", "elseif", "else", "for", "end", "const", "variable"
+	NextIndex  int    // Index of next directive token in block chain (if->elseif->else->end, for->end)
+	DummyRange []int
+}

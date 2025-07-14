@@ -103,19 +103,17 @@ func (t *SqlTokenizer) AllTokens() ([]Token, error) {
 func Tokenize(sql string) ([]Token, error) {
 	t := NewSqlTokenizer(sql)
 	tokens, err := t.AllTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	// Assign indices
 	for i := range tokens {
 		tokens[i].Index = i
 	}
+
 	return tokens, err
 }
-
-// SnapSQL directive structure
-type Directive struct {
-	Type string // "if", "elseif", "else", "for", "end", "const", "variable" など
-	// 必要なら他のフィールドも追加可能
-}
-
-// Token represents a lexical token in SQL parsing
 
 // Internal tokenizer implementation
 type tokenizer struct {

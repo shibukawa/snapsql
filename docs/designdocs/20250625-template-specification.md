@@ -25,7 +25,7 @@ All SnapSQL functionality is implemented through SQL comments, ensuring template
 
 - Control flow: `/*# if */`, `/*# for */`, `/*# end */`
 - Variable substitution: `/*= variable */`
-- Environment references: Built into variable system
+- Environment references: `/*$ constant */`
 
 ## Template Syntax
 
@@ -147,8 +147,8 @@ SELECT
     /*# end */
     /*# for field : additional_fields */
         /*= field */,
-    /*# end */
-FROM users_/*= env */prod
+    /*# end */dummy
+FROM users
 WHERE active = /*= filters.active */true
     /*# if filters.department */
     AND department = /*= filters.department */'sales'

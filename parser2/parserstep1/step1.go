@@ -32,8 +32,8 @@ func validateParentheses(tokens []tokenizer.Token) error {
 func validateSnapSQLDirectives(tokens []tokenizer.Token) error {
 	var stack []string
 	for _, tok := range tokens {
-		if tok.Type == tokenizer.BLOCK_COMMENT && tok.IsSnapSQLDirective {
-			dir := tok.DirectiveType
+		if tok.Type == tokenizer.BLOCK_COMMENT && tok.Directive != nil {
+			dir := tok.Directive.Type
 			switch dir {
 			case "if", "for":
 				stack = append(stack, dir)
