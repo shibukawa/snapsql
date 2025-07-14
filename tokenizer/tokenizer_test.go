@@ -248,8 +248,10 @@ func TestSnapSQLDirectives(t *testing.T) {
 			}
 
 			assert.Equal(t, test.expectedType, foundToken.Type)
-			assert.Equal(t, test.isDirective, foundToken.IsSnapSQLDirective)
-			assert.Equal(t, test.directiveType, foundToken.DirectiveType)
+			assert.Equal(t, test.isDirective, foundToken.Directive != nil)
+			if test.isDirective {
+				assert.Equal(t, test.directiveType, foundToken.Directive.Type)
+			}
 		})
 	}
 }

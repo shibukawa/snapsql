@@ -405,19 +405,17 @@ func (p Position) String() string {
 
 // Token represents a token
 type Token struct {
-	Type     TokenType
-	Value    string
-	Position Position
-
-	// SnapSQL extension information (Phase 1: store only, no parsing)
-	IsSnapSQLDirective bool
-	DirectiveType      string // "if", "for", "variable", etc.
+	Index     int
+	Type      TokenType
+	Value     string
+	Position  Position
+	Directive *Directive // SnapSQL directive information. nil if not a directive
 }
 
 // String returns the string representation of Token
 func (t Token) String() string {
-	if t.IsSnapSQLDirective {
-		return t.Type.String() + "(" + t.DirectiveType + "): " + t.Value
+	if t.Directive != nil {
+		return t.Type.String() + "(" + t.Directive.Type + "): " + t.Value
 	}
 	return t.Type.String() + ": " + t.Value
 }

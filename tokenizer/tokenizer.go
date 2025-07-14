@@ -102,8 +102,20 @@ func (t *SqlTokenizer) AllTokens() ([]Token, error) {
 // Tokenize is a helper that tokenizes SQL and returns all tokens (for tests).
 func Tokenize(sql string) ([]Token, error) {
 	t := NewSqlTokenizer(sql)
-	return t.AllTokens()
+	tokens, err := t.AllTokens()
+	for i := range tokens {
+		tokens[i].Index = i
+	}
+	return tokens, err
 }
+
+// SnapSQL directive structure
+type Directive struct {
+	Type string // "if", "elseif", "else", "for", "end", "const", "variable" など
+	// 必要なら他のフィールドも追加可能
+}
+
+// Token represents a lexical token in SQL parsing
 
 // Internal tokenizer implementation
 type tokenizer struct {
@@ -401,9 +413,10 @@ func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	}
 
 	return Token{
-		Type:     tokenType,
-		Value:    originalValue, // Preserve original case
-		Position: Position{Line: startLine, Column: startColumn, Offset: startOffset},
+		Type:      tokenType,
+		Value:     originalValue, // Preserve original case
+		Position:  Position{Line: startLine, Column: startColumn, Offset: startOffset},
+		Directive: nil,
 	}, nil
 }
 
@@ -538,13 +551,13 @@ func (t *tokenizer) readLineComment() (Token, error) {
 	startColumn := t.column - 1
 	startOffset := t.position - 1
 
-	// '--' を読み取る
+	// Read '//' or '--'
 	builder.WriteRune(t.current)
 	t.readChar()
 	builder.WriteRune(t.current)
 	t.readChar()
 
-	// 行末まで読み取る
+	// Read until end of line
 	for t.current != 0 && t.current != '\n' {
 		builder.WriteRune(t.current)
 		t.readChar()
@@ -568,13 +581,13 @@ func (t *tokenizer) readBlockComment() (Token, error) {
 	startColumn := t.column - 1
 	startOffset := t.position - 1
 
-	// '/*' を読み取る
+	// Read '/*'
 	builder.WriteRune(t.current)
 	t.readChar()
 	builder.WriteRune(t.current)
 	t.readChar()
 
-	// '*/' まで読み取る
+	// Read until '*/'
 	for t.current != 0 {
 		if t.current == '*' && t.peekChar() == '/' {
 			builder.WriteRune(t.current)
@@ -592,14 +605,13 @@ func (t *tokenizer) readBlockComment() (Token, error) {
 	}
 
 	comment := builder.String()
-	directiveType, isDirective := t.parseSnapSQLDirective(comment)
+	directive := t.parseSnapSQLDirective(comment)
 
 	return Token{
-		Type:               BLOCK_COMMENT,
-		Value:              comment,
-		Position:           Position{Line: startLine, Column: startColumn, Offset: startOffset},
-		IsSnapSQLDirective: isDirective,
-		DirectiveType:      directiveType,
+		Type:      BLOCK_COMMENT,
+		Value:     comment,
+		Position:  Position{Line: startLine, Column: startColumn, Offset: startOffset},
+		Directive: directive,
 	}, nil
 }
 
@@ -637,35 +649,35 @@ func (t *tokenizer) newToken(tokenType TokenType, value string) Token {
 }
 
 // parseSnapSQLDirective parses SnapSQL extension directives
-func (t *tokenizer) parseSnapSQLDirective(comment string) (directiveType string, isDirective bool) {
+func (t *tokenizer) parseSnapSQLDirective(comment string) *Directive {
 	trimmed := strings.TrimSpace(comment)
 
-	// /*# で始まる場合
+	// Starts with /*#
 	if strings.HasPrefix(trimmed, "/*#") && strings.HasSuffix(trimmed, "*/") {
 		content := strings.TrimSpace(trimmed[3 : len(trimmed)-2])
 
 		if strings.HasPrefix(content, "if") && (len(content) == 2 || content[2] == ' ') {
-			return "if", true
+			return &Directive{Type: "if"}
 		} else if strings.HasPrefix(content, "elseif") && (len(content) == 6 || content[6] == ' ') {
-			return "elseif", true
+			return &Directive{Type: "elseif"}
 		} else if content == "else" {
-			return "else", true
+			return &Directive{Type: "else"}
 		} else if strings.HasPrefix(content, "for") && (len(content) == 3 || content[3] == ' ') {
-			return "for", true
+			return &Directive{Type: "for"}
 		} else if content == "end" {
-			return "end", true
+			return &Directive{Type: "end"}
 		}
 	}
 
-	// /*@ で始まる場合（定数ディレクティブ）
-	if strings.HasPrefix(trimmed, "/*@") && strings.HasSuffix(trimmed, "*/") {
-		return "const", true
+	// Starts with /*$
+	if strings.HasPrefix(trimmed, "/*$") && strings.HasSuffix(trimmed, "*/") {
+		return &Directive{Type: "const"}
 	}
 
 	// If it starts with /*=
 	if strings.HasPrefix(trimmed, "/*=") && strings.HasSuffix(trimmed, "*/") {
-		return "variable", true
+		return &Directive{Type: "variable"}
 	}
 
-	return "", false
+	return nil
 }
