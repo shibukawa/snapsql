@@ -225,7 +225,7 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 	if options.EnableSubqueryAnalysis {
 		subqueryParser := parserstep7.NewSubqueryParserIntegrated()
 		_, subErr := subqueryParser.ParseStatement(stmt)
-		
+
 		if subErr != nil {
 			// Don't fail the entire parse for subquery analysis errors
 			// The error can be detected via stmt.GetSubqueryDependencies() == nil

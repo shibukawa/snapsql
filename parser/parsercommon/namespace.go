@@ -2,9 +2,9 @@ package parsercommon
 
 import (
 	"fmt"
-	"maps"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/google/cel-go/cel"
 )
@@ -12,19 +12,22 @@ import (
 // Namespace manages namespace information and CEL functionality in an integrated manner
 
 type frame struct {
-	cel        *cel.Env
-	param      map[string]any
-	loopTarget []any
-	loopIndex  int
-	loopVar    string
-}
-type Namespace struct {
-	environment map[string]any // CEL evaluation variables
-	envCEL      *cel.Env       // CEL environment for environment variables
-	stack       []frame        // CEL environment for parameters
+	variables  map[string]any // Variables added at this scope level
+	param      map[string]any // Parameter values at this scope level (for compatibility)
+	loopTarget []any          // Loop target array (if this is a loop frame)
+	loopIndex  int            // Current loop index
+	loopVar    string         // Loop variable name
 }
 
-// NewNamespace creates a new namespace
+type Namespace struct {
+	environment  map[string]any // CEL evaluation variables
+	envCEL       *cel.Env       // CEL environment for environment variables
+	paramBaseCEL *cel.Env       // Base CEL environment for parameters
+	currentCEL   *cel.Env       // Current CEL environment with all variables
+	stack        []frame        // Stack of variable scopes
+}
+
+// NewNamespace creates a new namespace with efficient CEL environment management
 // If schema is nil, creates an empty InterfaceSchema
 func NewNamespace(schema *FunctionDefinition, environment, param map[string]any) *Namespace {
 	// Create empty schema if nil
@@ -38,7 +41,7 @@ func NewNamespace(schema *FunctionDefinition, environment, param map[string]any)
 		param = generateDummyDataFromSchema(schema)
 	}
 
-	// Register environment constants directly as CEL variables (no prefix)
+	// Create environment CEL environment
 	envOptions := []cel.EnvOption{
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
@@ -52,64 +55,104 @@ func NewNamespace(schema *FunctionDefinition, environment, param map[string]any)
 		panic(err.Error())
 	}
 
-	paramOptions := []cel.EnvOption{
+	// Create base CEL environment for parameters with type inference
+	paramBaseOptions := []cel.EnvOption{
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
 	}
-	for key := range param {
-		paramOptions = append(paramOptions, cel.Variable(key, cel.DynType))
+
+	// Add typed variable declarations for parameters
+	if schema != nil && schema.Parameters != nil {
+		paramBaseOptions = append(paramBaseOptions, createCELVariableDeclarations(schema.Parameters)...)
+	} else {
+		// Fallback to dynamic type for all parameters
+		for key := range param {
+			paramBaseOptions = append(paramBaseOptions, cel.Variable(key, cel.DynType))
+		}
 	}
-	paramCEL, err := cel.NewEnv(paramOptions...)
+	paramBaseCEL, err := cel.NewEnv(paramBaseOptions...)
 	if err != nil {
 		panic(err.Error())
 	}
 
 	ns := &Namespace{
-		environment: environment,
+		environment:  environment,
+		envCEL:       envCEL,
+		paramBaseCEL: paramBaseCEL,
+		currentCEL:   paramBaseCEL, // Initially same as base
 		stack: []frame{
 			{
-				cel:   paramCEL,
-				param: param,
+				variables: make(map[string]any), // No additional variables at base level
+				param:     param,
 			},
 		},
-		envCEL: envCEL,
 	}
 	return ns
 }
 
-// Copy creates a copy of the namespace
+// rebuildCurrentCEL rebuilds the current CEL environment with all variables from the stack
+func (ns *Namespace) rebuildCurrentCEL() error {
+	// Start with base parameter environment options (reuse base declarations)
+	options := []cel.EnvOption{
+		cel.HomogeneousAggregateLiterals(),
+		cel.EagerlyValidateDeclarations(true),
+	}
+
+	// Add base parameter variables (these already have proper types from base env)
+	baseFrame := ns.stack[0]
+	for key := range baseFrame.param {
+		// Reuse type inference from value or use dyn as fallback
+		celType := inferCELTypeFromValue(baseFrame.param[key])
+		options = append(options, cel.Variable(key, celType))
+	}
+
+	// Add variables from all stack frames (loop variables etc.)
+	for _, frame := range ns.stack {
+		for key := range frame.variables {
+			// Loop variables and dynamic variables use dyn type
+			options = append(options, cel.Variable(key, cel.DynType))
+		}
+	}
+
+	// Create new environment
+	currentCEL, err := cel.NewEnv(options...)
+	if err != nil {
+		return err
+	}
+
+	ns.currentCEL = currentCEL
+	return nil
+}
+
+// EnterLoop enters a new loop scope with efficient variable management
 func (ns *Namespace) EnterLoop(varName string, loopTarget []any) bool {
 	if len(loopTarget) == 0 {
 		return false
 	}
-	last := ns.stack[len(ns.stack)-1]
-	newParam := maps.Clone(last.param)
 
 	// Generate dummy value based on the first element type
 	visited := make(map[string]bool)
 	dummyValue := generateDummyValueWithPath(loopTarget[0], visited, varName)
-	newParam[varName] = dummyValue // Set dummy value for loop variable
 
-	paramOptions := []cel.EnvOption{
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-	}
-	for key := range newParam {
-		paramOptions = append(paramOptions, cel.Variable(key, cel.DynType))
-	}
-	paramCEL, err := cel.NewEnv(paramOptions...)
-	if err != nil {
-		return false
-	}
-
+	// Create new frame with only the loop variable
 	newFrame := frame{
-		cel:        paramCEL,
+		variables: map[string]any{
+			varName: dummyValue,
+		},
+		param:      make(map[string]any), // Empty for compatibility
 		loopTarget: loopTarget,
 		loopIndex:  0,
 		loopVar:    varName,
-		param:      newParam,
 	}
 	ns.stack = append(ns.stack, newFrame)
+
+	// Rebuild CEL environment to include the new variable
+	if err := ns.rebuildCurrentCEL(); err != nil {
+		// Rollback on error
+		ns.stack = ns.stack[:len(ns.stack)-1]
+		return false
+	}
+
 	return true
 }
 
@@ -117,20 +160,22 @@ func (ns *Namespace) Next() bool {
 	if len(ns.stack) == 0 {
 		return false
 	}
-	last := ns.stack[len(ns.stack)-1]
+	last := &ns.stack[len(ns.stack)-1]
 	if last.loopIndex+1 >= len(last.loopTarget) {
 		return false // No more elements in loop
 	}
 
 	// Move to next element in loop
 	last.loopIndex++
-	last.param[last.loopVar] = last.loopTarget[last.loopIndex]
+	last.variables[last.loopVar] = last.loopTarget[last.loopIndex]
 	return true
 }
 
 func (ns *Namespace) LeaveLoop() {
 	if len(ns.stack) > 1 {
 		ns.stack = ns.stack[:len(ns.stack)-1]
+		// Rebuild CEL environment after leaving loop
+		ns.rebuildCurrentCEL()
 	}
 }
 
@@ -252,23 +297,38 @@ func (ns *Namespace) getCELTypeFromValue(value any) *cel.Type {
 	}
 }
 
-// EvaluateParameterExpression evaluates parameter expressions in dummy data environment
+// EvaluateParameterExpression evaluates parameter expressions using current CEL environment
 func (ns *Namespace) EvaluateParameterExpression(expression string) (any, error) {
-	// Compile CEL expression
-	last := ns.stack[len(ns.stack)-1]
-	ast, issues := last.cel.Compile(expression)
+	// Compile CEL expression using current environment
+	ast, issues := ns.currentCEL.Compile(expression)
 	if issues != nil && issues.Err() != nil {
 		return nil, fmt.Errorf("CEL compilation error: %w", issues.Err())
 	}
 
 	// Create program
-	program, err := last.cel.Program(ast)
+	program, err := ns.currentCEL.Program(ast)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL program: %w", err)
 	}
 
-	// Evaluate using dummy data
-	result, _, err := program.Eval(last.param)
+	// Collect all variables from stack
+	allVars := make(map[string]any)
+
+	// Add base parameters
+	baseFrame := ns.stack[0]
+	for k, v := range baseFrame.param {
+		allVars[k] = v
+	}
+
+	// Add variables from all stack frames
+	for _, frame := range ns.stack {
+		for k, v := range frame.variables {
+			allVars[k] = v
+		}
+	}
+
+	// Evaluate using collected variables
+	result, _, err := program.Eval(allVars)
 	if err != nil {
 		return nil, fmt.Errorf("CEL evaluation error: %w", err)
 	}
@@ -337,15 +397,18 @@ func (ns *Namespace) inferTypeFromValue(value any) string {
 	}
 }
 
-// generateDummyDataFromSchema generates dummy data environment from schema (function style)
+// generateDummyDataFromSchema generates dummy data environment from schema excluding nullable parameters
 func generateDummyDataFromSchema(schema *FunctionDefinition) map[string]any {
 	if schema == nil || schema.Parameters == nil {
 		return make(map[string]any)
 	}
 
+	// Use createCleanParameterMap to exclude nullable parameters
+	cleanParams := createCleanParameterMap(schema.Parameters)
+
 	result := make(map[string]any)
 	visited := make(map[string]bool) // Prevent circular references using path-based tracking
-	for key, typeInfo := range schema.Parameters {
+	for key, typeInfo := range cleanParams {
 		result[key] = generateDummyValueWithPath(typeInfo, visited, key)
 	}
 	return result
@@ -427,4 +490,92 @@ func generateDummyValueFromString(typeStr string) any {
 		// Default to empty string
 		return ""
 	}
+}
+
+// inferCELTypeFromValue infers CEL type from Go value
+func inferCELTypeFromValue(value any) *cel.Type {
+	if value == nil {
+		return cel.DynType
+	}
+
+	switch value.(type) {
+	case string:
+		return cel.StringType
+	case int, int8, int16, int32, int64:
+		return cel.IntType
+	case float32, float64:
+		return cel.DoubleType
+	case bool:
+		return cel.BoolType
+	case time.Time:
+		return cel.TimestampType
+	default:
+		return cel.DynType
+	}
+}
+
+// inferCELTypeFromStringType infers CEL type from parameter type string
+func inferCELTypeFromStringType(typeStr string) *cel.Type {
+	switch typeStr {
+	case "str", "string":
+		return cel.StringType
+	case "int", "integer":
+		return cel.IntType
+	case "float", "double":
+		return cel.DoubleType
+	case "bool", "boolean":
+		return cel.BoolType
+	case "timestamp", "time":
+		return cel.TimestampType
+	default:
+		return cel.DynType
+	}
+}
+
+// isNullableKey checks if parameter key ends with '?' for nullable
+func isNullableKey(key string) (string, bool) {
+	if strings.HasSuffix(key, "?") {
+		return key[:len(key)-1], true
+	}
+	return key, false
+}
+
+// createCELVariableDeclarations creates cel.VariableDecls from parameter map with type inference
+func createCELVariableDeclarations(parameters map[string]any) []cel.EnvOption {
+	var options []cel.EnvOption
+
+	for key, value := range parameters {
+		cleanKey, isNullable := isNullableKey(key)
+
+		var celType *cel.Type
+		if isNullable {
+			// Nullable parameters use dyn type
+			celType = cel.DynType
+		} else {
+			// Infer type from value or type string
+			if typeStr, ok := value.(string); ok {
+				celType = inferCELTypeFromStringType(typeStr)
+			} else {
+				celType = inferCELTypeFromValue(value)
+			}
+		}
+
+		options = append(options, cel.Variable(cleanKey, celType))
+	}
+
+	return options
+}
+
+// createCleanParameterMap creates parameter map excluding nullable keys for dummy data
+func createCleanParameterMap(parameters map[string]any) map[string]any {
+	clean := make(map[string]any)
+
+	for key, value := range parameters {
+		cleanKey, isNullable := isNullableKey(key)
+		if !isNullable {
+			clean[cleanKey] = value
+		}
+	}
+
+	return clean
 }
