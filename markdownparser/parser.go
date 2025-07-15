@@ -9,7 +9,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark-meta"
+	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -22,10 +22,13 @@ var (
 	ErrInvalidYAML            = errors.New("invalid YAML content")
 )
 
-// FrontMatter represents the YAML front matter of a markdown file
-type FrontMatter struct {
-	Name    string `yaml:"name"`
-	Dialect string `yaml:"dialect"`
+// SnapSQLDocument represents the parsed SnapSQL markdown document
+type SnapSQLDocument struct {
+	Metadata       map[string]any
+	ParameterBlock string
+	SQL            string
+	TestCases      []TestCase
+	MockData       map[string]map[string]any
 }
 
 // Section represents a markdown section
@@ -33,16 +36,6 @@ type Section struct {
 	Heading string
 	Content string
 }
-
-// ParsedMarkdown represents a parsed markdown query file
-type ParsedMarkdown struct {
-	FrontMatter FrontMatter
-	Title       string
-	Sections    map[string]Section
-}
-
-// Parameters represents the parsed parameters section
-type Parameters map[string]any
 
 // TestCase represents a single test case
 type TestCase struct {
@@ -52,13 +45,15 @@ type TestCase struct {
 	ExpectedResult any
 }
 
-// Parser handles markdown parsing using goldmark
-type Parser struct {
-	markdown goldmark.Markdown
-}
+// Parse parses a markdown query file and returns a SnapSQLDocument
+func Parse(reader io.Reader) (*SnapSQLDocument, error) {
+	// Read all content
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read content: %w", err)
+	}
 
-// NewParser creates a new markdown parser with goldmark
-func NewParser() *Parser {
+	// Create parser
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -69,78 +64,107 @@ func NewParser() *Parser {
 		),
 	)
 
-	return &Parser{
-		markdown: md,
-	}
-}
-
-// Parse parses a markdown query file using goldmark
-func (p *Parser) Parse(reader io.Reader) (*ParsedMarkdown, error) {
-	// Read all content
-	content, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read content: %w", err)
-	}
-
 	// Create parser context
 	context := parser.NewContext()
 
 	// Parse markdown document
-	doc := p.markdown.Parser().Parse(text.NewReader(content), parser.WithContext(context))
+	doc := md.Parser().Parse(text.NewReader(content), parser.WithContext(context))
 
 	// Extract metadata (front matter)
 	metaData := meta.Get(context)
-	frontMatter, err := p.extractFrontMatter(metaData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract front matter: %w", err)
-	}
+	frontMatter := fixFrontmatter(metaData)
 
 	// Extract title and sections
-	title, sections := p.extractSectionsFromAST(doc, content)
+	title, sections := extractSectionsFromAST(doc, content)
 
-	// Validate required sections
-	if err := p.validateRequiredSections(sections); err != nil {
+	// Validate required sections (only description and sql)
+	if err := validateRequiredSections(sections); err != nil {
 		return nil, err
 	}
 
-	return &ParsedMarkdown{
-		FrontMatter: *frontMatter,
-		Title:       title,
-		Sections:    sections,
-	}, nil
+	// Build SnapSQL document
+	document := &SnapSQLDocument{
+		Metadata: frontMatter,
+	}
+
+	// Extract parameter block if present
+	if paramSection, exists := sections["parameters"]; exists {
+		document.ParameterBlock = extractYAMLFromCodeBlock(paramSection.Content)
+	}
+
+	// Extract SQL
+	if sqlSection, exists := sections["sql"]; exists {
+		document.SQL = extractSQLFromCodeBlock(sqlSection.Content)
+	}
+
+	// Generate function_name if not present in metadata
+	if document.Metadata["function_name"] == nil && title != "" {
+		document.Metadata["function_name"] = generateFunctionNameFromTitle(title)
+	}
+
+	// Extract test cases if present
+	if testSection, exists := sections["test"]; exists {
+		testCases, err := parseTestCases(testSection.Content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse test cases: %w", err)
+		}
+		document.TestCases = testCases
+	}
+
+	// Extract mock data if present
+	if mockSection, exists := sections["mock"]; exists {
+		mockData, err := parseMockData(mockSection.Content)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse mock data: %w", err)
+		}
+		document.MockData = mockData
+	}
+
+	return document, nil
 }
 
-// extractFrontMatter extracts front matter from metadata
-func (p *Parser) extractFrontMatter(metaData map[string]any) (*FrontMatter, error) {
+// fixFrontmatter fixes front matter data
+func fixFrontmatter(metaData map[string]any) map[string]any {
 	if metaData == nil {
-		return nil, ErrInvalidFrontMatter
+		return make(map[string]any)
+	}
+	return metaData
+}
+
+// generateFunctionNameFromTitle generates a function name from title
+func generateFunctionNameFromTitle(title string) string {
+	// Convert to camelCase
+	words := strings.Fields(title)
+	if len(words) == 0 {
+		return "query"
 	}
 
-	name, nameExists := metaData["name"]
-	dialect, dialectExists := metaData["dialect"]
+	var result strings.Builder
+	for i, word := range words {
+		// Remove non-alphanumeric characters
+		cleanWord := regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(word, "")
+		if cleanWord == "" {
+			continue
+		}
 
-	if !nameExists || !dialectExists {
-		return nil, fmt.Errorf("%w: name and dialect are required", ErrInvalidFrontMatter)
+		if i == 0 {
+			// First word is lowercase
+			result.WriteString(strings.ToLower(cleanWord))
+		} else {
+			// Subsequent words are title case
+			result.WriteString(strings.Title(cleanWord))
+		}
 	}
 
-	nameStr, ok := name.(string)
-	if !ok {
-		return nil, fmt.Errorf("%w: name must be a string", ErrInvalidFrontMatter)
+	functionName := result.String()
+	if functionName == "" {
+		return "query"
 	}
-
-	dialectStr, ok := dialect.(string)
-	if !ok {
-		return nil, fmt.Errorf("%w: dialect must be a string", ErrInvalidFrontMatter)
-	}
-
-	return &FrontMatter{
-		Name:    nameStr,
-		Dialect: dialectStr,
-	}, nil
+	return functionName
 }
 
 // extractSectionsFromAST extracts title and sections from the AST
-func (p *Parser) extractSectionsFromAST(_ ast.Node, source []byte) (string, map[string]Section) {
+func extractSectionsFromAST(_ ast.Node, source []byte) (string, map[string]Section) {
 	sections := make(map[string]Section)
 	var title string
 
@@ -180,8 +204,8 @@ func (p *Parser) extractSectionsFromAST(_ ast.Node, source []byte) (string, map[
 				headingText := headingMatch[2]
 
 				// Check if this heading matches a known section keyword
-				keyword := p.extractKeywordFromHeading(headingText)
-				if keyword != "" && p.isKnownSection(keyword) {
+				keyword := extractKeywordFromHeading(headingText)
+				if keyword != "" && isKnownSection(keyword) {
 					// Save previous section
 					if currentSection != "" && inSection {
 						sections[currentSection] = Section{
@@ -198,8 +222,8 @@ func (p *Parser) extractSectionsFromAST(_ ast.Node, source []byte) (string, map[
 				}
 
 				// Check for custom sections (unknown keywords)
-				customKeyword := p.extractFirstWord(headingText)
-				if customKeyword != "" && !p.isKnownSection(customKeyword) {
+				customKeyword := extractFirstWord(headingText)
+				if customKeyword != "" && !isKnownSection(customKeyword) {
 					// Save previous section
 					if currentSection != "" && inSection {
 						sections[currentSection] = Section{
@@ -262,23 +286,22 @@ func (p *Parser) extractSectionsFromAST(_ ast.Node, source []byte) (string, map[
 }
 
 // isKnownSection checks if a keyword is a known section type
-func (p *Parser) isKnownSection(keyword string) bool {
+func isKnownSection(keyword string) bool {
 	knownSections := map[string]bool{
 		"overview":    true,
+		"description": true, // Accept both overview and description
 		"parameters":  true,
 		"sql":         true,
 		"test":        true,
 		"tests":       true, // Also accept "tests"
 		"mock":        true,
-		"performance": true,
-		"security":    true,
 		"change":      true,
 	}
 	return knownSections[strings.ToLower(keyword)]
 }
 
 // extractFirstWord extracts the first word from text (for custom sections)
-func (p *Parser) extractFirstWord(text string) string {
+func extractFirstWord(text string) string {
 	words := strings.Fields(text)
 	if len(words) > 0 {
 		// Remove any non-alphanumeric characters from the first word
@@ -291,7 +314,7 @@ func (p *Parser) extractFirstWord(text string) string {
 }
 
 // extractKeywordFromHeading extracts the first word from a heading
-func (p *Parser) extractKeywordFromHeading(heading string) string {
+func extractKeywordFromHeading(heading string) string {
 	// Handle special cases first
 	lowerHeading := strings.ToLower(heading)
 	if strings.HasPrefix(lowerHeading, "test case") || strings.HasPrefix(lowerHeading, "test") {
@@ -314,120 +337,32 @@ func (p *Parser) extractKeywordFromHeading(heading string) string {
 }
 
 // validateRequiredSections checks if all required sections are present
-func (p *Parser) validateRequiredSections(sections map[string]Section) error {
-	requiredSections := []string{"overview", "parameters", "sql", "test"}
+func validateRequiredSections(sections map[string]Section) error {
+	// Only description/overview and sql are required
+	descriptionFound := false
+	sqlFound := false
 
-	for _, required := range requiredSections {
-		if _, exists := sections[required]; !exists {
-			return fmt.Errorf("%w: %s", ErrMissingRequiredSection, required)
+	for sectionName := range sections {
+		switch sectionName {
+		case "overview", "description":
+			descriptionFound = true
+		case "sql":
+			sqlFound = true
 		}
+	}
+
+	if !descriptionFound {
+		return fmt.Errorf("%w: description or overview", ErrMissingRequiredSection)
+	}
+	if !sqlFound {
+		return fmt.Errorf("%w: sql", ErrMissingRequiredSection)
 	}
 
 	return nil
 }
 
-// ParseParameters parses the parameters section as YAML
-func (p *Parser) ParseParameters(content string) (Parameters, error) {
-	// Extract YAML content from markdown code block
-	yamlContent := p.extractYAMLFromCodeBlock(content)
-
-	var params Parameters
-	if err := yaml.Unmarshal([]byte(yamlContent), &params); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInvalidYAML, err)
-	}
-
-	return params, nil
-}
-
-// ParseTestCases parses the test cases section
-func (p *Parser) ParseTestCases(content string) ([]TestCase, error) {
-	var testCases []TestCase
-
-	// Split content by case headers
-	casePattern := regexp.MustCompile(`(?m)^### Case \d+: (.+)$`)
-	cases := casePattern.Split(content, -1)
-	caseNames := casePattern.FindAllStringSubmatch(content, -1)
-
-	for i := 1; i < len(cases); i++ {
-		caseName := ""
-		if i-1 < len(caseNames) {
-			caseName = caseNames[i-1][1]
-		}
-
-		testCase, err := p.parseTestCase(caseName, cases[i])
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse test case %s: %w", caseName, err)
-		}
-
-		testCases = append(testCases, *testCase)
-	}
-
-	return testCases, nil
-}
-
-// parseTestCase parses a single test case
-func (p *Parser) parseTestCase(name, content string) (*TestCase, error) {
-	testCase := &TestCase{Name: name}
-
-	// Extract Fixture
-	if fixture := p.extractSectionContent(content, "Fixture"); fixture != "" {
-		var fixtureData map[string]any
-		if err := yaml.Unmarshal([]byte(fixture), &fixtureData); err != nil {
-			return nil, fmt.Errorf("invalid fixture YAML: %w", err)
-		}
-		testCase.Fixture = fixtureData
-	}
-
-	// Extract Parameters
-	if params := p.extractSectionContent(content, "Parameters"); params != "" {
-		var paramData map[string]any
-		if err := yaml.Unmarshal([]byte(params), &paramData); err != nil {
-			return nil, fmt.Errorf("invalid parameters YAML: %w", err)
-		}
-		testCase.Parameters = paramData
-	}
-
-	// Extract Expected Result
-	if result := p.extractSectionContent(content, "Expected Result"); result != "" {
-		var resultData any
-		if err := yaml.Unmarshal([]byte(result), &resultData); err != nil {
-			return nil, fmt.Errorf("invalid expected result YAML: %w", err)
-		}
-		testCase.ExpectedResult = resultData
-	}
-
-	return testCase, nil
-}
-
-// ExtractYAMLFromCodeBlock extracts YAML content from markdown code block (public method)
-func (p *Parser) ExtractYAMLFromCodeBlock(content string) string {
-	return p.extractYAMLFromCodeBlock(content)
-}
-
-// ExtractSQLFromCodeBlock extracts SQL content from markdown code block
-func (p *Parser) ExtractSQLFromCodeBlock(content string) string {
-	lines := strings.Split(strings.TrimSpace(content), "\n")
-	var sqlLines []string
-	inCodeBlock := false
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "```") {
-			if !inCodeBlock {
-				inCodeBlock = true
-			} else {
-				break
-			}
-			continue
-		}
-
-		if inCodeBlock {
-			sqlLines = append(sqlLines, line)
-		}
-	}
-
-	return strings.Join(sqlLines, "\n")
-}
-func (p *Parser) extractYAMLFromCodeBlock(content string) string {
+// extractYAMLFromCodeBlock extracts YAML content from markdown code block
+func extractYAMLFromCodeBlock(content string) string {
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 	var yamlLines []string
 	inCodeBlock := false
@@ -450,12 +385,122 @@ func (p *Parser) extractYAMLFromCodeBlock(content string) string {
 	return strings.Join(yamlLines, "\n")
 }
 
+// extractSQLFromCodeBlock extracts SQL content from markdown code block
+func extractSQLFromCodeBlock(content string) string {
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+	var sqlLines []string
+	inCodeBlock := false
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "```") {
+			if !inCodeBlock {
+				inCodeBlock = true
+			} else {
+				break
+			}
+			continue
+		}
+
+		if inCodeBlock {
+			sqlLines = append(sqlLines, line)
+		}
+	}
+
+	return strings.Join(sqlLines, "\n")
+}
+
+// parseTestCases parses the test cases section
+func parseTestCases(content string) ([]TestCase, error) {
+	var testCases []TestCase
+
+	// Split content by case headers
+	casePattern := regexp.MustCompile(`(?m)^### Case \d+: (.+)$`)
+	cases := casePattern.Split(content, -1)
+	caseNames := casePattern.FindAllStringSubmatch(content, -1)
+
+	for i := 1; i < len(cases); i++ {
+		caseName := ""
+		if i-1 < len(caseNames) {
+			caseName = caseNames[i-1][1]
+		}
+
+		testCase, err := parseTestCase(caseName, cases[i])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse test case %s: %w", caseName, err)
+		}
+
+		testCases = append(testCases, *testCase)
+	}
+
+	return testCases, nil
+}
+
+// parseTestCase parses a single test case
+func parseTestCase(name, content string) (*TestCase, error) {
+	testCase := &TestCase{Name: name}
+
+	// Extract Fixture
+	if fixture := extractSectionContent(content, "Fixture"); fixture != "" {
+		var fixtureData map[string]any
+		if err := yaml.Unmarshal([]byte(fixture), &fixtureData); err != nil {
+			return nil, fmt.Errorf("invalid fixture YAML: %w", err)
+		}
+		testCase.Fixture = fixtureData
+	}
+
+	// Extract Parameters
+	if params := extractSectionContent(content, "Parameters"); params != "" {
+		var paramData map[string]any
+		if err := yaml.Unmarshal([]byte(params), &paramData); err != nil {
+			return nil, fmt.Errorf("invalid parameters YAML: %w", err)
+		}
+		testCase.Parameters = paramData
+	}
+
+	// Extract Expected Result
+	if result := extractSectionContent(content, "Expected Result"); result != "" {
+		var resultData any
+		if err := yaml.Unmarshal([]byte(result), &resultData); err != nil {
+			return nil, fmt.Errorf("invalid expected result YAML: %w", err)
+		}
+		testCase.ExpectedResult = resultData
+	}
+
+	return testCase, nil
+}
+
 // extractSectionContent extracts content from a subsection like **Fixture:**
-func (p *Parser) extractSectionContent(content, sectionName string) string {
+func extractSectionContent(content, sectionName string) string {
 	pattern := regexp.MustCompile(`(?s)\*\*` + sectionName + `[:\s]*\*\*\s*\n` + "```[^`\n]*\n(.*?)\n```")
 	matches := pattern.FindStringSubmatch(content)
 	if len(matches) > 1 {
 		return matches[1]
 	}
 	return ""
+}
+
+// parseMockData parses the mock data section
+func parseMockData(content string) (map[string]map[string]any, error) {
+	mockData := make(map[string]map[string]any)
+
+	// Extract YAML content from markdown code block
+	yamlContent := extractYAMLFromCodeBlock(content)
+
+	if yamlContent == "" {
+		return mockData, nil
+	}
+
+	var data map[string]any
+	if err := yaml.Unmarshal([]byte(yamlContent), &data); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidYAML, err)
+	}
+
+	// Convert to the expected format
+	for key, value := range data {
+		if tableData, ok := value.(map[string]any); ok {
+			mockData[key] = tableData
+		}
+	}
+
+	return mockData, nil
 }
