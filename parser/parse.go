@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/shibukawa/snapsql/parser/parsercommon"
@@ -10,7 +11,13 @@ import (
 	"github.com/shibukawa/snapsql/parser/parserstep4"
 	"github.com/shibukawa/snapsql/parser/parserstep5"
 	"github.com/shibukawa/snapsql/parser/parserstep6"
+	"github.com/shibukawa/snapsql/parser/parserstep7"
 	"github.com/shibukawa/snapsql/tokenizer"
+)
+
+// Sentinel errors for parser operations
+var (
+	ErrSubqueryAnalysisNotAvailable = errors.New("subquery analysis not available")
 )
 
 // Re-export common types for user convenience
@@ -140,51 +147,57 @@ type ParseOptions struct {
 	Environment map[string]any
 	// Parameter values for CEL evaluation (optional, will generate dummy data if nil)
 	Parameters map[string]any
+	// Enable subquery dependency analysis (parserstep7)
+	EnableSubqueryAnalysis bool
 }
 
 // Parse is the main entry point for parsing SQL templates from pre-tokenized tokens.
 // It takes tokenized SQL and optional additional YAML function definitions,
 // runs the complete parsing pipeline (parserstep1-6), and returns a StatementNode.
 //
+// When EnableSubqueryAnalysis is true, parserstep7 will be executed and its results
+// will be stored directly in the StatementNode for easy access via:
+// - stmt.GetFieldSources()
+// - stmt.GetTableReferences()
+// - stmt.GetSubqueryDependencies()
+//
 // Parameters:
 //   - tokens: Pre-tokenized SQL tokens
-//   - additionalYAML: Optional YAML string with additional function definitions.
-//     If empty, YAML will be extracted from leading comments in tokens.
+//   - functionDef: Function definition schema
 //   - options: Optional parsing options for environment and parameter values
 //
 // Returns:
-//   - StatementNode: The parsed statement AST
-//   - *FunctionDefinition: The parsed function definition schema
+//   - StatementNode: The parsed statement AST (may contain parserstep7 results)
 //   - error: Any parsing errors encountered
-func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *ParseOptions) (StatementNode, *FunctionDefinition, error) {
+func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *ParseOptions) (StatementNode, error) {
 	if options == nil {
 		options = &ParseOptions{}
 	}
 
 	// Step 1: Run parserstep1 - Basic syntax validation
 	if err := parserstep1.Execute(tokens); err != nil {
-		return nil, nil, fmt.Errorf("parserstep1 failed: %w", err)
+		return nil, fmt.Errorf("parserstep1 failed: %w", err)
 	}
 
 	// Step 2: Run parserstep2 - SQL structure parsing
 	stmt, err := parserstep2.Execute(tokens)
 	if err != nil {
-		return nil, nil, fmt.Errorf("parserstep2 failed: %w", err)
+		return nil, fmt.Errorf("parserstep2 failed: %w", err)
 	}
 
 	// Step 3: Run parserstep3 - Clause-level validation and assignment
 	if err := parserstep3.Execute(stmt); err != nil {
-		return nil, nil, fmt.Errorf("parserstep3 failed: %w", err)
+		return nil, fmt.Errorf("parserstep3 failed: %w", err)
 	}
 
 	// Step 4: Run parserstep4 - Clause content validation
 	if err := parserstep4.Execute(stmt); err != nil {
-		return nil, nil, fmt.Errorf("parserstep4 failed: %w", err)
+		return nil, fmt.Errorf("parserstep4 failed: %w", err)
 	}
 
 	// Step 5: Run parserstep5 - Directive structure validation
 	if err := parserstep5.Execute(stmt); err != nil {
-		return nil, nil, fmt.Errorf("parserstep5 failed: %w", err)
+		return nil, fmt.Errorf("parserstep5 failed: %w", err)
 	}
 
 	// Step 6: Run parserstep6 - Variable and directive validation
@@ -205,8 +218,20 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 	namespace := NewNamespace(functionDef, environment, parameters)
 
 	if parseErr := parserstep6.Execute(stmt, namespace); parseErr != nil {
-		return nil, nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
+		return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
 	}
 
-	return stmt, functionDef, nil
+	// Step 7: Run parserstep7 - Subquery dependency analysis (optional)
+	if options.EnableSubqueryAnalysis {
+		subqueryParser := parserstep7.NewSubqueryParserIntegrated()
+		_, subErr := subqueryParser.ParseStatement(stmt)
+		
+		if subErr != nil {
+			// Don't fail the entire parse for subquery analysis errors
+			// The error can be detected via stmt.GetSubqueryDependencies() == nil
+			// This allows graceful degradation
+		}
+	}
+
+	return stmt, nil
 }

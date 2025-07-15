@@ -4,6 +4,11 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+// Forward declarations for parserstep7 types to avoid circular imports
+type FieldSourceInterface interface{}
+type TableReferenceInterface interface{}
+type DependencyGraphInterface interface{}
+
 // DML Statement structures
 
 type StatementNode interface {
@@ -11,12 +16,96 @@ type StatementNode interface {
 	CTE() *WithClause                 // Returns CTE definitions in the block
 	LeadingTokens() []tokenizer.Token // Returns leading tokens of the block
 	Clauses() []ClauseNode            // Returns clauses in the block
+
+	// New methods for parserstep7 field source information
+	GetFieldSources() map[string]FieldSourceInterface
+	GetTableReferences() map[string]TableReferenceInterface
+	GetSubqueryDependencies() DependencyGraphInterface
+	SetFieldSources(map[string]FieldSourceInterface)
+	SetTableReferences(map[string]TableReferenceInterface)
+	SetSubqueryDependencies(DependencyGraphInterface)
+
+	// Convenience methods for field and table lookup
+	FindFieldReference(tableOrAlias, fieldOrReference string) FieldSourceInterface
+	FindTableReference(tableOrAlias string) TableReferenceInterface
 }
 
 type baseStatement struct {
 	leadingTokens []tokenizer.Token // Leading tokens before the SELECT statement
 	with          *WithClause       // CTE definitions in the SELECT statement
 	clauses       []ClauseNode      // All clauses in the statement
+
+	// New fields for parserstep7
+	fieldSources         map[string]FieldSourceInterface
+	tableReferences      map[string]TableReferenceInterface
+	subqueryDependencies DependencyGraphInterface
+}
+
+// GetFieldSources implements StatementNode
+func (bs *baseStatement) GetFieldSources() map[string]FieldSourceInterface {
+	if bs.fieldSources == nil {
+		bs.fieldSources = make(map[string]FieldSourceInterface)
+	}
+	return bs.fieldSources
+}
+
+// GetTableReferences implements StatementNode
+func (bs *baseStatement) GetTableReferences() map[string]TableReferenceInterface {
+	if bs.tableReferences == nil {
+		bs.tableReferences = make(map[string]TableReferenceInterface)
+	}
+	return bs.tableReferences
+}
+
+// GetSubqueryDependencies implements StatementNode
+func (bs *baseStatement) GetSubqueryDependencies() DependencyGraphInterface {
+	return bs.subqueryDependencies
+}
+
+// SetFieldSources implements StatementNode
+func (bs *baseStatement) SetFieldSources(sources map[string]FieldSourceInterface) {
+	bs.fieldSources = sources
+}
+
+// SetTableReferences implements StatementNode
+func (bs *baseStatement) SetTableReferences(refs map[string]TableReferenceInterface) {
+	bs.tableReferences = refs
+}
+
+// SetSubqueryDependencies implements StatementNode
+func (bs *baseStatement) SetSubqueryDependencies(deps DependencyGraphInterface) {
+	bs.subqueryDependencies = deps
+}
+
+// FindFieldReference implements StatementNode
+func (bs *baseStatement) FindFieldReference(tableOrAlias, fieldOrReference string) FieldSourceInterface {
+	// First try direct field lookup
+	if source, exists := bs.fieldSources[fieldOrReference]; exists {
+		return source
+	}
+
+	// Then try table.field lookup
+	key := tableOrAlias + "." + fieldOrReference
+	if source, exists := bs.fieldSources[key]; exists {
+		return source
+	}
+
+	// Finally try looking up in table references
+	if tableRef, exists := bs.tableReferences[tableOrAlias]; exists {
+		// This would need to be implemented properly with actual types
+		// For now, return nil
+		_ = tableRef
+	}
+
+	return nil
+}
+
+// FindTableReference implements StatementNode
+func (bs *baseStatement) FindTableReference(tableOrAlias string) TableReferenceInterface {
+	if ref, exists := bs.tableReferences[tableOrAlias]; exists {
+		return ref
+	}
+	return nil
 }
 
 // SelectStatement represents SELECT statement
