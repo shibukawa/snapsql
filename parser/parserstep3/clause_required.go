@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Check for required (mandatory) clauses for a given statement type

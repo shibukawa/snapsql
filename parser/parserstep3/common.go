@@ -1,6 +1,6 @@
 package parserstep3
 
-import cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+import cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 
 // hasSelectClause returns true if SELECT_CLAUSE is present in the clause list
 func hasSelectClause(clauses []cmn.ClauseNode) bool {

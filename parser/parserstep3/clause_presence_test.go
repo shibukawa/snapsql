@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	step2 "github.com/shibukawa/snapsql/parser2/parserstep2"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	step2 "github.com/shibukawa/snapsql/parser/parserstep2"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 

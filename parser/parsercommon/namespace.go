@@ -84,7 +84,12 @@ func (ns *Namespace) EnterLoop(varName string, loopTarget []any) bool {
 	}
 	last := ns.stack[len(ns.stack)-1]
 	newParam := maps.Clone(last.param)
-	newParam[varName] = loopTarget[0] // Set first element as initial value
+
+	// Generate dummy value based on the first element type
+	visited := make(map[string]bool)
+	dummyValue := generateDummyValueWithPath(loopTarget[0], visited, varName)
+	newParam[varName] = dummyValue // Set dummy value for loop variable
+
 	paramOptions := []cel.EnvOption{
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),

@@ -3,7 +3,7 @@ package parserstep4
 import (
 	"fmt"
 
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // finalizeHavingClause validates HAVING clause

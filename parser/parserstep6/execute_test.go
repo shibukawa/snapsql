@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	"github.com/shibukawa/snapsql/parser2/parserstep2"
-	"github.com/shibukawa/snapsql/parser2/parserstep3"
-	"github.com/shibukawa/snapsql/parser2/parserstep4"
-	"github.com/shibukawa/snapsql/parser2/parserstep5"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parserstep2"
+	"github.com/shibukawa/snapsql/parser/parserstep3"
+	"github.com/shibukawa/snapsql/parser/parserstep4"
+	"github.com/shibukawa/snapsql/parser/parserstep5"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 

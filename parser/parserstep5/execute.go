@@ -1,7 +1,7 @@
 package parserstep5
 
 import (
-	"github.com/shibukawa/snapsql/parser2/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Execute is the entry point for parserstep5.
@@ -10,12 +10,12 @@ import (
 func Execute(statement parsercommon.StatementNode) error {
 	// Apply parserstep5 processing
 	// Apply dummy detection
-	DetectDummyRanges(statement)
+	detectDummyRanges(statement)
 	// Apply implicit if conditions for LIMIT and OFFSET clauses
-	ApplyImplicitIfConditions(statement)
+	applyImplicitIfConditions(statement)
 
 	perr := &parsercommon.ParseError{}
-	ValidateAndLinkDirectives(statement, perr)
+	validateAndLinkDirectives(statement, perr)
 	if len(perr.Errors) > 0 {
 		return perr
 	}

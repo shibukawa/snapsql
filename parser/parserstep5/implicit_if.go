@@ -3,13 +3,13 @@ package parserstep5
 import (
 	"strings"
 
-	"github.com/shibukawa/snapsql/parser2/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// ApplyImplicitIfConditions applies implicit if conditions to LIMIT and OFFSET clauses
+// applyImplicitIfConditions applies implicit if conditions to LIMIT and OFFSET clauses
 // when they contain a single variable parameter and don't already have an explicit if condition.
-func ApplyImplicitIfConditions(statement parsercommon.StatementNode) {
+func applyImplicitIfConditions(statement parsercommon.StatementNode) {
 	if statement == nil {
 		return
 	}

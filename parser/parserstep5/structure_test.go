@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	"github.com/shibukawa/snapsql/parser2/parserstep2"
-	"github.com/shibukawa/snapsql/parser2/parserstep3"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parserstep2"
+	"github.com/shibukawa/snapsql/parser/parserstep3"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -182,7 +182,7 @@ func TestValidateAndLinkDirectives(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 			var parseErr cmn.ParseError
-			ValidateAndLinkDirectives(stmt, &parseErr)
+			validateAndLinkDirectives(stmt, &parseErr)
 
 			if tc.shouldSucceed {
 				assert.Equal(t, 0, len(parseErr.Errors), "validation should succeed for %s: %v", tc.name, parseErr.Errors)
@@ -269,7 +269,7 @@ func TestValidateAndLinkDirectives_MultipleErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 			var parseErr cmn.ParseError
-			ValidateAndLinkDirectives(stmt, &parseErr)
+			validateAndLinkDirectives(stmt, &parseErr)
 
 			assert.Equal(t, len(tc.expectedErrors), len(parseErr.Errors),
 				"should have %d errors, got %d: %v", len(tc.expectedErrors), len(parseErr.Errors), parseErr.Errors)
@@ -340,7 +340,7 @@ func TestValidateAndLinkDirectives_NextIndexLinking(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 			var parseErr cmn.ParseError
-			ValidateAndLinkDirectives(stmt, &parseErr)
+			validateAndLinkDirectives(stmt, &parseErr)
 			assert.Equal(t, 0, len(parseErr.Errors), "validation should succeed: %v", parseErr.Errors)
 
 			clause := findClauseByType(t, stmt, tc.clauseType)
@@ -439,7 +439,7 @@ func TestValidateAndLinkDirectives_ParenthesesBoundary(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 			var parseErr cmn.ParseError
-			ValidateAndLinkDirectives(stmt, &parseErr)
+			validateAndLinkDirectives(stmt, &parseErr)
 
 			t.Logf("Test case: %s, Errors count: %d", tc.name, len(parseErr.Errors))
 			if len(parseErr.Errors) > 0 {

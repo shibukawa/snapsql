@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Sentinel error for duplicate clause detection

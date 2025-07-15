@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 

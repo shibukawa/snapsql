@@ -1,11 +1,11 @@
 package parserstep5
 
 import (
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// DetectDummyRanges detects dummy elements that should be removed when directive values are output.
+// detectDummyRanges detects dummy elements that should be removed when directive values are output.
 // Dummy elements are tokens that immediately follow /*= var */, /*$ env */, or /*# end */ directives
 // without any whitespace in between.
 //
@@ -17,7 +17,7 @@ import (
 //
 //	VALUES /*# for user : users */ (/*= user.id */'1', /*= user.name */'name'), /*# end */('1', 'name')
 //	The last ('1', 'name') should be marked as dummy range from opening '(' to closing ')'
-func DetectDummyRanges(stmt cmn.StatementNode) {
+func detectDummyRanges(stmt cmn.StatementNode) {
 	// Process all clauses in the statement
 	for _, clause := range stmt.Clauses() {
 		// Use RawTokens() which includes directive tokens

@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// ValidateVariables validates template variables and directives in a parsed statement
-func ValidateVariables(statement cmn.StatementNode, namespace *cmn.Namespace, perr *cmn.ParseError) {
+// validateVariables validates template variables and directives in a parsed statement
+func validateVariables(statement cmn.StatementNode, namespace *cmn.Namespace, perr *cmn.ParseError) {
 	// Process all clauses in the statement
 	processStatement(statement, namespace, perr)
 }

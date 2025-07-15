@@ -1,7 +1,7 @@
 package parserstep3
 
 import (
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Execute runs all clause checks and assigns clause fields to the statement struct.

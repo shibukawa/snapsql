@@ -3,12 +3,12 @@ package parserstep5
 import (
 	"fmt"
 
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// ValidateAndLinkDirectives validates SnapSQL directive structure and builds linking information
-func ValidateAndLinkDirectives(stmt cmn.StatementNode, parseErr *cmn.ParseError) {
+// validateAndLinkDirectives validates SnapSQL directive structure and builds linking information
+func validateAndLinkDirectives(stmt cmn.StatementNode, parseErr *cmn.ParseError) {
 	// Validate directives in each clause separately
 	for _, clause := range stmt.Clauses() {
 		validateClause(clause.ContentTokens(), parseErr)

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -75,7 +75,7 @@ func TestDetectDummyRanges(t *testing.T) {
 			}
 
 			// Apply dummy detection
-			DetectDummyRanges(stmt)
+			detectDummyRanges(stmt)
 
 			// Re-check tokens after dummy detection
 			allTokensAfter := getAllTokensFromStatement(stmt)

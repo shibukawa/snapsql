@@ -1,7 +1,7 @@
 package parserstep4
 
 import (
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Execute runs clause-level validation for parserstep4

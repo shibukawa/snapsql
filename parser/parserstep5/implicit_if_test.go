@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/shibukawa/snapsql/parser2/parsercommon"
-	"github.com/shibukawa/snapsql/parser2/parserstep2"
+	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -60,7 +60,7 @@ func TestApplyImplicitIfConditions(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Apply implicit if conditions
-			ApplyImplicitIfConditions(statement)
+			applyImplicitIfConditions(statement)
 
 			// Check LIMIT clause condition
 			for _, clause := range statement.Clauses() {

@@ -3,8 +3,8 @@ package parserstep3
 import (
 	"testing"
 
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	step2 "github.com/shibukawa/snapsql/parser2/parserstep2"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	step2 "github.com/shibukawa/snapsql/parser/parserstep2"
 	tokenizer "github.com/shibukawa/snapsql/tokenizer"
 )
 

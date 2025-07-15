@@ -3,8 +3,8 @@ package parserstep6
 import (
 	"testing"
 
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
-	"github.com/shibukawa/snapsql/parser2/parserstep2"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -69,7 +69,7 @@ func TestValidateVariables(t *testing.T) {
 
 			// Validate variables
 			perr := &cmn.ParseError{}
-			ValidateVariables(parsed, namespace, perr)
+			validateVariables(parsed, namespace, perr)
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))

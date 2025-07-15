@@ -1,7 +1,7 @@
 package parserstep6
 
 import (
-	cmn "github.com/shibukawa/snapsql/parser2/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Execute is the entry point for parserstep6.
@@ -10,7 +10,7 @@ import (
 func Execute(statement cmn.StatementNode, namespace *cmn.Namespace) *cmn.ParseError {
 	// Validate template variables and directives
 	perr := &cmn.ParseError{}
-	ValidateVariables(statement, namespace, perr)
+	validateVariables(statement, namespace, perr)
 
 	if len(perr.Errors) > 0 {
 		return perr
