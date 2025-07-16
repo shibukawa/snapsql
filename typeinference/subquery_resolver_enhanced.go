@@ -6,13 +6,17 @@ import (
 
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
+	"github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // EnhancedSubqueryResolver provides complete subquery type inference
 // using StatementNode information and dependency analysis
 type EnhancedSubqueryResolver struct {
-	*SubqueryTypeResolver // Embed existing resolver
-	fieldResolverCache    map[string]map[string]*InferredFieldInfo // nodeID -> fieldName -> type info
+	schemaResolver        *SchemaResolver                              // Schema resolver for type lookup
+	statementNode         parser.StatementNode                         // Parsed SQL AST
+	dialect               snapsql.Dialect                              // Database dialect
+	typeCache             map[string][]*InferredFieldInfo              // Cache subquery field types by dependency node ID
+	fieldResolverCache    map[string]map[string]*InferredFieldInfo     // nodeID -> fieldName -> type info
 }
 
 // NewEnhancedSubqueryResolver creates an enhanced subquery resolver
@@ -21,10 +25,12 @@ func NewEnhancedSubqueryResolver(
 	statementNode parser.StatementNode,
 	dialect snapsql.Dialect,
 ) *EnhancedSubqueryResolver {
-	base := NewSubqueryTypeResolver(schemaResolver, statementNode, dialect)
 	return &EnhancedSubqueryResolver{
-		SubqueryTypeResolver: base,
-		fieldResolverCache:   make(map[string]map[string]*InferredFieldInfo),
+		schemaResolver:     schemaResolver,
+		statementNode:      statementNode,
+		dialect:            dialect,
+		typeCache:          make(map[string][]*InferredFieldInfo),
+		fieldResolverCache: make(map[string]map[string]*InferredFieldInfo),
 	}
 }
 
@@ -308,6 +314,35 @@ func (esr *EnhancedSubqueryResolver) GetCompleteSubqueryInformation() *SubqueryA
 	enhancedAnalysis.SubqueryTables = esr.GetAvailableSubqueryTables()
 
 	return &enhancedAnalysis
+}
+
+// GetAvailableSubqueryTables returns table names available from resolved subqueries
+func (esr *EnhancedSubqueryResolver) GetAvailableSubqueryTables() []string {
+	var tables []string
+
+	if esr.statementNode == nil {
+		return tables
+	}
+
+	dependencyGraph := esr.statementNode.GetSubqueryDependencies()
+	if dependencyGraph == nil {
+		return tables
+	}
+
+	// Add CTE names as available tables
+	for nodeID := range esr.typeCache {
+		if node := dependencyGraph.GetNode(nodeID); node != nil {
+			if node.NodeType == parsercommon.SQDependencyCTE {
+				// Extract CTE name from node ID
+				cteName := esr.extractCTENameFromNodeID(nodeID)
+				if cteName != "" {
+					tables = append(tables, cteName)
+				}
+			}
+		}
+	}
+
+	return tables
 }
 
 // extractSelectFromStatement attempts to extract a SELECT statement from various statement types

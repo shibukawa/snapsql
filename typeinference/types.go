@@ -108,15 +108,16 @@ func (g *FieldNameGenerator) ReserveFieldName(name string) {
 
 // TypeInferenceEngine2 performs type inference on StatementNode
 type TypeInferenceEngine2 struct {
-	databaseSchemas  []snapsql.DatabaseSchema        // Database schemas from pull functionality
-	schemaResolver   *SchemaResolver                 // Schema resolver for type lookup
-	statementNode    StatementNode                   // Parsed SQL AST
-	subqueryResolver *SubqueryTypeResolver           // Subquery type resolver (Phase 5)
-	dmlEngine        *DMLInferenceEngine             // DML inference engine (Phase 6)
-	context          *InferenceContext               // Inference context
-	fieldNameGen     *FieldNameGenerator             // Basic field name generator
-	enhancedGen      *EnhancedFieldNameGenerator     // Enhanced field name generator for complex expressions (Phase 4)
-	typeCache        map[string][]*InferredFieldInfo // Type inference cache
+	databaseSchemas     []snapsql.DatabaseSchema        // Database schemas from pull functionality
+	schemaResolver      *SchemaResolver                 // Schema resolver for type lookup
+	statementNode       StatementNode                   // Parsed SQL AST
+	subqueryResolver    *SubqueryTypeResolver           // Basic subquery type resolver (legacy)
+	enhancedResolver    *EnhancedSubqueryResolver       // Enhanced subquery type resolver (Phase 5)
+	dmlEngine           *DMLInferenceEngine             // DML inference engine (Phase 6)
+	context             *InferenceContext               // Inference context
+	fieldNameGen        *FieldNameGenerator             // Basic field name generator
+	enhancedGen         *EnhancedFieldNameGenerator     // Enhanced field name generator for complex expressions (Phase 4)
+	typeCache           map[string][]*InferredFieldInfo // Type inference cache
 }
 
 // NewTypeInferenceEngine2 creates a new type inference engine.
@@ -158,10 +159,11 @@ func NewTypeInferenceEngine2(
 
 	// Create subquery resolver if subquery information is available
 	var subqueryResolver *SubqueryTypeResolver
+	var enhancedResolver *EnhancedSubqueryResolver
 	if subqueryInfo != nil && subqueryInfo.HasSubqueries {
 		// Use enhanced subquery resolver for complete type inference
-		enhancedResolver := NewEnhancedSubqueryResolver(schemaResolver, statementNode, dialect)
-		subqueryResolver = enhancedResolver.SubqueryTypeResolver
+		enhancedResolver = NewEnhancedSubqueryResolver(schemaResolver, statementNode, dialect)
+		// Note: We'll use enhanced resolver directly, not the embedded basic resolver
 	}
 
 	engine := &TypeInferenceEngine2{
@@ -169,6 +171,7 @@ func NewTypeInferenceEngine2(
 		schemaResolver:   schemaResolver,
 		statementNode:    statementNode,
 		subqueryResolver: subqueryResolver,
+		enhancedResolver: enhancedResolver,
 		context:          context,
 		fieldNameGen:     NewFieldNameGenerator(),
 		enhancedGen:      NewEnhancedFieldNameGenerator(),

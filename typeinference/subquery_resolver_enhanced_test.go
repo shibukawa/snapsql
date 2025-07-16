@@ -28,7 +28,7 @@ func TestEnhancedSubqueryResolver_BasicFunctionality(t *testing.T) {
 			},
 			{
 				Name:   "orders",
-				Schema: "public", 
+				Schema: "public",
 				Columns: map[string]*snapsql.ColumnInfo{
 					"id":      {Name: "id", DataType: "integer", Nullable: false},
 					"user_id": {Name: "user_id", DataType: "integer", Nullable: false},
@@ -41,10 +41,10 @@ func TestEnhancedSubqueryResolver_BasicFunctionality(t *testing.T) {
 	t.Run("enhanced_resolver_creation", func(t *testing.T) {
 		// Test enhanced resolver creation
 		schemaResolver := NewSchemaResolver([]snapsql.DatabaseSchema{schema})
-		
+
 		// Create a mock statement node
 		mockStatement := createMockStatementWithSubqueryAnalysis("")
-		
+
 		enhancedResolver := NewEnhancedSubqueryResolver(schemaResolver, mockStatement, snapsql.DialectPostgres)
 		assert.NotEqual(t, nil, enhancedResolver)
 		assert.NotEqual(t, nil, enhancedResolver.SubqueryTypeResolver)
@@ -55,14 +55,14 @@ func TestEnhancedSubqueryResolver_BasicFunctionality(t *testing.T) {
 		// Test subquery field type resolution
 		schemaResolver := NewSchemaResolver([]snapsql.DatabaseSchema{schema})
 		mockStatement := createMockStatementWithSubqueryAnalysis("")
-		
+
 		enhancedResolver := NewEnhancedSubqueryResolver(schemaResolver, mockStatement, snapsql.DialectPostgres)
-		
+
 		// Test field resolution with mock data
 		testFieldInfos := []*InferredFieldInfo{
 			{
 				Name:         "user_count",
-				OriginalName: "user_count", 
+				OriginalName: "user_count",
 				Type:         &TypeInfo{BaseType: "int", IsNullable: false},
 				Source:       FieldSource{Type: "function", FunctionName: "COUNT"},
 			},
@@ -73,21 +73,21 @@ func TestEnhancedSubqueryResolver_BasicFunctionality(t *testing.T) {
 				Source:       FieldSource{Type: "function", FunctionName: "SUM"},
 			},
 		}
-		
+
 		// Cache test data
 		enhancedResolver.cacheFieldMapping("test_cte", testFieldInfos)
-		
+
 		// Test field resolution
 		fieldInfo, found := enhancedResolver.ResolveSubqueryFieldType("test_cte", "user_count")
 		assert.True(t, found)
 		assert.NotEqual(t, nil, fieldInfo)
 		assert.Equal(t, "user_count", fieldInfo.Name)
 		assert.Equal(t, "int", fieldInfo.Type.BaseType)
-		
+
 		// Test non-existent field
 		_, found = enhancedResolver.ResolveSubqueryFieldType("test_cte", "non_existent")
 		assert.False(t, found)
-		
+
 		// Test non-existent subquery
 		_, found = enhancedResolver.ResolveSubqueryFieldType("non_existent", "user_count")
 		assert.False(t, found)
@@ -97,16 +97,16 @@ func TestEnhancedSubqueryResolver_BasicFunctionality(t *testing.T) {
 		// Test CTE name extraction logic
 		schemaResolver := NewSchemaResolver([]snapsql.DatabaseSchema{schema})
 		mockStatement := createMockStatementWithSubqueryAnalysis("")
-		
+
 		enhancedResolver := NewEnhancedSubqueryResolver(schemaResolver, mockStatement, snapsql.DialectPostgres)
-		
+
 		// Test node ID based extraction
 		cteName := enhancedResolver.extractCTENameFromNodeID("cte_user_summary")
 		assert.Equal(t, "user_summary", cteName)
-		
+
 		cteName = enhancedResolver.extractCTENameFromNodeID("with_order_totals")
 		assert.Equal(t, "order_totals", cteName)
-		
+
 		// Test fallback for unknown formats
 		cteName = enhancedResolver.extractCTENameFromNodeID("unknown_format")
 		assert.Equal(t, "unknown_format", cteName)
@@ -137,14 +137,14 @@ func TestEnhancedSubqueryResolver_Integration(t *testing.T) {
 	t.Run("type_inference_engine_integration", func(t *testing.T) {
 		// Test integration with TypeInferenceEngine2
 		mockStatement := createMockStatementWithSubqueryAnalysis("")
-		
+
 		engine := NewTypeInferenceEngine2([]snapsql.DatabaseSchema{schema}, mockStatement)
 		enhancedResolver, ok := engine.getEnhancedSubqueryResolver()
-		
+
 		if ok {
 			assert.NotEqual(t, nil, enhancedResolver)
 			assert.NotEqual(t, nil, enhancedResolver.SubqueryTypeResolver)
-			
+
 			// Test complete subquery analysis
 			analysis := enhancedResolver.GetCompleteSubqueryInformation()
 			assert.NotEqual(t, nil, analysis)
@@ -166,12 +166,12 @@ func parseWithSubqueryAnalysis(sqlText string) (parser.StatementNode, error) {
 	// In a real implementation, this would be:
 	// tokens, err := tokenizer.TokenizeSQL(sqlText)
 	// if err != nil { return nil, err }
-	// 
+	//
 	// result, err := parser.ParseExtended(tokens, nil, &parser.ParseOptions{
 	//     EnableSubqueryAnalysis: true,
 	// })
 	// if err != nil { return nil, err }
-	// 
+	//
 	// return result.Statement, nil
 
 	// For now, return a mock implementation
