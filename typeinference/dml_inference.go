@@ -10,7 +10,7 @@ import (
 type DMLInferenceEngine struct {
 	baseEngine       *TypeInferenceEngine2
 	schemaResolver   *SchemaResolver
-	subqueryResolver *SubqueryTypeResolver
+	enhancedResolver *EnhancedSubqueryResolver
 }
 
 // NewDMLInferenceEngine creates a new DML inference engine
@@ -18,7 +18,7 @@ func NewDMLInferenceEngine(baseEngine *TypeInferenceEngine2) *DMLInferenceEngine
 	return &DMLInferenceEngine{
 		baseEngine:       baseEngine,
 		schemaResolver:   baseEngine.schemaResolver,
-		subqueryResolver: baseEngine.subqueryResolver,
+		enhancedResolver: baseEngine.enhancedResolver,
 	}
 }
 

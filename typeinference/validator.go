@@ -63,6 +63,9 @@ type SchemaValidator struct {
 
 // NewSchemaValidator creates a new schema validator
 func NewSchemaValidator(schemaResolver *SchemaResolver) *SchemaValidator {
+	if schemaResolver == nil {
+		return nil
+	}
 	return &SchemaValidator{
 		schemaResolver:  schemaResolver,
 		tableAliases:    make(map[string]string),

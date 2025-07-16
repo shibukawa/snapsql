@@ -12,11 +12,11 @@ import (
 // EnhancedSubqueryResolver provides complete subquery type inference
 // using StatementNode information and dependency analysis
 type EnhancedSubqueryResolver struct {
-	schemaResolver        *SchemaResolver                              // Schema resolver for type lookup
-	statementNode         parser.StatementNode                         // Parsed SQL AST
-	dialect               snapsql.Dialect                              // Database dialect
-	typeCache             map[string][]*InferredFieldInfo              // Cache subquery field types by dependency node ID
-	fieldResolverCache    map[string]map[string]*InferredFieldInfo     // nodeID -> fieldName -> type info
+	schemaResolver     *SchemaResolver                          // Schema resolver for type lookup
+	statementNode      parser.StatementNode                     // Parsed SQL AST
+	dialect            snapsql.Dialect                          // Database dialect
+	typeCache          map[string][]*InferredFieldInfo          // Cache subquery field types by dependency node ID
+	fieldResolverCache map[string]map[string]*InferredFieldInfo // nodeID -> fieldName -> type info
 }
 
 // NewEnhancedSubqueryResolver creates an enhanced subquery resolver
@@ -161,7 +161,7 @@ func (esr *EnhancedSubqueryResolver) createEnhancedSubEngine(node *parser.SQDepe
 	}
 
 	// Don't create recursive subquery resolver for sub-engine to avoid infinite recursion
-	subEngine.subqueryResolver = nil
+	subEngine.enhancedResolver = nil
 
 	return subEngine
 }
@@ -355,4 +355,51 @@ func (esr *EnhancedSubqueryResolver) extractSelectFromStatement(stmt parser.Stat
 		// This would require more complex analysis based on the actual AST structure
 		return nil, false
 	}
+}
+
+// ValidateSubqueryReferences validates that subquery references are properly resolved
+func (esr *EnhancedSubqueryResolver) ValidateSubqueryReferences() []ValidationError {
+	var errors []ValidationError
+
+	if esr.statementNode == nil {
+		return errors
+	}
+
+	dependencyGraph := esr.statementNode.GetSubqueryDependencies()
+	if dependencyGraph == nil {
+		return errors
+	}
+
+	// Check that all referenced subqueries have type information
+	for nodeID, node := range dependencyGraph.GetAllNodes() {
+		if node.NodeType == parsercommon.SQDependencyMain {
+			continue // Skip main query
+		}
+
+		if _, exists := esr.typeCache[nodeID]; !exists {
+			errors = append(errors, ValidationError{
+				Position:   -1,
+				ErrorType:  "subquery_not_resolved",
+				Message:    fmt.Sprintf("Subquery node %s has no type information", nodeID),
+				TableName:  "",
+				FieldName:  "",
+				Suggestion: fmt.Sprintf("Ensure subquery %s is properly analyzed", nodeID),
+			})
+		}
+	}
+
+	return errors
+}
+
+// ResolveSubqueryReference resolves a table reference that might be a subquery
+func (esr *EnhancedSubqueryResolver) ResolveSubqueryReference(tableName string) ([]*InferredFieldInfo, bool) {
+	// Check if this table name corresponds to a CTE
+	for nodeID, fieldInfos := range esr.typeCache {
+		cteName := esr.extractCTENameFromNodeID(nodeID)
+		if cteName == tableName {
+			return fieldInfos, true
+		}
+	}
+
+	return nil, false
 }

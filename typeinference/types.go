@@ -108,16 +108,15 @@ func (g *FieldNameGenerator) ReserveFieldName(name string) {
 
 // TypeInferenceEngine2 performs type inference on StatementNode
 type TypeInferenceEngine2 struct {
-	databaseSchemas     []snapsql.DatabaseSchema        // Database schemas from pull functionality
-	schemaResolver      *SchemaResolver                 // Schema resolver for type lookup
-	statementNode       StatementNode                   // Parsed SQL AST
-	subqueryResolver    *SubqueryTypeResolver           // Basic subquery type resolver (legacy)
-	enhancedResolver    *EnhancedSubqueryResolver       // Enhanced subquery type resolver (Phase 5)
-	dmlEngine           *DMLInferenceEngine             // DML inference engine (Phase 6)
-	context             *InferenceContext               // Inference context
-	fieldNameGen        *FieldNameGenerator             // Basic field name generator
-	enhancedGen         *EnhancedFieldNameGenerator     // Enhanced field name generator for complex expressions (Phase 4)
-	typeCache           map[string][]*InferredFieldInfo // Type inference cache
+	databaseSchemas  []snapsql.DatabaseSchema        // Database schemas from pull functionality
+	schemaResolver   *SchemaResolver                 // Schema resolver for type lookup
+	statementNode    StatementNode                   // Parsed SQL AST
+	enhancedResolver *EnhancedSubqueryResolver       // Enhanced subquery type resolver (Phase 5)
+	dmlEngine        *DMLInferenceEngine             // DML inference engine (Phase 6)
+	context          *InferenceContext               // Inference context
+	fieldNameGen     *FieldNameGenerator             // Basic field name generator
+	enhancedGen      *EnhancedFieldNameGenerator     // Enhanced field name generator for complex expressions (Phase 4)
+	typeCache        map[string][]*InferredFieldInfo // Type inference cache
 }
 
 // NewTypeInferenceEngine2 creates a new type inference engine.
@@ -158,19 +157,16 @@ func NewTypeInferenceEngine2(
 	}
 
 	// Create subquery resolver if subquery information is available
-	var subqueryResolver *SubqueryTypeResolver
 	var enhancedResolver *EnhancedSubqueryResolver
 	if subqueryInfo != nil && subqueryInfo.HasSubqueries {
 		// Use enhanced subquery resolver for complete type inference
 		enhancedResolver = NewEnhancedSubqueryResolver(schemaResolver, statementNode, dialect)
-		// Note: We'll use enhanced resolver directly, not the embedded basic resolver
 	}
 
 	engine := &TypeInferenceEngine2{
 		databaseSchemas:  databaseSchemas,
 		schemaResolver:   schemaResolver,
 		statementNode:    statementNode,
-		subqueryResolver: subqueryResolver,
 		enhancedResolver: enhancedResolver,
 		context:          context,
 		fieldNameGen:     NewFieldNameGenerator(),
@@ -182,17 +178,6 @@ func NewTypeInferenceEngine2(
 	engine.dmlEngine = NewDMLInferenceEngine(engine)
 
 	return engine
-}
-
-// getEnhancedSubqueryResolver returns enhanced subquery resolver if available
-func (e *TypeInferenceEngine2) getEnhancedSubqueryResolver() (*EnhancedSubqueryResolver, bool) {
-	// This is a design choice: we could store enhanced resolver separately
-	// For now, we create it on demand
-	if e.statementNode != nil && e.statementNode.HasSubqueryAnalysis() {
-		enhancedResolver := NewEnhancedSubqueryResolver(e.schemaResolver, e.statementNode, e.context.Dialect)
-		return enhancedResolver, true
-	}
-	return nil, false
 }
 
 // functionFieldNameMappings returns mappings from function names to field names
@@ -241,24 +226,11 @@ func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) 
 		return nil, fmt.Errorf("statement is not a SELECT statement")
 	}
 
-	// Phase 5: Resolve subquery types first (if subquery resolver is available)
-	if e.subqueryResolver != nil {
-		// Use enhanced resolution if available
-		if enhancedResolver, ok := e.getEnhancedSubqueryResolver(); ok {
-			if err := enhancedResolver.ResolveSubqueryTypesComplete(); err != nil {
-				// Don't fail completely - log warning and continue with degraded mode
-				fmt.Printf("Warning: enhanced subquery type resolution failed: %v\n", err)
-				// Fallback to basic resolution
-				if err := e.subqueryResolver.ResolveSubqueryTypes(); err != nil {
-					fmt.Printf("Warning: fallback subquery type resolution failed: %v\n", err)
-				}
-			}
-		} else {
-			// Use basic subquery resolution
-			if err := e.subqueryResolver.ResolveSubqueryTypes(); err != nil {
-				// Don't fail completely - log warning and continue with degraded mode
-				fmt.Printf("Warning: subquery type resolution failed: %v\n", err)
-			}
+	// Phase 5: Resolve subquery types first (if enhanced resolver is available)
+	if e.enhancedResolver != nil {
+		if err := e.enhancedResolver.ResolveSubqueryTypesComplete(); err != nil {
+			// Don't fail completely - log warning and continue with degraded mode
+			fmt.Printf("Warning: enhanced subquery type resolution failed: %v\n", err)
 		}
 	}
 
@@ -266,8 +238,8 @@ func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) 
 	e.extractTableAliases(selectStmt)
 
 	// Add available subquery tables to current tables
-	if e.subqueryResolver != nil {
-		subqueryTables := e.subqueryResolver.GetAvailableSubqueryTables()
+	if e.enhancedResolver != nil {
+		subqueryTables := e.enhancedResolver.GetAvailableSubqueryTables()
 		e.context.CurrentTables = append(e.context.CurrentTables, subqueryTables...)
 	}
 
@@ -294,25 +266,36 @@ func (e *TypeInferenceEngine2) performSchemaValidation() []error {
 
 	// For SELECT statements, validate fields
 	if selectStmt, ok := e.statementNode.(*parser.SelectStatement); ok {
+		// Check if SELECT statement structure is valid
+		if selectStmt == nil || selectStmt.Select == nil {
+			return allErrors // Return early if structure is invalid
+		}
+
 		// Extract table aliases
 		e.extractTableAliases(selectStmt)
 
-		// Create schema validator
-		validator := NewSchemaValidator(e.schemaResolver)
-		validator.SetTableAliases(e.context.TableAliases)
-		validator.SetAvailableTables(e.context.CurrentTables)
+		// Create schema validator only if schema resolver is available
+		if e.schemaResolver != nil {
+			validator := NewSchemaValidator(e.schemaResolver)
+			if validator != nil {
+				validator.SetTableAliases(e.context.TableAliases)
+				validator.SetAvailableTables(e.context.CurrentTables)
 
-		// Validate SELECT fields
-		validationErrors := validator.ValidateSelectFields(selectStmt.Select.Fields)
+				// Validate SELECT fields only if they exist
+				if selectStmt.Select.Fields != nil {
+					validationErrors := validator.ValidateSelectFields(selectStmt.Select.Fields)
 
-		// Convert ValidationError to error and add to allErrors
-		for _, vErr := range validationErrors {
-			allErrors = append(allErrors, &vErr)
+					// Convert ValidationError to error and add to allErrors
+					for _, vErr := range validationErrors {
+						allErrors = append(allErrors, &vErr)
+					}
+				}
+			}
 		}
 
-		// Add subquery validation errors if subquery resolver is available
-		if e.subqueryResolver != nil {
-			subqueryErrors := e.subqueryResolver.ValidateSubqueryReferences()
+		// Add subquery validation errors if enhanced resolver is available
+		if e.enhancedResolver != nil {
+			subqueryErrors := e.enhancedResolver.ValidateSubqueryReferences()
 			// Convert ValidationError to error and add to allErrors
 			for _, vErr := range subqueryErrors {
 				allErrors = append(allErrors, &vErr)
@@ -350,8 +333,8 @@ func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectSta
 	validationErrors := validator.ValidateSelectFields(selectStmt.Select.Fields)
 
 	// Add subquery validation errors
-	if e.subqueryResolver != nil {
-		subqueryErrors := e.subqueryResolver.ValidateSubqueryReferences()
+	if e.enhancedResolver != nil {
+		subqueryErrors := e.enhancedResolver.ValidateSubqueryReferences()
 		validationErrors = append(validationErrors, subqueryErrors...)
 	}
 
@@ -387,7 +370,7 @@ func (e *TypeInferenceEngine2) extractTableAliases(selectStmt *parser.SelectStat
 	e.context.TableAliases = make(map[string]string)
 	e.context.CurrentTables = []string{}
 
-	if selectStmt.From == nil {
+	if selectStmt == nil || selectStmt.From == nil || selectStmt.From.Tables == nil {
 		return
 	}
 
@@ -505,8 +488,8 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 	}
 
 	// Phase 5: Check if this is a subquery reference (CTE or derived table)
-	if e.subqueryResolver != nil {
-		if subqueryFields, found := e.subqueryResolver.ResolveSubqueryReference(realTableName); found {
+	if e.enhancedResolver != nil {
+		if subqueryFields, found := e.enhancedResolver.ResolveSubqueryReference(realTableName); found {
 			// Find the field in the subquery results
 			for _, subField := range subqueryFields {
 				if subField.OriginalName == field.OriginalField ||
@@ -550,14 +533,14 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 // inferSingleFieldType infers type for unqualified column references
 func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (*TypeInfo, FieldSource, error) {
 	// Phase 5: First check subqueries for this column
-	if e.subqueryResolver != nil {
+	if e.enhancedResolver != nil {
 		var subqueryMatches []string
 		var subqueryFieldInfo *InferredFieldInfo
 
 		// Check all resolved subqueries
-		subqueryTables := e.subqueryResolver.GetAvailableSubqueryTables()
+		subqueryTables := e.enhancedResolver.GetAvailableSubqueryTables()
 		for _, tableName := range subqueryTables {
-			if subqueryFields, found := e.subqueryResolver.ResolveSubqueryReference(tableName); found {
+			if subqueryFields, found := e.enhancedResolver.ResolveSubqueryReference(tableName); found {
 				for _, subField := range subqueryFields {
 					if subField.OriginalName == field.OriginalField ||
 						subField.Name == field.OriginalField ||
