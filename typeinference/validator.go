@@ -22,6 +22,30 @@ const (
 	ExpressionTooComplex
 )
 
+// String returns the string representation of ValidationErrorType
+func (v ValidationErrorType) String() string {
+	switch v {
+	case TableNotFound:
+		return "table_not_found"
+	case ColumnNotFound:
+		return "column_not_found"
+	case AmbiguousColumn:
+		return "ambiguous_column"
+	case SchemaNotFound:
+		return "schema_not_found"
+	case TypeMismatch:
+		return "type_mismatch"
+	case NullabilityViolation:
+		return "nullability_violation"
+	case CircularReference:
+		return "circular_reference"
+	case ExpressionTooComplex:
+		return "expression_too_complex"
+	default:
+		return "unknown_error"
+	}
+}
+
 // ErrorSeverity represents the severity of an error
 type ErrorSeverity int
 
@@ -30,44 +54,11 @@ const (
 	Error                        // Error: stop type inference
 )
 
-// ValidationError represents a schema validation error
-type ValidationError struct {
-	FieldIndex int                 // Index of the problematic field
-	ErrorType  ValidationErrorType // Type of error
-	Message    string              // Error message
-	Severity   ErrorSeverity       // Error severity
-	TableName  string              // Related table name (for schema errors)
-	ColumnName string              // Related column name (for schema errors)
-	Suggestion string              // Correction suggestion
-}
-
-// Error implements the error interface
-func (e *ValidationError) Error() string {
-	return e.Message
-}
-
-// TypeInferenceError represents a type inference error
-type TypeInferenceError struct {
-	FieldIndex int                 // Index of the problematic field
-	ErrorType  ValidationErrorType // Type of error
-	Message    string              // Error message
-	Severity   ErrorSeverity       // Error severity
-	TableName  string              // Related table name (for schema errors)
-	ColumnName string              // Related column name (for schema errors)
-}
-
-// Error implements the error interface
-func (e *TypeInferenceError) Error() string {
-	return e.Message
-}
-
 // SchemaValidator validates SQL statements against database schema
 type SchemaValidator struct {
 	schemaResolver  *SchemaResolver
 	tableAliases    map[string]string // alias -> real table name
 	availableTables []string          // Currently available tables
-	errors          []ValidationError
-	warnings        []ValidationError
 }
 
 // NewSchemaValidator creates a new schema validator
@@ -76,8 +67,6 @@ func NewSchemaValidator(schemaResolver *SchemaResolver) *SchemaValidator {
 		schemaResolver:  schemaResolver,
 		tableAliases:    make(map[string]string),
 		availableTables: []string{},
-		errors:          []ValidationError{},
-		warnings:        []ValidationError{},
 	}
 }
 
@@ -93,19 +82,18 @@ func (v *SchemaValidator) SetAvailableTables(tables []string) {
 
 // ValidateSelectFields validates SELECT fields against schema
 func (v *SchemaValidator) ValidateSelectFields(selectFields []parsercommon.SelectField) []ValidationError {
-	v.errors = []ValidationError{}
-	v.warnings = []ValidationError{}
+	errors := []ValidationError{}
 
 	for i, field := range selectFields {
 		switch field.FieldKind {
 		case parsercommon.TableField:
 			if err := v.validateTableColumn(i, field.TableName, field.OriginalField); err != nil {
-				v.errors = append(v.errors, *err)
+				errors = append(errors, *err)
 			}
 
 		case parsercommon.SingleField:
 			if err := v.validateSingleColumn(i, field.OriginalField); err != nil {
-				v.errors = append(v.errors, *err)
+				errors = append(errors, *err)
 			}
 
 		case parsercommon.FunctionField, parsercommon.ComplexField, parsercommon.LiteralField:
@@ -114,7 +102,7 @@ func (v *SchemaValidator) ValidateSelectFields(selectFields []parsercommon.Selec
 		}
 	}
 
-	return append(v.errors, v.warnings...)
+	return errors
 }
 
 // validateTableColumn validates a specific table.column reference
@@ -126,10 +114,9 @@ func (v *SchemaValidator) validateTableColumn(fieldIndex int, tableName, columnN
 	schemaName := v.findSchemaForTable(realTableName)
 	if schemaName == "" {
 		return &ValidationError{
-			FieldIndex: fieldIndex,
-			ErrorType:  TableNotFound,
+			Position:   fieldIndex,
+			ErrorType:  TableNotFound.String(),
 			Message:    fmt.Sprintf("Table '%s' does not exist", realTableName),
-			Severity:   Error,
 			TableName:  realTableName,
 			Suggestion: v.suggestSimilarTables(realTableName),
 		}
@@ -139,12 +126,11 @@ func (v *SchemaValidator) validateTableColumn(fieldIndex int, tableName, columnN
 	_, err := v.schemaResolver.ResolveTableColumn(schemaName, realTableName, columnName)
 	if err != nil {
 		return &ValidationError{
-			FieldIndex: fieldIndex,
-			ErrorType:  ColumnNotFound,
+			Position:   fieldIndex,
+			ErrorType:  ColumnNotFound.String(),
 			Message:    fmt.Sprintf("Column '%s' does not exist in table '%s.%s'", columnName, schemaName, realTableName),
-			Severity:   Error,
 			TableName:  realTableName,
-			ColumnName: columnName,
+			FieldName:  columnName,
 			Suggestion: v.suggestSimilarColumns(schemaName, realTableName, columnName),
 		}
 	}
@@ -159,22 +145,20 @@ func (v *SchemaValidator) validateSingleColumn(fieldIndex int, columnName string
 
 	if len(matches) == 0 {
 		return &ValidationError{
-			FieldIndex: fieldIndex,
-			ErrorType:  ColumnNotFound,
+			Position:   fieldIndex,
+			ErrorType:  ColumnNotFound.String(),
 			Message:    fmt.Sprintf("Column '%s' does not exist in any available table", columnName),
-			Severity:   Error,
-			ColumnName: columnName,
+			FieldName:  columnName,
 			Suggestion: v.suggestSimilarColumnsAcrossTables(columnName),
 		}
 	}
 
 	if len(matches) > 1 {
 		return &ValidationError{
-			FieldIndex: fieldIndex,
-			ErrorType:  AmbiguousColumn,
+			Position:   fieldIndex,
+			ErrorType:  AmbiguousColumn.String(),
 			Message:    fmt.Sprintf("Column '%s' is ambiguous, found in tables: %v", columnName, matches),
-			Severity:   Error,
-			ColumnName: columnName,
+			FieldName:  columnName,
 			Suggestion: "Use table.column notation to disambiguate",
 		}
 	}
@@ -217,20 +201,18 @@ func (v *SchemaValidator) ValidateTypeConsistency(
 	// Check basic type compatibility
 	if !v.areTypesCompatible(inferredType.BaseType, schemaColumn.DataType) {
 		return &ValidationError{
-			ErrorType: TypeMismatch,
+			ErrorType: TypeMismatch.String(),
 			Message: fmt.Sprintf("Type mismatch: inferred '%s' but schema expects '%s'",
 				inferredType.BaseType, schemaColumn.DataType),
-			Severity: Warning, // Warning level for type mismatches
 		}
 	}
 
 	// Check nullability
 	if !inferredType.IsNullable && schemaColumn.Nullable {
 		return &ValidationError{
-			ErrorType: NullabilityViolation,
+			ErrorType: NullabilityViolation.String(),
 			Message: fmt.Sprintf("Column '%s' is nullable in schema but inferred as non-nullable",
 				field.OriginalField),
-			Severity: Warning, // Warning level for nullability issues
 		}
 	}
 

@@ -226,12 +226,11 @@ func (r *SubqueryTypeResolver) ValidateSubqueryReferences() []ValidationError {
 
 		if _, exists := r.typeCache[nodeID]; !exists {
 			errors = append(errors, ValidationError{
-				FieldIndex: -1,
-				ErrorType:  ValidationErrorType(9), // SubqueryNotResolved (custom type)
+				Position:   -1,
+				ErrorType:  "subquery_not_resolved",
 				Message:    fmt.Sprintf("Subquery node %s has no type information", nodeID),
-				Severity:   Error,
 				TableName:  "",
-				ColumnName: "",
+				FieldName:  "",
 				Suggestion: fmt.Sprintf("Ensure subquery %s is properly analyzed", nodeID),
 			})
 		}

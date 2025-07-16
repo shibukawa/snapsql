@@ -255,6 +255,57 @@ func (e *TypeInferenceEngine2) InferTypes() ([]*InferredFieldInfo, error) {
 	}
 }
 
+// performSchemaValidation is a helper method that performs schema validation
+// and returns all validation errors as a slice of error
+func (e *TypeInferenceEngine2) performSchemaValidation() []error {
+	var allErrors []error
+
+	// For SELECT statements, validate fields
+	if selectStmt, ok := e.statementNode.(*parser.SelectStatement); ok {
+		// Extract table aliases
+		e.extractTableAliases(selectStmt)
+
+		// Create schema validator
+		validator := NewSchemaValidator(e.schemaResolver)
+		validator.SetTableAliases(e.context.TableAliases)
+		validator.SetAvailableTables(e.context.CurrentTables)
+
+		// Validate SELECT fields
+		validationErrors := validator.ValidateSelectFields(selectStmt.Select.Fields)
+
+		// Convert ValidationError to error and add to allErrors
+		for _, vErr := range validationErrors {
+			allErrors = append(allErrors, &vErr)
+		}
+
+		// Add subquery validation errors if subquery resolver is available
+		if e.subqueryResolver != nil {
+			subqueryErrors := e.subqueryResolver.ValidateSubqueryReferences()
+			// Convert ValidationError to error and add to allErrors
+			for _, vErr := range subqueryErrors {
+				allErrors = append(allErrors, &vErr)
+			}
+		}
+
+		return allErrors
+	}
+
+	// For DML statements, validation is handled by DML inference engine
+	if e.dmlEngine != nil {
+		// DML validation is performed during type inference
+		// For now, return empty validation errors for DML statements
+		return allErrors
+	}
+
+	return allErrors
+}
+
+// performTypeInference is a helper method that performs type inference
+func (e *TypeInferenceEngine2) performTypeInference() ([]*InferredFieldInfo, error) {
+	// Perform unified type inference
+	return e.InferTypes()
+}
+
 // inferSelectStatement handles the core SELECT statement inference logic
 func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectStatement) ([]*InferredFieldInfo, error) {
 
@@ -273,7 +324,8 @@ func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectSta
 	}
 
 	for _, err := range validationErrors {
-		if err.Severity == Error {
+		// For critical validation errors, return early
+		if strings.Contains(err.ErrorType, "not_found") {
 			return nil, fmt.Errorf("schema validation failed: %s", err.Message)
 		}
 	}

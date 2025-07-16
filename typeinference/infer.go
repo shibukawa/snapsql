@@ -13,8 +13,9 @@ var (
 	ErrInvalidStatement = errors.New("invalid statement node")
 )
 
-// InferFieldTypes performs type inference with additional options and context.
-// This is the main entry point for type inference functionality.
+// InferFieldTypes performs type inference and schema validation with additional options and context.
+// This function collects all type inference and validation errors independently,
+// returning them as a joined error using errors.Join.
 //
 // Parameters:
 //   - databaseSchemas: Database schema information from pull functionality
@@ -23,7 +24,18 @@ var (
 //
 // Returns:
 //   - Slice of InferredFieldInfo containing type information for each field
-//   - Error if type inference fails
+//   - Joined error containing all type inference and validation errors (use AsTypeInferenceErrors/AsValidationErrors to separate)
+//
+// Error Handling:
+//   - Type inference errors: Use AsTypeInferenceErrors(err) to extract
+//   - Validation errors: Use AsValidationErrors(err) to extract
+//   - Multiple independent errors are collected and returned as a joined error
+//
+// Schema Validation:
+//   - Table existence validation
+//   - Column existence validation
+//   - Type compatibility checks
+//   - Use AsValidationErrors(err) to extract validation errors only
 //
 // Supported statement types:
 //   - SELECT statements: Returns type information for SELECT fields
@@ -32,13 +44,21 @@ var (
 //   - DELETE statements: Returns type information for RETURNING clause fields (if present)
 //
 // For DML statements without RETURNING clause, returns a single field representing affected rows count.
+//
+// For validation-only use cases, ignore the first return value and extract validation errors:
+//
+//	_, err := InferFieldTypes(schemas, statement, nil)
+//	if err != nil {
+//	    validationErrors := AsValidationErrors(err)
+//	    // Handle validation errors only
+//	}
 func InferFieldTypes(
 	databaseSchemas []snapsql.DatabaseSchema,
 	statementNode parser.StatementNode,
 	options *InferenceOptions,
 ) ([]*InferredFieldInfo, error) {
 	// Validate inputs
-	if databaseSchemas == nil || len(databaseSchemas) == 0 {
+	if len(databaseSchemas) == 0 {
 		return nil, ErrNoSchemaProvided
 	}
 	if statementNode == nil {
@@ -67,8 +87,24 @@ func InferFieldTypes(
 		}
 	}
 
-	// Perform unified type inference
-	return engine.InferTypes()
+	var allErrors []error
+
+	// Perform schema validation first (independent of type inference)
+	validationErrors := engine.performSchemaValidation()
+	allErrors = append(allErrors, validationErrors...)
+
+	// Perform type inference (independent of validation)
+	results, inferenceErr := engine.performTypeInference()
+	if inferenceErr != nil {
+		allErrors = append(allErrors, inferenceErr)
+	}
+
+	// Return results with combined errors
+	if len(allErrors) > 0 {
+		return results, errors.Join(allErrors...)
+	}
+
+	return results, nil
 }
 
 // InferenceOptions provides additional options for type inference
@@ -76,69 +112,6 @@ type InferenceOptions struct {
 	Dialect       snapsql.Dialect   // Database dialect override
 	TableAliases  map[string]string // Custom table alias mappings
 	CurrentTables []string          // Custom available tables list
-}
-
-// ValidateStatementSchema validates a SQL statement against database schema.
-// This function checks for schema validation errors without performing full type inference.
-//
-// Parameters:
-//   - databaseSchemas: Database schema information from pull functionality
-//   - statementNode: Parsed SQL AST (StatementNode)
-//
-// Returns:
-//   - Slice of ValidationError containing any schema validation issues
-//   - Error if validation process fails
-func ValidateStatementSchema(
-	databaseSchemas []snapsql.DatabaseSchema,
-	statementNode parser.StatementNode,
-) ([]ValidationError, error) {
-	// Validate inputs
-	if databaseSchemas == nil || len(databaseSchemas) == 0 {
-		return nil, ErrNoSchemaProvided
-	}
-	if statementNode == nil {
-		return nil, ErrInvalidStatement
-	}
-
-	// Extract subquery analysis from statement node
-	var subqueryInfo *SubqueryAnalysisInfo
-	if statementNode.HasSubqueryAnalysis() {
-		subqueryInfo = statementNode.GetSubqueryAnalysis()
-	}
-
-	// Create type inference engine for validation
-	engine := NewTypeInferenceEngine2(databaseSchemas, statementNode, subqueryInfo)
-
-	// For SELECT statements, validate fields
-	if selectStmt, ok := statementNode.(*parser.SelectStatement); ok {
-		// Extract table aliases
-		engine.extractTableAliases(selectStmt)
-
-		// Create schema validator
-		validator := NewSchemaValidator(engine.schemaResolver)
-		validator.SetTableAliases(engine.context.TableAliases)
-		validator.SetAvailableTables(engine.context.CurrentTables)
-
-		// Validate SELECT fields
-		validationErrors := validator.ValidateSelectFields(selectStmt.Select.Fields)
-
-		// Add subquery validation errors if subquery resolver is available
-		if engine.subqueryResolver != nil {
-			subqueryErrors := engine.subqueryResolver.ValidateSubqueryReferences()
-			validationErrors = append(validationErrors, subqueryErrors...)
-		}
-
-		return validationErrors, nil
-	}
-
-	// For DML statements, validation is handled by DML inference engine
-	if engine.dmlEngine != nil {
-		// DML validation is performed during type inference
-		// For now, return empty validation errors for DML statements
-		return []ValidationError{}, nil
-	}
-
-	return []ValidationError{}, nil
 }
 
 // Re-export types from parser for convenience
