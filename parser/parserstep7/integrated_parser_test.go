@@ -212,3 +212,16 @@ func (m *mockStatementNodeIntegrated) String() string {
 func (m *mockStatementNodeIntegrated) Type() cmn.NodeType {
 	return cmn.SELECT_STATEMENT
 }
+
+// Implement new SubqueryAnalysisInfo methods
+func (m *mockStatementNodeIntegrated) GetSubqueryAnalysis() *cmn.SubqueryAnalysisInfo {
+	return nil
+}
+
+func (m *mockStatementNodeIntegrated) SetSubqueryAnalysis(info *cmn.SubqueryAnalysisInfo) {
+	// Mock implementation does nothing
+}
+
+func (m *mockStatementNodeIntegrated) HasSubqueryAnalysis() bool {
+	return false
+}

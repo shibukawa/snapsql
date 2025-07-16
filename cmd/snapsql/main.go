@@ -10,7 +10,7 @@ import (
 
 // CLI represents the command line interface structure
 type CLI struct {
-	Generate GenerateCmd `cmd:"" help:"Generate intermediate files or runtime code"`
+	// Generate GenerateCmd `cmd:"" help:"Generate intermediate files or runtime code"` // TODO: Update to new parser API
 	Validate ValidateCmd `cmd:"" help:"Validate SQL templates"`
 	Pull     PullCmd     `cmd:"" help:"Extract database schema information"`
 	Init     InitCmd     `cmd:"" help:"Initialize a new SnapSQL project"`

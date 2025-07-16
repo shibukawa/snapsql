@@ -8,8 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/shibukawa/snapsql/typeinference"
 )
 
 // Sentinel errors for validation
@@ -181,23 +179,8 @@ func LoadFromFile(filePath string) (*IntermediateFormat, error) {
 }
 
 // InferResultTypeFields infers field types using typeinference and populates ResultType.Fields
-func InferResultTypeFields(schema *typeinference.SchemaStore, selectClause *typeinference.SelectClause, context *typeinference.InferenceContext) ([]Field, error) {
-	tie := typeinference.NewTypeInferenceEngine(schema)
-	inferred, err := tie.InferSelectTypes(selectClause, context)
-	if err != nil {
-		return nil, err
-	}
-	fields := make([]Field, len(inferred))
-	for i, f := range inferred {
-		fields[i] = Field{
-			Name:       f.Name,
-			Type:       f.Type.BaseType,
-			BaseType:   f.Type.BaseType,
-			IsNullable: f.Type.IsNullable,
-			MaxLength:  f.Type.MaxLength,
-			Precision:  f.Type.Precision,
-			Scale:      f.Type.Scale,
-		}
-	}
-	return fields, nil
+// TODO: Update to use new typeinference API
+func InferResultTypeFields(schema interface{}, selectClause interface{}, context interface{}) ([]Field, error) {
+	// Temporarily disabled - needs to be updated for new typeinference API
+	return nil, errors.New("InferResultTypeFields not implemented for new typeinference API")
 }

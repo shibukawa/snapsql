@@ -28,6 +28,11 @@ type StatementNode interface {
 	// Convenience methods for field and table lookup
 	FindFieldReference(tableOrAlias, fieldOrReference string) FieldSourceInterface
 	FindTableReference(tableOrAlias string) TableReferenceInterface
+
+	// Subquery analysis information access
+	GetSubqueryAnalysis() *SubqueryAnalysisInfo
+	SetSubqueryAnalysis(*SubqueryAnalysisInfo)
+	HasSubqueryAnalysis() bool
 }
 
 type baseStatement struct {
@@ -39,6 +44,7 @@ type baseStatement struct {
 	fieldSources         map[string]FieldSourceInterface
 	tableReferences      map[string]TableReferenceInterface
 	subqueryDependencies DependencyGraphInterface
+	subqueryAnalysis     *SubqueryAnalysisInfo // Subquery analysis information
 }
 
 // GetFieldSources implements StatementNode
@@ -75,6 +81,21 @@ func (bs *baseStatement) SetTableReferences(refs map[string]TableReferenceInterf
 // SetSubqueryDependencies implements StatementNode
 func (bs *baseStatement) SetSubqueryDependencies(deps DependencyGraphInterface) {
 	bs.subqueryDependencies = deps
+}
+
+// GetSubqueryAnalysis implements StatementNode
+func (bs *baseStatement) GetSubqueryAnalysis() *SubqueryAnalysisInfo {
+	return bs.subqueryAnalysis
+}
+
+// SetSubqueryAnalysis implements StatementNode
+func (bs *baseStatement) SetSubqueryAnalysis(analysis *SubqueryAnalysisInfo) {
+	bs.subqueryAnalysis = analysis
+}
+
+// HasSubqueryAnalysis implements StatementNode
+func (bs *baseStatement) HasSubqueryAnalysis() bool {
+	return bs.subqueryAnalysis != nil && bs.subqueryAnalysis.HasSubqueries
 }
 
 // FindFieldReference implements StatementNode

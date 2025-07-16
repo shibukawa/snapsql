@@ -53,6 +53,17 @@ func (d *demoStatementNode) RawTokens() []tokenizer.Token { return nil }
 func (d *demoStatementNode) String() string               { return "demo_statement" }
 func (d *demoStatementNode) Type() cmn.NodeType           { return cmn.SELECT_STATEMENT }
 
+// Implement new StatementNode interface methods
+func (d *demoStatementNode) GetSubqueryAnalysis() *cmn.SubqueryAnalysisInfo {
+	return nil // Demo implementation returns nil
+}
+func (d *demoStatementNode) SetSubqueryAnalysis(info *cmn.SubqueryAnalysisInfo) {
+	// Demo implementation does nothing
+}
+func (d *demoStatementNode) HasSubqueryAnalysis() bool {
+	return false // Demo implementation always returns false
+}
+
 // DemoFieldSourceManagement demonstrates the field source management capabilities
 func DemoFieldSourceManagement() {
 	fmt.Println("=== parserstep7 Field Source Management Demo ===")

@@ -239,3 +239,16 @@ func (m *MockStatementNode) FindFieldReference(tableOrAlias, fieldOrReference st
 func (m *MockStatementNode) FindTableReference(tableOrAlias string) parsercommon.TableReferenceInterface {
 	return nil
 }
+
+// Implement new SubqueryAnalysisInfo methods
+func (m *MockStatementNode) GetSubqueryAnalysis() *parsercommon.SubqueryAnalysisInfo {
+	return nil
+}
+
+func (m *MockStatementNode) SetSubqueryAnalysis(info *parsercommon.SubqueryAnalysisInfo) {
+	// Mock implementation does nothing
+}
+
+func (m *MockStatementNode) HasSubqueryAnalysis() bool {
+	return false
+}

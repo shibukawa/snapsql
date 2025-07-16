@@ -1,18 +1,25 @@
 package typeinference2
 
 import (
+	"errors"
+
 	"github.com/shibukawa/snapsql"
-	"github.com/shibukawa/snapsql/parser/parsercommon"
-	"github.com/shibukawa/snapsql/parser/parserstep7"
+	"github.com/shibukawa/snapsql/parser"
 )
 
-// InferFieldTypes performs type inference on SQL statement fields and returns inferred field information.
+// Sentinel errors for input validation
+var (
+	ErrNoSchemaProvided = errors.New("no database schema provided")
+	ErrInvalidStatement = errors.New("invalid statement node")
+)
+
+// InferFieldTypes performs type inference with additional options and context.
 // This is the main entry point for type inference functionality.
 //
 // Parameters:
 //   - databaseSchemas: Database schema information from pull functionality
 //   - statementNode: Parsed SQL AST (StatementNode)
-//   - subqueryInfo: Optional subquery information from parserstep7 (can be nil)
+//   - options: Additional inference options (can be nil for default options)
 //
 // Returns:
 //   - Slice of InferredFieldInfo containing type information for each field
@@ -27,74 +34,23 @@ import (
 // For DML statements without RETURNING clause, returns a single field representing affected rows count.
 func InferFieldTypes(
 	databaseSchemas []snapsql.DatabaseSchema,
-	statementNode parsercommon.StatementNode,
-	subqueryInfo *parserstep7.ParseResult,
-) ([]*InferredFieldInfo, error) {
-	// Create type inference engine
-	engine := NewTypeInferenceEngine2(databaseSchemas, statementNode, subqueryInfo)
-
-	// Perform unified type inference
-	return engine.InferTypes()
-}
-
-// InferSelectFieldTypes performs type inference specifically for SELECT statement fields.
-// This is a specialized entry point for SELECT-only type inference.
-//
-// Parameters:
-//   - databaseSchemas: Database schema information from pull functionality
-//   - selectStatement: Parsed SELECT statement AST
-//   - subqueryInfo: Optional subquery information from parserstep7 (can be nil)
-//
-// Returns:
-//   - Slice of InferredFieldInfo containing type information for each SELECT field
-//   - Error if type inference fails or if statement is not a SELECT statement
-func InferSelectFieldTypes(
-	databaseSchemas []snapsql.DatabaseSchema,
-	selectStatement *parsercommon.SelectStatement,
-	subqueryInfo *parserstep7.ParseResult,
-) ([]*InferredFieldInfo, error) {
-	// Create type inference engine with SELECT statement
-	engine := NewTypeInferenceEngine2(databaseSchemas, selectStatement, subqueryInfo)
-
-	// Perform SELECT-specific type inference
-	return engine.InferSelectTypes()
-}
-
-// InferFieldTypesSimple performs type inference without subquery information.
-// This is a simplified entry point for basic type inference scenarios.
-//
-// Parameters:
-//   - databaseSchemas: Database schema information from pull functionality
-//   - statementNode: Parsed SQL AST (StatementNode)
-//
-// Returns:
-//   - Slice of InferredFieldInfo containing type information for each field
-//   - Error if type inference fails
-func InferFieldTypesSimple(
-	databaseSchemas []snapsql.DatabaseSchema,
-	statementNode parsercommon.StatementNode,
-) ([]*InferredFieldInfo, error) {
-	return InferFieldTypes(databaseSchemas, statementNode, nil)
-}
-
-// InferFieldTypesWithOptions performs type inference with additional options and context.
-// This is an advanced entry point that allows customization of the inference process.
-//
-// Parameters:
-//   - databaseSchemas: Database schema information from pull functionality
-//   - statementNode: Parsed SQL AST (StatementNode)
-//   - subqueryInfo: Optional subquery information from parserstep7 (can be nil)
-//   - options: Additional inference options
-//
-// Returns:
-//   - Slice of InferredFieldInfo containing type information for each field
-//   - Error if type inference fails
-func InferFieldTypesWithOptions(
-	databaseSchemas []snapsql.DatabaseSchema,
-	statementNode parsercommon.StatementNode,
-	subqueryInfo *parserstep7.ParseResult,
+	statementNode parser.StatementNode,
 	options *InferenceOptions,
 ) ([]*InferredFieldInfo, error) {
+	// Validate inputs
+	if databaseSchemas == nil || len(databaseSchemas) == 0 {
+		return nil, ErrNoSchemaProvided
+	}
+	if statementNode == nil {
+		return nil, ErrInvalidStatement
+	}
+
+	// Extract subquery analysis from statement node
+	var subqueryInfo *SubqueryAnalysisInfo
+	if statementNode.HasSubqueryAnalysis() {
+		subqueryInfo = statementNode.GetSubqueryAnalysis()
+	}
+
 	// Create type inference engine
 	engine := NewTypeInferenceEngine2(databaseSchemas, statementNode, subqueryInfo)
 
@@ -128,21 +84,33 @@ type InferenceOptions struct {
 // Parameters:
 //   - databaseSchemas: Database schema information from pull functionality
 //   - statementNode: Parsed SQL AST (StatementNode)
-//   - subqueryInfo: Optional subquery information from parserstep7 (can be nil)
 //
 // Returns:
 //   - Slice of ValidationError containing any schema validation issues
 //   - Error if validation process fails
 func ValidateStatementSchema(
 	databaseSchemas []snapsql.DatabaseSchema,
-	statementNode parsercommon.StatementNode,
-	subqueryInfo *parserstep7.ParseResult,
+	statementNode parser.StatementNode,
 ) ([]ValidationError, error) {
+	// Validate inputs
+	if databaseSchemas == nil || len(databaseSchemas) == 0 {
+		return nil, ErrNoSchemaProvided
+	}
+	if statementNode == nil {
+		return nil, ErrInvalidStatement
+	}
+
+	// Extract subquery analysis from statement node
+	var subqueryInfo *SubqueryAnalysisInfo
+	if statementNode.HasSubqueryAnalysis() {
+		subqueryInfo = statementNode.GetSubqueryAnalysis()
+	}
+
 	// Create type inference engine for validation
 	engine := NewTypeInferenceEngine2(databaseSchemas, statementNode, subqueryInfo)
 
 	// For SELECT statements, validate fields
-	if selectStmt, ok := statementNode.(*parsercommon.SelectStatement); ok {
+	if selectStmt, ok := statementNode.(*parser.SelectStatement); ok {
 		// Extract table aliases
 		engine.extractTableAliases(selectStmt)
 
@@ -172,3 +140,9 @@ func ValidateStatementSchema(
 
 	return []ValidationError{}, nil
 }
+
+// Re-export types from parser for convenience
+type (
+	SubqueryAnalysisInfo = parser.SubqueryAnalysisInfo
+	ValidationErrorInfo  = parser.ValidationErrorInfo
+)

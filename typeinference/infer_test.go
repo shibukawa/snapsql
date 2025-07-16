@@ -4,370 +4,352 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql"
-	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser"
+	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-func TestInferFieldTypes_SimpleSelect(t *testing.T) {
-	// Setup test schema
-	schemas := []snapsql.DatabaseSchema{
-		{
-			Name: "testdb",
-			DatabaseInfo: snapsql.DatabaseInfo{
-				Name: "testdb",
-				Type: "postgres",
-			},
-			Tables: []*snapsql.TableInfo{
-				{
-					Name:   "users",
-					Schema: "public",
-					Columns: map[string]*snapsql.ColumnInfo{
-						"id": {
-							Name:         "id",
-							DataType:     "int",
-							Nullable:     false,
-							IsPrimaryKey: true,
-						},
-						"name": {
-							Name:     "name",
-							DataType: "varchar",
-							Nullable: true,
-						},
-						"age": {
-							Name:     "age",
-							DataType: "int",
-							Nullable: true,
-						},
-					},
-				},
-			},
-		},
+// Helper function to load schema from YAML
+func loadSchemaFromYAML(yamlContent string) ([]snapsql.DatabaseSchema, error) {
+	var schema snapsql.DatabaseSchema
+	err := yaml.Unmarshal([]byte(yamlContent), &schema)
+	if err != nil {
+		return nil, err
 	}
-
-	// Setup test SELECT statement
-	selectStmt := &parsercommon.SelectStatement{
-		Select: &parsercommon.SelectClause{
-			Fields: []parsercommon.SelectField{
-				{
-					FieldKind:     parsercommon.TableField,
-					TableName:     "users",
-					OriginalField: "id",
-					ExplicitName:  false,
-				},
-				{
-					FieldKind:     parsercommon.TableField,
-					TableName:     "users",
-					OriginalField: "name",
-					ExplicitName:  false,
-				},
-			},
-		},
-		From: &parsercommon.FromClause{
-			Tables: []parsercommon.TableReferenceForFrom{
-				{
-					TableReference: parsercommon.TableReference{
-						TableName: "users",
-						Name:      "users",
-					},
-				},
-			},
-		},
-	}
-
-	// Test InferFieldTypes
-	result, err := InferFieldTypes(schemas, selectStmt, nil)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 2, len(result))
-
-	// Check first field (id)
-	assert.Equal(t, "id", result[0].Name)
-	assert.Equal(t, "id", result[0].OriginalName)
-	assert.Equal(t, "int", result[0].Type.BaseType)
-	assert.Equal(t, false, result[0].Type.IsNullable)
-	assert.Equal(t, "column", result[0].Source.Type)
-	assert.Equal(t, "users", result[0].Source.Table)
-	assert.Equal(t, "id", result[0].Source.Column)
-
-	// Check second field (name)
-	assert.Equal(t, "name", result[1].Name)
-	assert.Equal(t, "name", result[1].OriginalName)
-	assert.Equal(t, "varchar", result[1].Type.BaseType) // Raw type from schema
-	assert.Equal(t, true, result[1].Type.IsNullable)
-	assert.Equal(t, "column", result[1].Source.Type)
-	assert.Equal(t, "users", result[1].Source.Table)
-	assert.Equal(t, "name", result[1].Source.Column)
+	return []snapsql.DatabaseSchema{schema}, nil
 }
 
-func TestInferSelectFieldTypes_SpecializedFunction(t *testing.T) {
-	// Setup test schema
-	schemas := []snapsql.DatabaseSchema{
-		{
-			Name: "testdb",
-			DatabaseInfo: snapsql.DatabaseInfo{
-				Name: "testdb",
-				Type: "postgres",
-			},
-			Tables: []*snapsql.TableInfo{
-				{
-					Name:   "users",
-					Schema: "public",
-					Columns: map[string]*snapsql.ColumnInfo{
-						"id": {
-							Name:         "id",
-							DataType:     "int",
-							Nullable:     false,
-							IsPrimaryKey: true,
-						},
-						"name": {
-							Name:     "name",
-							DataType: "varchar",
-							Nullable: true,
-						},
-					},
-				},
-			},
-		},
+// Parse SQL using actual parser
+func parseSQL(sql string) (parser.StatementNode, error) {
+	tokens, err := tokenizer.Tokenize(sql)
+	if err != nil {
+		return nil, err
 	}
 
-	// Setup test SELECT statement
-	selectStmt := &parsercommon.SelectStatement{
-		Select: &parsercommon.SelectClause{
-			Fields: []parsercommon.SelectField{
-				{
-					FieldKind:     parsercommon.TableField,
-					TableName:     "users",
-					OriginalField: "name",
-					ExplicitName:  false,
-				},
-			},
-		},
-		From: &parsercommon.FromClause{
-			Tables: []parsercommon.TableReferenceForFrom{
-				{
-					TableReference: parsercommon.TableReference{
-						TableName: "users",
-						Name:      "users",
-					},
-				},
-			},
-		},
+	stmt, err := parser.Parse(tokens, nil, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	// Test InferSelectFieldTypes
-	result, err := InferSelectFieldTypes(schemas, selectStmt, nil)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(result))
-	assert.Equal(t, "name", result[0].Name)
-	assert.Equal(t, "varchar", result[0].Type.BaseType) // Raw type from schema
+	return stmt, nil
 }
 
-func TestInferFieldTypesSimple_NoSubqueryInfo(t *testing.T) {
-	// Setup test schema
-	schemas := []snapsql.DatabaseSchema{
-		{
-			Name: "testdb",
-			DatabaseInfo: snapsql.DatabaseInfo{
-				Name: "testdb",
-				Type: "postgres",
-			},
-			Tables: []*snapsql.TableInfo{
-				{
-					Name:   "users",
-					Schema: "public",
-					Columns: map[string]*snapsql.ColumnInfo{
-						"id": {
-							Name:         "id",
-							DataType:     "int",
-							Nullable:     false,
-							IsPrimaryKey: true,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Setup test SELECT statement
-	selectStmt := &parsercommon.SelectStatement{
-		Select: &parsercommon.SelectClause{
-			Fields: []parsercommon.SelectField{
-				{
-					FieldKind:     parsercommon.TableField,
-					TableName:     "users",
-					OriginalField: "id",
-					ExplicitName:  false,
-				},
-			},
-		},
-		From: &parsercommon.FromClause{
-			Tables: []parsercommon.TableReferenceForFrom{
-				{
-					TableReference: parsercommon.TableReference{
-						TableName: "users",
-						Name:      "users",
-					},
-				},
-			},
-		},
-	}
-
-	// Test InferFieldTypesSimple
-	result, err := InferFieldTypesSimple(schemas, selectStmt)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(result))
-	assert.Equal(t, "id", result[0].Name)
-	assert.Equal(t, "int", result[0].Type.BaseType)
+// Test data structure for table-driven tests
+type inferenceTestCase struct {
+	name      string
+	sql       string
+	schema    string // YAML schema definition
+	expected  []InferredFieldInfo
+	expectErr bool
+	errMsg    string
 }
 
-func TestInferFieldTypesWithOptions_CustomOptions(t *testing.T) {
-	// Setup test schema
-	schemas := []snapsql.DatabaseSchema{
+// Test InferFieldTypes with table-driven tests
+func TestInferFieldTypes_TableDriven(t *testing.T) {
+	testCases := []inferenceTestCase{
 		{
-			Name: "testdb",
-			DatabaseInfo: snapsql.DatabaseInfo{
-				Name: "testdb",
-				Type: "mysql",
-			},
-			Tables: []*snapsql.TableInfo{
+			name: "simple SELECT with basic columns",
+			sql:  "SELECT id, name FROM users",
+			schema: `
+name: test_db
+tables:
+- name: users
+  columns:
+    id:
+      name: id
+      dataType: INTEGER
+      nullable: false
+      isPrimaryKey: true
+    name:
+      name: name
+      dataType: TEXT
+      nullable: false
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`,
+			expected: []InferredFieldInfo{
 				{
-					Name:   "products",
-					Schema: "mydb",
-					Columns: map[string]*snapsql.ColumnInfo{
-						"id": {
-							Name:         "id",
-							DataType:     "int",
-							Nullable:     false,
-							IsPrimaryKey: true,
-						},
-						"price": {
-							Name:     "price",
-							DataType: "decimal",
-							Nullable: true,
-						},
+					Name:         "id",
+					OriginalName: "id",
+					Type: &TypeInfo{
+						BaseType:   "INTEGER",
+						IsNullable: false,
+					},
+					Source: FieldSource{
+						Type:   "column",
+						Table:  "users",
+						Column: "id",
+					},
+				},
+				{
+					Name:         "name",
+					OriginalName: "name",
+					Type: &TypeInfo{
+						BaseType:   "TEXT",
+						IsNullable: false,
+					},
+					Source: FieldSource{
+						Type:   "column",
+						Table:  "users",
+						Column: "name",
 					},
 				},
 			},
+			expectErr: false,
 		},
-	}
-
-	// Setup test SELECT statement with alias
-	selectStmt := &parsercommon.SelectStatement{
-		Select: &parsercommon.SelectClause{
-			Fields: []parsercommon.SelectField{
+		{
+			name: "SELECT with nullable column",
+			sql:  "SELECT email FROM users",
+			schema: `
+name: test_db
+tables:
+  - name: users
+    columns:
+      email:
+        name: email
+        dataType: TEXT
+        nullable: true
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`,
+			expected: []InferredFieldInfo{
 				{
-					FieldKind:     parsercommon.TableField,
-					TableName:     "p",
-					OriginalField: "price",
-					ExplicitName:  false,
-				},
-			},
-		},
-		From: &parsercommon.FromClause{
-			Tables: []parsercommon.TableReferenceForFrom{
-				{
-					TableReference: parsercommon.TableReference{
-						TableName:    "products",
-						Name:         "p",
-						ExplicitName: true,
+					Name:         "email",
+					OriginalName: "email",
+					Type: &TypeInfo{
+						BaseType:   "TEXT",
+						IsNullable: true,
+					},
+					Source: FieldSource{
+						Type:   "column",
+						Table:  "users",
+						Column: "email",
 					},
 				},
 			},
+			expectErr: false,
+		},
+		{
+			name: "missing table error",
+			sql:  "SELECT id FROM nonexistent",
+			schema: `
+name: test_db
+tables: []
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`,
+			expectErr: true,
+			errMsg:    "does not exist in any available table",
 		},
 	}
 
-	// Test with custom options
-	options := &InferenceOptions{
-		Dialect: snapsql.DialectMySQL,
-		TableAliases: map[string]string{
-			"p": "products",
-		},
-		CurrentTables: []string{"p"},
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Load schema from YAML
+			schemas, err := loadSchemaFromYAML(tc.schema)
+			assert.NoError(t, err, "Failed to load schema from YAML")
+
+			// Parse SQL
+			stmt, err := parseSQL(tc.sql)
+			assert.NoError(t, err, "Failed to parse SQL")
+
+			// Perform type inference
+			results, err := InferFieldTypes(schemas, stmt, nil)
+
+			if tc.expectErr {
+				assert.True(t, err != nil, "Expected error or validation errors but got none")
+				if tc.errMsg != "" {
+					assert.Contains(t, err.Error(), tc.errMsg, "Error message doesn't match")
+				}
+				return
+			}
+
+			assert.NoError(t, err, "Unexpected error during type inference")
+			assert.Equal(t, len(tc.expected), len(results), "Number of inferred fields doesn't match")
+
+			for i, expected := range tc.expected {
+				if i < len(results) {
+					actual := results[i]
+					assert.Equal(t, expected.Name, actual.Name, "Name mismatch at index %d", i)
+					assert.Equal(t, expected.OriginalName, actual.OriginalName, "OriginalName mismatch at index %d", i)
+					if expected.Type != nil && actual.Type != nil {
+						assert.Equal(t, expected.Type.BaseType, actual.Type.BaseType, "BaseType mismatch at index %d", i)
+						assert.Equal(t, expected.Type.IsNullable, actual.Type.IsNullable, "IsNullable mismatch at index %d", i)
+					}
+					assert.Equal(t, expected.Source.Type, actual.Source.Type, "Source.Type mismatch at index %d", i)
+					assert.Equal(t, expected.Source.Table, actual.Source.Table, "Source.Table mismatch at index %d", i)
+					assert.Equal(t, expected.Source.Column, actual.Source.Column, "Source.Column mismatch at index %d", i)
+				}
+			}
+		})
 	}
-
-	result, err := InferFieldTypesWithOptions(schemas, selectStmt, nil, options)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(result))
-	assert.Equal(t, "price", result[0].Name)
-	assert.Equal(t, "decimal", result[0].Type.BaseType)
 }
 
-func TestValidateStatementSchema_ValidSelect(t *testing.T) {
-	// Setup test schema
-	schemas := []snapsql.DatabaseSchema{
+// Test ValidateStatementSchema function
+func TestValidateStatementSchema_TableDriven(t *testing.T) {
+	testCases := []struct {
+		name      string
+		sql       string
+		schema    string
+		expectErr bool
+	}{
 		{
-			Name: "testdb",
-			DatabaseInfo: snapsql.DatabaseInfo{
-				Name: "testdb",
-				Type: "postgres",
-			},
-			Tables: []*snapsql.TableInfo{
-				{
-					Name:   "users",
-					Schema: "public",
-					Columns: map[string]*snapsql.ColumnInfo{
-						"id": {
-							Name:         "id",
-							DataType:     "int",
-							Nullable:     false,
-							IsPrimaryKey: true,
-						},
-						"name": {
-							Name:     "name",
-							DataType: "varchar",
-							Nullable: true,
-						},
-					},
-				},
-			},
+			name: "valid schema",
+			sql:  "SELECT id, name FROM users",
+			schema: `
+name: test_db
+tables:
+  - name: users
+    columns:
+      id:
+        name: id
+        dataType: INTEGER
+        nullable: false
+      name:
+        name: name
+        dataType: TEXT
+        nullable: false
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`,
+			expectErr: false,
+		},
+		{
+			name: "missing table",
+			sql:  "SELECT id FROM nonexistent",
+			schema: `
+name: test_db
+tables: []
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`,
+			expectErr: true,
 		},
 	}
 
-	// Setup valid SELECT statement
-	selectStmt := &parsercommon.SelectStatement{
-		Select: &parsercommon.SelectClause{
-			Fields: []parsercommon.SelectField{
-				{
-					FieldKind:     parsercommon.TableField,
-					TableName:     "users",
-					OriginalField: "id",
-					ExplicitName:  false,
-				},
-			},
-		},
-		From: &parsercommon.FromClause{
-			Tables: []parsercommon.TableReferenceForFrom{
-				{
-					TableReference: parsercommon.TableReference{
-						TableName: "users",
-						Name:      "users",
-					},
-				},
-			},
-		},
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Load schema from YAML
+			schemas, err := loadSchemaFromYAML(tc.schema)
+			assert.NoError(t, err, "Failed to load schema from YAML")
+
+			// Parse SQL
+			stmt, err := parseSQL(tc.sql)
+			assert.NoError(t, err, "Failed to parse SQL")
+
+			// Perform schema validation
+			validationErrors, err := ValidateStatementSchema(schemas, stmt)
+
+			if tc.expectErr {
+				assert.True(t, err != nil || len(validationErrors) > 0, "Expected error or validation errors but got none")
+			} else {
+				assert.NoError(t, err, "Unexpected error during schema validation")
+				assert.Equal(t, 0, len(validationErrors), "Expected no validation errors")
+			}
+		})
 	}
-
-	// Test ValidateStatementSchema
-	validationErrors, err := ValidateStatementSchema(schemas, selectStmt, nil)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 0, len(validationErrors)) // No validation errors expected
 }
 
-func TestInferFieldTypes_UnsupportedStatement(t *testing.T) {
-	// Setup test schema
-	schemas := []snapsql.DatabaseSchema{}
+// Test edge cases
+func TestInferFieldTypes_EdgeCases(t *testing.T) {
+	t.Run("nil schema", func(t *testing.T) {
+		stmt, err := parseSQL("SELECT id FROM users")
+		assert.NoError(t, err)
 
-	// Setup unsupported statement (using nil which will be treated as unsupported)
-	var unsupportedStmt parsercommon.StatementNode = nil
+		results, err := InferFieldTypes(nil, stmt, nil)
+		assert.Error(t, err)
+		assert.Equal(t, 0, len(results))
+	})
 
-	// Test InferFieldTypes with unsupported statement
-	result, err := InferFieldTypes(schemas, unsupportedStmt, nil)
+	t.Run("nil statement", func(t *testing.T) {
+		schemas, err := loadSchemaFromYAML(`
+name: test_db
+tables: []
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`)
+		assert.NoError(t, err)
 
-	assert.Error(t, err)
-	assert.Zero(t, len(result))
-	assert.Contains(t, err.Error(), "unsupported statement type")
+		results, err := InferFieldTypes(schemas, nil, nil)
+		assert.Error(t, err)
+		assert.Equal(t, 0, len(results))
+	})
+
+	t.Run("empty schema list", func(t *testing.T) {
+		stmt, err := parseSQL("SELECT id FROM users")
+		assert.NoError(t, err)
+
+		results, err := InferFieldTypes([]snapsql.DatabaseSchema{}, stmt, nil)
+		assert.Error(t, err)
+		assert.Equal(t, 0, len(results))
+	})
+}
+
+// Test basic functionality (simple smoke test)
+func TestInferFieldTypes_Basic(t *testing.T) {
+	schema := `
+name: test_db
+tables:
+  - name: users
+    columns:
+      id:
+        name: id
+        dataType: INTEGER
+        nullable: false
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`
+
+	schemas, err := loadSchemaFromYAML(schema)
+	assert.NoError(t, err)
+
+	stmt, err := parseSQL("SELECT id FROM users")
+	assert.NoError(t, err)
+
+	results, err := InferFieldTypes(schemas, stmt, nil)
+	assert.NoError(t, err)
+	assert.True(t, len(results) > 0, "Should return at least one field")
+}
+
+// Test ValidateStatementSchema basic functionality
+func TestValidateStatementSchema_Basic(t *testing.T) {
+	schema := `
+name: test_db
+tables:
+  - name: users
+    columns:
+      id:
+        name: id
+        dataType: INTEGER
+        nullable: false
+databaseInfo:
+  type: sqlite
+  version: "3.0"
+  name: test_db
+`
+
+	schemas, err := loadSchemaFromYAML(schema)
+	assert.NoError(t, err)
+
+	stmt, err := parseSQL("SELECT id FROM users")
+	assert.NoError(t, err)
+
+	validationErrors, err := ValidateStatementSchema(schemas, stmt)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(validationErrors), "Expected no validation errors")
 }

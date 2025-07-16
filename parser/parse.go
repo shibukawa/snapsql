@@ -53,8 +53,9 @@ type (
 	ReturningClause  = parsercommon.ReturningClause
 
 	// Element types
-	FieldName = parsercommon.FieldName
-	FieldType = parsercommon.FieldType
+	FieldName   = parsercommon.FieldName
+	FieldType   = parsercommon.FieldType
+	SelectField = parsercommon.SelectField
 
 	// Schema and namespace types
 	FunctionDefinition = parsercommon.FunctionDefinition
@@ -63,6 +64,10 @@ type (
 
 	// Error types
 	ParseError = parsercommon.ParseError
+
+	// Subquery analysis types
+	SubqueryAnalysisInfo = parsercommon.SubqueryAnalysisInfo
+	ValidationErrorInfo  = parsercommon.ValidationErrorInfo
 
 	// Node type constants
 	NodeType = parsercommon.NodeType

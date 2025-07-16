@@ -5,7 +5,6 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
-	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 func TestASTIntegrator_NewASTIntegrator(t *testing.T) {
@@ -140,76 +139,4 @@ func TestASTIntegrator_GetErrors(t *testing.T) {
 	assert.Equal(t, 0, len(errors))
 }
 
-// Mock statement node for testing
-type mockStatementNode struct {
-	cte                  *cmn.WithClause
-	fieldSources         map[string]cmn.FieldSourceInterface
-	tableReferences      map[string]cmn.TableReferenceInterface
-	subqueryDependencies cmn.DependencyGraphInterface
-}
-
-func (m *mockStatementNode) CTE() *cmn.WithClause {
-	return m.cte
-}
-
-func (m *mockStatementNode) LeadingTokens() []tokenizer.Token {
-	return nil
-}
-
-func (m *mockStatementNode) Clauses() []cmn.ClauseNode {
-	return nil
-}
-
-func (m *mockStatementNode) GetFieldSources() map[string]cmn.FieldSourceInterface {
-	if m.fieldSources == nil {
-		m.fieldSources = make(map[string]cmn.FieldSourceInterface)
-	}
-	return m.fieldSources
-}
-
-func (m *mockStatementNode) GetTableReferences() map[string]cmn.TableReferenceInterface {
-	if m.tableReferences == nil {
-		m.tableReferences = make(map[string]cmn.TableReferenceInterface)
-	}
-	return m.tableReferences
-}
-
-func (m *mockStatementNode) GetSubqueryDependencies() cmn.DependencyGraphInterface {
-	return m.subqueryDependencies
-}
-
-func (m *mockStatementNode) SetFieldSources(fs map[string]cmn.FieldSourceInterface) {
-	m.fieldSources = fs
-}
-
-func (m *mockStatementNode) SetTableReferences(tr map[string]cmn.TableReferenceInterface) {
-	m.tableReferences = tr
-}
-
-func (m *mockStatementNode) SetSubqueryDependencies(dg cmn.DependencyGraphInterface) {
-	m.subqueryDependencies = dg
-}
-
-func (m *mockStatementNode) FindFieldReference(tableOrAlias, fieldOrReference string) cmn.FieldSourceInterface {
-	return nil
-}
-
-func (m *mockStatementNode) FindTableReference(tableOrAlias string) cmn.TableReferenceInterface {
-	return nil
-}
-
-func (m *mockStatementNode) Position() tokenizer.Position {
-	return tokenizer.Position{}
-}
-
-func (m *mockStatementNode) RawTokens() []tokenizer.Token {
-	return nil
-}
-
-func (m *mockStatementNode) String() string {
-	return "mock_statement"
-}
-
-func (m *mockStatementNode) Type() cmn.NodeType {
-	return cmn.SELECT_STATEMENT
-}
+// mockStatementNode is now defined in test_helpers.go

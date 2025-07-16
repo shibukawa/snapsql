@@ -5,9 +5,18 @@ import (
 	"strings"
 
 	"github.com/shibukawa/snapsql"
-	"github.com/shibukawa/snapsql/parser/parsercommon"
-	"github.com/shibukawa/snapsql/parser/parserstep7"
+	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/tokenizer"
+)
+
+// Type aliases for parser types
+type (
+	StatementNode       = parser.StatementNode
+	SelectStatement     = parser.SelectStatement
+	InsertIntoStatement = parser.InsertIntoStatement
+	UpdateStatement     = parser.UpdateStatement
+	DeleteFromStatement = parser.DeleteFromStatement
+	SelectField         = parser.SelectField
 )
 
 // TypeInfo represents inferred type information
@@ -101,8 +110,8 @@ func (g *FieldNameGenerator) ReserveFieldName(name string) {
 type TypeInferenceEngine2 struct {
 	databaseSchemas  []snapsql.DatabaseSchema        // Database schemas from pull functionality
 	schemaResolver   *SchemaResolver                 // Schema resolver for type lookup
-	statementNode    parsercommon.StatementNode      // Parsed SQL AST
-	subqueryInfo     *parserstep7.ParseResult        // Subquery information from parserstep7
+	statementNode    StatementNode                   // Parsed SQL AST
+	subqueryInfo     *SubqueryAnalysisInfo           // Subquery information from StatementNode
 	subqueryResolver *SubqueryTypeResolver           // Subquery type resolver (Phase 5)
 	dmlEngine        *DMLInferenceEngine             // DML inference engine (Phase 6)
 	context          *InferenceContext               // Inference context
@@ -114,8 +123,8 @@ type TypeInferenceEngine2 struct {
 // NewTypeInferenceEngine2 creates a new type inference engine
 func NewTypeInferenceEngine2(
 	databaseSchemas []snapsql.DatabaseSchema,
-	statementNode parsercommon.StatementNode,
-	subqueryInfo *parserstep7.ParseResult,
+	statementNode StatementNode,
+	subqueryInfo *SubqueryAnalysisInfo,
 ) *TypeInferenceEngine2 {
 	// Create schema resolver from database schemas
 	schemaResolver := NewSchemaResolver(databaseSchemas)
@@ -144,8 +153,9 @@ func NewTypeInferenceEngine2(
 
 	// Create subquery resolver if subquery information is available
 	var subqueryResolver *SubqueryTypeResolver
-	if subqueryInfo != nil {
-		subqueryResolver = NewSubqueryTypeResolver(schemaResolver, subqueryInfo, dialect)
+	if subqueryInfo != nil && subqueryInfo.HasSubqueries {
+		// For now, disable subquery resolver until we implement SubqueryAnalysisInfo integration
+		// subqueryResolver = NewSubqueryTypeResolver(schemaResolver, subqueryInfo, dialect)
 	}
 
 	engine := &TypeInferenceEngine2{
@@ -207,7 +217,7 @@ func functionFieldNameMappings() map[string]string {
 // InferSelectTypes performs type inference on SELECT statement fields
 func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) {
 	// Get SELECT statement
-	selectStmt, ok := e.statementNode.(*parsercommon.SelectStatement)
+	selectStmt, ok := e.statementNode.(*parser.SelectStatement)
 	if !ok {
 		return nil, fmt.Errorf("statement is not a SELECT statement")
 	}
@@ -235,9 +245,9 @@ func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) 
 // InferTypes performs unified type inference for any statement type (Phase 6)
 func (e *TypeInferenceEngine2) InferTypes() ([]*InferredFieldInfo, error) {
 	switch stmt := e.statementNode.(type) {
-	case *parsercommon.SelectStatement:
+	case *parser.SelectStatement:
 		return e.InferSelectTypes()
-	case *parsercommon.InsertIntoStatement, *parsercommon.UpdateStatement, *parsercommon.DeleteFromStatement:
+	case *parser.InsertIntoStatement, *parser.UpdateStatement, *parser.DeleteFromStatement:
 		// Phase 6: DML statement inference
 		return e.dmlEngine.InferDMLStatementType(e.statementNode)
 	default:
@@ -246,7 +256,7 @@ func (e *TypeInferenceEngine2) InferTypes() ([]*InferredFieldInfo, error) {
 }
 
 // inferSelectStatement handles the core SELECT statement inference logic
-func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parsercommon.SelectStatement) ([]*InferredFieldInfo, error) {
+func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectStatement) ([]*InferredFieldInfo, error) {
 
 	// Create schema validator
 	validator := NewSchemaValidator(e.schemaResolver)
@@ -289,7 +299,7 @@ func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parsercommon.Sel
 }
 
 // extractTableAliases extracts table aliases from the FROM clause
-func (e *TypeInferenceEngine2) extractTableAliases(selectStmt *parsercommon.SelectStatement) {
+func (e *TypeInferenceEngine2) extractTableAliases(selectStmt *parser.SelectStatement) {
 	e.context.TableAliases = make(map[string]string)
 	e.context.CurrentTables = []string{}
 
@@ -314,7 +324,7 @@ func (e *TypeInferenceEngine2) extractTableAliases(selectStmt *parsercommon.Sele
 }
 
 // inferFieldType performs type inference on a single SELECT field
-func (e *TypeInferenceEngine2) inferFieldType(field *parsercommon.SelectField, fieldIndex int) (*InferredFieldInfo, error) {
+func (e *TypeInferenceEngine2) inferFieldType(field *parser.SelectField, fieldIndex int) (*InferredFieldInfo, error) {
 	var fieldType *TypeInfo
 	var fieldSource FieldSource
 	var err error
@@ -332,15 +342,15 @@ func (e *TypeInferenceEngine2) inferFieldType(field *parsercommon.SelectField, f
 	} else {
 		// Infer type based on field kind
 		switch field.FieldKind {
-		case parsercommon.TableField:
+		case parser.TableField:
 			fieldType, fieldSource, err = e.inferTableFieldType(field)
-		case parsercommon.SingleField:
+		case parser.SingleField:
 			fieldType, fieldSource, err = e.inferSingleFieldType(field)
-		case parsercommon.FunctionField:
+		case parser.FunctionField:
 			fieldType, fieldSource, err = e.inferFunctionFieldType(field)
-		case parsercommon.LiteralField:
+		case parser.LiteralField:
 			fieldType, fieldSource, err = e.inferLiteralFieldType(field)
-		case parsercommon.ComplexField:
+		case parser.ComplexField:
 			fieldType, fieldSource, err = e.inferComplexFieldType(field)
 		default:
 			fieldType = &TypeInfo{BaseType: "any", IsNullable: true}
@@ -359,22 +369,22 @@ func (e *TypeInferenceEngine2) inferFieldType(field *parsercommon.SelectField, f
 		e.fieldNameGen.ReserveFieldName(fieldName)
 	} else {
 		// Use enhanced generator for complex fields, fallback to basic for simple fields
-		if field.FieldKind == parsercommon.ComplexField || field.FieldKind == parsercommon.FunctionField {
+		if field.FieldKind == parser.ComplexField || field.FieldKind == parser.FunctionField {
 			fieldName = e.enhancedGen.GenerateComplexFieldName(field)
 		} else {
 			// Generate field name based on field kind for improved naming (Phase 4 enhancement)
-			if field.FieldKind == parsercommon.ComplexField || field.FieldKind == parsercommon.FunctionField {
+			if field.FieldKind == parser.ComplexField || field.FieldKind == parser.FunctionField {
 				// Use enhanced generator for complex expressions and functions
 				fieldName = e.enhancedGen.GenerateComplexFieldName(field)
 			} else {
 				// Use basic generator for simple fields
 				var fieldKindString string
 				switch field.FieldKind {
-				case parsercommon.FunctionField:
+				case parser.FunctionField:
 					fieldKindString = "function"
-				case parsercommon.LiteralField:
+				case parser.LiteralField:
 					fieldKindString = "literal"
-				case parsercommon.ComplexField:
+				case parser.ComplexField:
 					fieldKindString = "expr"
 				default:
 					fieldKindString = "field"
@@ -403,7 +413,7 @@ func (e *TypeInferenceEngine2) inferFieldType(field *parsercommon.SelectField, f
 // Type inference methods for different field kinds
 
 // inferTableFieldType infers type for table.column references
-func (e *TypeInferenceEngine2) inferTableFieldType(field *parsercommon.SelectField) (*TypeInfo, FieldSource, error) {
+func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*TypeInfo, FieldSource, error) {
 	// Resolve table alias
 	realTableName := field.TableName
 	if alias, exists := e.context.TableAliases[field.TableName]; exists {
@@ -454,7 +464,7 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parsercommon.SelectFie
 }
 
 // inferSingleFieldType infers type for unqualified column references
-func (e *TypeInferenceEngine2) inferSingleFieldType(field *parsercommon.SelectField) (*TypeInfo, FieldSource, error) {
+func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (*TypeInfo, FieldSource, error) {
 	// Phase 5: First check subqueries for this column
 	if e.subqueryResolver != nil {
 		var subqueryMatches []string
@@ -523,7 +533,7 @@ func (e *TypeInferenceEngine2) inferSingleFieldType(field *parsercommon.SelectFi
 }
 
 // inferFunctionFieldType infers type for function calls
-func (e *TypeInferenceEngine2) inferFunctionFieldType(field *parsercommon.SelectField) (*TypeInfo, FieldSource, error) {
+func (e *TypeInferenceEngine2) inferFunctionFieldType(field *parser.SelectField) (*TypeInfo, FieldSource, error) {
 	functionName := e.extractFunctionName(field)
 	if functionName == "" {
 		return &TypeInfo{BaseType: "any", IsNullable: true},
@@ -550,7 +560,7 @@ func (e *TypeInferenceEngine2) inferFunctionFieldType(field *parsercommon.Select
 }
 
 // inferLiteralFieldType infers type for literal values
-func (e *TypeInferenceEngine2) inferLiteralFieldType(field *parsercommon.SelectField) (*TypeInfo, FieldSource, error) {
+func (e *TypeInferenceEngine2) inferLiteralFieldType(field *parser.SelectField) (*TypeInfo, FieldSource, error) {
 	// Basic literal type inference
 	literalType := e.inferLiteralType(field.OriginalField)
 	fieldSource := FieldSource{
@@ -562,7 +572,7 @@ func (e *TypeInferenceEngine2) inferLiteralFieldType(field *parsercommon.SelectF
 }
 
 // inferComplexFieldType infers type for complex expressions
-func (e *TypeInferenceEngine2) inferComplexFieldType(field *parsercommon.SelectField) (*TypeInfo, FieldSource, error) {
+func (e *TypeInferenceEngine2) inferComplexFieldType(field *parser.SelectField) (*TypeInfo, FieldSource, error) {
 	// Use ExpressionCastAnalyzer for advanced type inference
 	analyzer := NewExpressionCastAnalyzer(field.Expression, e)
 
@@ -615,8 +625,8 @@ func (e *TypeInferenceEngine2) findSchemaForTable(tableName string) string {
 }
 
 // extractFunctionName extracts function name from a function field
-func (e *TypeInferenceEngine2) extractFunctionName(field *parsercommon.SelectField) string {
-	if field.FieldKind != parsercommon.FunctionField || len(field.Expression) == 0 {
+func (e *TypeInferenceEngine2) extractFunctionName(field *parser.SelectField) string {
+	if field.FieldKind != parser.FunctionField || len(field.Expression) == 0 {
 		return ""
 	}
 
