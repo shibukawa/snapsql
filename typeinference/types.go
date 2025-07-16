@@ -159,7 +159,9 @@ func NewTypeInferenceEngine2(
 	// Create subquery resolver if subquery information is available
 	var subqueryResolver *SubqueryTypeResolver
 	if subqueryInfo != nil && subqueryInfo.HasSubqueries {
-		subqueryResolver = NewSubqueryTypeResolver(schemaResolver, statementNode, dialect)
+		// Use enhanced subquery resolver for complete type inference
+		enhancedResolver := NewEnhancedSubqueryResolver(schemaResolver, statementNode, dialect)
+		subqueryResolver = enhancedResolver.SubqueryTypeResolver
 	}
 
 	engine := &TypeInferenceEngine2{
@@ -177,6 +179,17 @@ func NewTypeInferenceEngine2(
 	engine.dmlEngine = NewDMLInferenceEngine(engine)
 
 	return engine
+}
+
+// getEnhancedSubqueryResolver returns enhanced subquery resolver if available
+func (e *TypeInferenceEngine2) getEnhancedSubqueryResolver() (*EnhancedSubqueryResolver, bool) {
+	// This is a design choice: we could store enhanced resolver separately
+	// For now, we create it on demand
+	if e.statementNode != nil && e.statementNode.HasSubqueryAnalysis() {
+		enhancedResolver := NewEnhancedSubqueryResolver(e.schemaResolver, e.statementNode, e.context.Dialect)
+		return enhancedResolver, true
+	}
+	return nil, false
 }
 
 // functionFieldNameMappings returns mappings from function names to field names
@@ -227,9 +240,22 @@ func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) 
 
 	// Phase 5: Resolve subquery types first (if subquery resolver is available)
 	if e.subqueryResolver != nil {
-		if err := e.subqueryResolver.ResolveSubqueryTypes(); err != nil {
-			// Don't fail completely - log warning and continue with degraded mode
-			fmt.Printf("Warning: subquery type resolution failed: %v\n", err)
+		// Use enhanced resolution if available
+		if enhancedResolver, ok := e.getEnhancedSubqueryResolver(); ok {
+			if err := enhancedResolver.ResolveSubqueryTypesComplete(); err != nil {
+				// Don't fail completely - log warning and continue with degraded mode
+				fmt.Printf("Warning: enhanced subquery type resolution failed: %v\n", err)
+				// Fallback to basic resolution
+				if err := e.subqueryResolver.ResolveSubqueryTypes(); err != nil {
+					fmt.Printf("Warning: fallback subquery type resolution failed: %v\n", err)
+				}
+			}
+		} else {
+			// Use basic subquery resolution
+			if err := e.subqueryResolver.ResolveSubqueryTypes(); err != nil {
+				// Don't fail completely - log warning and continue with degraded mode
+				fmt.Printf("Warning: subquery type resolution failed: %v\n", err)
+			}
 		}
 	}
 
