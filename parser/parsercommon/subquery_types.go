@@ -8,34 +8,6 @@ import (
 
 // SQ (SubQuery) prefixed types from parserstep7 for better type organization
 
-// SQParseResult represents the result of parserstep7 parsing
-type SQParseResult struct {
-	Statement       StatementNode      // Parsed SQL statement
-	FunctionDef     interface{}        // Function definition (interface{} for flexibility)
-	DependencyGraph *SQDependencyGraph // Original dependency graph
-	ProcessingOrder []string           // Recommended processing order
-	HasErrors       bool               // Whether errors occurred
-	Errors          []*SQParseError    // List of errors
-}
-
-// String returns a summary of the parse result
-func (pr *SQParseResult) String() string {
-	if pr.HasErrors {
-		return "SQParseResult: Has errors"
-	}
-
-	nodeCount := len(pr.DependencyGraph.GetAllNodes())
-	return fmt.Sprintf("SQParseResult: %d nodes, %d processing steps", nodeCount, len(pr.ProcessingOrder))
-}
-
-// GetFieldSourcesForNode returns all field sources available to a specific node
-func (pr *SQParseResult) GetFieldSourcesForNode(nodeID string) ([]*SQFieldSource, error) {
-	if pr.DependencyGraph == nil {
-		return nil, ErrNoDependencyGraph
-	}
-	return pr.DependencyGraph.GetAccessibleFieldsForNode(nodeID)
-}
-
 // SQDependencyGraph manages dependencies between subqueries
 type SQDependencyGraph struct {
 	nodes        map[string]*SQDependencyNode

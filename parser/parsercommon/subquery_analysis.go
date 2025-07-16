@@ -1,16 +1,16 @@
 package parsercommon
 
 // SubqueryAnalysisResult contains subquery analysis information from parserstep7
-// This provides a public interface to parserstep7 functionality without exposing internal types
+// This provides a public interface to parserstep7 functionality with typed field access
 type SubqueryAnalysisResult struct {
-	HasSubqueries    bool                   // Whether the statement contains subqueries
-	SubqueryTables   []string               // List of available subquery table names
-	FieldSources     map[string]interface{} // Field source information (opaque interface)
-	TableReferences  map[string]interface{} // Table reference information (opaque interface)
-	DependencyInfo   interface{}            // Dependency graph information (opaque interface)
-	ProcessingOrder  []string               // Recommended processing order for subqueries
-	ValidationErrors []ValidationError      // Validation errors from subquery analysis
-	HasErrors        bool                   // Whether analysis had errors
+	HasSubqueries    bool                         // Whether the statement contains subqueries
+	SubqueryTables   []string                     // List of available subquery table names
+	FieldSources     map[string]*SQFieldSource    // Field source information
+	TableReferences  map[string]*SQTableReference // Table reference information
+	DependencyInfo   *SQDependencyGraph           // Dependency graph information
+	ProcessingOrder  []string                     // Recommended processing order for subqueries
+	ValidationErrors []ValidationError            // Validation errors from subquery analysis
+	HasErrors        bool                         // Whether analysis had errors
 }
 
 // ValidationError represents a validation error from subquery analysis

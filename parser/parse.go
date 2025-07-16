@@ -68,7 +68,6 @@ type (
 	// Subquery analysis types
 	SubqueryAnalysisResult = cmn.SubqueryAnalysisResult
 	ValidationError        = cmn.ValidationError
-	SQParseResult          = cmn.SQParseResult
 	SQDependencyGraph      = cmn.SQDependencyGraph
 	SQFieldSource          = cmn.SQFieldSource
 	SQTableReference       = cmn.SQTableReference
@@ -246,7 +245,7 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 	// Step 7: Run parserstep7 - Subquery dependency analysis (optional)
 	if options.EnableSubqueryAnalysis {
 		subqueryParser := parserstep7.NewSubqueryParserIntegrated()
-		_, subErr := subqueryParser.ParseStatement(stmt, functionDef)
+		subErr := subqueryParser.ParseStatement(stmt, functionDef)
 
 		if subErr != nil {
 			// Don't fail the entire parse for subquery analysis errors
@@ -256,38 +255,4 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 	}
 
 	return stmt, nil
-}
-
-// ParseExtended parses tokens with extended subquery analysis and returns detailed results
-// This function provides access to parserstep7 subquery analysis results
-func ParseExtended(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *ParseOptions) (*SQParseResult, error) {
-	if options == nil {
-		options = &ParseOptions{}
-	}
-
-	// Enable subquery analysis for extended parsing
-	extendedOptions := *options
-	extendedOptions.EnableSubqueryAnalysis = true
-
-	// Parse the statement normally
-	stmt, err := Parse(tokens, functionDef, &extendedOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	// Run parserstep7 and return its results
-	subqueryParser := parserstep7.NewSubqueryParserIntegrated()
-	result, subErr := subqueryParser.ParseStatement(stmt, functionDef)
-
-	if subErr != nil {
-		// Return error result with error information
-		return &SQParseResult{
-			DependencyGraph: nil,
-			ProcessingOrder: nil,
-			HasErrors:       true,
-			Errors:          nil, // Could convert subErr to SQParseError if needed
-		}, subErr
-	}
-
-	return result, nil
 }

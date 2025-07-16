@@ -11,7 +11,7 @@ import (
 // SubqueryTypeResolver handles type inference for subqueries using parserstep7 results
 type SubqueryTypeResolver struct {
 	schemaResolver *SchemaResolver
-	parseResult    *parser.SQParseResult
+	statementNode  parser.StatementNode
 	dialect        snapsql.Dialect
 	typeCache      map[string][]*InferredFieldInfo // Cache subquery field types by dependency node ID
 }
@@ -19,28 +19,12 @@ type SubqueryTypeResolver struct {
 // NewSubqueryTypeResolver creates a new subquery type resolver
 func NewSubqueryTypeResolver(
 	schemaResolver *SchemaResolver,
-	parseResult *parser.SQParseResult,
+	statementNode parser.StatementNode,
 	dialect snapsql.Dialect,
 ) *SubqueryTypeResolver {
 	return &SubqueryTypeResolver{
 		schemaResolver: schemaResolver,
-		parseResult:    parseResult,
-		dialect:        dialect,
-		typeCache:      make(map[string][]*InferredFieldInfo),
-	}
-}
-
-// NewSubqueryTypeResolverFromAnalysis creates a new subquery type resolver from SubqueryAnalysisResult
-func NewSubqueryTypeResolverFromAnalysis(
-	schemaResolver *SchemaResolver,
-	subqueryInfo *SubqueryAnalysisResult,
-	dialect snapsql.Dialect,
-) *SubqueryTypeResolver {
-	// For now, create a minimal resolver without full ParseResult
-	// This is a simplified implementation that works with available SubqueryAnalysisResult data
-	return &SubqueryTypeResolver{
-		schemaResolver: schemaResolver,
-		parseResult:    nil, // Will need to be handled safely in methods
+		statementNode:  statementNode,
 		dialect:        dialect,
 		typeCache:      make(map[string][]*InferredFieldInfo),
 	}
@@ -48,13 +32,13 @@ func NewSubqueryTypeResolverFromAnalysis(
 
 // ResolveSubqueryTypes resolves types for all subqueries in dependency order
 func (r *SubqueryTypeResolver) ResolveSubqueryTypes() error {
-	if r.parseResult == nil {
-		// Simplified implementation without ParseResult - no subqueries to resolve
+	if r.statementNode == nil {
+		// Simplified implementation without StatementNode - no subqueries to resolve
 		return nil
 	}
 
-	// Get processing order from dependency graph
-	processingOrder := r.parseResult.ProcessingOrder
+	// Get processing order from StatementNode
+	processingOrder := r.statementNode.GetProcessingOrder()
 	if len(processingOrder) == 0 {
 		// No subqueries to process
 		return nil
@@ -72,8 +56,8 @@ func (r *SubqueryTypeResolver) ResolveSubqueryTypes() error {
 
 // resolveSubqueryNodeTypes resolves types for a specific subquery node
 func (r *SubqueryTypeResolver) resolveSubqueryNodeTypes(nodeID string) error {
-	// Get dependency node information
-	dependencyGraph := r.parseResult.DependencyGraph
+	// Get dependency node information from StatementNode
+	dependencyGraph := r.statementNode.GetSubqueryDependencies()
 	if dependencyGraph == nil {
 		return fmt.Errorf("dependency graph not available")
 	}
@@ -118,7 +102,6 @@ func (r *SubqueryTypeResolver) createSubEngine(node *parser.SQDependencyNode) *T
 		databaseSchemas: r.schemaResolver.schemas,
 		schemaResolver:  r.schemaResolver,
 		statementNode:   node.Statement,
-		subqueryInfo:    nil, // No nested subquery analysis for sub-engines
 		context:         context,
 		fieldNameGen:    NewFieldNameGenerator(),
 		enhancedGen:     NewEnhancedFieldNameGenerator(),
@@ -141,7 +124,7 @@ func (r *SubqueryTypeResolver) extractAvailableTablesFromScope(node *parser.SQDe
 
 	// Add tables from dependent subqueries (available in scope)
 	for _, depID := range node.Dependencies {
-		if depNode := r.parseResult.DependencyGraph.GetNode(depID); depNode != nil {
+		if depNode := r.statementNode.GetSubqueryDependencies().GetNode(depID); depNode != nil {
 			// For CTE, add the CTE name as available table
 			if depNode.NodeType == parser.DependencyCTE {
 				// Extract CTE name from node ID (format: "cte_<name>")
@@ -175,7 +158,7 @@ func (r *SubqueryTypeResolver) calculateDepthRecursive(nodeID string, visited ma
 	maxDepth := currentDepth
 
 	// Check dependencies for deeper nesting
-	if node := r.parseResult.DependencyGraph.GetNode(nodeID); node != nil {
+	if node := r.statementNode.GetSubqueryDependencies().GetNode(nodeID); node != nil {
 		for _, depID := range node.Dependencies {
 			depDepth := r.calculateDepthRecursive(depID, visited, currentDepth+1)
 			if depDepth > maxDepth {
@@ -197,11 +180,11 @@ func (r *SubqueryTypeResolver) GetSubqueryFieldTypes(nodeID string) ([]*Inferred
 func (r *SubqueryTypeResolver) GetAvailableSubqueryTables() []string {
 	var tables []string
 
-	if r.parseResult == nil {
+	if r.statementNode == nil {
 		return tables
 	}
 
-	dependencyGraph := r.parseResult.DependencyGraph
+	dependencyGraph := r.statementNode.GetSubqueryDependencies()
 	if dependencyGraph == nil {
 		return tables
 	}
@@ -226,11 +209,11 @@ func (r *SubqueryTypeResolver) GetAvailableSubqueryTables() []string {
 func (r *SubqueryTypeResolver) ValidateSubqueryReferences() []ValidationError {
 	var errors []ValidationError
 
-	if r.parseResult == nil {
+	if r.statementNode == nil {
 		return errors
 	}
 
-	dependencyGraph := r.parseResult.DependencyGraph
+	dependencyGraph := r.statementNode.GetSubqueryDependencies()
 	if dependencyGraph == nil {
 		return errors
 	}

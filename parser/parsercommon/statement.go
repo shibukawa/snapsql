@@ -18,9 +18,7 @@ type StatementNode interface {
 	GetFieldSources() map[string]*SQFieldSource
 	GetTableReferences() map[string]*SQTableReference
 	GetSubqueryDependencies() *SQDependencyGraph
-	SetFieldSources(map[string]*SQFieldSource)
-	SetTableReferences(map[string]*SQTableReference)
-	SetSubqueryDependencies(*SQDependencyGraph)
+	GetProcessingOrder() []string
 
 	// Convenience methods for field and table lookup
 	FindFieldReference(tableOrAlias, fieldOrReference string) *SQFieldSource
@@ -28,7 +26,6 @@ type StatementNode interface {
 
 	// Subquery analysis information access
 	GetSubqueryAnalysis() *SubqueryAnalysisResult
-	SetSubqueryAnalysis(*SubqueryAnalysisResult)
 	HasSubqueryAnalysis() bool
 }
 
@@ -41,6 +38,7 @@ type baseStatement struct {
 	fieldSources         map[string]*SQFieldSource
 	tableReferences      map[string]*SQTableReference
 	subqueryDependencies *SQDependencyGraph
+	processingOrder      []string                // Processing order for subqueries
 	subqueryAnalysis     *SubqueryAnalysisResult // Subquery analysis information
 }
 
@@ -65,29 +63,14 @@ func (bs *baseStatement) GetSubqueryDependencies() *SQDependencyGraph {
 	return bs.subqueryDependencies
 }
 
-// SetFieldSources implements StatementNode
-func (bs *baseStatement) SetFieldSources(sources map[string]*SQFieldSource) {
-	bs.fieldSources = sources
-}
-
-// SetTableReferences implements StatementNode
-func (bs *baseStatement) SetTableReferences(refs map[string]*SQTableReference) {
-	bs.tableReferences = refs
-}
-
-// SetSubqueryDependencies implements StatementNode
-func (bs *baseStatement) SetSubqueryDependencies(deps *SQDependencyGraph) {
-	bs.subqueryDependencies = deps
+// GetProcessingOrder implements StatementNode
+func (bs *baseStatement) GetProcessingOrder() []string {
+	return bs.processingOrder
 }
 
 // GetSubqueryAnalysis implements StatementNode
 func (bs *baseStatement) GetSubqueryAnalysis() *SubqueryAnalysisResult {
 	return bs.subqueryAnalysis
-}
-
-// SetSubqueryAnalysis implements StatementNode
-func (bs *baseStatement) SetSubqueryAnalysis(analysis *SubqueryAnalysisResult) {
-	bs.subqueryAnalysis = analysis
 }
 
 // HasSubqueryAnalysis implements StatementNode
@@ -365,3 +348,70 @@ func (n *DeleteFromStatement) CTE() *WithClause {
 }
 
 var _ StatementNode = (*DeleteFromStatement)(nil)
+
+// External setter functions for StatementNode
+
+// SetFieldSources sets field sources for a statement
+func SetFieldSources(stmt StatementNode, sources map[string]*SQFieldSource) {
+	if bs, ok := stmt.(*SelectStatement); ok {
+		bs.fieldSources = sources
+	} else if bs, ok := stmt.(*InsertIntoStatement); ok {
+		bs.fieldSources = sources
+	} else if bs, ok := stmt.(*UpdateStatement); ok {
+		bs.fieldSources = sources
+	} else if bs, ok := stmt.(*DeleteFromStatement); ok {
+		bs.fieldSources = sources
+	}
+}
+
+// SetTableReferences sets table references for a statement
+func SetTableReferences(stmt StatementNode, refs map[string]*SQTableReference) {
+	if bs, ok := stmt.(*SelectStatement); ok {
+		bs.tableReferences = refs
+	} else if bs, ok := stmt.(*InsertIntoStatement); ok {
+		bs.tableReferences = refs
+	} else if bs, ok := stmt.(*UpdateStatement); ok {
+		bs.tableReferences = refs
+	} else if bs, ok := stmt.(*DeleteFromStatement); ok {
+		bs.tableReferences = refs
+	}
+}
+
+// SetSubqueryDependencies sets subquery dependencies for a statement
+func SetSubqueryDependencies(stmt StatementNode, deps *SQDependencyGraph) {
+	if bs, ok := stmt.(*SelectStatement); ok {
+		bs.subqueryDependencies = deps
+	} else if bs, ok := stmt.(*InsertIntoStatement); ok {
+		bs.subqueryDependencies = deps
+	} else if bs, ok := stmt.(*UpdateStatement); ok {
+		bs.subqueryDependencies = deps
+	} else if bs, ok := stmt.(*DeleteFromStatement); ok {
+		bs.subqueryDependencies = deps
+	}
+}
+
+// SetProcessingOrder sets processing order for a statement
+func SetProcessingOrder(stmt StatementNode, order []string) {
+	if bs, ok := stmt.(*SelectStatement); ok {
+		bs.processingOrder = order
+	} else if bs, ok := stmt.(*InsertIntoStatement); ok {
+		bs.processingOrder = order
+	} else if bs, ok := stmt.(*UpdateStatement); ok {
+		bs.processingOrder = order
+	} else if bs, ok := stmt.(*DeleteFromStatement); ok {
+		bs.processingOrder = order
+	}
+}
+
+// SetSubqueryAnalysis sets subquery analysis for a statement
+func SetSubqueryAnalysis(stmt StatementNode, analysis *SubqueryAnalysisResult) {
+	if bs, ok := stmt.(*SelectStatement); ok {
+		bs.subqueryAnalysis = analysis
+	} else if bs, ok := stmt.(*InsertIntoStatement); ok {
+		bs.subqueryAnalysis = analysis
+	} else if bs, ok := stmt.(*UpdateStatement); ok {
+		bs.subqueryAnalysis = analysis
+	} else if bs, ok := stmt.(*DeleteFromStatement); ok {
+		bs.subqueryAnalysis = analysis
+	}
+}

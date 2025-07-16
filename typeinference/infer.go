@@ -65,14 +65,8 @@ func InferFieldTypes(
 		return nil, ErrInvalidStatement
 	}
 
-	// Extract subquery analysis from statement node
-	var subqueryInfo *SubqueryAnalysisResult
-	if statementNode.HasSubqueryAnalysis() {
-		subqueryInfo = statementNode.GetSubqueryAnalysis()
-	}
-
 	// Create type inference engine
-	engine := NewTypeInferenceEngine2(databaseSchemas, statementNode, subqueryInfo)
+	engine := NewTypeInferenceEngine2(databaseSchemas, statementNode)
 
 	// Apply options if provided
 	if options != nil {

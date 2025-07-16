@@ -111,7 +111,6 @@ type TypeInferenceEngine2 struct {
 	databaseSchemas  []snapsql.DatabaseSchema        // Database schemas from pull functionality
 	schemaResolver   *SchemaResolver                 // Schema resolver for type lookup
 	statementNode    StatementNode                   // Parsed SQL AST
-	subqueryInfo     *SubqueryAnalysisResult         // Subquery information from StatementNode
 	subqueryResolver *SubqueryTypeResolver           // Subquery type resolver (Phase 5)
 	dmlEngine        *DMLInferenceEngine             // DML inference engine (Phase 6)
 	context          *InferenceContext               // Inference context
@@ -120,17 +119,23 @@ type TypeInferenceEngine2 struct {
 	typeCache        map[string][]*InferredFieldInfo // Type inference cache
 }
 
-// NewTypeInferenceEngine2 creates a new type inference engine
+// NewTypeInferenceEngine2 creates a new type inference engine.
+// Subquery analysis information is automatically extracted from the StatementNode.
 func NewTypeInferenceEngine2(
 	databaseSchemas []snapsql.DatabaseSchema,
 	statementNode StatementNode,
-	subqueryInfo *SubqueryAnalysisResult,
 ) *TypeInferenceEngine2 {
+	// Extract subquery analysis from statement node
+	var subqueryInfo *SubqueryAnalysisResult
+	if statementNode != nil && statementNode.HasSubqueryAnalysis() {
+		subqueryInfo = statementNode.GetSubqueryAnalysis()
+	}
+
 	// Create schema resolver from database schemas
 	schemaResolver := NewSchemaResolver(databaseSchemas)
 
 	// Determine dialect from first schema (if available)
-	var dialect snapsql.Dialect = snapsql.DialectPostgres // default
+	dialect := snapsql.DialectPostgres // default
 	if len(databaseSchemas) > 0 {
 		switch databaseSchemas[0].DatabaseInfo.Type {
 		case "postgres", "postgresql":
@@ -154,14 +159,13 @@ func NewTypeInferenceEngine2(
 	// Create subquery resolver if subquery information is available
 	var subqueryResolver *SubqueryTypeResolver
 	if subqueryInfo != nil && subqueryInfo.HasSubqueries {
-		subqueryResolver = NewSubqueryTypeResolverFromAnalysis(schemaResolver, subqueryInfo, dialect)
+		subqueryResolver = NewSubqueryTypeResolver(schemaResolver, statementNode, dialect)
 	}
 
 	engine := &TypeInferenceEngine2{
 		databaseSchemas:  databaseSchemas,
 		schemaResolver:   schemaResolver,
 		statementNode:    statementNode,
-		subqueryInfo:     subqueryInfo,
 		subqueryResolver: subqueryResolver,
 		context:          context,
 		fieldNameGen:     NewFieldNameGenerator(),

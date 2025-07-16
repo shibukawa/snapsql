@@ -34,23 +34,23 @@ func NewSubqueryParserIntegrated() *SubqueryParserIntegrated {
 
 // ParseStatement parses a statement and extracts all subquery dependencies
 // This method stores the results directly in the StatementNode for easy access
-func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, functionDef interface{}) (*cmn.SQParseResult, error) {
+func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, functionDef interface{}) error {
 	spi.errorHandler.Clear()
 
 	if stmt == nil {
-		return nil, ErrInvalidStatement
+		return ErrInvalidStatement
 	}
 
 	// 1. Extract subqueries and build dependency graph
 	if err := spi.integrator.ExtractSubqueries(stmt); err != nil {
 		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
-		return nil, err
+		return err
 	}
 
 	// 2. Build field sources
 	if err := spi.integrator.BuildFieldSources(); err != nil {
 		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
-		return nil, err
+		return err
 	}
 
 	// 3. Get dependency graph
@@ -59,18 +59,14 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 	// 4. Check for circular dependencies
 	if cmn.HasCircularDependencyInGraph(graph) {
 		spi.errorHandler.AddError(ErrorTypeCircularDependency, "circular dependencies detected", Position{})
-		return &cmn.SQParseResult{
-			DependencyGraph: graph,
-			HasErrors:       true,
-			Errors:          spi.errorHandler.GetErrors(),
-		}, ErrCircularDependency
+		return ErrCircularDependency
 	}
 
 	// 6. Get processing order
 	order, err := cmn.GetProcessingOrderFromGraph(graph)
 	if err != nil {
 		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
-		return nil, err
+		return err
 	}
 
 	// 7. Store results directly in the StatementNode
@@ -93,18 +89,12 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 	}
 
 	// Store in StatementNode
-	stmt.SetFieldSources(fieldSources)
-	stmt.SetTableReferences(tableReferences)
-	stmt.SetSubqueryDependencies(graph)
+	cmn.SetFieldSources(stmt, fieldSources)
+	cmn.SetTableReferences(stmt, tableReferences)
+	cmn.SetSubqueryDependencies(stmt, graph)
+	cmn.SetProcessingOrder(stmt, order)
 
-	return &cmn.SQParseResult{
-		Statement:       stmt,
-		FunctionDef:     functionDef,
-		DependencyGraph: graph,
-		ProcessingOrder: order,
-		HasErrors:       spi.errorHandler.HasErrors(),
-		Errors:          spi.errorHandler.GetErrors(),
-	}, nil
+	return nil
 }
 
 // GetDependencyVisualization returns a basic text visualization of the dependency graph

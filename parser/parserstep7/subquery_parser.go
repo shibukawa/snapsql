@@ -177,9 +177,9 @@ func (sp *SubqueryParser) buildFieldSources(stmt cmn.StatementNode) error {
 		interfaceTableReferences[k] = v
 	}
 
-	stmt.SetFieldSources(interfaceFieldSources)
-	stmt.SetTableReferences(interfaceTableReferences)
-	stmt.SetSubqueryDependencies(sp.dependencies)
+	cmn.SetFieldSources(stmt, interfaceFieldSources)
+	cmn.SetTableReferences(stmt, interfaceTableReferences)
+	cmn.SetSubqueryDependencies(stmt, sp.dependencies)
 
 	return nil
 }
