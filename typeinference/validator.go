@@ -1,4 +1,4 @@
-package typeinference2
+package typeinference
 
 import (
 	"fmt"
