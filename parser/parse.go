@@ -79,12 +79,6 @@ type (
 	SQErrorType            = cmn.SQErrorType
 	SQParseError           = cmn.SQParseError
 
-	// parserstep7 type aliases for backward compatibility
-	ParseResult     = cmn.SQParseResult
-	DependencyGraph = cmn.SQDependencyGraph
-	DependencyNode  = cmn.SQDependencyNode
-	DependencyType  = cmn.SQDependencyType
-
 	// Node type constants
 	NodeType = cmn.NodeType
 )

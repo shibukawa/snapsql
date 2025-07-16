@@ -4,10 +4,7 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// Forward declarations for parserstep7 types to avoid circular imports
-type FieldSourceInterface interface{}
-type TableReferenceInterface interface{}
-type DependencyGraphInterface interface{}
+// Types from parserstep7 now available in parsercommon
 
 // DML Statement structures
 
@@ -18,16 +15,16 @@ type StatementNode interface {
 	Clauses() []ClauseNode            // Returns clauses in the block
 
 	// New methods for parserstep7 field source information
-	GetFieldSources() map[string]FieldSourceInterface
-	GetTableReferences() map[string]TableReferenceInterface
-	GetSubqueryDependencies() DependencyGraphInterface
-	SetFieldSources(map[string]FieldSourceInterface)
-	SetTableReferences(map[string]TableReferenceInterface)
-	SetSubqueryDependencies(DependencyGraphInterface)
+	GetFieldSources() map[string]*SQFieldSource
+	GetTableReferences() map[string]*SQTableReference
+	GetSubqueryDependencies() *SQDependencyGraph
+	SetFieldSources(map[string]*SQFieldSource)
+	SetTableReferences(map[string]*SQTableReference)
+	SetSubqueryDependencies(*SQDependencyGraph)
 
 	// Convenience methods for field and table lookup
-	FindFieldReference(tableOrAlias, fieldOrReference string) FieldSourceInterface
-	FindTableReference(tableOrAlias string) TableReferenceInterface
+	FindFieldReference(tableOrAlias, fieldOrReference string) *SQFieldSource
+	FindTableReference(tableOrAlias string) *SQTableReference
 
 	// Subquery analysis information access
 	GetSubqueryAnalysis() *SubqueryAnalysisResult
@@ -41,45 +38,45 @@ type baseStatement struct {
 	clauses       []ClauseNode      // All clauses in the statement
 
 	// New fields for parserstep7
-	fieldSources         map[string]FieldSourceInterface
-	tableReferences      map[string]TableReferenceInterface
-	subqueryDependencies DependencyGraphInterface
+	fieldSources         map[string]*SQFieldSource
+	tableReferences      map[string]*SQTableReference
+	subqueryDependencies *SQDependencyGraph
 	subqueryAnalysis     *SubqueryAnalysisResult // Subquery analysis information
 }
 
 // GetFieldSources implements StatementNode
-func (bs *baseStatement) GetFieldSources() map[string]FieldSourceInterface {
+func (bs *baseStatement) GetFieldSources() map[string]*SQFieldSource {
 	if bs.fieldSources == nil {
-		bs.fieldSources = make(map[string]FieldSourceInterface)
+		bs.fieldSources = make(map[string]*SQFieldSource)
 	}
 	return bs.fieldSources
 }
 
 // GetTableReferences implements StatementNode
-func (bs *baseStatement) GetTableReferences() map[string]TableReferenceInterface {
+func (bs *baseStatement) GetTableReferences() map[string]*SQTableReference {
 	if bs.tableReferences == nil {
-		bs.tableReferences = make(map[string]TableReferenceInterface)
+		bs.tableReferences = make(map[string]*SQTableReference)
 	}
 	return bs.tableReferences
 }
 
 // GetSubqueryDependencies implements StatementNode
-func (bs *baseStatement) GetSubqueryDependencies() DependencyGraphInterface {
+func (bs *baseStatement) GetSubqueryDependencies() *SQDependencyGraph {
 	return bs.subqueryDependencies
 }
 
 // SetFieldSources implements StatementNode
-func (bs *baseStatement) SetFieldSources(sources map[string]FieldSourceInterface) {
+func (bs *baseStatement) SetFieldSources(sources map[string]*SQFieldSource) {
 	bs.fieldSources = sources
 }
 
 // SetTableReferences implements StatementNode
-func (bs *baseStatement) SetTableReferences(refs map[string]TableReferenceInterface) {
+func (bs *baseStatement) SetTableReferences(refs map[string]*SQTableReference) {
 	bs.tableReferences = refs
 }
 
 // SetSubqueryDependencies implements StatementNode
-func (bs *baseStatement) SetSubqueryDependencies(deps DependencyGraphInterface) {
+func (bs *baseStatement) SetSubqueryDependencies(deps *SQDependencyGraph) {
 	bs.subqueryDependencies = deps
 }
 
@@ -99,7 +96,7 @@ func (bs *baseStatement) HasSubqueryAnalysis() bool {
 }
 
 // FindFieldReference implements StatementNode
-func (bs *baseStatement) FindFieldReference(tableOrAlias, fieldOrReference string) FieldSourceInterface {
+func (bs *baseStatement) FindFieldReference(tableOrAlias, fieldOrReference string) *SQFieldSource {
 	// First try direct field lookup
 	if source, exists := bs.fieldSources[fieldOrReference]; exists {
 		return source
@@ -122,7 +119,7 @@ func (bs *baseStatement) FindFieldReference(tableOrAlias, fieldOrReference strin
 }
 
 // FindTableReference implements StatementNode
-func (bs *baseStatement) FindTableReference(tableOrAlias string) TableReferenceInterface {
+func (bs *baseStatement) FindTableReference(tableOrAlias string) *SQTableReference {
 	if ref, exists := bs.tableReferences[tableOrAlias]; exists {
 		return ref
 	}

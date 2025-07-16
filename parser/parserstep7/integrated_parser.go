@@ -74,8 +74,8 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 	}
 
 	// 7. Store results directly in the StatementNode
-	fieldSources := make(map[string]cmn.FieldSourceInterface)
-	tableReferences := make(map[string]cmn.TableReferenceInterface)
+	fieldSources := make(map[string]*cmn.SQFieldSource)
+	tableReferences := make(map[string]*cmn.SQTableReference)
 
 	// Convert and store field sources from dependency graph nodes
 	allNodes := cmn.GetDependencyNodes(graph)
@@ -83,19 +83,19 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 		for i, fs := range node.FieldSources {
 			// Use node ID and field index as key since FieldSource doesn't have ID
 			key := fmt.Sprintf("%s_field_%d", nodeID, i)
-			fieldSources[key] = cmn.FieldSourceInterface(fs)
+			fieldSources[key] = fs
 		}
 		for i, tr := range node.TableRefs {
 			// Use node ID and table index as key since TableReference doesn't have ID
 			key := fmt.Sprintf("%s_table_%d", nodeID, i)
-			tableReferences[key] = cmn.TableReferenceInterface(tr)
+			tableReferences[key] = tr
 		}
 	}
 
 	// Store in StatementNode
 	stmt.SetFieldSources(fieldSources)
 	stmt.SetTableReferences(tableReferences)
-	stmt.SetSubqueryDependencies(cmn.DependencyGraphInterface(graph))
+	stmt.SetSubqueryDependencies(graph)
 
 	return &cmn.SQParseResult{
 		Statement:       stmt,

@@ -167,12 +167,12 @@ func (sp *SubqueryParser) buildFieldSources(stmt cmn.StatementNode) error {
 	}
 
 	// 3. Convert to interface{} types and set results in StatementNode
-	interfaceFieldSources := make(map[string]cmn.FieldSourceInterface)
+	interfaceFieldSources := make(map[string]*cmn.SQFieldSource)
 	for k, v := range fieldSources {
 		interfaceFieldSources[k] = v
 	}
 
-	interfaceTableReferences := make(map[string]cmn.TableReferenceInterface)
+	interfaceTableReferences := make(map[string]*cmn.SQTableReference)
 	for k, v := range tableReferences {
 		interfaceTableReferences[k] = v
 	}
