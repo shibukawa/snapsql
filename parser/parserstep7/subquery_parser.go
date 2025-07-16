@@ -9,7 +9,7 @@ import (
 // SubqueryParser handles subquery parsing and dependency resolution
 type SubqueryParser struct {
 	idGenerator  *IDGenerator
-	dependencies *DependencyGraph
+	dependencies *cmn.SQDependencyGraph
 }
 
 // NewSubqueryParser creates a new subquery parser
@@ -32,12 +32,12 @@ func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
 	}
 
 	// 3. Check for circular dependencies
-	if sp.dependencies.HasCircularDependency() {
+	if cmn.HasCircularDependencyInGraph(sp.dependencies) {
 		return ErrCircularDependency
 	}
 
 	// 4. Determine processing order (topological sort)
-	processingOrder, err := sp.dependencies.GetProcessingOrder()
+	processingOrder, err := cmn.GetProcessingOrderFromGraph(sp.dependencies)
 	if err != nil {
 		return err
 	}
@@ -60,10 +60,10 @@ func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
 // buildDependencyGraph builds the dependency graph for subqueries
 func (sp *SubqueryParser) buildDependencyGraph(stmt cmn.StatementNode) error {
 	mainID := sp.idGenerator.Generate("main")
-	mainNode := &DependencyNode{
+	mainNode := &cmn.SQDependencyNode{
 		ID:        mainID,
 		Statement: stmt,
-		NodeType:  DependencyMain,
+		NodeType:  cmn.SQDependencyMain,
 	}
 	sp.dependencies.AddNode(mainNode)
 
@@ -74,10 +74,10 @@ func (sp *SubqueryParser) buildDependencyGraph(stmt cmn.StatementNode) error {
 
 			// CTEDefinition.Select is AstNode, need to check if it's StatementNode
 			if cteStmt, ok := cteDef.Select.(cmn.StatementNode); ok {
-				cteNode := &DependencyNode{
+				cteNode := &cmn.SQDependencyNode{
 					ID:        cteID,
 					Statement: cteStmt,
-					NodeType:  DependencyCTE,
+					NodeType:  cmn.SQDependencyCTE,
 				}
 				sp.dependencies.AddNode(cteNode)
 

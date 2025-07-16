@@ -53,10 +53,10 @@ func (ai *ASTIntegrator) extractCTEDependencies(stmt cmn.StatementNode) error {
 
 	// Create main statement node
 	mainID := ai.parser.idGenerator.Generate("main")
-	mainNode := &DependencyNode{
+	mainNode := &cmn.SQDependencyNode{
 		ID:        mainID,
 		Statement: stmt,
-		NodeType:  DependencyMain,
+		NodeType:  cmn.SQDependencyMain,
 	}
 	ai.parser.dependencies.AddNode(mainNode)
 
@@ -67,10 +67,10 @@ func (ai *ASTIntegrator) extractCTEDependencies(stmt cmn.StatementNode) error {
 
 		// Create placeholder StatementNode for the CTE
 		// Note: Full implementation would parse cteDef.Select as StatementNode
-		cteNode := &DependencyNode{
+		cteNode := &cmn.SQDependencyNode{
 			ID:        cteID,
 			Statement: nil, // Placeholder for future CTE statement parsing
-			NodeType:  DependencyCTE,
+			NodeType:  cmn.SQDependencyCTE,
 		}
 		ai.parser.dependencies.AddNode(cteNode)
 
@@ -105,7 +105,7 @@ func (ai *ASTIntegrator) BuildFieldSources() error {
 }
 
 // buildNodeFieldSources builds field source information for a single node
-func (ai *ASTIntegrator) buildNodeFieldSources(node *DependencyNode) error {
+func (ai *ASTIntegrator) buildNodeFieldSources(node *cmn.SQDependencyNode) error {
 	if node.Statement == nil {
 		return nil // Skip nodes without statements (e.g., CTE placeholders)
 	}
@@ -136,11 +136,11 @@ func (ai *ASTIntegrator) buildNodeFieldSources(node *DependencyNode) error {
 }
 
 // GetDependencyGraph returns the built dependency graph
-func (ai *ASTIntegrator) GetDependencyGraph() *DependencyGraph {
+func (ai *ASTIntegrator) GetDependencyGraph() *cmn.SQDependencyGraph {
 	return ai.parser.dependencies
 }
 
 // GetErrors returns any errors encountered during processing
-func (ai *ASTIntegrator) GetErrors() []*ParseError {
+func (ai *ASTIntegrator) GetErrors() []*cmn.SQParseError {
 	return ai.errorHandler.GetErrors()
 }

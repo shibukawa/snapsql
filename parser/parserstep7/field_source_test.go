@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 func TestSourceType_String(t *testing.T) {
@@ -37,7 +38,7 @@ func TestTableReference_GetField(t *testing.T) {
 }
 
 func TestDependencyType_String(t *testing.T) {
-	assert.Equal(t, "CTE", DependencyCTE.String())
-	assert.Equal(t, "Subquery", DependencySubquery.String())
-	assert.Equal(t, "Main", DependencyMain.String())
+	assert.Equal(t, "CTE", cmn.SQDependencyCTE.String())
+	assert.Equal(t, "Subquery", cmn.SQDependencySubquery.String())
+	assert.Equal(t, "Main", cmn.SQDependencyMain.String())
 }

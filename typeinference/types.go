@@ -111,7 +111,7 @@ type TypeInferenceEngine2 struct {
 	databaseSchemas  []snapsql.DatabaseSchema        // Database schemas from pull functionality
 	schemaResolver   *SchemaResolver                 // Schema resolver for type lookup
 	statementNode    StatementNode                   // Parsed SQL AST
-	subqueryInfo     *SubqueryAnalysisInfo           // Subquery information from StatementNode
+	subqueryInfo     *SubqueryAnalysisResult         // Subquery information from StatementNode
 	subqueryResolver *SubqueryTypeResolver           // Subquery type resolver (Phase 5)
 	dmlEngine        *DMLInferenceEngine             // DML inference engine (Phase 6)
 	context          *InferenceContext               // Inference context
@@ -124,7 +124,7 @@ type TypeInferenceEngine2 struct {
 func NewTypeInferenceEngine2(
 	databaseSchemas []snapsql.DatabaseSchema,
 	statementNode StatementNode,
-	subqueryInfo *SubqueryAnalysisInfo,
+	subqueryInfo *SubqueryAnalysisResult,
 ) *TypeInferenceEngine2 {
 	// Create schema resolver from database schemas
 	schemaResolver := NewSchemaResolver(databaseSchemas)
@@ -154,8 +154,7 @@ func NewTypeInferenceEngine2(
 	// Create subquery resolver if subquery information is available
 	var subqueryResolver *SubqueryTypeResolver
 	if subqueryInfo != nil && subqueryInfo.HasSubqueries {
-		// For now, disable subquery resolver until we implement SubqueryAnalysisInfo integration
-		// subqueryResolver = NewSubqueryTypeResolver(schemaResolver, subqueryInfo, dialect)
+		subqueryResolver = NewSubqueryTypeResolverFromAnalysis(schemaResolver, subqueryInfo, dialect)
 	}
 
 	engine := &TypeInferenceEngine2{

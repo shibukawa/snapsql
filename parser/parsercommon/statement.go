@@ -30,8 +30,8 @@ type StatementNode interface {
 	FindTableReference(tableOrAlias string) TableReferenceInterface
 
 	// Subquery analysis information access
-	GetSubqueryAnalysis() *SubqueryAnalysisInfo
-	SetSubqueryAnalysis(*SubqueryAnalysisInfo)
+	GetSubqueryAnalysis() *SubqueryAnalysisResult
+	SetSubqueryAnalysis(*SubqueryAnalysisResult)
 	HasSubqueryAnalysis() bool
 }
 
@@ -44,7 +44,7 @@ type baseStatement struct {
 	fieldSources         map[string]FieldSourceInterface
 	tableReferences      map[string]TableReferenceInterface
 	subqueryDependencies DependencyGraphInterface
-	subqueryAnalysis     *SubqueryAnalysisInfo // Subquery analysis information
+	subqueryAnalysis     *SubqueryAnalysisResult // Subquery analysis information
 }
 
 // GetFieldSources implements StatementNode
@@ -84,12 +84,12 @@ func (bs *baseStatement) SetSubqueryDependencies(deps DependencyGraphInterface) 
 }
 
 // GetSubqueryAnalysis implements StatementNode
-func (bs *baseStatement) GetSubqueryAnalysis() *SubqueryAnalysisInfo {
+func (bs *baseStatement) GetSubqueryAnalysis() *SubqueryAnalysisResult {
 	return bs.subqueryAnalysis
 }
 
 // SetSubqueryAnalysis implements StatementNode
-func (bs *baseStatement) SetSubqueryAnalysis(analysis *SubqueryAnalysisInfo) {
+func (bs *baseStatement) SetSubqueryAnalysis(analysis *SubqueryAnalysisResult) {
 	bs.subqueryAnalysis = analysis
 }
 

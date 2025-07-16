@@ -3,94 +3,27 @@ package parserstep7
 import (
 	"fmt"
 	"strings"
+
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
-// ErrorType represents the type of parsing error
-type ErrorType int
+// Type aliases for backward compatibility
+type (
+	ErrorType  = cmn.SQErrorType
+	Position   = cmn.SQPosition
+	ParseError = cmn.SQParseError
+)
 
+// Constants for error types
 const (
-	ErrorTypeUnknown ErrorType = iota
-	ErrorTypeCircularDependency
-	ErrorTypeUnresolvedReference
-	ErrorTypeInvalidSubquery
-	ErrorTypeScopeViolation
-	ErrorTypeTypeIncompatibility
-	ErrorTypeSyntaxError
+	ErrorTypeUnknown             = cmn.SQErrorTypeUnknown
+	ErrorTypeCircularDependency  = cmn.SQErrorTypeCircularDependency
+	ErrorTypeUnresolvedReference = cmn.SQErrorTypeUnresolvedReference
+	ErrorTypeInvalidSubquery     = cmn.SQErrorTypeInvalidSubquery
+	ErrorTypeScopeViolation      = cmn.SQErrorTypeScopeViolation
+	ErrorTypeTypeIncompatibility = cmn.SQErrorTypeTypeIncompatibility
+	ErrorTypeSyntaxError         = cmn.SQErrorTypeSyntaxError
 )
-
-// String returns the string representation of ErrorType
-func (et ErrorType) String() string {
-	switch et {
-	case ErrorTypeCircularDependency:
-		return "CircularDependency"
-	case ErrorTypeUnresolvedReference:
-		return "UnresolvedReference"
-	case ErrorTypeInvalidSubquery:
-		return "InvalidSubquery"
-	case ErrorTypeScopeViolation:
-		return "ScopeViolation"
-	case ErrorTypeTypeIncompatibility:
-		return "TypeIncompatibility"
-	case ErrorTypeSyntaxError:
-		return "SyntaxError"
-	default:
-		return "Unknown"
-	}
-}
-
-// Position represents a position in the source code
-type Position struct {
-	Line   int    // Line number (1-based)
-	Column int    // Column number (1-based)
-	Offset int    // Byte offset (0-based)
-	File   string // Source file name
-}
-
-// String returns a string representation of the position
-func (p Position) String() string {
-	if p.File != "" {
-		return fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
-	}
-	return fmt.Sprintf("%d:%d", p.Line, p.Column)
-}
-
-// ParseError represents a detailed parsing error
-type ParseError struct {
-	Type        ErrorType
-	Message     string
-	Position    Position
-	Context     string   // Surrounding context
-	Suggestions []string // Suggested fixes
-	RelatedIDs  []string // Related node/field IDs
-}
-
-// Error implements the error interface
-func (pe *ParseError) Error() string {
-	var sb strings.Builder
-
-	sb.WriteString(fmt.Sprintf("[%s] %s", pe.Type.String(), pe.Message))
-
-	if pe.Position.Line > 0 {
-		sb.WriteString(fmt.Sprintf(" at %s", pe.Position.String()))
-	}
-
-	if pe.Context != "" {
-		sb.WriteString(fmt.Sprintf("\nContext: %s", pe.Context))
-	}
-
-	if len(pe.Suggestions) > 0 {
-		sb.WriteString("\nSuggestions:")
-		for _, suggestion := range pe.Suggestions {
-			sb.WriteString(fmt.Sprintf("\n  - %s", suggestion))
-		}
-	}
-
-	if len(pe.RelatedIDs) > 0 {
-		sb.WriteString(fmt.Sprintf("\nRelated: %s", strings.Join(pe.RelatedIDs, ", ")))
-	}
-
-	return sb.String()
-}
 
 // ErrorReporter collects and manages parsing errors
 type ErrorReporter struct {
@@ -188,26 +121,29 @@ func (er *ErrorReporter) Clear() {
 
 // String returns a formatted string of all errors and warnings
 func (er *ErrorReporter) String() string {
-	var sb strings.Builder
+	if len(er.errors) == 0 && len(er.warnings) == 0 {
+		return "No errors or warnings"
+	}
 
+	var result strings.Builder
 	if len(er.errors) > 0 {
-		sb.WriteString(fmt.Sprintf("Errors (%d):\n", len(er.errors)))
+		result.WriteString(fmt.Sprintf("Errors (%d):\n", len(er.errors)))
 		for i, err := range er.errors {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, err.Error()))
+			result.WriteString(fmt.Sprintf("%d. %s\n", i+1, err.Error()))
 		}
 	}
 
 	if len(er.warnings) > 0 {
-		if sb.Len() > 0 {
-			sb.WriteString("\n")
+		if result.Len() > 0 {
+			result.WriteString("\n")
 		}
-		sb.WriteString(fmt.Sprintf("Warnings (%d):\n", len(er.warnings)))
+		result.WriteString(fmt.Sprintf("Warnings (%d):\n", len(er.warnings)))
 		for i, warning := range er.warnings {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, warning.Error()))
+			result.WriteString(fmt.Sprintf("%d. %s\n", i+1, warning.Error()))
 		}
 	}
 
-	return sb.String()
+	return result.String()
 }
 
 // ErrorCollector is a helper for collecting common error patterns
@@ -225,7 +161,7 @@ func NewErrorCollector(reporter *ErrorReporter) *ErrorCollector {
 // ReportCircularDependency reports a circular dependency error
 func (ec *ErrorCollector) ReportCircularDependency(path []string, position Position) {
 	message := fmt.Sprintf("Circular dependency detected in path: %s", strings.Join(path, " -> "))
-	context := fmt.Sprintf("Dependency chain forms a cycle")
+	context := "Dependency chain forms a cycle"
 	suggestions := []string{
 		"Review the subquery structure to eliminate circular references",
 		"Consider restructuring the query to avoid circular dependencies",
@@ -288,7 +224,7 @@ func (ec *ErrorCollector) ReportScopeViolation(fieldName string, currentScope st
 // ReportInvalidSubquery reports an invalid subquery error
 func (ec *ErrorCollector) ReportInvalidSubquery(subqueryID string, reason string, position Position) {
 	message := fmt.Sprintf("Invalid subquery '%s': %s", subqueryID, reason)
-	context := fmt.Sprintf("Subquery validation failed")
+	context := "Subquery validation failed"
 	suggestions := []string{
 		"Check the subquery syntax",
 		"Ensure all referenced fields are available",

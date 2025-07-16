@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/shibukawa/snapsql/parser/parsercommon"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/parser/parserstep1"
 	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/parser/parserstep3"
@@ -23,127 +23,150 @@ var (
 // Re-export common types for user convenience
 type (
 	// Core interfaces
-	StatementNode = parsercommon.StatementNode
-	ClauseNode    = parsercommon.ClauseNode
-	AstNode       = parsercommon.AstNode
+	StatementNode = cmn.StatementNode
+	ClauseNode    = cmn.ClauseNode
+	AstNode       = cmn.AstNode
 
 	// Statement types
-	SelectStatement     = parsercommon.SelectStatement
-	InsertIntoStatement = parsercommon.InsertIntoStatement
-	UpdateStatement     = parsercommon.UpdateStatement
-	DeleteFromStatement = parsercommon.DeleteFromStatement
+	SelectStatement     = cmn.SelectStatement
+	InsertIntoStatement = cmn.InsertIntoStatement
+	UpdateStatement     = cmn.UpdateStatement
+	DeleteFromStatement = cmn.DeleteFromStatement
 
 	// Clause types
-	SelectClause     = parsercommon.SelectClause
-	FromClause       = parsercommon.FromClause
-	WhereClause      = parsercommon.WhereClause
-	GroupByClause    = parsercommon.GroupByClause
-	HavingClause     = parsercommon.HavingClause
-	OrderByClause    = parsercommon.OrderByClause
-	LimitClause      = parsercommon.LimitClause
-	OffsetClause     = parsercommon.OffsetClause
-	WithClause       = parsercommon.WithClause
-	ForClause        = parsercommon.ForClause
-	InsertIntoClause = parsercommon.InsertIntoClause
-	ValuesClause     = parsercommon.ValuesClause
-	UpdateClause     = parsercommon.UpdateClause
-	SetClause        = parsercommon.SetClause
-	DeleteFromClause = parsercommon.DeleteFromClause
-	OnConflictClause = parsercommon.OnConflictClause
-	ReturningClause  = parsercommon.ReturningClause
+	SelectClause     = cmn.SelectClause
+	FromClause       = cmn.FromClause
+	WhereClause      = cmn.WhereClause
+	GroupByClause    = cmn.GroupByClause
+	HavingClause     = cmn.HavingClause
+	OrderByClause    = cmn.OrderByClause
+	LimitClause      = cmn.LimitClause
+	OffsetClause     = cmn.OffsetClause
+	WithClause       = cmn.WithClause
+	ForClause        = cmn.ForClause
+	InsertIntoClause = cmn.InsertIntoClause
+	ValuesClause     = cmn.ValuesClause
+	UpdateClause     = cmn.UpdateClause
+	SetClause        = cmn.SetClause
+	DeleteFromClause = cmn.DeleteFromClause
+	OnConflictClause = cmn.OnConflictClause
+	ReturningClause  = cmn.ReturningClause
 
 	// Element types
-	FieldName   = parsercommon.FieldName
-	FieldType   = parsercommon.FieldType
-	SelectField = parsercommon.SelectField
+	FieldName   = cmn.FieldName
+	FieldType   = cmn.FieldType
+	SelectField = cmn.SelectField
 
 	// Schema and namespace types
-	FunctionDefinition = parsercommon.FunctionDefinition
-	Namespace          = parsercommon.Namespace
-	CELVariable        = parsercommon.CELVariable
+	FunctionDefinition = cmn.FunctionDefinition
+	Namespace          = cmn.Namespace
+	CELVariable        = cmn.CELVariable
 
 	// Error types
-	ParseError = parsercommon.ParseError
+	ParseError = cmn.ParseError
 
 	// Subquery analysis types
-	SubqueryAnalysisInfo = parsercommon.SubqueryAnalysisInfo
-	ValidationErrorInfo  = parsercommon.ValidationErrorInfo
+	SubqueryAnalysisResult = cmn.SubqueryAnalysisResult
+	ValidationError        = cmn.ValidationError
+	SQParseResult          = cmn.SQParseResult
+	SQDependencyGraph      = cmn.SQDependencyGraph
+	SQFieldSource          = cmn.SQFieldSource
+	SQTableReference       = cmn.SQTableReference
+	SQDependencyNode       = cmn.SQDependencyNode
+	SQScopeManager         = cmn.SQScopeManager
+	SQDependencyType       = cmn.SQDependencyType
+	SQSourceType           = cmn.SQSourceType
+	SQErrorType            = cmn.SQErrorType
+	SQParseError           = cmn.SQParseError
+
+	// parserstep7 type aliases for backward compatibility
+	ParseResult     = cmn.SQParseResult
+	DependencyGraph = cmn.SQDependencyGraph
+	DependencyNode  = cmn.SQDependencyNode
+	DependencyType  = cmn.SQDependencyType
 
 	// Node type constants
-	NodeType = parsercommon.NodeType
+	NodeType = cmn.NodeType
 )
 
 // Re-export constants
 const (
 	// SQL statement structures
-	UNKNOWN            = parsercommon.UNKNOWN
-	SUBQUERY_STATEMENT = parsercommon.SUBQUERY_STATEMENT
+	UNKNOWN            = cmn.UNKNOWN
+	SUBQUERY_STATEMENT = cmn.SUBQUERY_STATEMENT
 
 	// Select statement
-	SELECT_STATEMENT = parsercommon.SELECT_STATEMENT
-	SELECT_CLAUSE    = parsercommon.SELECT_CLAUSE
-	FROM_CLAUSE      = parsercommon.FROM_CLAUSE
-	WHERE_CLAUSE     = parsercommon.WHERE_CLAUSE
-	ORDER_BY_CLAUSE  = parsercommon.ORDER_BY_CLAUSE
-	GROUP_BY_CLAUSE  = parsercommon.GROUP_BY_CLAUSE
-	HAVING_CLAUSE    = parsercommon.HAVING_CLAUSE
-	LIMIT_CLAUSE     = parsercommon.LIMIT_CLAUSE
-	OFFSET_CLAUSE    = parsercommon.OFFSET_CLAUSE
-	WITH_CLAUSE      = parsercommon.WITH_CLAUSE
-	FOR_CLAUSE       = parsercommon.FOR_CLAUSE
-	CTE_DEFINITION   = parsercommon.CTE_DEFINITION
+	SELECT_STATEMENT = cmn.SELECT_STATEMENT
+	SELECT_CLAUSE    = cmn.SELECT_CLAUSE
+	FROM_CLAUSE      = cmn.FROM_CLAUSE
+	WHERE_CLAUSE     = cmn.WHERE_CLAUSE
+	ORDER_BY_CLAUSE  = cmn.ORDER_BY_CLAUSE
+	GROUP_BY_CLAUSE  = cmn.GROUP_BY_CLAUSE
+	HAVING_CLAUSE    = cmn.HAVING_CLAUSE
+	LIMIT_CLAUSE     = cmn.LIMIT_CLAUSE
+	OFFSET_CLAUSE    = cmn.OFFSET_CLAUSE
+	WITH_CLAUSE      = cmn.WITH_CLAUSE
+	FOR_CLAUSE       = cmn.FOR_CLAUSE
+	CTE_DEFINITION   = cmn.CTE_DEFINITION
 
 	// Insert statement
-	INSERT_INTO_STATEMENT = parsercommon.INSERT_INTO_STATEMENT
-	INSERT_INTO_CLAUSE    = parsercommon.INSERT_INTO_CLAUSE
-	VALUES_CLAUSE         = parsercommon.VALUES_CLAUSE
-	ON_CONFLICT_CLAUSE    = parsercommon.ON_CONFLICT_CLAUSE
+	INSERT_INTO_STATEMENT = cmn.INSERT_INTO_STATEMENT
+	INSERT_INTO_CLAUSE    = cmn.INSERT_INTO_CLAUSE
+	VALUES_CLAUSE         = cmn.VALUES_CLAUSE
+	ON_CONFLICT_CLAUSE    = cmn.ON_CONFLICT_CLAUSE
 
 	// Update statement
-	UPDATE_STATEMENT = parsercommon.UPDATE_STATEMENT
-	UPDATE_CLAUSE    = parsercommon.UPDATE_CLAUSE
-	SET_CLAUSE       = parsercommon.SET_CLAUSE
+	UPDATE_STATEMENT = cmn.UPDATE_STATEMENT
+	UPDATE_CLAUSE    = cmn.UPDATE_CLAUSE
+	SET_CLAUSE       = cmn.SET_CLAUSE
 
 	// Delete statement
-	DELETE_FROM_CLAUSE    = parsercommon.DELETE_FROM_CLAUSE
-	DELETE_FROM_STATEMENT = parsercommon.DELETE_FROM_STATEMENT
+	DELETE_FROM_CLAUSE    = cmn.DELETE_FROM_CLAUSE
+	DELETE_FROM_STATEMENT = cmn.DELETE_FROM_STATEMENT
 
 	// FieldType constants
-	SingleField   = parsercommon.SingleField
-	TableField    = parsercommon.TableField
-	FunctionField = parsercommon.FunctionField
-	ComplexField  = parsercommon.ComplexField
-	LiteralField  = parsercommon.LiteralField
+	SingleField   = cmn.SingleField
+	TableField    = cmn.TableField
+	FunctionField = cmn.FunctionField
+	ComplexField  = cmn.ComplexField
+	LiteralField  = cmn.LiteralField
+
+	// parserstep7 dependency type constants
+	DependencyCTE            = cmn.SQDependencyCTE
+	DependencySubquery       = cmn.SQDependencySubquery
+	DependencyMain           = cmn.SQDependencyMain
+	DependencyFromSubquery   = cmn.SQDependencyFromSubquery
+	DependencySelectSubquery = cmn.SQDependencySelectSubquery
 )
 
 // Re-export sentinel errors
 var (
 	// Parser related errors
-	ErrInvalidSQL        = parsercommon.ErrInvalidSQL
-	ErrInvalidForSnapSQL = parsercommon.ErrInvalidForSnapSQL
+	ErrInvalidSQL        = cmn.ErrInvalidSQL
+	ErrInvalidForSnapSQL = cmn.ErrInvalidForSnapSQL
 
 	// YAML/Schema related errors
-	ErrExpectedDocumentNode     = parsercommon.ErrExpectedDocumentNode
-	ErrExpectedMappingNode      = parsercommon.ErrExpectedMappingNode
-	ErrExpectedMappingForParams = parsercommon.ErrExpectedMappingForParams
-	ErrExpectedSequenceNode     = parsercommon.ErrExpectedSequenceNode
-	ErrUnsupportedParameterType = parsercommon.ErrUnsupportedParameterType
+	ErrExpectedDocumentNode     = cmn.ErrExpectedDocumentNode
+	ErrExpectedMappingNode      = cmn.ErrExpectedMappingNode
+	ErrExpectedMappingForParams = cmn.ErrExpectedMappingForParams
+	ErrExpectedSequenceNode     = cmn.ErrExpectedSequenceNode
+	ErrUnsupportedParameterType = cmn.ErrUnsupportedParameterType
 
 	// CEL related errors
-	ErrEnvironmentCELNotInit      = parsercommon.ErrEnvironmentCELNotInit
-	ErrParameterCELNotInit        = parsercommon.ErrParameterCELNotInit
-	ErrNoOutputType               = parsercommon.ErrNoOutputType
-	ErrExpressionValidationFailed = parsercommon.ErrExpressionValidationFailed
-	ErrExpressionNotList          = parsercommon.ErrExpressionNotList
+	ErrEnvironmentCELNotInit      = cmn.ErrEnvironmentCELNotInit
+	ErrParameterCELNotInit        = cmn.ErrParameterCELNotInit
+	ErrNoOutputType               = cmn.ErrNoOutputType
+	ErrExpressionValidationFailed = cmn.ErrExpressionValidationFailed
+	ErrExpressionNotList          = cmn.ErrExpressionNotList
 
 	// Other errors
-	ErrParameterNotFound = parsercommon.ErrParameterNotFound
+	ErrParameterNotFound = cmn.ErrParameterNotFound
 )
 
 // Re-export helper functions
 var (
-	NewNamespace = parsercommon.NewNamespace
-	AsParseError = parsercommon.AsParseError
+	NewNamespace = cmn.NewNamespace
+	AsParseError = cmn.AsParseError
 )
 
 // ParseOptions contains options for the Parse function
@@ -229,7 +252,7 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 	// Step 7: Run parserstep7 - Subquery dependency analysis (optional)
 	if options.EnableSubqueryAnalysis {
 		subqueryParser := parserstep7.NewSubqueryParserIntegrated()
-		_, subErr := subqueryParser.ParseStatement(stmt)
+		_, subErr := subqueryParser.ParseStatement(stmt, functionDef)
 
 		if subErr != nil {
 			// Don't fail the entire parse for subquery analysis errors
@@ -239,4 +262,38 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 	}
 
 	return stmt, nil
+}
+
+// ParseExtended parses tokens with extended subquery analysis and returns detailed results
+// This function provides access to parserstep7 subquery analysis results
+func ParseExtended(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *ParseOptions) (*SQParseResult, error) {
+	if options == nil {
+		options = &ParseOptions{}
+	}
+
+	// Enable subquery analysis for extended parsing
+	extendedOptions := *options
+	extendedOptions.EnableSubqueryAnalysis = true
+
+	// Parse the statement normally
+	stmt, err := Parse(tokens, functionDef, &extendedOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	// Run parserstep7 and return its results
+	subqueryParser := parserstep7.NewSubqueryParserIntegrated()
+	result, subErr := subqueryParser.ParseStatement(stmt, functionDef)
+
+	if subErr != nil {
+		// Return error result with error information
+		return &SQParseResult{
+			DependencyGraph: nil,
+			ProcessingOrder: nil,
+			HasErrors:       true,
+			Errors:          nil, // Could convert subErr to SQParseError if needed
+		}, subErr
+	}
+
+	return result, nil
 }

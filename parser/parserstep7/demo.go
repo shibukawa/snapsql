@@ -54,10 +54,10 @@ func (d *demoStatementNode) String() string               { return "demo_stateme
 func (d *demoStatementNode) Type() cmn.NodeType           { return cmn.SELECT_STATEMENT }
 
 // Implement new StatementNode interface methods
-func (d *demoStatementNode) GetSubqueryAnalysis() *cmn.SubqueryAnalysisInfo {
+func (d *demoStatementNode) GetSubqueryAnalysis() *cmn.SubqueryAnalysisResult {
 	return nil // Demo implementation returns nil
 }
-func (d *demoStatementNode) SetSubqueryAnalysis(info *cmn.SubqueryAnalysisInfo) {
+func (d *demoStatementNode) SetSubqueryAnalysis(info *cmn.SubqueryAnalysisResult) {
 	// Demo implementation does nothing
 }
 func (d *demoStatementNode) HasSubqueryAnalysis() bool {
@@ -93,7 +93,7 @@ func DemoFieldSourceManagement() {
 
 	// Parse the statement
 	fmt.Println("\n2. Parsing statement and building dependency graph...")
-	result, err := parser.ParseStatement(mainStmt)
+	result, err := parser.ParseStatement(mainStmt, nil)
 	if err != nil {
 		fmt.Printf("Error parsing statement: %v\n", err)
 		return
@@ -108,9 +108,9 @@ func DemoFieldSourceManagement() {
 
 	for nodeID, node := range nodes {
 		switch node.NodeType {
-		case DependencyCTE:
+		case cmn.SQDependencyCTE:
 			cteNodeID = nodeID
-		case DependencyMain:
+		case cmn.SQDependencyMain:
 			mainNodeID = nodeID
 		}
 	}
@@ -308,7 +308,7 @@ func DemoFieldSourceErrorCases() {
 		},
 	}
 
-	_, err = parser.ParseStatement(stmt)
+	_, err = parser.ParseStatement(stmt, nil)
 	if err != nil {
 		fmt.Printf("   Parse error: %v\n", err)
 		return

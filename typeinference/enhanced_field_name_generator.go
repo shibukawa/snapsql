@@ -3,7 +3,7 @@ package typeinference
 import (
 	"strings"
 
-	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser"
 )
 
 // EnhancedFieldNameGenerator provides advanced field name generation for complex expressions
@@ -19,7 +19,7 @@ func NewEnhancedFieldNameGenerator() *EnhancedFieldNameGenerator {
 }
 
 // GenerateComplexFieldName generates meaningful names for complex expressions using AST nodes
-func (g *EnhancedFieldNameGenerator) GenerateComplexFieldName(selectField *parsercommon.SelectField) string {
+func (g *EnhancedFieldNameGenerator) GenerateComplexFieldName(selectField *parser.SelectField) string {
 	// Use explicit field name if provided
 	if selectField.ExplicitName && selectField.FieldName != "" {
 		return g.makeUnique(selectField.FieldName)
@@ -32,19 +32,19 @@ func (g *EnhancedFieldNameGenerator) GenerateComplexFieldName(selectField *parse
 
 	// Generate names based on field kind and content
 	switch selectField.FieldKind {
-	case parsercommon.SingleField:
+	case parser.SingleField:
 		return g.makeUnique(selectField.OriginalField)
-	case parsercommon.TableField:
+	case parser.TableField:
 		// Extract field name from table.field
 		if selectField.TableName != "" && selectField.OriginalField != "" {
 			return g.makeUnique(selectField.OriginalField)
 		}
 		return g.makeUnique("table_field")
-	case parsercommon.FunctionField:
+	case parser.FunctionField:
 		return g.generateFunctionFieldName(selectField.OriginalField)
-	case parsercommon.ComplexField:
+	case parser.ComplexField:
 		return g.generateComplexFieldName(selectField.OriginalField)
-	case parsercommon.LiteralField:
+	case parser.LiteralField:
 		return g.generateLiteralFieldName(selectField.OriginalField)
 	default:
 		return g.makeUnique("field")

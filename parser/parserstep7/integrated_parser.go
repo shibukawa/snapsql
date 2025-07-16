@@ -34,7 +34,7 @@ func NewSubqueryParserIntegrated() *SubqueryParserIntegrated {
 
 // ParseStatement parses a statement and extracts all subquery dependencies
 // This method stores the results directly in the StatementNode for easy access
-func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode) (*ParseResult, error) {
+func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, functionDef interface{}) (*cmn.SQParseResult, error) {
 	spi.errorHandler.Clear()
 
 	if stmt == nil {
@@ -56,16 +56,10 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode) (*Pa
 	// 3. Get dependency graph
 	graph := spi.integrator.GetDependencyGraph()
 
-	// 4. Build scope hierarchy for field source management
-	if err := graph.BuildScopeHierarchy(); err != nil {
-		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, fmt.Sprintf("failed to build scope hierarchy: %v", err), Position{})
-		return nil, err
-	}
-
-	// 5. Check for circular dependencies
-	if graph.HasCircularDependency() {
+	// 4. Check for circular dependencies
+	if cmn.HasCircularDependencyInGraph(graph) {
 		spi.errorHandler.AddError(ErrorTypeCircularDependency, "circular dependencies detected", Position{})
-		return &ParseResult{
+		return &cmn.SQParseResult{
 			DependencyGraph: graph,
 			HasErrors:       true,
 			Errors:          spi.errorHandler.GetErrors(),
@@ -73,7 +67,7 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode) (*Pa
 	}
 
 	// 6. Get processing order
-	order, err := graph.GetProcessingOrder()
+	order, err := cmn.GetProcessingOrderFromGraph(graph)
 	if err != nil {
 		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
 		return nil, err
@@ -84,7 +78,7 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode) (*Pa
 	tableReferences := make(map[string]cmn.TableReferenceInterface)
 
 	// Convert and store field sources from dependency graph nodes
-	allNodes := graph.GetAllNodes()
+	allNodes := cmn.GetDependencyNodes(graph)
 	for nodeID, node := range allNodes {
 		for i, fs := range node.FieldSources {
 			// Use node ID and field index as key since FieldSource doesn't have ID
@@ -103,7 +97,9 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode) (*Pa
 	stmt.SetTableReferences(tableReferences)
 	stmt.SetSubqueryDependencies(cmn.DependencyGraphInterface(graph))
 
-	return &ParseResult{
+	return &cmn.SQParseResult{
+		Statement:       stmt,
+		FunctionDef:     functionDef,
 		DependencyGraph: graph,
 		ProcessingOrder: order,
 		HasErrors:       spi.errorHandler.HasErrors(),
@@ -111,60 +107,10 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode) (*Pa
 	}, nil
 }
 
-// ParseResult contains the complete result of subquery parsing
-type ParseResult struct {
-	DependencyGraph *DependencyGraph // Original dependency graph
-	ProcessingOrder []string         // Recommended processing order
-	HasErrors       bool             // Whether errors occurred
-	Errors          []*ParseError    // List of errors
-}
-
-// String returns a summary of the parse result
-func (pr *ParseResult) String() string {
-	if pr.HasErrors {
-		return "ParseResult: Has errors"
-	}
-
-	nodeCount := len(pr.DependencyGraph.GetAllNodes())
-	return fmt.Sprintf("ParseResult: %d nodes, %d processing steps", nodeCount, len(pr.ProcessingOrder))
-}
-
-// GetFieldSourcesForNode returns all field sources available to a specific node
-func (pr *ParseResult) GetFieldSourcesForNode(nodeID string) ([]*FieldSource, error) {
-	if pr.DependencyGraph == nil {
-		return nil, fmt.Errorf("no dependency graph available")
-	}
-	return pr.DependencyGraph.GetAccessibleFieldsForNode(nodeID)
-}
-
-// ValidateFieldAccessForNode validates if a field can be accessed from a specific node
-func (pr *ParseResult) ValidateFieldAccessForNode(nodeID, fieldName string) error {
-	if pr.DependencyGraph == nil {
-		return fmt.Errorf("no dependency graph available")
-	}
-	return pr.DependencyGraph.ValidateFieldAccessForNode(nodeID, fieldName)
-}
-
-// ResolveFieldForNode resolves a field reference from a specific node's perspective
-func (pr *ParseResult) ResolveFieldForNode(nodeID, fieldName string) ([]*FieldSource, error) {
-	if pr.DependencyGraph == nil {
-		return nil, fmt.Errorf("no dependency graph available")
-	}
-	return pr.DependencyGraph.ResolveFieldInNode(nodeID, fieldName)
-}
-
-// GetScopeHierarchy returns a visualization of the scope hierarchy
-func (pr *ParseResult) GetScopeHierarchy() string {
-	if pr.DependencyGraph == nil {
-		return "No dependency graph available"
-	}
-	return pr.DependencyGraph.GetScopeHierarchyVisualization()
-}
-
 // GetDependencyVisualization returns a basic text visualization of the dependency graph
 func (spi *SubqueryParserIntegrated) GetDependencyVisualization() string {
 	graph := spi.integrator.GetDependencyGraph()
-	nodes := graph.GetAllNodes()
+	nodes := cmn.GetDependencyNodes(graph)
 
 	if len(nodes) == 0 {
 		return "No dependencies found"
@@ -181,37 +127,51 @@ func (spi *SubqueryParserIntegrated) GetDependencyVisualization() string {
 // GetScopeVisualization returns a visualization of the scope hierarchy
 func (spi *SubqueryParserIntegrated) GetScopeVisualization() string {
 	graph := spi.integrator.GetDependencyGraph()
-	return graph.GetScopeHierarchyVisualization()
+	return cmn.GetScopeHierarchyVisualizationFromGraph(graph)
 }
 
 // AddFieldSourceToNode adds a field source to a specific node
 func (spi *SubqueryParserIntegrated) AddFieldSourceToNode(nodeID string, fieldSource *FieldSource) error {
 	graph := spi.integrator.GetDependencyGraph()
-	return graph.AddFieldSourceToNode(nodeID, fieldSource)
+	return cmn.AddFieldSourceToNodeInGraph(graph, nodeID, fieldSource)
 }
 
 // AddTableReferenceToNode adds a table reference to a specific node
 func (spi *SubqueryParserIntegrated) AddTableReferenceToNode(nodeID string, tableRef *TableReference) error {
 	graph := spi.integrator.GetDependencyGraph()
-	return graph.AddTableReferenceToNode(nodeID, tableRef)
+	return cmn.AddTableReferenceToNodeInGraph(graph, nodeID, tableRef)
 }
 
 // GetAccessibleFieldsForNode returns all fields accessible from a specific node
 func (spi *SubqueryParserIntegrated) GetAccessibleFieldsForNode(nodeID string) ([]*FieldSource, error) {
 	graph := spi.integrator.GetDependencyGraph()
-	return graph.GetAccessibleFieldsForNode(nodeID)
+	result, err := cmn.GetAccessibleFieldsForNodeInGraph(graph, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if fields, ok := result.([]*FieldSource); ok {
+		return fields, nil
+	}
+	return nil, fmt.Errorf("unexpected return type from GetAccessibleFieldsForNodeInGraph")
 }
 
 // ValidateFieldAccess validates if a field can be accessed from a specific node
 func (spi *SubqueryParserIntegrated) ValidateFieldAccess(nodeID, fieldName string) error {
 	graph := spi.integrator.GetDependencyGraph()
-	return graph.ValidateFieldAccessForNode(nodeID, fieldName)
+	return cmn.ValidateFieldAccessForNodeInGraph(graph, nodeID, fieldName)
 }
 
 // ResolveFieldReference resolves a field reference from a specific node's perspective
 func (spi *SubqueryParserIntegrated) ResolveFieldReference(nodeID, fieldName string) ([]*FieldSource, error) {
 	graph := spi.integrator.GetDependencyGraph()
-	return graph.ResolveFieldInNode(nodeID, fieldName)
+	result, err := cmn.ResolveFieldInNodeFromGraph(graph, nodeID, fieldName)
+	if err != nil {
+		return nil, err
+	}
+	if fields, ok := result.([]*FieldSource); ok {
+		return fields, nil
+	}
+	return nil, fmt.Errorf("unexpected return type from ResolveFieldInNodeFromGraph")
 }
 
 // Reset resets all internal state

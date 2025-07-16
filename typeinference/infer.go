@@ -66,7 +66,7 @@ func InferFieldTypes(
 	}
 
 	// Extract subquery analysis from statement node
-	var subqueryInfo *SubqueryAnalysisInfo
+	var subqueryInfo *SubqueryAnalysisResult
 	if statementNode.HasSubqueryAnalysis() {
 		subqueryInfo = statementNode.GetSubqueryAnalysis()
 	}
@@ -116,6 +116,6 @@ type InferenceOptions struct {
 
 // Re-export types from parser for convenience
 type (
-	SubqueryAnalysisInfo = parser.SubqueryAnalysisInfo
-	ValidationErrorInfo  = parser.ValidationErrorInfo
+	SubqueryAnalysisResult = parser.SubqueryAnalysisResult
+	ValidationErrorInfo    = parser.ValidationError
 )

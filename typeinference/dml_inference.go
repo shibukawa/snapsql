@@ -3,7 +3,7 @@ package typeinference
 import (
 	"fmt"
 
-	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser"
 )
 
 // DMLInferenceEngine handles type inference for INSERT/UPDATE/DELETE statements
@@ -23,13 +23,13 @@ func NewDMLInferenceEngine(baseEngine *TypeInferenceEngine2) *DMLInferenceEngine
 }
 
 // InferDMLStatementType performs type inference for DML statements
-func (d *DMLInferenceEngine) InferDMLStatementType(stmt parsercommon.StatementNode) ([]*InferredFieldInfo, error) {
+func (d *DMLInferenceEngine) InferDMLStatementType(stmt parser.StatementNode) ([]*InferredFieldInfo, error) {
 	switch s := stmt.(type) {
-	case *parsercommon.InsertIntoStatement:
+	case *parser.InsertIntoStatement:
 		return d.inferInsertStatement(s)
-	case *parsercommon.UpdateStatement:
+	case *parser.UpdateStatement:
 		return d.inferUpdateStatement(s)
-	case *parsercommon.DeleteFromStatement:
+	case *parser.DeleteFromStatement:
 		return d.inferDeleteStatement(s)
 	default:
 		return nil, fmt.Errorf("unsupported DML statement type: %T", stmt)
@@ -37,7 +37,7 @@ func (d *DMLInferenceEngine) InferDMLStatementType(stmt parsercommon.StatementNo
 }
 
 // inferInsertStatement handles INSERT statement type inference
-func (d *DMLInferenceEngine) inferInsertStatement(stmt *parsercommon.InsertIntoStatement) ([]*InferredFieldInfo, error) {
+func (d *DMLInferenceEngine) inferInsertStatement(stmt *parser.InsertIntoStatement) ([]*InferredFieldInfo, error) {
 	var fields []*InferredFieldInfo
 
 	// Get target table information from INTO clause
@@ -75,7 +75,7 @@ func (d *DMLInferenceEngine) inferInsertStatement(stmt *parsercommon.InsertIntoS
 }
 
 // inferUpdateStatement handles UPDATE statement type inference
-func (d *DMLInferenceEngine) inferUpdateStatement(stmt *parsercommon.UpdateStatement) ([]*InferredFieldInfo, error) {
+func (d *DMLInferenceEngine) inferUpdateStatement(stmt *parser.UpdateStatement) ([]*InferredFieldInfo, error) {
 	var fields []*InferredFieldInfo
 
 	// Get target table information from UPDATE clause
@@ -113,7 +113,7 @@ func (d *DMLInferenceEngine) inferUpdateStatement(stmt *parsercommon.UpdateState
 }
 
 // inferDeleteStatement handles DELETE statement type inference
-func (d *DMLInferenceEngine) inferDeleteStatement(stmt *parsercommon.DeleteFromStatement) ([]*InferredFieldInfo, error) {
+func (d *DMLInferenceEngine) inferDeleteStatement(stmt *parser.DeleteFromStatement) ([]*InferredFieldInfo, error) {
 	var fields []*InferredFieldInfo
 
 	// Get target table information from FROM clause
@@ -151,7 +151,7 @@ func (d *DMLInferenceEngine) inferDeleteStatement(stmt *parsercommon.DeleteFromS
 }
 
 // inferReturningClause handles RETURNING clause type inference
-func (d *DMLInferenceEngine) inferReturningClause(returning *parsercommon.ReturningClause, targetTable string) ([]*InferredFieldInfo, error) {
+func (d *DMLInferenceEngine) inferReturningClause(returning *parser.ReturningClause, targetTable string) ([]*InferredFieldInfo, error) {
 	var fields []*InferredFieldInfo
 
 	// RETURNING clause uses SelectField structure, so we can reuse SELECT inference
@@ -167,7 +167,7 @@ func (d *DMLInferenceEngine) inferReturningClause(returning *parsercommon.Return
 }
 
 // getTargetTableFromInsert extracts target table name from INSERT statement
-func (d *DMLInferenceEngine) getTargetTableFromInsert(stmt *parsercommon.InsertIntoStatement) (string, error) {
+func (d *DMLInferenceEngine) getTargetTableFromInsert(stmt *parser.InsertIntoStatement) (string, error) {
 	if stmt.Into == nil {
 		return "", fmt.Errorf("INSERT statement missing INTO clause")
 	}
@@ -178,7 +178,7 @@ func (d *DMLInferenceEngine) getTargetTableFromInsert(stmt *parsercommon.InsertI
 }
 
 // getTargetTableFromUpdate extracts target table name from UPDATE statement
-func (d *DMLInferenceEngine) getTargetTableFromUpdate(stmt *parsercommon.UpdateStatement) (string, error) {
+func (d *DMLInferenceEngine) getTargetTableFromUpdate(stmt *parser.UpdateStatement) (string, error) {
 	if stmt.Update == nil {
 		return "", fmt.Errorf("UPDATE statement missing UPDATE clause")
 	}
@@ -188,7 +188,7 @@ func (d *DMLInferenceEngine) getTargetTableFromUpdate(stmt *parsercommon.UpdateS
 }
 
 // getTargetTableFromDelete extracts target table name from DELETE statement
-func (d *DMLInferenceEngine) getTargetTableFromDelete(stmt *parsercommon.DeleteFromStatement) (string, error) {
+func (d *DMLInferenceEngine) getTargetTableFromDelete(stmt *parser.DeleteFromStatement) (string, error) {
 	if stmt.From == nil {
 		return "", fmt.Errorf("DELETE statement missing FROM clause")
 	}
@@ -198,7 +198,7 @@ func (d *DMLInferenceEngine) getTargetTableFromDelete(stmt *parsercommon.DeleteF
 }
 
 // extractTableNameFromClause extracts table name from various clause types
-func (d *DMLInferenceEngine) extractTableNameFromClause(clause parsercommon.ClauseNode) (string, error) {
+func (d *DMLInferenceEngine) extractTableNameFromClause(clause parser.ClauseNode) (string, error) {
 	// This is a simplified implementation that extracts table name from clause text
 	// In a real implementation, this would need to parse the clause more thoroughly
 	clauseText := clause.SourceText()

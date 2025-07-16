@@ -3,15 +3,17 @@ package parserstep7
 import (
 	"fmt"
 	"strings"
+
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // DependencyAnalyzer provides advanced dependency analysis features
 type DependencyAnalyzer struct {
-	graph *DependencyGraph
+	graph *cmn.SQDependencyGraph
 }
 
 // NewDependencyAnalyzer creates a new dependency analyzer
-func NewDependencyAnalyzer(graph *DependencyGraph) *DependencyAnalyzer {
+func NewDependencyAnalyzer(graph *cmn.SQDependencyGraph) *DependencyAnalyzer {
 	return &DependencyAnalyzer{
 		graph: graph,
 	}
@@ -54,12 +56,12 @@ func (da *DependencyAnalyzer) calculateDependencyLevels() map[string]int {
 	visited := make(map[string]bool)
 
 	// Initialize all nodes to level 0
-	for nodeID := range da.graph.nodes {
+	for nodeID := range da.graph.GetAllNodes() {
 		levels[nodeID] = 0
 	}
 
 	// Calculate levels using DFS
-	for nodeID := range da.graph.nodes {
+	for nodeID := range da.graph.GetAllNodes() {
 		if !visited[nodeID] {
 			da.calculateLevelDFS(nodeID, levels, visited, make(map[string]bool))
 		}
@@ -78,15 +80,19 @@ func (da *DependencyAnalyzer) calculateLevelDFS(nodeID string, levels map[string
 	inStack[nodeID] = true
 
 	maxChildLevel := -1
-	for _, childID := range da.graph.edges[nodeID] {
-		if inStack[childID] {
-			// Circular dependency detected, skip to avoid infinite recursion
-			continue
-		}
+	nodes := da.graph.GetAllNodes()
+	node := nodes[nodeID]
+	if node != nil {
+		for _, childID := range node.Dependencies {
+			if inStack[childID] {
+				// Circular dependency detected, skip to avoid infinite recursion
+				continue
+			}
 
-		da.calculateLevelDFS(childID, levels, visited, inStack)
-		if levels[childID] > maxChildLevel {
-			maxChildLevel = levels[childID]
+			da.calculateLevelDFS(childID, levels, visited, inStack)
+			if levels[childID] > maxChildLevel {
+				maxChildLevel = levels[childID]
+			}
 		}
 	}
 
@@ -103,7 +109,7 @@ func (da *DependencyAnalyzer) findAllCircularPaths() [][]string {
 	visited := make(map[string]bool)
 	inStack := make(map[string]bool)
 
-	for nodeID := range da.graph.nodes {
+	for nodeID := range da.graph.GetAllNodes() {
 		if !visited[nodeID] {
 			path := []string{}
 			da.findCircularPathsDFS(nodeID, visited, inStack, path, &circularPaths)
@@ -119,27 +125,31 @@ func (da *DependencyAnalyzer) findCircularPathsDFS(nodeID string, visited, inSta
 	inStack[nodeID] = true
 	path = append(path, nodeID)
 
-	for _, childID := range da.graph.edges[nodeID] {
-		if inStack[childID] {
-			// Found a circular path
-			circularStart := -1
-			for i, id := range path {
-				if id == childID {
-					circularStart = i
-					break
+	nodes := da.graph.GetAllNodes()
+	node := nodes[nodeID]
+	if node != nil {
+		for _, childID := range node.Dependencies {
+			if inStack[childID] {
+				// Found a circular path
+				circularStart := -1
+				for i, id := range path {
+					if id == childID {
+						circularStart = i
+						break
+					}
 				}
+				if circularStart >= 0 {
+					circularPath := make([]string, len(path)-circularStart)
+					copy(circularPath, path[circularStart:])
+					*circularPaths = append(*circularPaths, circularPath)
+				}
+			} else if !visited[childID] {
+				da.findCircularPathsDFS(childID, visited, inStack, path, circularPaths)
 			}
-			if circularStart >= 0 {
-				circularPath := make([]string, len(path)-circularStart)
-				copy(circularPath, path[circularStart:])
-				*circularPaths = append(*circularPaths, circularPath)
-			}
-		} else if !visited[childID] {
-			da.findCircularPathsDFS(childID, visited, inStack, path, circularPaths)
 		}
-	}
 
-	inStack[nodeID] = false
+		inStack[nodeID] = false
+	}
 }
 
 // findCriticalNodes finds nodes that many others depend on
@@ -147,18 +157,19 @@ func (da *DependencyAnalyzer) findCriticalNodes() []string {
 	inDegree := make(map[string]int)
 
 	// Calculate in-degrees
-	for nodeID := range da.graph.nodes {
+	nodes := da.graph.GetAllNodes()
+	for nodeID := range nodes {
 		inDegree[nodeID] = 0
 	}
-	for _, edges := range da.graph.edges {
-		for _, to := range edges {
-			inDegree[to]++
+	for _, node := range nodes {
+		for _, dep := range node.Dependencies {
+			inDegree[dep]++
 		}
 	}
 
 	// Find nodes with high in-degree (many dependents)
 	var criticalNodes []string
-	threshold := len(da.graph.nodes) / 4 // 25% threshold
+	threshold := len(nodes) / 4 // 25% threshold
 	if threshold < 2 {
 		threshold = 2
 	}
@@ -177,7 +188,8 @@ func (da *DependencyAnalyzer) findLongestDependencyChains() [][]string {
 	var longestChains [][]string
 	maxLength := 0
 
-	for nodeID := range da.graph.nodes {
+	nodes := da.graph.GetAllNodes()
+	for nodeID := range nodes {
 		path := []string{nodeID}
 		visited := make(map[string]bool)
 		chains := da.findChainsFromNode(nodeID, path, visited)
@@ -204,7 +216,13 @@ func (da *DependencyAnalyzer) findChainsFromNode(nodeID string, path []string, v
 	visited[nodeID] = true
 	defer func() { visited[nodeID] = false }()
 
-	children := da.graph.edges[nodeID]
+	nodes := da.graph.GetAllNodes()
+	node := nodes[nodeID]
+	var children []string
+	if node != nil {
+		children = node.Dependencies
+	}
+
 	if len(children) == 0 {
 		// Leaf node, return current path
 		result := make([]string, len(path))
@@ -224,11 +242,12 @@ func (da *DependencyAnalyzer) findChainsFromNode(nodeID string, path []string, v
 
 // calculateStatistics calculates overall dependency statistics
 func (da *DependencyAnalyzer) calculateStatistics() DependencyStats {
-	totalNodes := len(da.graph.nodes)
+	nodes := da.graph.GetAllNodes()
+	totalNodes := len(nodes)
 	totalEdges := 0
 
-	for _, edges := range da.graph.edges {
-		totalEdges += len(edges)
+	for _, node := range nodes {
+		totalEdges += len(node.Dependencies)
 	}
 
 	levels := da.calculateDependencyLevels()
@@ -245,12 +264,12 @@ func (da *DependencyAnalyzer) calculateStatistics() DependencyStats {
 	}
 
 	inDegree := make(map[string]int)
-	for nodeID := range da.graph.nodes {
+	for nodeID := range nodes {
 		inDegree[nodeID] = 0
 	}
-	for _, edges := range da.graph.edges {
-		for _, to := range edges {
-			inDegree[to]++
+	for _, node := range nodes {
+		for _, dep := range node.Dependencies {
+			inDegree[dep]++
 		}
 	}
 

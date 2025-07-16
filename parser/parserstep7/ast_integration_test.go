@@ -57,10 +57,10 @@ func TestASTIntegrator_ExtractSubqueries_WithCTE(t *testing.T) {
 	// Check that we have main and CTE nodes
 	var hasMain, hasCTE bool
 	for _, node := range nodes {
-		if node.NodeType == DependencyMain {
+		if node.NodeType == cmn.SQDependencyMain {
 			hasMain = true
 		}
-		if node.NodeType == DependencyCTE {
+		if node.NodeType == cmn.SQDependencyCTE {
 			hasCTE = true
 		}
 	}
@@ -94,10 +94,10 @@ func TestASTIntegrator_ExtractSubqueries_MultipleCTEs(t *testing.T) {
 	// Count node types
 	var mainCount, cteCount int
 	for _, node := range nodes {
-		if node.NodeType == DependencyMain {
+		if node.NodeType == cmn.SQDependencyMain {
 			mainCount++
 		}
-		if node.NodeType == DependencyCTE {
+		if node.NodeType == cmn.SQDependencyCTE {
 			cteCount++
 		}
 	}
@@ -111,10 +111,10 @@ func TestASTIntegrator_BuildFieldSources(t *testing.T) {
 
 	// Add a test node to the dependency graph
 	stmt := &cmn.SelectStatement{}
-	node := &DependencyNode{
+	node := &cmn.SQDependencyNode{
 		ID:        "test",
 		Statement: stmt,
-		NodeType:  DependencyMain,
+		NodeType:  cmn.SQDependencyMain,
 	}
 	integrator.parser.dependencies.AddNode(node)
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/shibukawa/snapsql"
-	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser"
 )
 
 // ValidationErrorType represents the type of validation error
@@ -81,22 +81,22 @@ func (v *SchemaValidator) SetAvailableTables(tables []string) {
 }
 
 // ValidateSelectFields validates SELECT fields against schema
-func (v *SchemaValidator) ValidateSelectFields(selectFields []parsercommon.SelectField) []ValidationError {
+func (v *SchemaValidator) ValidateSelectFields(selectFields []parser.SelectField) []ValidationError {
 	errors := []ValidationError{}
 
 	for i, field := range selectFields {
 		switch field.FieldKind {
-		case parsercommon.TableField:
+		case parser.TableField:
 			if err := v.validateTableColumn(i, field.TableName, field.OriginalField); err != nil {
 				errors = append(errors, *err)
 			}
 
-		case parsercommon.SingleField:
+		case parser.SingleField:
 			if err := v.validateSingleColumn(i, field.OriginalField); err != nil {
 				errors = append(errors, *err)
 			}
 
-		case parsercommon.FunctionField, parsercommon.ComplexField, parsercommon.LiteralField:
+		case parser.FunctionField, parser.ComplexField, parser.LiteralField:
 			// These field types don't require schema validation
 			continue
 		}
@@ -189,7 +189,7 @@ func (v *SchemaValidator) findSchemaForTable(tableName string) string {
 
 // ValidateTypeConsistency validates type consistency between inferred and schema types
 func (v *SchemaValidator) ValidateTypeConsistency(
-	field *parsercommon.SelectField,
+	field *parser.SelectField,
 	inferredType *TypeInfo,
 	schemaColumn *snapsql.ColumnInfo,
 ) *ValidationError {
