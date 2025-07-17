@@ -487,23 +487,32 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 		realTableName = alias
 	}
 
+	// Extract column name from table.column format if needed
+	realColumnName := field.OriginalField
+	if strings.Contains(field.OriginalField, ".") {
+		parts := strings.Split(field.OriginalField, ".")
+		if len(parts) == 2 {
+			realColumnName = parts[1] // Take the column part
+		}
+	}
+
 	// Phase 5: Check if this is a subquery reference (CTE or derived table)
 	if e.enhancedResolver != nil {
 		if subqueryFields, found := e.enhancedResolver.ResolveSubqueryReference(realTableName); found {
 			// Find the field in the subquery results
 			for _, subField := range subqueryFields {
-				if subField.OriginalName == field.OriginalField ||
-					subField.Name == field.OriginalField ||
-					subField.Alias == field.OriginalField {
+				if subField.OriginalName == realColumnName ||
+					subField.Name == realColumnName ||
+					subField.Alias == realColumnName {
 					fieldSource := FieldSource{
 						Type:   "subquery",
 						Table:  realTableName,
-						Column: field.OriginalField,
+						Column: realColumnName,
 					}
 					return subField.Type, fieldSource, nil
 				}
 			}
-			return nil, FieldSource{}, fmt.Errorf("column '%s' not found in subquery '%s'", field.OriginalField, realTableName)
+			return nil, FieldSource{}, fmt.Errorf("column '%s' not found in subquery '%s'", realColumnName, realTableName)
 		}
 	}
 
@@ -514,7 +523,7 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 	}
 
 	// Get column information
-	column, err := e.schemaResolver.ResolveTableColumn(schemaName, realTableName, field.OriginalField)
+	column, err := e.schemaResolver.ResolveTableColumn(schemaName, realTableName, realColumnName)
 	if err != nil {
 		return nil, FieldSource{}, err
 	}
@@ -524,7 +533,7 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 	fieldSource := FieldSource{
 		Type:   "column",
 		Table:  realTableName,
-		Column: field.OriginalField,
+		Column: realColumnName,
 	}
 
 	return fieldType, fieldSource, nil

@@ -113,6 +113,15 @@ func (v *SchemaValidator) validateTableColumn(fieldIndex int, tableName, columnN
 	// Resolve table alias
 	realTableName := v.resolveTableAlias(tableName)
 
+	// Extract column name from table.column format if needed
+	realColumnName := columnName
+	if strings.Contains(columnName, ".") {
+		parts := strings.Split(columnName, ".")
+		if len(parts) == 2 {
+			realColumnName = parts[1] // Take the column part
+		}
+	}
+
 	// Find schema name for the table
 	schemaName := v.findSchemaForTable(realTableName)
 	if schemaName == "" {
@@ -126,15 +135,15 @@ func (v *SchemaValidator) validateTableColumn(fieldIndex int, tableName, columnN
 	}
 
 	// Validate column exists
-	_, err := v.schemaResolver.ResolveTableColumn(schemaName, realTableName, columnName)
+	_, err := v.schemaResolver.ResolveTableColumn(schemaName, realTableName, realColumnName)
 	if err != nil {
 		return &ValidationError{
 			Position:   fieldIndex,
 			ErrorType:  ColumnNotFound.String(),
-			Message:    fmt.Sprintf("Column '%s' does not exist in table '%s.%s'", columnName, schemaName, realTableName),
+			Message:    fmt.Sprintf("Column '%s' does not exist in table '%s.%s'", realColumnName, schemaName, realTableName),
 			TableName:  realTableName,
-			FieldName:  columnName,
-			Suggestion: v.suggestSimilarColumns(schemaName, realTableName, columnName),
+			FieldName:  realColumnName,
+			Suggestion: v.suggestSimilarColumns(schemaName, realTableName, realColumnName),
 		}
 	}
 

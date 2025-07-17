@@ -76,7 +76,7 @@ OFFSET /*= pagination.page * pagination.size */0;`
 }
 
 func TestCommentBlockParsing(t *testing.T) {
-	sqlContent := `/*@
+	sqlContent := `/*#
 name: comment_query
 function_name: commentQuery
 parameters:

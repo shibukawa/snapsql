@@ -213,7 +213,7 @@ func (ns *Namespace) valueToLiteral(value any) string {
 	}
 }
 
-// EvaluateEnvironmentExpression evaluates environment constant expressions (/*@ */)
+// EvaluateEnvironmentExpression evaluates environment constant expressions (/*# */)
 func (ns *Namespace) EvaluateEnvironmentExpression(expression string) (any, error) {
 	if ns.envCEL == nil {
 		return nil, ErrEnvironmentCELNotInit
@@ -578,4 +578,32 @@ func createCleanParameterMap(parameters map[string]any) map[string]any {
 	}
 
 	return clean
+}
+
+// GetLoopVariableType returns the type of a loop variable if it exists in the current stack
+// Returns the type string and true if found, empty string and false if not found
+func (ns *Namespace) GetLoopVariableType(variableName string) (string, bool) {
+	// Check from current frame to outer frames
+	for i := len(ns.stack) - 1; i >= 0; i-- {
+		frame := ns.stack[i]
+		if frame.loopVar == variableName {
+			// Found as loop variable - infer type from loop target
+			if frame.loopTarget != nil && len(frame.loopTarget) > 0 {
+				return ns.inferLoopVariableType(frame.loopTarget), true
+			}
+			// Default to string if no loop target info
+			return "string", true
+		}
+	}
+	return "", false
+}
+
+// inferLoopVariableType infers type from loop target (usually an array element)
+func (ns *Namespace) inferLoopVariableType(loopTarget []any) string {
+	if len(loopTarget) == 0 {
+		return "string"
+	}
+
+	// Use the existing inferTypeFromValue method
+	return ns.inferTypeFromValue(loopTarget[0])
 }

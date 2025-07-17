@@ -21,7 +21,8 @@ var (
 	String               = PrimitiveType("string", tok.STRING)
 	Boolean              = PrimitiveType("boolean", tok.BOOLEAN)
 	Null                 = PrimitiveType("null", tok.NULL)
-	Literal              = pc.Or(Number, String, Boolean, Null)
+	DummyLiteral         = PrimitiveType("dummy_literal", tok.DUMMY_LITERAL)
+	Literal              = pc.Or(Number, String, Boolean, Null, DummyLiteral)
 	Identifier           = PrimitiveType("identifier", tok.IDENTIFIER)
 	ContextualIdentifier = PrimitiveType("contextualIdentifier", tok.CONTEXTUAL_IDENTIFIER)
 
@@ -32,7 +33,8 @@ var (
 	NumericOperator = PrimitiveType("numericOperator", tok.PLUS, tok.MINUS, tok.MULTIPLY, tok.DIVIDE)
 
 	// Keywords
-	Select = PrimitiveType("select", tok.SELECT)
+	Select  = PrimitiveType("select", tok.SELECT)
+	Keyword = PrimitiveType("keyword", tok.RESERVED_IDENTIFIER) // Any reserved keyword
 
 	SP  = pc.Drop(pc.ZeroOrMore("comment or space", pc.Or(Space, Comment)))
 	EOS = pc.EOS[tok.Token]()

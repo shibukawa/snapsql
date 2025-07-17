@@ -669,7 +669,11 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) *Directive {
 		} else if content == "else" {
 			return &Directive{Type: "else"}
 		} else if strings.HasPrefix(content, "for") && (len(content) == 3 || content[3] == ' ') {
-			return &Directive{Type: "for"}
+			condition := ""
+			if len(content) > 3 && content[3] == ' ' {
+				condition = strings.TrimSpace(content[4:])
+			}
+			return &Directive{Type: "for", Condition: condition}
 		} else if content == "end" {
 			return &Directive{Type: "end"}
 		}

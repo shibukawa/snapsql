@@ -18,6 +18,9 @@ var (
 	subQuery       = cmn.WS2(cmn.PrimitiveType("select", tok.SELECT))
 	cast           = cmn.PrimitiveType("cast", tok.CAST)
 	postgreSQLCast = cmn.PrimitiveType("postgresqlCast", tok.DOUBLE_COLON)
+
+	// Type identifiers - can be keywords or identifiers
+	typeIdentifier = pc.Or(cmn.Identifier, cmn.Keyword)
 	asterisk       = cmn.PrimitiveType("asterisk", tok.MULTIPLY)
 	jsonOperator   = cmn.WS2(cmn.PrimitiveType("jsonOperator", tok.JSON_OPERATOR))
 
@@ -63,11 +66,11 @@ var (
 	)
 
 	standardCastStart   = pc.Seq(cast, cmn.ParenOpen, cmn.SP)
-	standardCastEnd     = pc.Seq(cmn.SP, as, cmn.SP, cmn.Identifier, cmn.SP, cmn.ParenClose, cmn.SP, cmn.EOS)
+	standardCastEnd     = pc.Seq(cmn.SP, as, cmn.SP, typeIdentifier, cmn.SP, cmn.ParenClose, cmn.SP, cmn.EOS)
 	postgreSQLCastStart = pc.Seq(cmn.ParenOpen, cmn.SP)
 	postgreSQLCastEnd   = pc.Seq(
 		pc.Optional(pc.Seq(cmn.SP, cmn.ParenClose)),
-		cmn.SP, postgreSQLCast, cmn.SP, cmn.Identifier, cmn.SP, cmn.EOS)
+		cmn.SP, postgreSQLCast, cmn.SP, typeIdentifier, cmn.SP, cmn.EOS)
 )
 
 func tag(typeStr string, p ...pc.Parser[tok.Token]) pc.Parser[tok.Token] {

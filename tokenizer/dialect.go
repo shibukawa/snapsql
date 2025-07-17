@@ -39,7 +39,7 @@ var KeywordSet = map[string]KeywordInfo{
 
 	// --- MySQL/SQLite/extended (strict reserved) ---
 	"REGEXP": {true, true}, "XOR": {true, true}, "REPLACE": {true, true}, "SHOW": {true, true}, "TRIGGER": {true, true},
-	"UNLOCK": {true, true}, "ZEROFILL": {true, true}, "MOD": {true, true}, "DIV": {true, true}, "LOCK": {true, true}, "UNSIGNED": {true, true},
+	"UNLOCK": {true, true}, "ZEROFILL": {true, true}, "MOD": {true, true}, "DIV": {true, true}, "LOCK": {true, true}, "UNSIGNED": {true, true}, "SIGNED": {true, true},
 	"STRAIGHT_JOIN": {true, true}, "SQL_BIG_RESULT": {true, true}, "SQL_CALC_FOUND_ROWS": {true, true}, "SQL_SMALL_RESULT": {true, true},
 	"HIGH_PRIORITY": {true, true}, "LOW_PRIORITY": {true, true}, "DELAYED": {true, true}, "IGNORE": {true, true},
 

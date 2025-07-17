@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parserstep1"
 	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/parser/parserstep3"
 	"github.com/shibukawa/snapsql/parser/parserstep4"
@@ -113,6 +114,97 @@ func TestExecute(t *testing.T) {
 						}
 					}
 				}
+			}
+		})
+	}
+}
+
+// TestExecuteWithFunctionDef tests DUMMY_LITERAL replacement functionality
+func TestExecuteWithFunctionDef(t *testing.T) {
+	tests := []struct {
+		name        string
+		sql         string
+		functionDef cmn.FunctionDefinition
+		expectError bool
+	}{
+		{
+			name: "Replace DUMMY_LITERAL with int parameter",
+			sql:  "SELECT /*= user_id */ FROM users",
+			functionDef: cmn.FunctionDefinition{
+				Name: "test_query",
+				Parameters: map[string]any{
+					"user_id": map[string]any{
+						"type": "int",
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Replace DUMMY_LITERAL with string parameter",
+			sql:  "SELECT /*= user_name */ FROM users",
+			functionDef: cmn.FunctionDefinition{
+				Name: "test_query",
+				Parameters: map[string]any{
+					"user_name": map[string]any{
+						"type": "string",
+					},
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Tokenize SQL
+			tokens, err := tokenizer.Tokenize(tt.sql)
+			assert.NoError(t, err)
+
+			// Process through parserstep1 to insert DUMMY_LITERAL tokens
+			processedTokens, err := parserstep1.Execute(tokens)
+			assert.NoError(t, err)
+
+			// Parse through steps 2-5
+			stmt, err := parserstep2.Execute(processedTokens)
+			assert.NoError(t, err)
+
+			err = parserstep3.Execute(stmt)
+			assert.NoError(t, err)
+
+			parseErr := parserstep4.Execute(stmt)
+			if parseErr != nil {
+				t.Fatalf("parserstep4 failed: %v", parseErr)
+			}
+
+			parseErr = parserstep5.Execute(stmt)
+			if parseErr != nil {
+				t.Fatalf("parserstep5 failed: %v", parseErr)
+			}
+
+			// Create namespace
+			namespace := cmn.NewNamespace(&tt.functionDef, nil, nil)
+
+			// Execute parserstep6 with function definition
+			parseErr = ExecuteWithFunctionDef(stmt, namespace, tt.functionDef)
+
+			if tt.expectError {
+				assert.True(t, parseErr != nil, "Expected error but got none")
+			} else {
+				// Check if DUMMY_LITERAL tokens were replaced correctly
+				dummyLiteralFound := false
+
+				for _, clause := range stmt.Clauses() {
+					tokens := clause.RawTokens()
+					for _, token := range tokens {
+						if token.Type == tokenizer.DUMMY_LITERAL {
+							dummyLiteralFound = true
+							t.Logf("Found unreplaced DUMMY_LITERAL token: %s", token.Value)
+						}
+					}
+				}
+
+				assert.False(t, dummyLiteralFound, "DUMMY_LITERAL tokens should have been replaced")
 			}
 		})
 	}

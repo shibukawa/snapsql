@@ -42,9 +42,9 @@ func NewFunctionDefinitionFromSQL(tokens []tokenizer.Token) (*FunctionDefinition
 		if token.Type == tokenizer.BLOCK_COMMENT {
 			content := strings.TrimSpace(token.Value)
 
-			// Only process comments that start with /*@ (def marker)
-			if strings.HasPrefix(content, "/*@") && strings.HasSuffix(content, "*/") {
-				// Remove /*@ and */ markers
+			// Only process comments that start with /*# (def marker)
+			if strings.HasPrefix(content, "/*#") && strings.HasSuffix(content, "*/") {
+				// Remove /*# and */ markers
 				content = strings.TrimSpace(content[3 : len(content)-2])
 
 				// This should be YAML content

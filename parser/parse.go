@@ -195,13 +195,14 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 		options = &ParseOptions{}
 	}
 
-	// Step 1: Run parserstep1 - Basic syntax validation
-	if err := parserstep1.Execute(tokens); err != nil {
+	// Step 1: Run parserstep1 - Basic syntax validation and dummy literal insertion
+	processedTokens, err := parserstep1.Execute(tokens)
+	if err != nil {
 		return nil, fmt.Errorf("parserstep1 failed: %w", err)
 	}
 
 	// Step 2: Run parserstep2 - SQL structure parsing
-	stmt, err := parserstep2.Execute(tokens)
+	stmt, err := parserstep2.Execute(processedTokens)
 	if err != nil {
 		return nil, fmt.Errorf("parserstep2 failed: %w", err)
 	}
@@ -238,8 +239,15 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 
 	namespace := NewNamespace(functionDef, environment, parameters)
 
-	if parseErr := parserstep6.Execute(stmt, namespace); parseErr != nil {
-		return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
+	// Use ExecuteWithFunctionDef only if functionDef is provided
+	if functionDef != nil {
+		if parseErr := parserstep6.ExecuteWithFunctionDef(stmt, namespace, *functionDef); parseErr != nil {
+			return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
+		}
+	} else {
+		if parseErr := parserstep6.Execute(stmt, namespace); parseErr != nil {
+			return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
+		}
 	}
 
 	// Step 7: Run parserstep7 - Subquery dependency analysis (optional)

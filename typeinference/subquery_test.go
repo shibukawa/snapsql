@@ -50,7 +50,7 @@ func TestSubqueryTypeInference(t *testing.T) {
 	}{
 		{
 			name:        "simple_select_with_users",
-			sql:         "SELECT /*@ id */ as id, /*@ name */ as name FROM users",
+			sql:         "SELECT /*# id */ as id, /*# name */ as name FROM users",
 			expectError: false,
 		},
 		{
@@ -427,16 +427,16 @@ func TestRealSubqueryParsing(t *testing.T) {
 			sql: `
 				WITH monthly_sales AS (
 					SELECT 
-						/*@ customer_id */ as customer_id,
-						/*@ EXTRACT(YEAR FROM sale_date) */ as year,
-						/*@ EXTRACT(MONTH FROM sale_date) */ as month,
-						/*@ SUM(amount) */ as monthly_total
+						/*# customer_id */ as customer_id,
+						/*# EXTRACT(YEAR FROM sale_date) */ as year,
+						/*# EXTRACT(MONTH FROM sale_date) */ as month,
+						/*# SUM(amount) */ as monthly_total
 					FROM sales
 					GROUP BY customer_id, EXTRACT(YEAR FROM sale_date), EXTRACT(MONTH FROM sale_date)
 				)
 				SELECT 
-					/*@ customer_id */ as customer_id,
-					/*@ AVG(monthly_total) */ as avg_monthly_sales
+					/*# customer_id */ as customer_id,
+					/*# AVG(monthly_total) */ as avg_monthly_sales
 				FROM monthly_sales
 				GROUP BY customer_id
 			`,

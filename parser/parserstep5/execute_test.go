@@ -29,7 +29,7 @@ func TestExecute(t *testing.T) {
 		},
 		{
 			name: "Template with environment variable",
-			sql:  "SELECT id, name FROM users WHERE role = /*@ role */admin",
+			sql:  "SELECT id, name FROM users WHERE role = /*# role */admin",
 		},
 		{
 			name: "Template with LIMIT implicit condition",

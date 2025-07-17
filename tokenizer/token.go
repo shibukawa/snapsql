@@ -26,6 +26,7 @@ const (
 	IDENTIFIER    // quoted identifiers ("col")
 	NUMBER        // numeric literals
 	BOOLEAN       // boolean literals (true, false)
+	DUMMY_LITERAL // placeholder for /*= variable */ directives
 	OPENED_PARENS // (
 	CLOSED_PARENS // )
 	COMMA         // ,

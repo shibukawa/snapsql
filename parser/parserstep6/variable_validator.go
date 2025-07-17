@@ -161,8 +161,8 @@ func processForLoop(tokens []tokenizer.Token, startIndex int, ns *cmn.Namespace,
 		return false, startIndex
 	} else if loopTarget2, ok := loopTarget.([]any); ok {
 		endIndex := findMatchingEnd(tokens, startIndex)
-		ns.EnterLoop(loopVar, loopTarget2)
-		return true, endIndex
+		success := ns.EnterLoop(loopVar, loopTarget2)
+		return success, endIndex
 	} else {
 		perr.Add(fmt.Errorf("%w at %s: loop target '%s' is not list: %v", cmn.ErrInvalidForSnapSQL, forToken.Position.String(), listExpr, loopTarget))
 		return false, startIndex

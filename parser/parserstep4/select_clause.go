@@ -185,9 +185,26 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		case "asterisk": // asterisk (*)
 			p := v.Position
 			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow asterisk (*) in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
-		case "literal": // literal (boolean/number/string/null)
-			p := v.Position
-			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow literal('%s') in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String(), v.Value))
+		case "literal": // literal (boolean/number/string/null) or DUMMY_LITERAL
+			// Check if this is a DUMMY_LITERAL token (allowed as variable placeholder)
+			isDummyLiteral := false
+			for _, token := range match {
+				if token.Val.Type == tok.DUMMY_LITERAL {
+					isDummyLiteral = true
+					break
+				}
+			}
+
+			if isDummyLiteral {
+				// DUMMY_LITERAL tokens are allowed as they represent variable directives
+				field.FieldKind = cmn.LiteralField
+				field.Expression = cmn.ToToken(match)
+				clause.Fields = append(clause.Fields, field)
+			} else {
+				// Regular literals are still restricted in SELECT clause
+				p := v.Position
+				perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow literal('%s') in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String(), v.Value))
+			}
 		case "not *": // not null/true/false
 			p := match[0].Val.Position
 			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow literal in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
@@ -245,8 +262,10 @@ func parseFieldQualifier(fieldTokens []pc.Token[tok.Token]) (cmn.SelectField, []
 		fieldTokens = fieldTokens[consume:]
 		// as type)
 		fieldTokens, match, _, _, _ = pc.Find(pctx, standardCastEnd, fieldTokens)
-		result.TypeName = match[1].Val.Value
-		result.ExplicitType = true
+		if len(match) > 1 {
+			result.TypeName = match[1].Val.Value
+			result.ExplicitType = true
+		}
 	} else {
 		var ok bool
 		newFieldToken, match, _, _, ok := pc.Find(pctx, postgreSQLCastEnd, fieldTokens)
