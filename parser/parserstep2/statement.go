@@ -3,6 +3,7 @@ package parserstep2
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
@@ -88,7 +89,6 @@ func subQuery(pctx *pc.ParseContext[Entity], t []pc.Token[Entity]) (consumed int
 				}, nil
 			}
 		}
-		current += len(part.Skipped) + part.Consume
 	}
 	return 0, nil, &IncompleteSubQueryError{
 		Pos:           t[0].Val.Original.Position,
@@ -217,6 +217,19 @@ func clauseStart(tt tok.TokenType) pc.Parser[Entity] {
 	)
 }
 
+func DumpStatement(tokens []pc.Token[Entity]) string {
+	var sb strings.Builder
+	for i, token := range tokens {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("'")
+		sb.WriteString(token.Val.Original.Value)
+		sb.WriteString("'")
+	}
+	return sb.String()
+}
+
 func ParseStatement() pc.Parser[Entity] {
 	return pc.Trace("statement", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
 		consumeForCTE, cte, err := ws(parseCTE())(pctx, tokens)
@@ -306,56 +319,31 @@ func extractIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Token[Ent
 		return "", clauseBody, prevClauseBody
 	}
 
-	// Find if directive at the end of previous clause (excluding whitespace and non-directive comments)
+	// Find if directive at the end of previous clause
 	ifCondition := ""
 	ifIndex := -1
 	if len(prevClauseBody) > 0 {
 		for i := len(prevClauseBody) - 1; i >= 0; i-- {
 			token := prevClauseBody[i]
-			// Skip whitespace and non-directive comments
-			if token.Val.Original.Type == tok.WHITESPACE ||
-				(token.Val.Original.Type == tok.BLOCK_COMMENT && token.Val.Original.Directive == nil) ||
-				(token.Val.Original.Type == tok.LINE_COMMENT && token.Val.Original.Directive == nil) {
-				continue
-			}
-			// Check if this is an if directive
 			if token.Val.Original.Directive != nil && token.Val.Original.Directive.Type == "if" {
 				ifCondition = token.Val.Original.Directive.Condition
 				ifIndex = i
 				break
 			}
-			// If we found a non-whitespace, non-comment token, stop looking
-			break
 		}
 	}
 
-	// Find end directive at the end of current clause body (excluding whitespace and non-directive comments)
-	// If the last token is an if directive, look before it
+	// Find end directive at the end of current clause body
 	foundEnd := false
 	endIndex := -1
 	if len(clauseBody) > 0 {
-		startIdx := len(clauseBody) - 1
-		// If the last token is an if directive, start looking before it
-		if clauseBody[startIdx].Val.Original.Directive != nil && clauseBody[startIdx].Val.Original.Directive.Type == "if" {
-			startIdx--
-		}
-
-		for i := startIdx; i >= 0; i-- {
+		for i := len(clauseBody) - 1; i >= 0; i-- {
 			token := clauseBody[i]
-			// Skip whitespace and non-directive comments
-			if token.Val.Original.Type == tok.WHITESPACE ||
-				(token.Val.Original.Type == tok.BLOCK_COMMENT && token.Val.Original.Directive == nil) ||
-				(token.Val.Original.Type == tok.LINE_COMMENT && token.Val.Original.Directive == nil) {
-				continue
-			}
-			// Check if this is an end directive
 			if token.Val.Original.Directive != nil && token.Val.Original.Directive.Type == "end" {
 				foundEnd = true
 				endIndex = i
 				break
 			}
-			// If we found a non-whitespace, non-comment token, stop looking
-			break
 		}
 	}
 
@@ -383,29 +371,112 @@ func extractIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Token[Ent
 	return "", clauseBody, prevClauseBody
 }
 
+func splitter(tt tok.TokenType) pc.Parser[Entity] {
+	return pc.Or(
+		ws(parenOpen),
+		ws(parenClose),
+
+		// for select
+		selectStatement,
+		fromClause,
+		whereClause,
+		groupByClause,
+		orderByClause,
+		havingClause,
+		limitClause,
+		offsetClause,
+		forClause,
+		returningClause,
+
+		// for insert
+		insertIntoStatement,
+		valuesClause,
+		onConflictClause,
+
+		// for update
+		// on conflict do update, for update
+		when(tt != tok.INSERT && tt != tok.SELECT, updateStatement),
+		// on conflict do update set
+		when(tt != tok.INSERT, setClause),
+
+		// for delete
+		deleteFromStatement,
+	)
+}
+
+func clauseIter(pctx *pc.ParseContext[Entity], tt tok.TokenType, tokens []pc.Token[Entity]) iter.Seq2[int, pc.Consume[Entity]] {
+	return func(yield func(index int, consume pc.Consume[Entity]) bool) {
+		count := 0
+		consume := 0
+		nest := 0
+		var skipped []pc.Token[Entity]
+		for _, part := range pc.FindIter(pctx, splitter(tt), tokens) {
+			if part.Last {
+				yield(count, pc.Consume[Entity]{
+					Consume: part.Consume,
+					Skipped: append(skipped, part.Skipped...),
+					Match:   nil,
+					Last:    true,
+				})
+			} else if nest > 0 {
+				switch part.Match[0].Val.Original.Type {
+				case tok.OPENED_PARENS:
+					nest++
+				case tok.CLOSED_PARENS:
+					nest--
+				}
+				skipped = append(skipped, part.Skipped...)
+				for _, m := range part.Match {
+					skipped = append(skipped, tokenToEntity(m.Val.RawTokens())...)
+				}
+				consume += part.Consume
+			} else {
+				if part.Match[0].Val.Original.Type == tok.OPENED_PARENS {
+					skipped = append(skipped, part.Skipped...)
+					for _, m := range part.Match {
+						skipped = append(skipped, tokenToEntity(m.Val.RawTokens())...)
+					}
+					consume += part.Consume + len(part.Skipped)
+					nest = 1
+				} else {
+					yield(count, pc.Consume[Entity]{
+						Consume: part.Consume,
+						Skipped: append(skipped, part.Skipped...),
+						Match:   part.Match,
+						Last:    part.Last,
+					})
+					skipped = nil
+					consume = 0
+					count++
+				}
+			}
+		}
+	}
+}
+
 func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *cmn.WithClause, tokens []pc.Token[Entity]) (int, []cmn.ClauseNode, error) {
 	var clauseHead []pc.Token[Entity]
-	var clauseBody []pc.Token[Entity]
 	var prevClauseBody []pc.Token[Entity]
 	var clauses []cmn.ClauseNode
 	if withClause != nil {
 		clauses = append(clauses, withClause)
 	}
 	var consumes int
-	for i, clause := range pc.FindIter(pctx, clauseStart(tt), tokens) {
+	for i, clause := range clauseIter(pctx, tt, tokens) {
 		consumes += clause.Consume + len(clause.Skipped)
-		if i != 0 {
-			if clause.Match != nil && clause.Match[0].Val.NewValue != nil && clause.Match[0].Val.NewValue.Type() == SUB_QUERY {
-				clauseBody = append(clauseBody, clause.Skipped...)
-				clauseBody = append(clauseBody, clause.Match...)
-				continue
+		clauseBody := append(clause.Skipped, clause.Match...)
+		if len(clauseBody) > 0 {
+			if i == 0 {
+				clauseHead = clause.Match
+				prevClauseBody = clauseBody
+			} else {
+				if len(clauseHead) > 0 {
+					clauses = append(clauses, newClauseNode(clauseHead, clauseBody, prevClauseBody))
+				}
+				clauseHead = clause.Match
+				prevClauseBody = clauseBody
 			}
-			clauseBody = append(clauseBody, clause.Skipped...)
-			clauses = append(clauses, newClauseNode(clauseHead, clauseBody, prevClauseBody))
-			prevClauseBody = clauseBody
-			clauseBody = nil
 		}
-		clauseHead = clause.Match
 	}
 	return consumes, clauses, nil
 }
