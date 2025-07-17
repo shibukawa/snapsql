@@ -306,6 +306,23 @@ func TestParseStatementWithCTE(t *testing.T) {
 			wantCTEs: 1,
 			wantErr:  false,
 		},
+		{
+			name: "regression test for CTE parsing",
+			args: args{
+				src: `WITH user_stats AS (
+					SELECT department, COUNT(*) as dept_count
+					FROM users
+					WHERE age >= /*= min_age */18
+					GROUP BY department
+					)
+					SELECT u.name, u.department, s.dept_count
+					FROM users u
+					JOIN user_stats s ON u.department = s.department`,
+			},
+			wantType: cmn.SELECT_STATEMENT,
+			wantCTEs: 1,
+			wantErr:  false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

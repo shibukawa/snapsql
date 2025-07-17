@@ -88,7 +88,7 @@ func subQuery(pctx *pc.ParseContext[Entity], t []pc.Token[Entity]) (consumed int
 				}, nil
 			}
 		}
-		current += len(part.Skipped) + part.Consume
+		// current += len(part.Skipped) + part.Consume // ← 2回目の加算を削除
 	}
 	return 0, nil, &IncompleteSubQueryError{
 		Pos:           t[0].Val.Original.Position,
