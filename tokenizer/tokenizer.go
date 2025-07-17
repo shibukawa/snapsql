@@ -13,7 +13,6 @@ type TokenIterator iter.Seq2[Token, error]
 // SqlTokenizer is a tokenizer that returns an iterator
 type SqlTokenizer struct {
 	input   string
-	dialect SqlDialect
 	options TokenizerOptions
 }
 
@@ -21,15 +20,13 @@ type SqlTokenizer struct {
 type TokenizerOptions struct {
 	SkipWhitespace bool
 	SkipComments   bool
-	PreserveCase   bool
 }
 
 // NewSqlTokenizer creates a new SqlTokenizer
-func NewSqlTokenizer(input string, dialect SqlDialect, options ...TokenizerOptions) *SqlTokenizer {
+func NewSqlTokenizer(input string, options ...TokenizerOptions) *SqlTokenizer {
 	opts := TokenizerOptions{
 		SkipWhitespace: false,
 		SkipComments:   false,
-		PreserveCase:   false,
 	}
 	if len(options) > 0 {
 		opts = options[0]
@@ -37,7 +34,6 @@ func NewSqlTokenizer(input string, dialect SqlDialect, options ...TokenizerOptio
 
 	return &SqlTokenizer{
 		input:   input,
-		dialect: dialect,
 		options: opts,
 	}
 }
@@ -50,7 +46,6 @@ func (t *SqlTokenizer) Tokens() TokenIterator {
 			position: 0,
 			line:     1,
 			column:   1,
-			dialect:  t.dialect,
 			options:  t.options,
 		}
 
@@ -104,6 +99,22 @@ func (t *SqlTokenizer) AllTokens() ([]Token, error) {
 	return tokens, lastError
 }
 
+// Tokenize is a helper that tokenizes SQL and returns all tokens (for tests).
+func Tokenize(sql string) ([]Token, error) {
+	t := NewSqlTokenizer(sql)
+	tokens, err := t.AllTokens()
+	if err != nil {
+		return nil, err
+	}
+
+	// Assign indices
+	for i := range tokens {
+		tokens[i].Index = i
+	}
+
+	return tokens, err
+}
+
 // Internal tokenizer implementation
 type tokenizer struct {
 	input    string
@@ -111,7 +122,6 @@ type tokenizer struct {
 	line     int
 	column   int
 	current  rune
-	dialect  SqlDialect
 	options  TokenizerOptions
 }
 
@@ -143,15 +153,49 @@ func (t *tokenizer) nextToken() (Token, error) {
 			token := t.newToken(DOT, string(t.current))
 			t.readChar()
 			return token, nil
-		case '\'', '"':
+		case '\'', '"', '`':
 			return t.readString(t.current)
 		case '-':
+			// PostgreSQL JSON operators: ->, ->>
+			if t.peekChar() == '>' {
+				t.readChar() // consume '-'
+				if t.peekChar() == '>' {
+					t.readChar() // consume first '>'
+					t.readChar() // consume second '>'
+					return t.newToken(JSON_OPERATOR, "->>"), nil
+				}
+				t.readChar() // consume '>'
+				return t.newToken(JSON_OPERATOR, "->"), nil
+			}
 			if t.peekChar() == '-' {
 				return t.readLineComment()
 			}
 			token := t.newToken(MINUS, string(t.current))
 			t.readChar()
 			return token, nil
+		case '#':
+			// PostgreSQL JSON operators: #>, #>>
+			if t.peekChar() == '>' {
+				t.readChar() // consume '#'
+				if t.peekChar() == '>' {
+					t.readChar() // consume first '>'
+					t.readChar() // consume second '>'
+					return t.newToken(JSON_OPERATOR, "#>>"), nil
+				}
+				t.readChar() // consume '>'
+				return t.newToken(JSON_OPERATOR, "#>"), nil
+			}
+			token := t.newToken(OTHER, string(t.current))
+			t.readChar()
+			return token, nil
+		case ':':
+			// PostgreSQL-style cast operator ::
+			if t.peekChar() == ':' {
+				t.readChar() // consume first
+				t.readChar() // consume second
+				return t.newToken(DOUBLE_COLON, "::"), nil
+			}
+			return Token{}, fmt.Errorf("%w: invalid ':' at line %d, column %d", ErrInvalidSingleColon, t.line, t.column-1)
 		case '/':
 			if t.peekChar() == '*' {
 				return t.readBlockComment()
@@ -203,7 +247,7 @@ func (t *tokenizer) nextToken() (Token, error) {
 			return token, nil
 		default:
 			if unicode.IsLetter(t.current) || t.current == '_' {
-				return t.readWord()
+				return t.readIdentifierOrKeyword()
 			} else if unicode.IsDigit(t.current) {
 				return t.readNumber()
 			} else {
@@ -264,38 +308,117 @@ func (t *tokenizer) readWhitespace() Token {
 	}
 }
 
-// readWord reads words (identifiers and keywords)
-func (t *tokenizer) readWord() (Token, error) {
+var keywordLikeTokenTypeMap = map[string]TokenType{
+	// Row locking and concurrency control
+	"AND":   AND,
+	"OR":    OR,
+	"NOT":   NOT,
+	"NULL":  NULL,
+	"TRUE":  BOOLEAN,
+	"FALSE": BOOLEAN,
+
+	"SELECT":    SELECT,
+	"FROM":      FROM,
+	"WHERE":     WHERE,
+	"ORDER":     ORDER,
+	"BY":        BY,
+	"GROUP":     GROUP,
+	"HAVING":    HAVING,
+	"LIMIT":     LIMIT,
+	"OFFSET":    OFFSET,
+	"FOR":       FOR,
+	"SHARE":     SHARE,
+	"NO":        NO,
+	"NOWAIT":    NOWAIT,
+	"SKIP":      SKIP,
+	"LOCKED":    LOCKED,
+	"RETURNING": RETURNING,
+
+	"INSERT": INSERT,
+	"INTO":   INTO,
+	"VALUES": VALUES,
+
+	"UPDATE":   UPDATE,
+	"SET":      SET,
+	"ON":       ON,
+	"CONFLICT": CONFLICT,
+
+	"DELETE": DELETE,
+
+	"WITH":      WITH,
+	"RECURSIVE": RECURSIVE,
+	"AS":        AS,
+
+	"CAST":     CAST,
+	"DISTINCT": DISTINCT,
+	"ALL":      ALL,
+
+	"JOIN":    JOIN,
+	"INNER":   INNER,
+	"OUTER":   OUTER,
+	"LEFT":    LEFT,
+	"RIGHT":   RIGHT,
+	"FULL":    FULL,
+	"USING":   USING,
+	"NATURAL": NATURAL,
+	"CROSS":   CROSS,
+
+	"ASC":     ASC,
+	"DESC":    DESC,
+	"COLLATE": COLLATE,
+
+	// Expression keywords
+	"CASE": CASE,
+	"WHEN": WHEN,
+	"THEN": THEN,
+	"ELSE": ELSE,
+	"END":  END,
+
+	// Group By keywords
+	"ROLLUP":   ROLLUP,
+	"CUBE":     CUBE,
+	"GROUPING": GROUPING,
+	"SETS":     SETS,
+}
+
+// readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking
+func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	var builder strings.Builder
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
 
+	// Read identifier characters
 	for unicode.IsLetter(t.current) || unicode.IsDigit(t.current) || t.current == '_' {
 		builder.WriteRune(t.current)
 		t.readChar()
 	}
 
-	word := builder.String()
-	if !t.options.PreserveCase {
-		word = strings.ToUpper(word)
+	originalValue := builder.String()
+	upperValue := strings.ToUpper(originalValue)
+
+	var tokenType TokenType
+	if tt, ok := keywordLikeTokenTypeMap[upperValue]; ok {
+		tokenType = tt
+	} else if info, ok := KeywordSet[upperValue]; ok && info.Keyword {
+		if info.StrictReserved {
+			tokenType = RESERVED_IDENTIFIER // Strictly reserved keywords as RESERVED_IDENTIFIER
+		} else {
+			tokenType = IDENTIFIER
+		}
+	} else {
+		tokenType = IDENTIFIER // Regular identifiers
 	}
 
-	// キーワード判定
-	tokenType := t.getKeywordTokenType(word)
-
 	return Token{
-		Type:  tokenType,
-		Value: word,
-		Position: Position{
-			Line:   startLine,
-			Column: startColumn,
-			Offset: startOffset,
-		},
+		Type:      tokenType,
+		Value:     originalValue, // Preserve original case
+		Position:  Position{Line: startLine, Column: startColumn, Offset: startOffset},
+		Directive: nil,
 	}, nil
 }
 
-// readString reads string literals
+// readString reads string literals or quoted identifiers with reserved keyword support
 func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	var builder strings.Builder
 	startLine := t.line
@@ -305,30 +428,56 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	builder.WriteRune(delimiter) // include opening quote
 	t.readChar()
 
-	for t.current != 0 && t.current != delimiter {
-		if t.current == '\\' {
+	for t.current != 0 {
+		if t.current == delimiter {
+			// Handle escaped quotes (e.g., '' or "" or ``)
+			if t.peekChar() == delimiter {
+				builder.WriteRune(delimiter)
+				t.readChar()
+				t.readChar()
+				continue
+			}
+			break // closing quote
+		}
+		if t.current == '\\' && delimiter == '\'' {
+			// Backslash escape (PostgreSQL compatible)
 			builder.WriteRune(t.current)
 			t.readChar()
 			if t.current != 0 {
 				builder.WriteRune(t.current)
 				t.readChar()
 			}
-		} else {
-			builder.WriteRune(t.current)
-			t.readChar()
+			continue
 		}
+		builder.WriteRune(t.current)
+		t.readChar()
 	}
 
-	if t.current == 0 {
+	if t.current != delimiter {
 		return Token{}, fmt.Errorf("%w: %c at line %d, column %d", ErrUnterminatedString, delimiter, startLine, startColumn)
 	}
 
 	builder.WriteRune(delimiter) // include closing quote
 	t.readChar()
 
+	// Determine token type based on delimiter
+	var tokenType TokenType
+	quotedContent := builder.String()
+	// Note: We no longer need to check reserved words for quoted identifiers
+
+	if delimiter == '"' || delimiter == '[' || delimiter == '`' {
+		// All quoted identifiers are treated as regular identifiers
+		// For standard SQL and SQLite, double quotes (") are used
+		// For MySQL, backticks (`) are used
+		// For SQL Server, square brackets ([]) are used
+		tokenType = IDENTIFIER // All quoted identifiers are regular identifiers
+	} else {
+		tokenType = STRING // String literal
+	}
+
 	return Token{
-		Type:  QUOTE,
-		Value: builder.String(),
+		Type:  tokenType,
+		Value: quotedContent, // Keep quotes for quoted identifiers, remove later in parser
 		Position: Position{
 			Line:   startLine,
 			Column: startColumn,
@@ -400,13 +549,13 @@ func (t *tokenizer) readLineComment() (Token, error) {
 	startColumn := t.column - 1
 	startOffset := t.position - 1
 
-	// '--' を読み取る
+	// Read '//' or '--'
 	builder.WriteRune(t.current)
 	t.readChar()
 	builder.WriteRune(t.current)
 	t.readChar()
 
-	// 行末まで読み取る
+	// Read until end of line
 	for t.current != 0 && t.current != '\n' {
 		builder.WriteRune(t.current)
 		t.readChar()
@@ -430,13 +579,13 @@ func (t *tokenizer) readBlockComment() (Token, error) {
 	startColumn := t.column - 1
 	startOffset := t.position - 1
 
-	// '/*' を読み取る
+	// Read '/*'
 	builder.WriteRune(t.current)
 	t.readChar()
 	builder.WriteRune(t.current)
 	t.readChar()
 
-	// '*/' まで読み取る
+	// Read until '*/'
 	for t.current != 0 {
 		if t.current == '*' && t.peekChar() == '/' {
 			builder.WriteRune(t.current)
@@ -454,14 +603,13 @@ func (t *tokenizer) readBlockComment() (Token, error) {
 	}
 
 	comment := builder.String()
-	directiveType, isDirective := t.parseSnapSQLDirective(comment)
+	directive := t.parseSnapSQLDirective(comment)
 
 	return Token{
-		Type:               BLOCK_COMMENT,
-		Value:              comment,
-		Position:           Position{Line: startLine, Column: startColumn, Offset: startOffset},
-		IsSnapSQLDirective: isDirective,
-		DirectiveType:      directiveType,
+		Type:      BLOCK_COMMENT,
+		Value:     comment,
+		Position:  Position{Line: startLine, Column: startColumn, Offset: startOffset},
+		Directive: directive,
 	}, nil
 }
 
@@ -499,141 +647,47 @@ func (t *tokenizer) newToken(tokenType TokenType, value string) Token {
 }
 
 // parseSnapSQLDirective parses SnapSQL extension directives
-func (t *tokenizer) parseSnapSQLDirective(comment string) (directiveType string, isDirective bool) {
+func (t *tokenizer) parseSnapSQLDirective(comment string) *Directive {
 	trimmed := strings.TrimSpace(comment)
 
-	// /*# で始まる場合
+	// Starts with /*#
 	if strings.HasPrefix(trimmed, "/*#") && strings.HasSuffix(trimmed, "*/") {
 		content := strings.TrimSpace(trimmed[3 : len(trimmed)-2])
 
-		if strings.HasPrefix(content, "if ") {
-			return "if", true
-		} else if strings.HasPrefix(content, "elseif ") {
-			return "elseif", true
+		if strings.HasPrefix(content, "if") && (len(content) == 2 || content[2] == ' ') {
+			condition := ""
+			if len(content) > 2 && content[2] == ' ' {
+				condition = strings.TrimSpace(content[3:])
+			}
+			return &Directive{Type: "if", Condition: condition}
+		} else if strings.HasPrefix(content, "elseif") && (len(content) == 6 || content[6] == ' ') {
+			condition := ""
+			if len(content) > 6 && content[6] == ' ' {
+				condition = strings.TrimSpace(content[7:])
+			}
+			return &Directive{Type: "elseif", Condition: condition}
 		} else if content == "else" {
-			return "else", true
-		} else if content == "endif" {
-			return "endif", true
-		} else if strings.HasPrefix(content, "for ") {
-			return "for", true
+			return &Directive{Type: "else"}
+		} else if strings.HasPrefix(content, "for") && (len(content) == 3 || content[3] == ' ') {
+			condition := ""
+			if len(content) > 3 && content[3] == ' ' {
+				condition = strings.TrimSpace(content[4:])
+			}
+			return &Directive{Type: "for", Condition: condition}
 		} else if content == "end" {
-			return "end", true
+			return &Directive{Type: "end"}
 		}
+	}
+
+	// Starts with /*$
+	if strings.HasPrefix(trimmed, "/*$") && strings.HasSuffix(trimmed, "*/") {
+		return &Directive{Type: "const"}
 	}
 
 	// If it starts with /*=
 	if strings.HasPrefix(trimmed, "/*=") && strings.HasSuffix(trimmed, "*/") {
-		return "variable", true
+		return &Directive{Type: "variable"}
 	}
 
-	return "", false
-}
-
-// getKeywordTokenType returns the TokenType corresponding to a keyword
-func (t *tokenizer) getKeywordTokenType(word string) TokenType {
-	upperWord := strings.ToUpper(word)
-
-	switch upperWord {
-	case "SELECT":
-		return SELECT
-	case "INSERT":
-		return INSERT
-	case "UPDATE":
-		return UPDATE
-	case "DELETE":
-		return DELETE
-	case "FROM":
-		return FROM
-	case "WHERE":
-		return WHERE
-	case "GROUP":
-		return GROUP
-	case "HAVING":
-		return HAVING
-	case "ORDER":
-		return ORDER
-	case "BY":
-		return BY
-	case "UNION":
-		return UNION
-	case "ALL":
-		return ALL
-	case "DISTINCT":
-		return DISTINCT
-	case "AS":
-		return AS
-	case "WITH":
-		return WITH
-	case "AND":
-		return AND
-	case "OR":
-		return OR
-	case "NOT":
-		return NOT
-	case "IN":
-		return IN
-	case "EXISTS":
-		return EXISTS
-	case "BETWEEN":
-		return BETWEEN
-	case "LIKE":
-		return LIKE
-	case "IS":
-		return IS
-	case "NULL":
-		return NULL
-	case "OVER":
-		return OVER
-	case "PARTITION":
-		return PARTITION
-	case "ROWS":
-		return ROWS
-	case "RANGE":
-		return RANGE
-	case "UNBOUNDED":
-		return UNBOUNDED
-	case "PRECEDING":
-		return PRECEDING
-	case "FOLLOWING":
-		return FOLLOWING
-	case "CURRENT":
-		return CURRENT
-	case "ROW":
-		return ROW
-	// Additional SQL keywords
-	case "CREATE":
-		return WORD
-	case "DROP":
-		return WORD
-	case "ALTER":
-		return WORD
-	case "TABLE":
-		return WORD
-	case "INDEX":
-		return WORD
-	case "VIEW":
-		return WORD
-	case "VALUES":
-		return WORD
-	case "INTO":
-		return WORD
-	case "SET":
-		return WORD
-	case "RETURNING":
-		return WORD
-	case "LIMIT":
-		return WORD
-	case "OFFSET":
-		return WORD
-	case "ON":
-		return ON
-	case "CONFLICT":
-		return CONFLICT
-	case "DUPLICATE":
-		return DUPLICATE
-	case "KEY":
-		return KEY
-	default:
-		return WORD
-	}
+	return nil
 }

@@ -20,7 +20,7 @@ YAML形式での入力パラメータ定義
 ## SQL (SQL)
 SnapSQL形式のSQLテンプレート
 
-## Test Cases (テストケース)
+## Test Cases (テストケース) [オプション]
 パラメータセットと期待結果
 
 ## Mock Data (モックデータ) [オプション]
@@ -74,8 +74,8 @@ SnapSQL形式のSQLテンプレート
 
 ```markdown
 ---
-name: "user search"
-dialect: "postgres"
+version: v1.0
+function_name: "user-search"
 ---
 
 # User Search Query (ユーザー検索クエリー)
@@ -267,10 +267,10 @@ table_suffix: "test"
 []
 ```
 
-## Mock Data (モックデータ)
+## Mock Response
 
 ```yaml
-users:
+default:
   - id: 1
     name: "John Doe"
     email: "john@example.com"

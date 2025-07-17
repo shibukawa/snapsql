@@ -9,6 +9,27 @@ import (
 	"strings"
 )
 
+// Instruction operation types
+const (
+	// Basic output instructions
+	OpEmitLiteral = "EMIT_LITERAL" // Output literal text
+	OpEmitParam   = "EMIT_PARAM"   // Output parameter value
+	OpEmitEval    = "EMIT_EVAL"    // Output evaluated expression
+
+	// Control flow instructions
+	OpJump      = "JUMP"        // Unconditional jump
+	OpJumpIfExp = "JUMP_IF_EXP" // Conditional jump based on expression
+	OpLabel     = "LABEL"       // Jump target label
+
+	// Loop instructions
+	OpLoopStart = "LOOP_START" // Start of loop block
+	OpLoopNext  = "LOOP_NEXT"  // Next iteration
+	OpLoopEnd   = "LOOP_END"   // End of loop block
+
+	// Dialect-specific instructions
+	OpEmitDialect = "EMIT_DIALECT" // Output dialect-specific content (e.g., CAST handling)
+)
+
 // Instruction represents a single instruction in the instruction set
 type Instruction struct {
 	Op          string `json:"op"`
@@ -24,6 +45,10 @@ type Instruction struct {
 	EndLabel    string `json:"end_label,omitempty"`   // For LOOP_START
 	StartLabel  string `json:"start_label,omitempty"` // For LOOP_NEXT
 	Label       string `json:"label,omitempty"`       // For LOOP_END
+	// New fields for dialect-specific instructions
+	Dialect      string            `json:"dialect,omitempty"`      // For EMIT_DIALECT - target dialect
+	Alternatives map[string]string `json:"alternatives,omitempty"` // For EMIT_DIALECT - dialect->value mapping
+	Default      string            `json:"default,omitempty"`      // For EMIT_DIALECT - default value
 }
 
 // IntermediateFormat represents the enhanced intermediate file format
@@ -39,9 +64,6 @@ type IntermediateFormat struct {
 
 	// Variable dependencies for caching optimization
 	Dependencies VariableDependencies `json:"dependencies"`
-
-	// Metadata
-	Metadata FormatMetadata `json:"metadata"`
 }
 
 // SourceInfo contains information about the original template file
@@ -102,14 +124,6 @@ type VariableDependencies struct {
 
 	// Cache key template for SQL reuse
 	CacheKeyTemplate string `json:"cache_key_template"`
-}
-
-// FormatMetadata contains metadata about the intermediate format
-type FormatMetadata struct {
-	Version     string `json:"version"`
-	GeneratedAt string `json:"generated_at"`
-	Generator   string `json:"generator"`
-	SchemaURL   string `json:"schema_url"`
 }
 
 // VariableExtractor extracts variable dependencies from CEL expressions and instructions

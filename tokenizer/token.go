@@ -1,6 +1,9 @@
 package tokenizer
 
-import "errors"
+import (
+	"errors"
+	"strconv"
+)
 
 // Sentinel errors
 var (
@@ -8,37 +11,74 @@ var (
 	ErrUnterminatedString  = errors.New("unterminated string literal")
 	ErrUnterminatedComment = errors.New("unterminated block comment")
 	ErrInvalidNumber       = errors.New("invalid number format")
+	ErrInvalidSingleColon  = errors.New("invalid single colon")
 )
 
 // TokenType represents the type of a token
 type TokenType int
 
 const (
-	// Basic tokens
-	EOF TokenType = iota
+	// --- Basic tokens ---
+	EOF TokenType = iota + 1
 	WHITESPACE
-	WORD          // identifiers, keywords
-	QUOTE         // string literals ('text', "text")
+
+	STRING        // string literals ('text')
+	IDENTIFIER    // quoted identifiers ("col")
 	NUMBER        // numeric literals
+	BOOLEAN       // boolean literals (true, false)
+	DUMMY_LITERAL // placeholder for /*= variable */ directives
 	OPENED_PARENS // (
 	CLOSED_PARENS // )
 	COMMA         // ,
 	SEMICOLON     // ;
 	DOT           // .
 
-	// SQL operators
+	// --- Comments ---
+	LINE_COMMENT  // -- line comment
+	BLOCK_COMMENT // /* block comment */ (including SnapSQL extensions)
+
+	// --- Arithmetic operators ---
+	PLUS     // +
+	MINUS    // -
+	MULTIPLY // *
+	DIVIDE   // /
+
+	// --- Comparison operators ---
 	EQUAL         // =
 	NOT_EQUAL     // <>, !=
 	LESS_THAN     // <
 	GREATER_THAN  // >
 	LESS_EQUAL    // <=
 	GREATER_EQUAL // >=
-	PLUS          // +
-	MINUS         // -
-	MULTIPLY      // *
-	DIVIDE        // /
 
-	// Window function related
+	// --- Special operators ---
+	JSON_OPERATOR // PostgreSQL JSON operators (->, ->>, #>, #>>)
+
+	// --- Type cast ---
+	DOUBLE_COLON // :: (PostgreSQL cast)
+
+	// --- Logical/conditional operators ---
+	AND     // AND keyword
+	OR      // OR keyword
+	NOT     // NOT keyword
+	IN      // IN keyword
+	EXISTS  // EXISTS keyword
+	BETWEEN // BETWEEN keyword
+	LIKE    // LIKE keyword
+	SIMILAR // SIMILAR keyword (PostgreSQL)
+	TO      // TO keyword (PostgreSQL)
+	REGEXP  // REGEXP keyword (MySQL/SQLite)
+	RLIKE   // RLIKE keyword (MySQL)
+	ILIKE   // ILIKE keyword (PostgreSQL)
+	IS      // IS keyword
+	NULL    // NULL keyword
+
+	// --- Typed literal tokens ---
+	DATE_LITERAL      // DATE '...'
+	TIMESTAMP_LITERAL // TIMESTAMP '...'
+	CAST              // CAST expression (CAST(... AS type))
+
+	// --- Window function related ---
 	OVER      // OVER keyword
 	PARTITION // PARTITION keyword
 	ORDER     // ORDER keyword
@@ -51,57 +91,103 @@ const (
 	CURRENT   // CURRENT keyword
 	ROW       // ROW keyword
 
-	// Logical operators and conditional expressions
-	AND     // AND keyword
-	OR      // OR keyword
-	NOT     // NOT keyword
-	IN      // IN keyword
-	EXISTS  // EXISTS keyword
-	BETWEEN // BETWEEN keyword
-	LIKE    // LIKE keyword
-	IS      // IS keyword
-	NULL    // NULL keyword
+	// --- CTE related ---
+	WITH      // WITH keyword
+	RECURSIVE // RECURSIVE keyword
+	AS        // AS keyword
 
-	// Subquery and CTE related
-	WITH     // WITH keyword
-	AS       // AS keyword
-	SELECT   // SELECT keyword
-	INSERT   // INSERT keyword
-	UPDATE   // UPDATE keyword
-	DELETE   // DELETE keyword
-	FROM     // FROM keyword
-	WHERE    // WHERE keyword
-	GROUP    // GROUP keyword
-	HAVING   // HAVING keyword
-	UNION    // UNION keyword
+	// --- Select ---
+	SELECT // SELECT keyword
+
 	ALL      // ALL keyword
 	DISTINCT // DISTINCT keyword
 
-	// Comments
-	LINE_COMMENT  // -- line comment
-	BLOCK_COMMENT // /* block comment */ (including SnapSQL extensions)
+	WHERE     // WHERE keyword
+	GROUP     // GROUP keyword
+	HAVING    // HAVING keyword
+	LIMIT     // LIMIT keyword
+	OFFSET    // OFFSET keyword
+	RETURNING // RETURNING keyword
 
-	// Others
+	// --- Insert ---
+
+	INSERT // INSERT keyword
+	INTO   // INTO keyword
+	VALUES // VALUES keyword
+
+	// --- Update ---
+	UPDATE    // UPDATE keyword
+	SET       // SET keyword
+	ON        // ON keyword
+	DUPLICATE // DUPLICATE keyword
+	KEY       // KEY keyword
+	CONFLICT  // CONFLICT keyword
+
+	// --- Delete ---
+	DELETE // DELETE keyword
+	FROM   // FROM keyword
+
+	// --- Row locking and concurrency control ---
+	FOR    // FOR keyword
+	SHARE  // SHARE keyword
+	NO     // NO keyword
+	NOWAIT // NOWAIT keyword
+	SKIP   // SKIP keyword
+	LOCKED // LOCKED keyword
+
+	// --- Join ---
+	JOIN    // JOIN keyword
+	INNER   // INNER keyword
+	OUTER   // OUTER keyword
+	LEFT    // LEFT keyword
+	RIGHT   // RIGHT keyword
+	FULL    // FULL keyword
+	CROSS   // CROSS keyword
+	USING   // USING keyword (for join conditions)
+	NATURAL // NATURAL keyword (for natural joins)
+
+	// --- Order By ---
+	ASC     // ASC keyword
+	DESC    // DESC keyword
+	COLLATE // COLLATE keyword
+
+	// --- Others ---
 	OTHER // complex expressions, database-specific syntax
+	UNION // UNION keyword
 
-	// SnapSQL extensions
-	DUPLICATE   // DUPLICATE keyword
-	KEY         // KEY keyword
-	ON          // ON keyword
-	CONFLICT    // CONFLICT keyword
+	// --- Expression ---
+	CASE // CASE expression
+	WHEN // WHEN keyword
+	THEN // THEN keyword
+	ELSE // ELSE keyword
+	END  // END keyword
+
+	// --- Group By ---
+	ROLLUP
+	CUBE
+	GROUPING
+	SETS
+
+	// --- Extended token types ---
+	CONTEXTUAL_IDENTIFIER // Non-reserved keyword used as identifier
+	RESERVED_IDENTIFIER   // Strictly reserved keyword used as identifier (quoted)
 )
 
 // String returns the string representation of TokenType
 func (t TokenType) String() string {
 	switch t {
+	case DOUBLE_COLON:
+		return "DOUBLE_COLON"
 	case EOF:
 		return "EOF"
 	case WHITESPACE:
 		return "WHITESPACE"
-	case WORD:
-		return "WORD"
-	case QUOTE:
-		return "QUOTE"
+	case STRING:
+		return "STRING"
+	case BOOLEAN:
+		return "BOOLEAN"
+	case IDENTIFIER:
+		return "IDENTIFIER"
 	case NUMBER:
 		return "NUMBER"
 	case OPENED_PARENS:
@@ -170,10 +256,28 @@ func (t TokenType) String() string {
 		return "BETWEEN"
 	case LIKE:
 		return "LIKE"
+	case SIMILAR:
+		return "SIMILAR"
+	case TO:
+		return "TO"
+	case REGEXP:
+		return "REGEXP"
+	case RLIKE:
+		return "RLIKE"
+	case ILIKE:
+		return "ILIKE"
 	case IS:
 		return "IS"
+	case JSON_OPERATOR:
+		return "JSON_OPERATOR"
 	case NULL:
 		return "NULL"
+	case CAST:
+		return "CAST"
+	case DATE_LITERAL:
+		return "DATE_LITERAL"
+	case TIMESTAMP_LITERAL:
+		return "TIMESTAMP_LITERAL"
 	case WITH:
 		return "WITH"
 	case AS:
@@ -194,6 +298,16 @@ func (t TokenType) String() string {
 		return "GROUP"
 	case HAVING:
 		return "HAVING"
+	case LIMIT:
+		return "LIMIT"
+	case OFFSET:
+		return "OFFSET"
+	case SET:
+		return "SET"
+	case VALUES:
+		return "VALUES"
+	case RETURNING:
+		return "RETURNING"
 	case UNION:
 		return "UNION"
 	case ALL:
@@ -214,6 +328,66 @@ func (t TokenType) String() string {
 		return "DUPLICATE"
 	case KEY:
 		return "KEY"
+	case FOR:
+		return "FOR"
+	case SHARE:
+		return "SHARE"
+	case NO:
+		return "NO"
+	case NOWAIT:
+		return "NOWAIT"
+	case SKIP:
+		return "SKIP"
+	case LOCKED:
+		return "LOCKED"
+	case JOIN:
+		return "JOIN"
+	case INNER:
+		return "INNER"
+	case OUTER:
+		return "OUTER"
+	case LEFT:
+		return "LEFT"
+	case RIGHT:
+		return "RIGHT"
+	case FULL:
+		return "FULL"
+	case CROSS:
+		return "CROSS"
+	case USING:
+		return "USING"
+	case NATURAL:
+		return "NATURAL"
+	case ASC:
+		return "ASC"
+	case DESC:
+		return "DESC"
+	case COLLATE:
+		return "COLLATE"
+	// --- Expression ---
+	case CASE:
+		return "CASE"
+	case WHEN:
+		return "WHEN"
+	case THEN:
+		return "THEN"
+	case ELSE:
+		return "ELSE"
+	case END:
+		return "END"
+	// --- Group By ---
+	case ROLLUP:
+		return "ROLLUP"
+	case CUBE:
+		return "CUBE"
+	case GROUPING:
+		return "GROUPING"
+	case SETS:
+		return "SETS"
+	case CONTEXTUAL_IDENTIFIER:
+		return "CONTEXTUAL_IDENTIFIER"
+	case RESERVED_IDENTIFIER:
+		return "RESERVED_IDENTIFIER"
 	default:
 		return "UNKNOWN"
 	}
@@ -226,21 +400,31 @@ type Position struct {
 	Offset int
 }
 
+func (p Position) String() string {
+	return strconv.Itoa(p.Line) + ":" + strconv.Itoa(p.Column)
+}
+
 // Token represents a token
 type Token struct {
-	Type     TokenType
-	Value    string
-	Position Position
-
-	// SnapSQL extension information (Phase 1: store only, no parsing)
-	IsSnapSQLDirective bool
-	DirectiveType      string // "if", "for", "variable", etc.
+	Index     int
+	Type      TokenType
+	Value     string
+	Position  Position
+	Directive *Directive // SnapSQL directive information. nil if not a directive
 }
 
 // String returns the string representation of Token
 func (t Token) String() string {
-	if t.IsSnapSQLDirective {
-		return t.Type.String() + "(" + t.DirectiveType + "): " + t.Value
+	if t.Directive != nil {
+		return t.Type.String() + "(" + t.Directive.Type + "): " + t.Value
 	}
 	return t.Type.String() + ": " + t.Value
+}
+
+// SnapSQL directive structure
+type Directive struct {
+	Type       string // "if", "elseif", "else", "for", "end", "const", "variable"
+	NextIndex  int    // Index of next directive token in block chain (if->elseif->else->end, for->end)
+	DummyRange []int
+	Condition  string // Condition expression for if/elseif directives
 }
