@@ -2,6 +2,7 @@ package parsercommon
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/shibukawa/snapsql/tokenizer"
@@ -9,8 +10,60 @@ import (
 )
 
 var (
-	ErrParameterNotFound = fmt.Errorf("parameter not found")
+	ErrParameterNotFound       = fmt.Errorf("parameter not found")
+	ErrInvalidParameterName    = fmt.Errorf("invalid parameter name")
+	ErrInvalidParameterValue   = fmt.Errorf("invalid parameter value for type")
+	ErrInvalidNamingConvention = fmt.Errorf("parameter name does not follow naming convention")
 )
+
+// Regular expression for valid parameter names
+// Must start with letter or underscore, followed by letters, digits, or underscores
+var validParameterNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+// ValidateParameterName checks if a parameter name follows naming conventions
+func ValidateParameterName(name string) error {
+	if name == "" {
+		return fmt.Errorf("%w: parameter name cannot be empty", ErrInvalidParameterName)
+	}
+
+	// Check naming convention (alphanumeric + underscore, not starting with digit)
+	if !validParameterNameRegex.MatchString(name) {
+		return fmt.Errorf("%w: parameter name '%s' must start with letter or underscore, followed by letters, digits, or underscores", ErrInvalidNamingConvention, name)
+	}
+
+	return nil
+}
+
+// ValidateAllParameterNames validates all parameter names in a nested structure
+func ValidateAllParameterNames(parameters map[string]any, prefix string) error {
+	var errors []string
+
+	for key, value := range parameters {
+		// Build full parameter name with prefix
+		fullName := key
+		if prefix != "" {
+			fullName = prefix + "." + key
+		}
+
+		// Validate the current parameter name
+		if err := ValidateParameterName(key); err != nil {
+			errors = append(errors, fmt.Sprintf("parameter '%s': %v", fullName, err))
+		}
+
+		// If value is a nested map, recursively validate
+		if nestedMap, ok := value.(map[string]any); ok {
+			if err := ValidateAllParameterNames(nestedMap, fullName); err != nil {
+				errors = append(errors, err.Error())
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("parameter validation failed:\n%s", strings.Join(errors, "\n"))
+	}
+
+	return nil
+}
 
 // CELVariable represents a CEL variable definition
 type CELVariable struct {
@@ -90,6 +143,11 @@ func NewFunctionDefinitionFromMarkdown(frontMatter map[string]any, parametersTex
 			return nil, fmt.Errorf("failed to parse parameters YAML: %w", err)
 		}
 
+		// Validate parameter names
+		if err := ValidateAllParameterNames(def.Parameters, ""); err != nil {
+			return nil, fmt.Errorf("parameter validation failed: %w", err)
+		}
+
 		// Extract parameter order from YAML text
 		keys, err := extractOrderedKeysFromParameters(parametersText)
 		if err == nil {
@@ -150,6 +208,11 @@ func NewFunctionDefinitionFromYAML(yamlText string) (*FunctionDefinition, error)
 	// Apply defaults (inline)
 	if def.Parameters == nil {
 		def.Parameters = make(map[string]any)
+	}
+
+	// Validate parameter names
+	if err := ValidateAllParameterNames(def.Parameters, ""); err != nil {
+		return nil, fmt.Errorf("parameter validation failed: %w", err)
 	}
 
 	// パラメータ順序抽出

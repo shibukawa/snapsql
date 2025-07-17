@@ -1,6 +1,7 @@
 package parsercommon
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -180,4 +181,155 @@ func TestNewFunctionDefinitionFromMarkdownEmptyParameters(t *testing.T) {
 	assert.True(t, def.Parameters != nil)
 	assert.Equal(t, 0, len(def.Parameters))
 	assert.Equal(t, []string{}, def.ParameterOrder)
+}
+
+func TestValidateParameterName(t *testing.T) {
+	tests := []struct {
+		name        string
+		paramName   string
+		shouldError bool
+		errorType   error
+	}{
+		// Valid names
+		{"valid_underscore", "user_id", false, nil},
+		{"valid_camelCase", "userId", false, nil},
+		{"valid_single_char", "x", false, nil},
+		{"valid_start_underscore", "_private", false, nil},
+		{"valid_mixed", "user_Name123", false, nil},
+
+		// Invalid names - empty
+		{"empty_name", "", true, ErrInvalidParameterName},
+
+		// Invalid names - naming convention
+		{"start_with_digit", "123abc", true, ErrInvalidNamingConvention},
+		{"contains_hyphen", "user-id", true, ErrInvalidNamingConvention},
+		{"contains_space", "user id", true, ErrInvalidNamingConvention},
+		{"contains_special", "user@id", true, ErrInvalidNamingConvention},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateParameterName(tt.paramName)
+			if tt.shouldError {
+				assert.Error(t, err)
+				if tt.errorType != nil {
+					assert.True(t, errors.Is(err, tt.errorType), "expected error type %v, got %v", tt.errorType, err)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateAllParameterNames(t *testing.T) {
+	tests := []struct {
+		name        string
+		parameters  map[string]any
+		shouldError bool
+	}{
+		{
+			name: "valid_parameters",
+			parameters: map[string]any{
+				"user_id":   123,
+				"user_name": "test",
+				"is_active": true,
+				"nested_obj": map[string]any{
+					"inner_field": "value",
+					"count_123":   456,
+				},
+			},
+			shouldError: false,
+		},
+		{
+			name: "invalid_naming_convention",
+			parameters: map[string]any{
+				"user_id":   123,
+				"user_name": "test",
+			},
+			shouldError: false,
+		},
+		{
+			name: "invalid_starts_with_digit",
+			parameters: map[string]any{
+				"user_id":    123,
+				"123invalid": "test", // starts with digit
+			},
+			shouldError: true,
+		},
+		{
+			name: "invalid_nested_parameter",
+			parameters: map[string]any{
+				"user_id": 123,
+				"filters": map[string]any{
+					"valid_field": "ok",
+					"123invalid":  "invalid", // starts with digit in nested
+				},
+			},
+			shouldError: true,
+		},
+		{
+			name:        "empty_parameters",
+			parameters:  map[string]any{},
+			shouldError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateAllParameterNames(tt.parameters, "")
+			if tt.shouldError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestNewFunctionDefinitionFromYAMLWithValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		yamlText    string
+		shouldError bool
+	}{
+		{
+			name: "valid_parameters",
+			yamlText: `name: test_func
+parameters:
+  user_id: int
+  user_name: string
+  is_active: bool`,
+			shouldError: false,
+		},
+		{
+			name: "invalid_naming_convention",
+			yamlText: `name: test_func
+parameters:
+  user_id: int
+  123invalid: string`,
+			shouldError: true,
+		},
+		{
+			name: "invalid_nested_parameter",
+			yamlText: `name: test_func
+parameters:
+  user_id: int
+  filters:
+    active: bool
+    123invalid: string`,
+			shouldError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewFunctionDefinitionFromYAML(tt.yamlText)
+			if tt.shouldError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
