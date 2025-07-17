@@ -330,12 +330,12 @@ func NewForClause(srcText string, heading, body []tokenizer.Token) *ForClause {
 
 // String implements ClauseNode.
 func (f *ForClause) String() string {
-	panic("unimplemented")
+	return "FOR CLAUSE"
 }
 
 // Type implements ClauseNode.
 func (f *ForClause) Type() NodeType {
-	panic("unimplemented")
+	return FOR_CLAUSE
 }
 
 var _ ClauseNode = (*ForClause)(nil)

@@ -338,16 +338,16 @@ func TestParseStatementWithCTE(t *testing.T) {
 			consumed, got, err := ParseStatement()(pctx, pcTokens)
 
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseGroup() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ParseStatement() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, len(pcTokens), consumed, "ParseGroup() should consume all tokens")
-			assert.Equal(t, len(got), 1, "ParseGroup() should return exactly one statement")
-			assert.Equal(t, tt.wantType, got[0].Val.NewValue.Type(), "ParseGroup() should return correct node type")
+			assert.Equal(t, len(pcTokens), consumed, "ParseStatement() should consume all tokens")
+			assert.Equal(t, len(got), 1, "ParseStatement() should return exactly one statement")
+			assert.Equal(t, tt.wantType, got[0].Val.NewValue.Type(), "ParseStatement() should return correct node type")
 			stmt := got[0].Val.NewValue.(cmn.StatementNode)
 			assert.True(t, stmt.CTE() != nil)
-			assert.Equal(t, tt.wantRecursive, stmt.CTE().Recursive, "ParseGroup() should return correct recursive flag")
-			assert.Equal(t, tt.wantCTEs, len(stmt.CTE().CTEs), "ParseGroup() should return correct number of CTEs")
+			assert.Equal(t, tt.wantRecursive, stmt.CTE().Recursive, "ParseStatement() should return correct recursive flag")
+			assert.Equal(t, tt.wantCTEs, len(stmt.CTE().CTEs), "ParseStatement() should return correct number of CTEs")
 		})
 	}
 }
@@ -434,12 +434,12 @@ tmp);`,
 			consumed, got, err := ParseStatement()(pctx, pcTokens)
 
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseGroup() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ParseStatement() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, len(pcTokens), consumed, "ParseGroup() should consume all tokens")
-			assert.Equal(t, len(got), 1, "ParseGroup() should return exactly one statement")
-			assert.Equal(t, tt.wantType, got[0].Val.NewValue.Type(), "ParseGroup() should return correct node type")
+			assert.Equal(t, len(pcTokens), consumed, "ParseStatement() should consume all tokens")
+			assert.Equal(t, len(got), 1, "ParseStatement() should return exactly one statement")
+			assert.Equal(t, tt.wantType, got[0].Val.NewValue.Type(), "ParseStatement() should return correct node type")
 			stmt := got[0].Val.NewValue.(cmn.StatementNode)
 			assert.Equal(t, tt.wantClauses, len(stmt.Clauses()))
 		})
