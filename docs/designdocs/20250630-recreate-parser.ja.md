@@ -2,172 +2,268 @@
 
 ## 概要
 
-SnapSQLのパーサーは、保守性・拡張性・テスト容易性を重視し、フルスクラッチで再設計します。
-パース処理は複数のステップ（parserstepN）に分割し、各ステップは独立した関数スタイルで実装します。
-パーサの組み立てには`parsercombinator`パッケージを利用します。
+SnapSQLのパーサーを保守性・拡張性・テスト容易性を重視して再設計しました。パース処理を7つのステップに分割し、各ステップを独立した関数スタイルで実装しています。パーサーの組み立てには`parsercombinator`パッケージを利用しています。
 
----
+## パース処理フロー
 
-## 目的・背景（2025-06-30追記）
+### 1. 字句解析（Lexer）
+- SQLテキストをトークン列に分解
+- コメント、文字列、数値、演算子、キーワードなどを識別
+- SnapSQLディレクティブの識別（/*# if */, /*= var */ など）
 
-現行パーサーは拡張性・保守性・エラー検出力に課題があり、今後の機能追加やバグ修正のコストが高い。
-新パーサーは段階的なパース・詳細なエラー情報・テスト容易性・既存資産との連携を重視して再設計する。
+### 2. 基本構文チェック（parserstep1）
+- 括弧の対応チェック（(), [], {}）
+- SnapSQLディレクティブの対応チェック（if/for/else/elseif/end）
+- ネスト構造の検証
+- 基本的な構文エラーの検出
 
----
+### 3. SQL文法チェック（parserstep2）
+- SELECT、INSERT、UPDATE、DELETE文の基本構造確認
+- 句（WHERE、ORDER BY、GROUP BY等）の順序チェック
+- 末尾のOR/AND、カンマの検出（後続処理で自動処理）
+- SQL構造のグルーピング
 
-## 要件（2025-06-30追記）
+### 4. SnapSQLディレクティブ解析（parserstep3）
+- ディレクティブの構文解析
+- 条件式の解析（CEL式）
+- 変数参照の解析
+- ディレクティブのネスト関係の検証
 
-- SQLテンプレートの構文を段階的にパースできること
-- エラー箇所の特定が容易で、詳細なエラー情報を返せること
-- 拡張性（新しい構文要素や制御フローの追加）が高いこと
-- テスト容易性（ユニットテスト・統合テストのしやすさ）
-- 既存のインターフェーススキーマや中間形式出力との連携
-- パフォーマンスの維持
+### 5. AST構築（parserstep4）
+- SQL構造をASTに変換
+- 擬似IF文の挿入（句のON/OFF制御用）
+- カンマノードの自動挿入
+- センチネルノードの挿入
 
----
+### 6. AST最適化（parserstep5）
+- 不要なノードの削除
+- ノードの結合
+- 条件式の最適化
+- 型情報の付加
 
-## 実装計画（2025-06-30追記）
-
-### フェーズ1: 設計・テスト雛形作成
-- 設計ドキュメント作成（本ファイル）
-- テスト雛形（parser2/parserstep1/step1_test.go）作成
-
-### フェーズ2: 字句解析（Lexer）
-- トークン定義
-- 字句解析器の実装
-- ユニットテスト
-
-### フェーズ3: 構文解析（Parser）
-- AST構造体定義
-- 構文解析器の実装
-- ユニットテスト
-
-### フェーズ4: 意味解析・中間形式出力
-- 意味解析ロジックの実装
-- 中間形式への変換
-- ユニットテスト
-
-### フェーズ5: 統合・E2Eテスト
-- 既存パーサーとの比較テスト
-- 実運用SQLテンプレートでの動作検証
-
----
+### 7. 中間形式生成（parserstep6）
+- ASTからintermediate.Instruction列への変換
+- 実行時に必要な情報の付加
+- デバッグ情報の付加
 
 ## ディレクトリ構成
 
 ```
 parser2/
   ├── parsercommon/   # 共通型・関数・ユーティリティ
-  ├── parserstep1/    # ステップ1: 基本構文チェック
-  ├── parserstep2/    # ステップ2: SQL文法・SnapSQLコメント種別判別
-  ├── parserstep3/    # ステップ3: SnapSQLディレクティブのエラーチェック
-  ├── parserstep4/    # ステップ4: AST加工（擬似IF、カンマノード等）
-  ├── parserstep5/    # ステップ5: intermediate.Instructionへの変換
-  ├── parser.go       # 外部公開API（Parse関数）、必要な型・エラーの再エクスポート
-  └── errors.go       # センチネルエラー再エクスポート
+  ├── parserstep1/    # 基本構文チェック
+  ├── parserstep2/    # SQL文法チェック
+  ├── parserstep3/    # SnapSQLディレクティブ解析
+  ├── parserstep4/    # AST構築
+  ├── parserstep5/    # AST最適化
+  ├── parserstep6/    # 中間形式生成
+  ├── parser.go       # 外部公開API
+  └── errors.go       # エラー定義
 ```
 
----
+## エラーハンドリング
 
-## ステップごとの責務
+### 1. 構文エラー
+- 括弧の不一致
+- ディレクティブの不一致
+- SQL文法エラー
+- 詳細な位置情報（行、列）を含むエラーメッセージ
 
-### parserstep1
-- **責務**: 括弧・SnapSQLディレクティブの対応など、事前の基本構文チェック
-    - `ValidateParentheses`: tokenizerのトークン列を受け取り、すべての括弧（(), [], {}など）が正しく対応しているかを検証する
-    - `ValidateSnapSQLDirectives`: SnapSQLのif/for/else/elseif/endディレクティブが正しくペアになっているか、ネスト構造・順序が正しいかを検証する
-        - `if`/`for`でpush、`end`でpop（直前が`if`または`for`でなければエラー）
-        - `else`/`elseif`は直前が`if`でなければエラー、popしない
-        - stackが空で`end`ならエラー、stackが残っていればエラー
-- **特徴**: parsercombinatorは使わず、シンプルな関数スタイル
-- **出力**: チェック済みトークン列
+### 2. 意味エラー
+- 未定義変数の参照
+- 型の不一致
+- 不正なディレクティブの使用
+- コンテキスト情報を含むエラーメッセージ
 
-### parserstep2
-- **責務**: SQL文法の確認とSnapSQLコメントの種類の判別
-    - 末尾のOR/AND、末尾のカンマは後続処理で自動省略・自動挿入するため、エラーチェックは緩やか
-- **特徴**: parsercombinatorを利用し、SQL構造の大まかなグルーピング・分類を行う
-- **出力**: 構造化されたノード列
+### 3. 変換エラー
+- AST構築エラー
+- 中間形式生成エラー
+- デバッグ情報を含むエラーメッセージ
 
-### parserstep3
-- **責務**: SnapSQLディレクティブ（if/for/else/elseif/end等）のエラーチェック
-- **特徴**: ディレクティブの対応関係やネスト構造の検証
-- **出力**: ディレクティブ検証済みノード列
+## テスト戦略
 
-### parserstep4
-- **責務**: 
-    - clause自体のON/OFFを表現するための擬似的なIF文の挿入
-    - 末尾OR/ANDや末尾カンマに関する自動カンマノードやセンチネルノードの挿入
-    - ASTの加工・最終調整
-- **特徴**: ASTノードの加工・補正
-- **出力**: 加工済みAST
+### 1. ユニットテスト
+- 各ステップの独立したテスト
+- エッジケースの網羅
+- エラーケースの検証
 
-### parserstep5
-- **責務**: intermediateパッケージの出力に使われるinstructionへの変換
-- **特徴**: ASTからinstruction列への変換
-- **出力**: intermediate.Instruction列
+### 2. 統合テスト
+- 全ステップを通した処理の検証
+- 実際のSQLテンプレートを使用したテスト
+- パフォーマンステスト
 
----
-
-## 依存関係ルール
-
-- 各parserstepNは**parsercommonのみ参照**し、他のstepやparser2は参照しない
-- parser2直下はparsercommonやparserstepNの型・関数・エラーを**再エクスポート**し、外部公開する
-- センチネルエラーもparserstepNでエクスポートされたものをparser2で最低限必要なもののみ再エクスポート
-- 循環参照を防ぐため、parsercommonやparserstepNはparser2や他のstepを参照しない
-
----
+### 3. 回帰テスト
+- 既存パーサーとの出力比較
+- 既存テストケースの再利用
+- バグ修正の検証
 
 ## 外部インターフェース
 
-- `parser2.Parse(tokens []tokenizer.Token) (any, error)`
-    - tokenizerのトークン列を受け取り、最終ASTまたはパース結果を返す
-- parser2パッケージが外部公開する型・関数・エラーは**parsercommonやparserstepNのもののみ**（再エクスポート）
-
----
-
-## 呼び出し順序例
-
 ```go
-func Parse(tokens []tokenizer.Token) (any, error) {
-    step1Result, err := parserstep1.ExecuteStep1(tokens)
-    if err != nil {
-        return nil, err
-    }
-    step2Result, err := parserstep2.ExecuteStep2(step1Result.Tokens)
-    if err != nil {
-        return nil, err
-    }
-    step3Result, err := parserstep3.ExecuteStep3(step2Result)
-    if err != nil {
-        return nil, err
-    }
-    step4Result, err := parserstep4.ExecuteStep4(step3Result)
-    if err != nil {
-        return nil, err
-    }
-    instructions, err := parserstep5.ExecuteStep5(step4Result)
-    if err != nil {
-        return nil, err
-    }
-    return instructions, nil
-}
+// メインのパース関数
+func Parse(tokens []tokenizer.Token) (any, error)
+
+// 段階的なパース関数（デバッグ用）
+func ParseStep1(tokens []tokenizer.Token) (*Step1Result, error)
+func ParseStep2(result *Step1Result) (*Step2Result, error)
+func ParseStep3(result *Step2Result) (*Step3Result, error)
+func ParseStep4(result *Step3Result) (*Step4Result, error)
+func ParseStep5(result *Step4Result) (*Step5Result, error)
+func ParseStep6(result *Step5Result) (*intermediate.Instructions, error)
 ```
 
----
+## 型システムと依存関係
 
-## コーディング標準・運用ルール
+### パッケージ構造
 
-- ソースコードのコメントは英語で記述
-- Go 1.24基準、`any`型を使用
-- センチネルエラーは各ファイルのimport文の直後にグローバル定義
-- テスト名は英語
-- Linter: `golangci-lint run`
-- TODOリスト管理を徹底
-- 設計ドキュメントは`docs/designdocs/{日付}-{機能名}.ja.md`で管理
+```
+parser/
+  ├── parsercommon/   # パーサー内部の共通型・関数・ユーティリティ
+  ├── parserstep1/    # 基本構文チェック
+  ├── parserstep2/    # SQL文法チェック
+  ├── parserstep3/    # SnapSQLディレクティブ解析
+  ├── parserstep4/    # AST構築
+  ├── parserstep5/    # AST最適化
+  ├── parserstep6/    # 中間形式生成
+  ├── parser.go       # 外部公開API
+  └── errors.go       # 公開エラー定義
+```
 
----
+### 型定義の階層構造
 
-## 備考
+1. **内部共通型の定義（parsercommon）**
+   ```go
+   package parsercommon
 
-- parsercombinatorパッケージのParser型・Evaluate関数を活用し、パーサーの組み立て・テストを行う
-- ASTは各ステップで段階的に生成されるため、parser2/ast.goは作成しない
-- テストコードは各parserstepN配下に配置し、テスト名は英語で統一
+   // パーサー内部で使用する基本ノード型
+   type Node struct {
+       Type     NodeType
+       Children []Node
+       // 内部処理用フィールド
+   }
+
+   // パース結果格納用の型（外部公開用）
+   type ParseResult struct {
+       Nodes    []Node
+       Metadata ResultMetadata
+   }
+
+   // 内部処理用ユーティリティ型
+   type TokenStack struct {
+       // 内部実装詳細
+   }
+   ```
+
+2. **ステップ固有の型（parserstepN）**
+   ```go
+   package parserstep4
+
+   // ステップ固有の内部型
+   type astNode struct {
+       parsercommon.Node
+       // ステップ固有のフィールド
+   }
+
+   // ステップの結果型（内部用）
+   type step4Result struct {
+       Nodes []astNode
+       // メタデータ
+   }
+   ```
+
+3. **公開インターフェース（parser）**
+   ```go
+   package parser
+
+   // 外部公開用の型エイリアス（必要最小限）
+   type ParseResult = parsercommon.ParseResult
+   type ResultMetadata = parsercommon.ResultMetadata
+
+   // 外部公開用の新しい型
+   type Options struct {
+       // パース設定オプション
+   }
+   ```
+
+### 依存関係の制御
+
+1. **パッケージ間の参照ルール**
+   - `parsercommon`: パーサー内部の共通機能を提供（外部からは非公開）
+   - `parserstepN`: `parsercommon`のみ参照可能（内部パッケージ）
+   - `parser`: 公開インターフェースのみを提供（型エイリアスと新規型定義）
+
+2. **型の可視性制御**
+   ```go
+   // parsercommon/types.go - 内部共通型
+   type (
+       // 内部処理用（非公開）
+       tokenProcessor struct { ... }
+       nodeVisitor struct { ... }
+
+       // 結果格納用（一部を外部公開）
+       ParseResult struct { ... }
+       ResultMetadata struct { ... }
+   )
+
+   // parser/types.go - 公開インターフェース
+   type (
+       // 必要な型のみを再エクスポート
+       ParseResult = parsercommon.ParseResult
+       ResultMetadata = parsercommon.ResultMetadata
+   )
+   ```
+
+3. **エラー型の管理**
+   ```go
+   // parsercommon/errors.go - 内部エラー
+   var (
+       errInvalidSyntax = errors.New("invalid syntax")
+       errInternalError = errors.New("internal parser error")
+   )
+
+   // parser/errors.go - 公開エラー
+   var (
+       // 公開用のエラー型（内部エラーをラップ）
+       ErrSyntax = fmt.Errorf("syntax error: %w", parsercommon.errInvalidSyntax)
+       ErrParse = errors.New("parse error")
+   )
+   ```
+
+### パッケージ構造の利点
+
+1. **内部実装の隠蔽**
+   - parsercommonは内部実装の詳細を含み、外部からは非公開
+   - 必要な型のみをparserパッケージで再エクスポート
+   - 内部処理の変更が外部に影響を与えない
+
+2. **保守性と拡張性**
+   - 内部共通処理をparsercommonに集約
+   - 各ステップが独立して進化可能
+   - 新しいステップの追加が容易
+
+3. **型安全性**
+   - 内部処理用の型と外部公開用の型を明確に分離
+   - コンパイル時の型チェックによる安全性確保
+   - インターフェースの一貫性維持
+
+4. **テスト容易性**
+   - 内部処理の単体テストが容易
+   - モックやスタブの作成が簡単
+   - 外部インターフェースの安定性確保
+
+## パフォーマンス最適化
+
+1. **メモリ効率**
+   - トークンの再利用
+   - 不要なコピーの削減
+   - メモリプールの使用
+
+2. **処理速度**
+   - 早期エラー検出
+   - 効率的なデータ構造
+   - キャッシュの活用
+
+3. **並列処理**
+   - 独立したファイルの並列パース
+   - ステップ内の並列処理
+   - リソース使用の最適化
