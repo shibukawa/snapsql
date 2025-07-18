@@ -23,7 +23,7 @@ var (
 	Null                 = PrimitiveType("null", tok.NULL)
 	DummyLiteral         = PrimitiveType("dummy_literal", tok.DUMMY_LITERAL)
 	Literal              = pc.Or(Number, String, Boolean, Null, DummyLiteral)
-	Identifier           = PrimitiveType("identifier", tok.IDENTIFIER)
+	Identifier           = PrimitiveType("identifier", tok.IDENTIFIER, tok.RESERVED_IDENTIFIER, tok.CONTEXTUAL_IDENTIFIER)
 	ContextualIdentifier = PrimitiveType("contextualIdentifier", tok.CONTEXTUAL_IDENTIFIER)
 
 	// Operators

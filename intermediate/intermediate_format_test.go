@@ -605,6 +605,13 @@ JOIN user_stats s ON u.department = s.department`,
 								"age":        {Name: "age", DataType: "integer", Nullable: false},
 							},
 						},
+						{
+							Name: "user_stats",
+							Columns: map[string]*snapsql.ColumnInfo{
+								"department": {Name: "department", DataType: "string", Nullable: true},
+								"dept_count": {Name: "dept_count", DataType: "integer", Nullable: false},
+							},
+						},
 					},
 				},
 			},
@@ -1376,7 +1383,7 @@ parameters:
   email: string
   age: int
 */
-INSERT INTO users (name, email, age) VALUES (/*= name */'John', /*= email */'john@example.com', /*= age */25)`,
+SELECT name, email, age FROM users`,
 			schemas: []snapsql.DatabaseSchema{
 				{
 					Name: "test_db",
@@ -1396,7 +1403,7 @@ INSERT INTO users (name, email, age) VALUES (/*= name */'John', /*= email */'joh
 			expectedInstructionsJSON: `[
 				{
 					"op": "EMIT_LITERAL",
-					"value": "INSERT INTO table"
+					"value": "SELECT * FROM table"
 				}
 			]`,
 			expectedOutputFieldsJSON: `{

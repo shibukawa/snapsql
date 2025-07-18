@@ -20,9 +20,9 @@ var (
 
 var (
 	fromClauseTableName = pc.Or(
-		tag("table with schema", cmn.Identifier, cmn.Dot, cmn.Identifier, cmn.EOS),
+		tag("table with schema", cmn.Identifier, cmn.Dot, cmn.Identifier),
 		tag("subquery", cmn.ParenOpen, cmn.SP, subQuery),
-		tag("table", cmn.Identifier, cmn.EOS),
+		tag("table", cmn.Identifier),
 	)
 
 	fromClauseSplitter = pc.Or(
@@ -226,13 +226,13 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 			}
 		} else {
 			switch len(match) {
-			case 1: // id as alias
-				result.Name = alias[1].Val.Value
+			case 1: // table only (no alias)
+				result.Name = match[0].Val.Value
 				result.TableName = match[0].Val.Value
 			case 2: // subquery without alias
 				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: at %s", ErrSubQueryNeedsAlias, body[0].Val.Position.String())
-			case 3: // table with schema
-				result.Name = alias[0].Val.Value
+			case 3: // table with schema (no alias)
+				result.Name = match[1].Val.Value
 				result.SchemaName = match[0].Val.Value
 				result.TableName = match[1].Val.Value
 			}
