@@ -14,6 +14,7 @@ type CLI struct {
 	Validate ValidateCmd `cmd:"" help:"Validate SQL templates"`
 	Pull     PullCmd     `cmd:"" help:"Extract database schema information"`
 	Init     InitCmd     `cmd:"" help:"Initialize a new SnapSQL project"`
+	Query    QueryCmd    `cmd:"" help:"Execute SQL query using template"`
 
 	Config  string `help:"Configuration file path" default:"./snapsql.yaml" type:"path"`
 	Verbose bool   `short:"v" help:"Enable verbose output"`

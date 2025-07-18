@@ -65,9 +65,9 @@ FROM users
 WHERE id = /*= user_id */123`
 
 	instruction := &Instruction{
-		Op:  "JUMP_IF_EXP",
-		Pos: []int{1, 18, 17},
-		Exp: "!include_email",
+		Op:       "JUMP_IF_EXP",
+		Pos:      []int{1, 18, 17},
+		ExpIndex: 0,
 	}
 
 	err := NewExecutionError("variable not found", 1, instruction, "test.sql", sourceContent)
@@ -86,7 +86,7 @@ WHERE id = /*= user_id */123`
 
 	instructions := []Instruction{
 		{Op: "EMIT_LITERAL", Pos: []int{1, 1, 0}, Value: "SELECT id, name"},
-		{Op: "JUMP_IF_EXP", Pos: []int{1, 18, 17}, Exp: "!include_email", Target: 4},
+		{Op: "JUMP_IF_EXP", Pos: []int{1, 18, 17}, ExpIndex: 0, Target: 4},
 		{Op: "EMIT_LITERAL", Pos: []int{1, 42, 41}, Value: ", email"},
 	}
 

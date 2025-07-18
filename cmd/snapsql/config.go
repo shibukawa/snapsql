@@ -15,6 +15,7 @@ type Config struct {
 	Schema        SchemaExtractionConfig `yaml:"schema_extraction"`
 	Generation    GenerationConfig       `yaml:"generation"`
 	Validation    ValidationConfig       `yaml:"validation"`
+	Query         QueryConfig            `yaml:"query"`
 }
 
 // Database represents database connection configuration
@@ -65,6 +66,19 @@ type LanguageConfig struct {
 type ValidationConfig struct {
 	Strict bool     `yaml:"strict"`
 	Rules  []string `yaml:"rules"`
+}
+
+// QueryConfig represents query execution settings
+type QueryConfig struct {
+	DefaultFormat        string `yaml:"default_format"`
+	DefaultEnvironment   string `yaml:"default_environment"`
+	Timeout              int    `yaml:"timeout"`
+	MaxRows              int    `yaml:"max_rows"`
+	Explain              bool   `yaml:"explain"`
+	ExplainAnalyze       bool   `yaml:"explain_analyze"`
+	Limit                int    `yaml:"limit"`
+	Offset               int    `yaml:"offset"`
+	ExecuteDangerousQuery bool  `yaml:"execute_dangerous_query"`
 }
 
 // LoadConfig loads configuration from the specified file
@@ -152,6 +166,17 @@ func getDefaultConfig() *Config {
 				"require-parameter-types",
 			},
 		},
+		Query: QueryConfig{
+			DefaultFormat:        "table",
+			DefaultEnvironment:   "development",
+			Timeout:              30,
+			MaxRows:              1000,
+			Explain:              false,
+			ExplainAnalyze:       false,
+			Limit:                0,
+			Offset:               0,
+			ExecuteDangerousQuery: false,
+		},
 	}
 }
 
@@ -195,5 +220,18 @@ func applyDefaults(config *Config) {
 
 	if len(config.Schema.TablePatterns.Exclude) == 0 {
 		config.Schema.TablePatterns.Exclude = []string{"pg_*", "information_schema*", "sys_*"}
+	}
+	
+	// Apply default query settings
+	if config.Query.DefaultFormat == "" {
+		config.Query.DefaultFormat = "table"
+	}
+	
+	if config.Query.Timeout == 0 {
+		config.Query.Timeout = 30
+	}
+	
+	if config.Query.MaxRows == 0 {
+		config.Query.MaxRows = 1000
 	}
 }

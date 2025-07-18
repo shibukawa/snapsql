@@ -18,6 +18,7 @@ snapsql <command> [options] [arguments]
 2. **validate** - SQLテンプレートの検証
 3. **pull** - データベーススキーマ情報の抽出
 4. **init** - 新しいSnapSQLプロジェクトの初期化
+5. **query** - SQLテンプレートを使用してデータベースにクエリを実行
 
 ### グローバルオプション
 
@@ -43,7 +44,7 @@ snapsql generate [options]
 - `-i, --input <dir>` - 入力ディレクトリ（デフォルト: `./queries`）
 - `--lang <language>` - 出力言語/形式（デフォルト: `json`）
   - サポート: `json`, `go`, `typescript`, `java`, `python`
-- `--package <name>` - パッケージ名（言語固有）
+- `--package <n>` - パッケージ名（言語固有）
 - `--validate` - 生成前にテンプレートを検証
 - `--watch` - ファイル変更を監視して自動再生成
 
@@ -181,6 +182,87 @@ snapsql init
 snapsql init
 ```
 
+### 5. queryコマンド
+
+SQLテンプレートを使用してデータベースにクエリを実行し、結果を返します。
+
+#### 構文
+```bash
+snapsql query [options] <template-file>
+```
+
+#### オプション
+- `-p, --params <file>` - パラメータファイル（JSON/YAML形式）
+- `--param <key=value>` - 個別のパラメータ指定（複数指定可能）
+- `--const <file>` - 定数定義ファイル（複数指定可能）
+- `--db <connection>` - データベース接続文字列
+- `--env <environment>` - 設定からの環境名
+- `--format <format>` - 出力形式（`table`, `json`, `csv`, `yaml`）（デフォルト: `table`）
+- `--output <file>` - 結果を保存するファイル（指定しない場合は標準出力）
+- `--timeout <seconds>` - クエリタイムアウト（秒）（デフォルト: `30`）
+- `--explain` - クエリの実行計画を表示
+- `--explain-analyze` - 実際に実行しながら詳細な実行計画を表示（`--explain`を含む）
+- `--limit <n>` - 結果の行数を制限
+- `--offset <n>` - 結果の開始位置を指定
+- `--execute-dangerous-query` - WHERE句のないDELETE/UPDATEクエリを実行（危険！）
+- `--dry-run` - 実際にクエリを実行せず、生成されたSQLを表示
+
+#### パラメータ指定
+- JSONファイル: `--params params.json`
+- YAMLファイル: `--params params.yaml`
+- コマンドライン: `--param user_id=123 --param include_email=true`
+- 複合パラメータ: `--param 'filters={"active":true,"department":"sales"}'`
+
+#### 出力形式
+- `table`: 整形されたテーブル（デフォルト、ターミナル向け）
+- `json`: JSON形式（プログラム処理向け）
+- `csv`: CSV形式（スプレッドシート向け）
+- `yaml`: YAML形式（可読性向け）
+
+#### サポートデータベース
+- PostgreSQL
+- MySQL
+- SQLite
+
+#### 例
+```bash
+# 基本的なクエリ実行
+snapsql query queries/get-users.snap.sql --param user_id=123
+
+# パラメータファイルを使用
+snapsql query queries/complex-report.snap.md --params params.json
+
+# 環境設定からのDB接続
+snapsql query queries/analytics.snap.sql --env production --format json
+
+# 結果をファイルに保存
+snapsql query queries/export-data.snap.sql --format csv --output data.csv
+
+# 複合パラメータ
+snapsql query queries/update-user.snap.sql --param 'user={"id":123,"name":"New Name"}'
+
+# 生成されるSQLの確認（実行なし）
+snapsql query queries/complex-query.snap.sql --params test-params.yaml --dry-run
+
+# 実行計画の表示
+snapsql query queries/performance-critical.snap.sql --explain
+
+# 詳細な実行計画の表示
+snapsql query queries/performance-critical.snap.sql --explain-analyze
+
+# 結果の制限
+snapsql query queries/large-result.snap.sql --limit 100
+
+# オフセット付きの結果取得
+snapsql query queries/paginated-result.snap.sql --limit 20 --offset 40
+
+# 危険なクエリの実行（WHERE句なしのDELETE/UPDATE）
+snapsql query queries/cleanup.snap.sql --execute-dangerous-query
+
+# 危険なクエリの実行（WHERE句なしのDELETE/UPDATE）
+snapsql query queries/cleanup.snap.sql --execute-dangerous-query
+```
+
 ## 設定ファイル
 
 ### ファイル場所
@@ -250,6 +332,19 @@ validation:
   rules:
     - "no-dynamic-table-names"
     - "require-parameter-types"
+
+# クエリ実行設定
+query:
+  default_format: "table"
+  default_environment: "development"
+  timeout: 30
+  max_rows: 1000
+  explain: false
+  explain_analyze: false
+  limit: 0
+  offset: 0
+  execute_dangerous_query: false
+  execute_dangerous_query: false
 ```
 
 ## ファイル処理
@@ -318,7 +413,7 @@ snapsql-gen-<lang> [options] <intermediate-json-file>
 
 #### 標準オプション
 - `--output-dir <path>` - 出力ディレクトリ
-- `--package <name>` - パッケージ/名前空間名
+- `--package <n>` - パッケージ/名前空間名
 - `--schema-file <path>` - データベーススキーマファイル
 - `--constants <files>` - 定数定義ファイル
 - `--config <file>` - SnapSQL設定ファイル
@@ -383,6 +478,18 @@ snapsql validate --strict --format json
 snapsql generate --lang java --validate
 ```
 
+#### 5. データベースクエリ実行
+```bash
+# 基本的なクエリ実行
+snapsql query queries/get-users.snap.sql --param user_id=123
+
+# 複雑なレポート生成
+snapsql query queries/monthly-report.snap.md --params report-params.yaml --format csv --output report.csv
+
+# データ更新操作
+snapsql query queries/update-status.snap.sql --param status=active --transaction
+```
+
 ## パフォーマンス考慮事項
 
 ### ファイル処理
@@ -399,6 +506,12 @@ snapsql generate --lang java --validate
 - スキーマ抽出のための接続プーリング
 - 効率的なメタデータクエリ
 - 遅い接続のためのタイムアウト処理
+
+### クエリ実行
+- 接続プーリングによる効率的なDB接続
+- パラメータ化クエリによるSQLインジェクション防止
+- 大きな結果セットのストリーミング処理
+- タイムアウト処理による長時間実行クエリの制御
 
 ## セキュリティ考慮事項
 
@@ -417,6 +530,12 @@ snapsql generate --lang java --validate
 - 安全なテンプレート処理
 - 出力サニタイゼーション
 
+### クエリ実行
+- パラメータ化クエリによるSQLインジェクション防止
+- 機密データの安全な処理
+- 権限制限によるデータアクセス制御
+- トランザクション分離レベルの適切な設定
+
 ## テスト戦略
 
 ### 単体テスト
@@ -430,8 +549,10 @@ snapsql generate --lang java --validate
 - データベーススキーマ抽出
 - 多言語コード生成
 - プラグインシステム統合
+- クエリ実行と結果処理
 
 ### パフォーマンステスト
 - 大きなテンプレートセット処理
 - メモリ使用量最適化
 - 生成速度ベンチマーク
+- クエリ実行パフォーマンス
