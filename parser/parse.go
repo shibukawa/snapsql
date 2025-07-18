@@ -158,8 +158,12 @@ var (
 
 // Re-export helper functions
 var (
-	NewNamespace = cmn.NewNamespace
-	AsParseError = cmn.AsParseError
+	NewNamespace                     = cmn.NewNamespace
+	AsParseError                     = cmn.AsParseError
+	NewFunctionDefinitionFromSQL     = cmn.NewFunctionDefinitionFromSQL
+	NewFunctionDefinitionFromYAML    = cmn.NewFunctionDefinitionFromYAML
+	NewFunctionDefinitionFromMarkdown = cmn.NewFunctionDefinitionFromMarkdown
+	NewFunctionDefinitionFromMarkdownContext = cmn.NewFunctionDefinitionFromMarkdownContext
 )
 
 // ParseOptions contains options for the Parse function
