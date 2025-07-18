@@ -5,8 +5,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/goccy/go-yaml"
+	meta "github.com/yuin/goldmark-meta"
+	"github.com/yuin/goldmark/parser"
+	yamlv3 "gopkg.in/yaml.v3"
 	"github.com/shibukawa/snapsql/tokenizer"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -163,6 +166,92 @@ func NewFunctionDefinitionFromMarkdown(frontMatter map[string]any, parametersTex
 	return def, nil
 }
 
+// NewFunctionDefinitionFromMarkdownContext creates a FunctionDefinition from markdown parser context
+// This version uses TryGetItems API to preserve key order in front matter
+func NewFunctionDefinitionFromMarkdownContext(pc parser.Context, parametersText, description string) (*FunctionDefinition, error) {
+	def := &FunctionDefinition{
+		Parameters: make(map[string]any),
+	}
+
+	// Extract metadata from front matter using TryGetItems to preserve order
+	orderedItems, err := meta.TryGetItems(pc)
+	if err == nil {
+		// Convert MapSlice to regular map for compatibility
+		frontMatter := make(map[string]any)
+		
+		// Extract ordered keys for parameter order
+		orderedKeys := make([]string, 0, len(orderedItems))
+		
+		// Process each item in order
+		for _, item := range orderedItems {
+			key, ok := item.Key.(string)
+			if !ok {
+				continue
+			}
+			
+			// Add to regular map
+			frontMatter[key] = item.Value
+			
+			// Add to ordered keys
+			orderedKeys = append(orderedKeys, key)
+		}
+		
+		// Extract metadata from front matter
+		if name, ok := frontMatter["name"].(string); ok {
+			def.Name = name
+		}
+		if functionName, ok := frontMatter["function_name"].(string); ok {
+			def.FunctionName = functionName
+		}
+		if desc, ok := frontMatter["description"].(string); ok {
+			def.Description = desc
+		}
+	}
+
+	// Use description parameter if provided and front matter description is empty
+	if def.Description == "" && description != "" {
+		def.Description = description
+	}
+
+	// Parse parameters from YAML text
+	if parametersText != "" {
+		// Parse parameters with order preservation
+		var yamlNode yamlv3.Node
+		if err := yamlv3.Unmarshal([]byte(parametersText), &yamlNode); err == nil {
+			// Extract ordered keys from YAML node
+			keys, err := extractOrderedKeysFromYAML(&yamlNode, "")
+			if err == nil {
+				def.ParameterOrder = keys
+			}
+		}
+		
+		// Parse parameters into map
+		if err := yaml.Unmarshal([]byte(parametersText), &def.Parameters); err != nil {
+			return nil, fmt.Errorf("failed to parse parameters YAML: %w", err)
+		}
+
+		// Validate parameter names
+		if err := ValidateAllParameterNames(def.Parameters, ""); err != nil {
+			return nil, fmt.Errorf("parameter validation failed: %w", err)
+		}
+		
+		// If parameter order wasn't extracted from YAML node, try extracting from text
+		if len(def.ParameterOrder) == 0 {
+			keys, err := extractOrderedKeysFromParameters(parametersText)
+			if err == nil {
+				def.ParameterOrder = keys
+			} else {
+				def.ParameterOrder = []string{}
+			}
+		}
+	} else {
+		// Ensure empty slice when no parameters
+		def.ParameterOrder = []string{}
+	}
+
+	return def, nil
+}
+
 // GetFunctionMetadata returns metadata for function generation
 func (def *FunctionDefinition) GetFunctionMetadata() map[string]string {
 	metadata := make(map[string]string)
@@ -195,8 +284,8 @@ func NewFunctionDefinitionFromYAML(yamlText string) (*FunctionDefinition, error)
 	}
 
 	// Parse YAML with order preservation
-	var yamlNode yaml.Node
-	if err := yaml.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
+	var yamlNode yamlv3.Node
+	if err := yamlv3.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML node: %w", err)
 	}
 	// Parse regular def
@@ -228,23 +317,23 @@ func NewFunctionDefinitionFromYAML(yamlText string) (*FunctionDefinition, error)
 
 // extractOrderedKeysFromYAMLText parses YAML text and returns ordered keys under the specified key.
 func extractOrderedKeysFromYAMLText(yamlText string, key string) ([]string, error) {
-	var yamlNode yaml.Node
-	if err := yaml.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
+	var yamlNode yamlv3.Node
+	if err := yamlv3.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 	return extractOrderedKeysFromYAML(&yamlNode, key)
 }
 
 // extractOrderedKeysFromYAML returns the ordered keys from a YAML node.
-func extractOrderedKeysFromYAML(yamlNode *yaml.Node, key string) ([]string, error) {
+func extractOrderedKeysFromYAML(yamlNode *yamlv3.Node, key string) ([]string, error) {
 	if yamlNode == nil {
 		return nil, fmt.Errorf("yamlNode is nil")
 	}
 	// ドキュメントノードを取得
-	var mapping *yaml.Node
-	if yamlNode.Kind == yaml.DocumentNode && len(yamlNode.Content) > 0 {
+	var mapping *yamlv3.Node
+	if yamlNode.Kind == yamlv3.DocumentNode && len(yamlNode.Content) > 0 {
 		mapping = yamlNode.Content[0]
-	} else if yamlNode.Kind == yaml.MappingNode {
+	} else if yamlNode.Kind == yamlv3.MappingNode {
 		mapping = yamlNode
 	} else {
 		return nil, fmt.Errorf("expected DocumentNode or MappingNode")
@@ -252,7 +341,7 @@ func extractOrderedKeysFromYAML(yamlNode *yaml.Node, key string) ([]string, erro
 
 	// キー指定がある場合はその下を探す
 	if key != "" {
-		var found *yaml.Node
+		var found *yamlv3.Node
 		for i := 0; i < len(mapping.Content); i += 2 {
 			k := mapping.Content[i]
 			v := mapping.Content[i+1]
@@ -264,7 +353,7 @@ func extractOrderedKeysFromYAML(yamlNode *yaml.Node, key string) ([]string, erro
 		if found == nil {
 			return nil, fmt.Errorf("key '%s' not found", key)
 		}
-		if found.Kind != yaml.MappingNode {
+		if found.Kind != yamlv3.MappingNode {
 			return nil, fmt.Errorf("key '%s' is not a mapping node", key)
 		}
 		mapping = found
@@ -276,7 +365,7 @@ func extractOrderedKeysFromYAML(yamlNode *yaml.Node, key string) ([]string, erro
 		k := mapping.Content[i]
 		v := mapping.Content[i+1]
 		// ネストされたmappingはトップレベルキーとしてのみ追加、下位キーは順序リストに含めない
-		if v.Kind == yaml.MappingNode {
+		if v.Kind == yamlv3.MappingNode {
 			keys = append(keys, k.Value)
 			// 下位mappingのキーは含めない
 		} else {
@@ -292,22 +381,22 @@ func extractOrderedKeysFromYAML(yamlNode *yaml.Node, key string) ([]string, erro
 
 // extractOrderedKeysFromParameters extracts ordered keys from parameters YAML text
 func extractOrderedKeysFromParameters(yamlText string) ([]string, error) {
-	var yamlNode yaml.Node
-	if err := yaml.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
+	var yamlNode yamlv3.Node
+	if err := yamlv3.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 
 	// The root should be a mapping node for parameters
-	var mapping *yaml.Node
-	if yamlNode.Kind == yaml.DocumentNode && len(yamlNode.Content) > 0 {
+	var mapping *yamlv3.Node
+	if yamlNode.Kind == yamlv3.DocumentNode && len(yamlNode.Content) > 0 {
 		mapping = yamlNode.Content[0]
-	} else if yamlNode.Kind == yaml.MappingNode {
+	} else if yamlNode.Kind == yamlv3.MappingNode {
 		mapping = &yamlNode
 	} else {
 		return nil, fmt.Errorf("expected DocumentNode or MappingNode")
 	}
 
-	if mapping.Kind != yaml.MappingNode {
+	if mapping.Kind != yamlv3.MappingNode {
 		return nil, fmt.Errorf("parameters content is not a mapping node")
 	}
 
