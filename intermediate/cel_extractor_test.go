@@ -1,6 +1,7 @@
 package intermediate
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -12,7 +13,6 @@ func TestCELExtractor(t *testing.T) {
 		name                string
 		sql                 string
 		expectedExpressions []string
-		expectedSimpleVars  []string
 		expectedEnvs        [][]EnvVar
 	}{
 		{
@@ -25,7 +25,6 @@ parameters:
 */
 SELECT id, name, email FROM users WHERE id = /*= user_id */123`,
 			expectedExpressions: []string{},
-			expectedSimpleVars:  []string{"user_id"},
 			expectedEnvs:        [][]EnvVar{},
 		},
 		{
@@ -41,7 +40,6 @@ SELECT id, name, email FROM users
 WHERE active = /*= filters.active */true
 /*# end */`,
 			expectedExpressions: []string{"filters.active"},
-			expectedSimpleVars:  []string{},
 			expectedEnvs:        [][]EnvVar{},
 		},
 		{
@@ -61,7 +59,6 @@ SELECT id, status
 /*# end */
 FROM users WHERE id = /*= user_id */123`,
 			expectedExpressions: []string{},
-			expectedSimpleVars:  []string{"include_details", "user_id"},
 			expectedEnvs:        [][]EnvVar{},
 		},
 		{
@@ -83,7 +80,6 @@ AND role = 'manager'
 AND role = 'user'
 /*# end */`,
 			expectedExpressions: []string{`user_type == "admin"`, `user_type == "manager"`},
-			expectedSimpleVars:  []string{"user_id"},
 			expectedEnvs:        [][]EnvVar{},
 		},
 		{
@@ -102,7 +98,6 @@ SELECT
   /*# end */
 FROM users`,
 			expectedExpressions: []string{},
-			expectedSimpleVars:  []string{"additional_fields", "field"},
 			expectedEnvs: [][]EnvVar{
 				{{Name: "field", Type: "any"}}, // Loop environment
 			},
@@ -134,14 +129,13 @@ SELECT * FROM (
   /*# end */
 )`,
 			expectedExpressions: []string{
-				"dept.id", 
-				"dept.name", 
-				"dept.employees", 
-				"emp.id", 
-				"emp.name", 
+				"dept.id",
+				"dept.name",
+				"dept.employees",
+				"emp.id",
+				"emp.name",
 				"!for.last",
 			},
-			expectedSimpleVars: []string{"departments", "dept", "emp"},
 			expectedEnvs: [][]EnvVar{
 				{{Name: "dept", Type: "any"}}, // First loop environment
 				{{Name: "emp", Type: "any"}},  // Nested loop environment
@@ -173,12 +167,11 @@ AND department IN (/*= departments */('HR', 'Engineering'))
 AND status = 'active'
 /*# end */`,
 			expectedExpressions: []string{
-				"min_age > 0", 
-				"max_age > 0", 
+				"min_age > 0",
+				"max_age > 0",
 				"departments != null && departments.size() > 0",
 			},
-			expectedSimpleVars: []string{"min_age", "max_age", "departments", "active"},
-			expectedEnvs:       [][]EnvVar{},
+			expectedEnvs: [][]EnvVar{},
 		},
 	}
 
@@ -189,12 +182,7 @@ AND status = 'active'
 			assert.NoError(t, err)
 
 			// Extract CEL expressions and environments
-			extractor := NewCELExtractor()
-			extractor.ExtractFromTokens(tokens)
-
-			expressions := extractor.GetExpressions()
-			simpleVars := extractor.GetSimpleVars()
-			envs := extractor.GetEnvs()
+			expressions, envs := extractFromTokens(tokens)
 
 			// Debug output
 			t.Logf("Extracted complex expressions (%d):", len(expressions))
@@ -202,19 +190,9 @@ AND status = 'active'
 				t.Logf("  %d: %s", i, expr)
 			}
 
-			t.Logf("Extracted simple variables (%d):", len(simpleVars))
-			for i, v := range simpleVars {
-				t.Logf("  %d: %s", i, v)
-			}
-
 			t.Logf("Expected complex expressions (%d):", len(tt.expectedExpressions))
 			for i, expr := range tt.expectedExpressions {
 				t.Logf("  %d: %s", i, expr)
-			}
-
-			t.Logf("Expected simple variables (%d):", len(tt.expectedSimpleVars))
-			for i, v := range tt.expectedSimpleVars {
-				t.Logf("  %d: %s", i, v)
 			}
 
 			// Debug token information
@@ -228,32 +206,10 @@ AND status = 'active'
 
 			// Verify expressions
 			assert.Equal(t, len(tt.expectedExpressions), len(expressions), "Number of complex expressions should match")
-			
+
 			// Check that all expected expressions are present
 			for _, expected := range tt.expectedExpressions {
-				found := false
-				for _, actual := range expressions {
-					if expected == actual {
-						found = true
-						break
-					}
-				}
-				assert.True(t, found, "Expected complex expression %s not found", expected)
-			}
-
-			// Verify simple variables
-			assert.Equal(t, len(tt.expectedSimpleVars), len(simpleVars), "Number of simple variables should match")
-			
-			// Check that all expected simple variables are present
-			for _, expected := range tt.expectedSimpleVars {
-				found := false
-				for _, actual := range simpleVars {
-					if expected == actual {
-						found = true
-						break
-					}
-				}
-				assert.True(t, found, "Expected simple variable %s not found", expected)
+				assert.True(t, slices.Contains(expressions, expected), "Expected complex expression %s not found", expected)
 			}
 
 			// Verify environments
