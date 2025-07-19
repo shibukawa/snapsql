@@ -53,7 +53,7 @@ parameters:
 				"only": "float",
 			},
 			expectedDummy: map[string]any{
-				"only": 1.0,
+				"only": 1.1,
 			},
 			wantErr: false,
 		},
@@ -84,7 +84,7 @@ parameters:
 					"name": "dummy",
 				},
 				"active": true,
-				"score":  1.0,
+				"score":  1.1,
 			},
 			wantErr: false,
 		},
@@ -162,7 +162,7 @@ parameters:
 						"name": "dummy",
 					},
 				},
-				"scores": []any{1.0},
+				"scores": []any{1.1},
 			},
 			wantErr: false,
 		},
@@ -179,7 +179,7 @@ parameters:
   i5: int8
   f1: double
   f2: decimal
-  f3: number
+  f3: numeric
   f4: float32
 `,
 			expectedOrder: []string{"i1", "i2", "i3", "i4", "i5", "f1", "f2", "f3", "f4"},
@@ -190,20 +190,20 @@ parameters:
 				"i4": "int16",
 				"i5": "int8",
 				"f1": "float",
-				"f2": "float",
-				"f3": "float",
+				"f2": "decimal",
+				"f3": "decimal",
 				"f4": "float32",
 			},
 			expectedDummy: map[string]any{
 				"i1": int64(1),
 				"i2": int64(1),
-				"i3": int32(1),
-				"i4": int16(1),
-				"i5": int8(1),
-				"f1": 1.0,
-				"f2": 1.0,
-				"f3": 1.0,
-				"f4": float32(1.0),
+				"i3": int32(2),
+				"i4": int16(3),
+				"i5": int8(4),
+				"f1": 1.1,
+				"f2": "1.0",
+				"f3": "1.0",
+				"f4": float32(2.2),
 			},
 			wantErr: false,
 		},
@@ -240,8 +240,8 @@ parameters:
 				"scores": "float32[]",
 			},
 			expectedDummy: map[string]any{
-				"ids":    []any{int32(1)},
-				"scores": []any{float32(1.0)},
+				"ids":    []any{int32(2)},
+				"scores": []any{float32(2.2)},
 			},
 			wantErr: false,
 		},
@@ -263,7 +263,7 @@ parameters:
 			expectedParams: map[string]any{
 				"items": []any{
 					map[string]any{
-						"id":    "int64",
+						"id":    "int",
 						"value": "float32",
 						"flag":  "bool",
 						"meta": map[string]any{
@@ -277,11 +277,11 @@ parameters:
 				"items": []any{
 					map[string]any{
 						"id":    int64(1),
-						"value": float32(1.0),
+						"value": float32(2.2),
 						"flag":  true,
 						"meta": map[string]any{
 							"tag":   "dummy",
-							"score": 1.0,
+							"score": 1.1,
 						},
 					},
 				},

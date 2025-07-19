@@ -365,21 +365,67 @@ func inferCELTypeFromValue(value any) *cel.Type {
 }
 
 // inferCELTypeFromStringType infers CEL type from parameter type string
+// inferCELTypeFromStringType infers CEL type from parameter type string (with array/map/alias support)
 func inferCELTypeFromStringType(typeStr string) *cel.Type {
-	switch typeStr {
-	case "str", "string":
+	t := strings.TrimSpace(typeStr)
+	switch t {
+	// --- Primitive and alias types ---
+	case "str", "string", "text", "varchar":
 		return cel.StringType
-	case "int", "integer":
+	case "int", "integer", "long":
 		return cel.IntType
-	case "float", "double":
+	case "int32":
+		return cel.IntType // CEL has only int
+	case "int16":
+		return cel.IntType
+	case "int8":
+		return cel.IntType
+	case "float", "double", "float32":
+		return cel.DoubleType
+	case "decimal", "numeric":
 		return cel.DoubleType
 	case "bool", "boolean":
 		return cel.BoolType
-	case "timestamp", "time":
+	// --- Special types ---
+	case "date":
+		return cel.StringType
+	case "datetime", "timestamp", "time":
 		return cel.TimestampType
-	default:
+	case "email":
+		return cel.StringType
+	case "uuid":
+		return cel.StringType
+	case "json":
+		// CEL: map(string, dyn)
+		return cel.MapType(cel.StringType, cel.DynType)
+	case "any":
 		return cel.DynType
+	case "object":
+		return cel.MapType(cel.StringType, cel.DynType)
 	}
+	// Array type: int[], string[], float32[], etc.
+	if strings.HasSuffix(t, "[]") {
+		base := t[:len(t)-2]
+		// CEL: list(baseType)
+		return cel.ListType(inferCELTypeFromStringType(base))
+	}
+	// Map type: map[string]any, map[string]int, etc.
+	if strings.HasPrefix(t, "map[") && strings.Contains(t, "]") {
+		// e.g. map[string]int
+		closeIdx := strings.Index(t, "]")
+		keyType := strings.TrimSpace(t[4:closeIdx])
+		valType := strings.TrimSpace(t[closeIdx+1:])
+		var celKey *cel.Type
+		switch keyType {
+		case "string":
+			celKey = cel.StringType
+		default:
+			celKey = cel.DynType
+		}
+		return cel.MapType(celKey, inferCELTypeFromStringType(valType))
+	}
+	// Fallback: treat as dyn
+	return cel.DynType
 }
 
 // isNullableKey checks if parameter key ends with '?' for nullable
@@ -438,7 +484,7 @@ func (ns *Namespace) GetLoopVariableType(variableName string) (string, bool) {
 		frame := ns.stack[i]
 		if frame.loopVar == variableName {
 			// Found as loop variable - infer type from loop target
-			if frame.loopTarget != nil && len(frame.loopTarget) > 0 {
+			if len(frame.loopTarget) > 0 {
 				return ns.inferLoopVariableType(frame.loopTarget), true
 			}
 			// Default to string if no loop target info

@@ -103,8 +103,6 @@ func normalizeAndValidateParameters(params yaml.MapSlice) (map[string]any, []str
 
 func normalizeAny(v any, fullName string, errs *ParseError) any {
 	switch val := v.(type) {
-	case yaml.MapSlice:
-		panic("should not come here")
 	case []any:
 		// Array literal ([int], [string], etc.)
 		if len(val) == 1 {
@@ -113,13 +111,18 @@ func normalizeAny(v any, fullName string, errs *ParseError) any {
 			switch elemType := elem.(type) {
 			case string:
 				return elemType + "[]"
-			case yaml.MapSlice:
-				panic("should not coe here")
+			case map[string]any:
+				return []any{normalizeAny(elemType, fullName+"[]", errs)}
 			default:
-				return []any{elem}
+				return []any{normalizeAny(elemType, fullName+"[]", errs)}
 			}
 		} else {
-			return val
+			// 配列の各要素を再帰的にnormalizeAny
+			result := make([]any, len(val))
+			for i, e := range val {
+				result[i] = normalizeAny(e, fullName+fmt.Sprintf("[%d]", i), errs)
+			}
+			return result
 		}
 	case map[string]any:
 		result := make(map[string]any)
@@ -140,9 +143,9 @@ func normalizeAny(v any, fullName string, errs *ParseError) any {
 
 // normalizeTypeString handles type aliases and array notations
 func normalizeTypeString(typeStr string) string {
-	t := strings.TrimSpace(typeStr)
+	t := strings.ToLower(strings.TrimSpace(typeStr))
 	switch t {
-	case "integer", "long":
+	case "integer", "long", "int64":
 		return "int"
 	case "smallint":
 		return "int16"
@@ -150,7 +153,7 @@ func normalizeTypeString(typeStr string) string {
 		return "int8"
 	case "text", "varchar", "str":
 		return "string"
-	case "double":
+	case "double", "number":
 		return "float"
 	case "decimal", "numeric":
 		return "decimal"
@@ -159,7 +162,7 @@ func normalizeTypeString(typeStr string) string {
 	case "array":
 		return "any[]"
 	}
-	// 配列型: int[], string[], float32[] など
+	// list type like int[]
 	if strings.HasSuffix(t, "[]") {
 		base := normalizeTypeString(t[:len(t)-2])
 		return base + "[]"
@@ -243,17 +246,17 @@ func generateDummyValueFromString(typeStr string) any {
 	case "string", "text", "varchar", "str":
 		return "dummy"
 	case "int":
-		return int64(1) // int: 1
+		return int64(1)
 	case "int32":
-		return int32(2) // int32: 2
+		return int32(2)
 	case "int16":
-		return int16(3) // int16: 3
+		return int16(3)
 	case "int8":
-		return int8(4) // int8: 4
+		return int8(4)
 	case "float":
-		return 1.1 // float64: 1.1
+		return 1.1
 	case "float32":
-		return float32(2.2) // float32: 2.2
+		return float32(2.2)
 	case "decimal":
 		return "1.0"
 	case "bool":
@@ -272,8 +275,10 @@ func generateDummyValueFromString(typeStr string) any {
 		return map[string]any{}
 	case "any":
 		return nil
+	case "object":
+		return map[string]any{}
 	}
-	// list types like int[]
+	// 配列型: int[], string[], float32[] など
 	if strings.HasSuffix(t, "[]") {
 		base := t[:len(t)-2]
 		return []any{generateDummyValueFromString(base)}
