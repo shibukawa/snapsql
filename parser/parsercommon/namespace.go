@@ -2,7 +2,6 @@ package parsercommon
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -246,57 +245,6 @@ type ParameterDefinition struct {
 	Type string `yaml:"type"`
 }
 
-// getCELTypeFromValue gets CEL type from value
-func (ns *Namespace) getCELTypeFromValue(value any) *cel.Type {
-	if value == nil {
-		return cel.AnyType
-	}
-
-	switch v := value.(type) {
-	case string:
-		return cel.StringType
-	case int, int32, int64:
-		return cel.IntType
-	case float32, float64:
-		return cel.DoubleType
-	case bool:
-		return cel.BoolType
-	case []string:
-		return cel.ListType(cel.StringType)
-	case []int:
-		return cel.ListType(cel.IntType)
-	case []int64:
-		return cel.ListType(cel.IntType)
-	case []float64:
-		return cel.ListType(cel.DoubleType)
-	case []bool:
-		return cel.ListType(cel.BoolType)
-	case []any:
-		// Infer element type
-		if len(v) > 0 {
-			elementType := ns.getCELTypeFromValue(v[0])
-			if elementType != nil {
-				return cel.ListType(elementType)
-			}
-		}
-		return cel.ListType(cel.AnyType)
-	case map[string]any:
-		// For nested objects, use MapType (complex object type definition is difficult in CEL)
-		return cel.MapType(cel.StringType, cel.AnyType)
-	default:
-		// Use reflection for more detailed type inference
-		rv := reflect.ValueOf(value)
-		switch rv.Kind() {
-		case reflect.Slice, reflect.Array:
-			return cel.ListType(cel.AnyType)
-		case reflect.Map:
-			return cel.MapType(cel.StringType, cel.AnyType)
-		default:
-			return cel.AnyType
-		}
-	}
-}
-
 // EvaluateParameterExpression evaluates parameter expressions using current CEL environment
 func (ns *Namespace) EvaluateParameterExpression(expression string) (any, error) {
 	// Compile CEL expression using current environment
@@ -455,39 +403,6 @@ func generateDummyValueWithPath(typeInfo any, visited map[string]bool, path stri
 		}
 		return result
 	default:
-		return ""
-	}
-}
-
-// generateDummyValueFromString generates dummy value from string type definition
-func generateDummyValueFromString(typeStr string) any {
-	switch typeStr {
-	case "str", "string":
-		return ""
-	case "int", "integer":
-		return 0
-	case "float", "double":
-		return 0.0
-	case "bool", "boolean":
-		return false
-	case "list[str]", "[]string":
-		return []string{"dummy"}
-	case "list[int]", "[]int":
-		return []int{0}
-	case "list[float]", "[]float":
-		return []float64{0.0}
-	case "list[bool]", "[]bool":
-		return []bool{false}
-	case "map[str]", "map[string]any":
-		return map[string]any{"": ""}
-	default:
-		// Parse list[T] pattern
-		if len(typeStr) > 5 && typeStr[:5] == "list[" && typeStr[len(typeStr)-1] == ']' {
-			elementType := typeStr[5 : len(typeStr)-1]
-			elementValue := generateDummyValueFromString(elementType)
-			return []any{elementValue}
-		}
-		// Default to empty string
 		return ""
 	}
 }

@@ -6,405 +6,261 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	meta "github.com/yuin/goldmark-meta"
-	"github.com/yuin/goldmark/parser"
-	yamlv3 "gopkg.in/yaml.v3"
-	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+// Sentinel errors
 var (
 	ErrParameterNotFound       = fmt.Errorf("parameter not found")
 	ErrInvalidParameterName    = fmt.Errorf("invalid parameter name")
 	ErrInvalidParameterValue   = fmt.Errorf("invalid parameter value for type")
 	ErrInvalidNamingConvention = fmt.Errorf("parameter name does not follow naming convention")
+	ErrDummyDataGeneration     = fmt.Errorf("failed to generate dummy data")
+	ErrParameterValidation     = fmt.Errorf("parameter validation failed")
 )
 
 // Regular expression for valid parameter names
-// Must start with letter or underscore, followed by letters, digits, or underscores
 var validParameterNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
-// ValidateParameterName checks if a parameter name follows naming conventions
-func ValidateParameterName(name string) error {
-	if name == "" {
-		return fmt.Errorf("%w: parameter name cannot be empty", ErrInvalidParameterName)
-	}
-
-	// Check naming convention (alphanumeric + underscore, not starting with digit)
-	if !validParameterNameRegex.MatchString(name) {
-		return fmt.Errorf("%w: parameter name '%s' must start with letter or underscore, followed by letters, digits, or underscores", ErrInvalidNamingConvention, name)
-	}
-
-	return nil
-}
-
-// ValidateAllParameterNames validates all parameter names in a nested structure
-func ValidateAllParameterNames(parameters map[string]any, prefix string) error {
-	var errors []string
-
-	for key, value := range parameters {
-		// Build full parameter name with prefix
-		fullName := key
-		if prefix != "" {
-			fullName = prefix + "." + key
-		}
-
-		// Validate the current parameter name
-		if err := ValidateParameterName(key); err != nil {
-			errors = append(errors, fmt.Sprintf("parameter '%s': %v", fullName, err))
-		}
-
-		// If value is a nested map, recursively validate
-		if nestedMap, ok := value.(map[string]any); ok {
-			if err := ValidateAllParameterNames(nestedMap, fullName); err != nil {
-				errors = append(errors, err.Error())
-			}
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("parameter validation failed:\n%s", strings.Join(errors, "\n"))
-	}
-
-	return nil
-}
-
-// CELVariable represents a CEL variable definition
-type CELVariable struct {
-	Name string // Variable name (dot notation for nested)
-	Type string // CEL type
-}
-
-// FunctionDefinition represents the complete interface definition for SQL templates
 type FunctionDefinition struct {
-	// Template metadata
-	Name        string `yaml:"name"`        // Template name for function generation
-	Description string `yaml:"description"` // Template description
-
-	// Function generation
-	FunctionName string `yaml:"function_name"` // Generated function name
-
-	// Parameters definition (hierarchical structure preserved for type generation)
-	Parameters map[string]any `yaml:"parameters"`
-
-	// Processed information
-	ParameterOrder []string // Parameters with definition order preserved
+	Name           string                    `yaml:"name"`
+	Description    string                    `yaml:"description"`
+	FunctionName   string                    `yaml:"function_name"`
+	Parameters     map[string]any            `yaml:"-"` // normalized, checked
+	ParameterOrder []string                  `yaml:"-"`
+	RawParameters  yaml.MapSlice             `yaml:"parameters"`
+	Generators     map[string]map[string]any `yaml:"generators"`
+	dummyData      any
 }
 
-// NewFunctionDefinitionFromSQL parses interface def from SQL tokens with comment blocks
-// This is the preferred method as it avoids regex parsing and preserves parameter order
-func NewFunctionDefinitionFromSQL(tokens []tokenizer.Token) (*FunctionDefinition, error) {
-	// Extract from comment tokens (inline extractCommentDefinitionFromTokens)
-	for _, token := range tokens {
-		if token.Type == tokenizer.BLOCK_COMMENT {
-			content := strings.TrimSpace(token.Value)
+// Finalize normalizes, validates, and caches dummy data for parameters
+func (f *FunctionDefinition) Finalize() error {
+	f.Parameters = make(map[string]any)
+	f.ParameterOrder = nil
 
-			// Only process comments that start with /*# (def marker)
-			if strings.HasPrefix(content, "/*#") && strings.HasSuffix(content, "*/") {
-				// Remove /*# and */ markers
-				content = strings.TrimSpace(content[3 : len(content)-2])
+	normalized, order, err := normalizeAndValidateParameters(f.RawParameters)
+	if err != nil {
+		f.dummyData = nil
+		return fmt.Errorf("%w: %v", ErrParameterValidation, err)
+	}
+	f.Parameters = normalized
+	f.ParameterOrder = order
 
-				// This should be YAML content
-				if content != "" {
-					return NewFunctionDefinitionFromYAML(content)
-				}
+	dummy, err := generateDummyData(f.Parameters)
+	if err != nil {
+		f.dummyData = nil
+		return fmt.Errorf("%w: %v", ErrDummyDataGeneration, err)
+	}
+	f.dummyData = dummy
+	return nil
+}
+
+// DummyData returns cached dummy data (call Finalize before)
+func (f *FunctionDefinition) DummyData() any {
+	return f.dummyData
+}
+
+// normalizeAndValidateParameters recursively normalizes and validates parameters
+func normalizeAndValidateParameters(params yaml.MapSlice) (map[string]any, []string, error) {
+	result := make(map[string]any, len(params))
+	order := make([]string, 0, len(params))
+	errs := &ParseError{}
+	for _, item := range params {
+		key, ok := item.Key.(string)
+		if !ok {
+			errs.Add(fmt.Errorf("%w: parameter key is not string: %v", ErrInvalidForSnapSQL, item.Key))
+			continue
+		}
+		// Validate parameter name
+		if !validParameterNameRegex.MatchString(key) {
+			errs.Add(fmt.Errorf("%w: invalid parameter name: %s", ErrInvalidForSnapSQL, key))
+			continue
+		}
+		order = append(order, key)
+		result[key] = normalizeAny(item.Value, key, errs)
+
+	}
+	if len(errs.Errors) > 0 {
+		return result, order, errs
+	}
+	return result, order, nil
+}
+
+func normalizeAny(v any, fullName string, errs *ParseError) any {
+	switch val := v.(type) {
+	case yaml.MapSlice:
+		panic("should not come here")
+	case []any:
+		// Array literal ([int], [string], etc.)
+		if len(val) == 1 {
+			// [int] → "int[]" など
+			elem := val[0]
+			switch elemType := elem.(type) {
+			case string:
+				return elemType + "[]"
+			case yaml.MapSlice:
+				panic("should not coe here")
+			default:
+				return []any{elem}
 			}
-		}
-	}
-	return NewFunctionDefinitionFromYAML("")
-}
-
-// NewFunctionDefinitionFromMarkdown creates a FunctionDefinition from markdown components
-// frontMatter: front matter metadata (map[string]any)
-// parametersText: parameters section code block text
-// description: description text from overview section
-func NewFunctionDefinitionFromMarkdown(frontMatter map[string]any, parametersText, description string) (*FunctionDefinition, error) {
-	def := &FunctionDefinition{
-		Parameters: make(map[string]any),
-	}
-
-	// Extract metadata from front matter
-	if frontMatter != nil {
-		if name, ok := frontMatter["name"].(string); ok {
-			def.Name = name
-		}
-		if functionName, ok := frontMatter["function_name"].(string); ok {
-			def.FunctionName = functionName
-		}
-		if desc, ok := frontMatter["description"].(string); ok {
-			def.Description = desc
-		}
-	}
-
-	// Use description parameter if provided and front matter description is empty
-	if def.Description == "" && description != "" {
-		def.Description = description
-	}
-
-	// Parse parameters from YAML text
-	if parametersText != "" {
-		if err := yaml.Unmarshal([]byte(parametersText), &def.Parameters); err != nil {
-			return nil, fmt.Errorf("failed to parse parameters YAML: %w", err)
-		}
-
-		// Validate parameter names
-		if err := ValidateAllParameterNames(def.Parameters, ""); err != nil {
-			return nil, fmt.Errorf("parameter validation failed: %w", err)
-		}
-
-		// Extract parameter order from YAML text
-		keys, err := extractOrderedKeysFromParameters(parametersText)
-		if err == nil {
-			def.ParameterOrder = keys
 		} else {
-			def.ParameterOrder = []string{}
+			return val
 		}
-	} else {
-		// Ensure empty slice when no parameters
-		def.ParameterOrder = []string{}
-	}
-
-	return def, nil
-}
-
-// NewFunctionDefinitionFromMarkdownContext creates a FunctionDefinition from markdown parser context
-// This version uses TryGetItems API to preserve key order in front matter
-func NewFunctionDefinitionFromMarkdownContext(pc parser.Context, parametersText, description string) (*FunctionDefinition, error) {
-	def := &FunctionDefinition{
-		Parameters: make(map[string]any),
-	}
-
-	// Extract metadata from front matter using TryGetItems to preserve order
-	orderedItems, err := meta.TryGetItems(pc)
-	if err == nil {
-		// Convert MapSlice to regular map for compatibility
-		frontMatter := make(map[string]any)
-		
-		// Extract ordered keys for parameter order
-		orderedKeys := make([]string, 0, len(orderedItems))
-		
-		// Process each item in order
-		for _, item := range orderedItems {
-			key, ok := item.Key.(string)
-			if !ok {
+	case map[string]any:
+		result := make(map[string]any)
+		for k, v := range val {
+			if !validParameterNameRegex.MatchString(k) {
+				errs.Add(fmt.Errorf("%w: invalid parameter name: %s", ErrInvalidForSnapSQL, fullName+"."+k))
 				continue
 			}
-			
-			// Add to regular map
-			frontMatter[key] = item.Value
-			
-			// Add to ordered keys
-			orderedKeys = append(orderedKeys, key)
+			result[k] = normalizeAny(v, fullName+"."+k, errs)
 		}
-		
-		// Extract metadata from front matter
-		if name, ok := frontMatter["name"].(string); ok {
-			def.Name = name
-		}
-		if functionName, ok := frontMatter["function_name"].(string); ok {
-			def.FunctionName = functionName
-		}
-		if desc, ok := frontMatter["description"].(string); ok {
-			def.Description = desc
-		}
+		return result
+	case string:
+		return normalizeTypeString(val)
+	default:
+		return inferTypeFromValue(val)
 	}
+}
 
-	// Use description parameter if provided and front matter description is empty
-	if def.Description == "" && description != "" {
-		def.Description = description
+// normalizeTypeString handles type aliases and array notations
+func normalizeTypeString(typeStr string) string {
+	t := strings.TrimSpace(typeStr)
+	switch t {
+	case "integer", "long":
+		return "int"
+	case "smallint":
+		return "int16"
+	case "tinyint":
+		return "int8"
+	case "text", "varchar", "str":
+		return "string"
+	case "double":
+		return "float"
+	case "decimal", "numeric":
+		return "decimal"
+	case "boolean":
+		return "bool"
+	case "array":
+		return "any[]"
 	}
+	// 配列型: int[], string[], float32[] など
+	if strings.HasSuffix(t, "[]") {
+		base := normalizeTypeString(t[:len(t)-2])
+		return base + "[]"
+	}
+	return t
+}
 
-	// Parse parameters from YAML text
-	if parametersText != "" {
-		// Parse parameters with order preservation
-		var yamlNode yamlv3.Node
-		if err := yamlv3.Unmarshal([]byte(parametersText), &yamlNode); err == nil {
-			// Extract ordered keys from YAML node
-			keys, err := extractOrderedKeysFromYAML(&yamlNode, "")
-			if err == nil {
-				def.ParameterOrder = keys
+// inferTypeFromValue infers type string from Go value
+func inferTypeFromValue(val any) string {
+	switch v := val.(type) {
+	case int, int64:
+		return "int"
+	case int32:
+		return "int32"
+	case int16:
+		return "int16"
+	case int8:
+		return "int8"
+	case float64:
+		return "float"
+	case float32:
+		return "float32"
+	case bool:
+		return "bool"
+	case string:
+		return "string"
+	case []any:
+		if len(v) > 0 {
+			return inferTypeFromValue(v[0]) + "[]"
+		}
+		return "any[]"
+	case yaml.MapSlice, map[string]any:
+		return "object"
+	default:
+		return "any"
+	}
+}
+
+// generateDummyData creates dummy data tree from parameter definitions
+func generateDummyData(params map[string]any) (any, error) {
+	result := make(map[string]any, len(params))
+	for k, v := range params {
+		switch val := v.(type) {
+		case string:
+			result[k] = generateDummyValueFromString(val)
+		case map[string]any:
+			d, err := generateDummyData(val)
+			if err != nil {
+				return nil, err
 			}
-		}
-		
-		// Parse parameters into map
-		if err := yaml.Unmarshal([]byte(parametersText), &def.Parameters); err != nil {
-			return nil, fmt.Errorf("failed to parse parameters YAML: %w", err)
-		}
-
-		// Validate parameter names
-		if err := ValidateAllParameterNames(def.Parameters, ""); err != nil {
-			return nil, fmt.Errorf("parameter validation failed: %w", err)
-		}
-		
-		// If parameter order wasn't extracted from YAML node, try extracting from text
-		if len(def.ParameterOrder) == 0 {
-			keys, err := extractOrderedKeysFromParameters(parametersText)
-			if err == nil {
-				def.ParameterOrder = keys
+			result[k] = d
+		case []any:
+			// 配列型: [object]や[型名]など
+			if len(val) == 1 {
+				switch elem := val[0].(type) {
+				case string:
+					result[k] = []any{generateDummyValueFromString(elem)}
+				case map[string]any:
+					d, err := generateDummyData(elem)
+					if err != nil {
+						return nil, err
+					}
+					result[k] = []any{d}
+				default:
+					result[k] = []any{elem}
+				}
 			} else {
-				def.ParameterOrder = []string{}
+				result[k] = []any{}
 			}
-		}
-	} else {
-		// Ensure empty slice when no parameters
-		def.ParameterOrder = []string{}
-	}
-
-	return def, nil
-}
-
-// GetFunctionMetadata returns metadata for function generation
-func (def *FunctionDefinition) GetFunctionMetadata() map[string]string {
-	metadata := make(map[string]string)
-
-	if def.Name != "" {
-		metadata["name"] = def.Name
-	}
-	if def.FunctionName != "" {
-		metadata["function_name"] = def.FunctionName
-	}
-	if def.Description != "" {
-		metadata["description"] = def.Description
-	}
-
-	return metadata
-}
-
-// GetTags returns empty slice (tags removed from def)
-func (def *FunctionDefinition) GetTags() []string {
-	return []string{}
-}
-
-// NewFunctionDefinitionFromYAML parses interface def from frontmatter YAML with parameter order preservation
-func NewFunctionDefinitionFromYAML(yamlText string) (*FunctionDefinition, error) {
-	if yamlText == "" {
-		// Return minimal def if no def found
-		return &FunctionDefinition{
-			Parameters: make(map[string]any),
-		}, nil
-	}
-
-	// Parse YAML with order preservation
-	var yamlNode yamlv3.Node
-	if err := yamlv3.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML node: %w", err)
-	}
-	// Parse regular def
-	var def FunctionDefinition
-	if err := yaml.Unmarshal([]byte(yamlText), &def); err != nil {
-		return nil, fmt.Errorf("failed to parse interface def YAML: %w", err)
-	}
-
-	// Apply defaults (inline)
-	if def.Parameters == nil {
-		def.Parameters = make(map[string]any)
-	}
-
-	// Validate parameter names
-	if err := ValidateAllParameterNames(def.Parameters, ""); err != nil {
-		return nil, fmt.Errorf("parameter validation failed: %w", err)
-	}
-
-	// パラメータ順序抽出
-	keys, err := extractOrderedKeysFromYAMLText(yamlText, "parameters")
-	if err == nil {
-		def.ParameterOrder = keys
-	} else {
-		def.ParameterOrder = []string{}
-	}
-
-	return &def, nil
-}
-
-// extractOrderedKeysFromYAMLText parses YAML text and returns ordered keys under the specified key.
-func extractOrderedKeysFromYAMLText(yamlText string, key string) ([]string, error) {
-	var yamlNode yamlv3.Node
-	if err := yamlv3.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-	return extractOrderedKeysFromYAML(&yamlNode, key)
-}
-
-// extractOrderedKeysFromYAML returns the ordered keys from a YAML node.
-func extractOrderedKeysFromYAML(yamlNode *yamlv3.Node, key string) ([]string, error) {
-	if yamlNode == nil {
-		return nil, fmt.Errorf("yamlNode is nil")
-	}
-	// ドキュメントノードを取得
-	var mapping *yamlv3.Node
-	if yamlNode.Kind == yamlv3.DocumentNode && len(yamlNode.Content) > 0 {
-		mapping = yamlNode.Content[0]
-	} else if yamlNode.Kind == yamlv3.MappingNode {
-		mapping = yamlNode
-	} else {
-		return nil, fmt.Errorf("expected DocumentNode or MappingNode")
-	}
-
-	// キー指定がある場合はその下を探す
-	if key != "" {
-		var found *yamlv3.Node
-		for i := 0; i < len(mapping.Content); i += 2 {
-			k := mapping.Content[i]
-			v := mapping.Content[i+1]
-			if k.Value == key {
-				found = v
-				break
-			}
-		}
-		if found == nil {
-			return nil, fmt.Errorf("key '%s' not found", key)
-		}
-		if found.Kind != yamlv3.MappingNode {
-			return nil, fmt.Errorf("key '%s' is not a mapping node", key)
-		}
-		mapping = found
-	}
-
-	// 順序付きでトップレベルのキーのみ抽出（値がMappingNodeの場合はそのキーのみ追加、下位キーは含めない）
-	var keys []string
-	for i := 0; i < len(mapping.Content); i += 2 {
-		k := mapping.Content[i]
-		v := mapping.Content[i+1]
-		// ネストされたmappingはトップレベルキーとしてのみ追加、下位キーは順序リストに含めない
-		if v.Kind == yamlv3.MappingNode {
-			keys = append(keys, k.Value)
-			// 下位mappingのキーは含めない
-		} else {
-			keys = append(keys, k.Value)
-		}
-		// TestParameterOrderFromYAMLの期待値に合わせて、ネスト下のキーは含めない
-		if k.Value == "filters" || k.Value == "pagination" {
-			break
+		default:
+			return nil, fmt.Errorf("unsupported parameter type: %T", v)
 		}
 	}
-	return keys, nil
+	return result, nil
 }
 
-// extractOrderedKeysFromParameters extracts ordered keys from parameters YAML text
-func extractOrderedKeysFromParameters(yamlText string) ([]string, error) {
-	var yamlNode yamlv3.Node
-	if err := yamlv3.Unmarshal([]byte(yamlText), &yamlNode); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+// generateDummyValueFromString generates dummy value from string type definition
+func generateDummyValueFromString(typeStr string) any {
+	t := strings.TrimSpace(typeStr)
+	switch t {
+	case "string", "text", "varchar", "str":
+		return "dummy"
+	case "int":
+		return int64(1)
+	case "int32":
+		return int32(1)
+	case "int16":
+		return int16(1)
+	case "int8":
+		return int8(1)
+	case "float":
+		return 1.0
+	case "float32":
+		return float32(1.0)
+	case "decimal":
+		return "1.0"
+	case "bool":
+		return true
+	case "date":
+		return "2024-01-01"
+	case "datetime":
+		return "2024-01-01 00:00:00"
+	case "timestamp":
+		return "2024-01-01 00:00:00"
+	case "email":
+		return "user@example.com"
+	case "uuid":
+		return "00000000-0000-0000-0000-000000000000"
+	case "json":
+		return map[string]any{}
+	case "any":
+		return nil
 	}
-
-	// The root should be a mapping node for parameters
-	var mapping *yamlv3.Node
-	if yamlNode.Kind == yamlv3.DocumentNode && len(yamlNode.Content) > 0 {
-		mapping = yamlNode.Content[0]
-	} else if yamlNode.Kind == yamlv3.MappingNode {
-		mapping = &yamlNode
-	} else {
-		return nil, fmt.Errorf("expected DocumentNode or MappingNode")
+	// 配列型: int[], string[], float32[] など
+	if strings.HasSuffix(t, "[]") {
+		base := t[:len(t)-2]
+		return []any{generateDummyValueFromString(base)}
 	}
-
-	if mapping.Kind != yamlv3.MappingNode {
-		return nil, fmt.Errorf("parameters content is not a mapping node")
-	}
-
-	// Extract top-level keys only
-	var keys []string
-	for i := 0; i < len(mapping.Content); i += 2 {
-		k := mapping.Content[i]
-		keys = append(keys, k.Value)
-	}
-	return keys, nil
+	return ""
 }
