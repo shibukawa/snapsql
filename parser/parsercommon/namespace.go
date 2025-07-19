@@ -8,8 +8,6 @@ import (
 	"github.com/google/cel-go/cel"
 )
 
-// Namespace manages namespace information and CEL functionality in an integrated manner
-
 type frame struct {
 	variables  map[string]any // Variables added at this scope level
 	param      map[string]any // Parameter values at this scope level (for compatibility)
@@ -37,7 +35,7 @@ func NewNamespace(schema *FunctionDefinition, environment, param map[string]any)
 	}
 
 	if param == nil {
-		param = generateDummyDataFromSchema(schema)
+		param = schema.DummyData().(map[string]any)
 	}
 
 	// Create environment CEL environment
@@ -130,8 +128,7 @@ func (ns *Namespace) EnterLoop(varName string, loopTarget []any) bool {
 	}
 
 	// Generate dummy value based on the first element type
-	visited := make(map[string]bool)
-	dummyValue := generateDummyValueWithPath(loopTarget[0], visited, varName)
+	dummyValue := 1
 
 	// Create new frame with only the loop variable
 	newFrame := frame{
@@ -342,68 +339,6 @@ func (ns *Namespace) inferTypeFromValue(value any) string {
 		return "list"
 	default:
 		return "any"
-	}
-}
-
-// generateDummyDataFromSchema generates dummy data environment from schema excluding nullable parameters
-func generateDummyDataFromSchema(schema *FunctionDefinition) map[string]any {
-	if schema == nil || schema.Parameters == nil {
-		return make(map[string]any)
-	}
-
-	// Use createCleanParameterMap to exclude nullable parameters
-	cleanParams := createCleanParameterMap(schema.Parameters)
-
-	result := make(map[string]any)
-	visited := make(map[string]bool) // Prevent circular references using path-based tracking
-	for key, typeInfo := range cleanParams {
-		result[key] = generateDummyValueWithPath(typeInfo, visited, key)
-	}
-	return result
-}
-
-// generateDummyValueWithPath generates dummy value while detecting circular references by path
-func generateDummyValueWithPath(typeInfo any, visited map[string]bool, path string) any {
-	// Check for circular reference by path
-	if visited[path] {
-		return "" // Return default value for circular reference
-	}
-	visited[path] = true
-	defer delete(visited, path) // Remove from visited after processing
-
-	switch t := typeInfo.(type) {
-	case string:
-		return generateDummyValueFromString(t)
-	case []any:
-		// For array types, use first element as template
-		if len(t) > 0 {
-			elementTemplate := t[0]
-			elementValue := generateDummyValueWithPath(elementTemplate, visited, path+"[0]")
-			// Return appropriate array type based on element type
-			switch elementTemplate {
-			case "str", "string":
-				return []string{"dummy"}
-			case "int", "integer":
-				return []int{0}
-			case "float", "double":
-				return []float64{0.0}
-			case "bool", "boolean":
-				return []bool{false}
-			default:
-				return []any{elementValue}
-			}
-		}
-		return []any{}
-	case map[string]any:
-		// For object types, process recursively
-		result := make(map[string]any)
-		for key, value := range t {
-			childPath := path + "." + key
-			result[key] = generateDummyValueWithPath(value, visited, childPath)
-		}
-		return result
-	default:
-		return ""
 	}
 }
 

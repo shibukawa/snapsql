@@ -29,7 +29,7 @@ type FunctionDefinition struct {
 	ParameterOrder []string                  `yaml:"-"`
 	RawParameters  yaml.MapSlice             `yaml:"parameters"`
 	Generators     map[string]map[string]any `yaml:"generators"`
-	dummyData      any
+	dummyData      map[string]any
 }
 
 // Finalize normalizes, validates, and caches dummy data for parameters
@@ -54,9 +54,25 @@ func (f *FunctionDefinition) Finalize() error {
 	return nil
 }
 
-// DummyData returns cached dummy data (call Finalize before)
-func (f *FunctionDefinition) DummyData() any {
-	return f.dummyData
+// DummyData returns cached dummy data (call Finalize before).
+// If path is specified, traverses the dummy data by keys (and 0th element for arrays).
+func (f *FunctionDefinition) DummyData(path ...string) any {
+	var current any = f.dummyData
+	for _, p := range path {
+		switch v := current.(type) {
+		case map[string]any:
+			current = v[p]
+		case []any:
+			if len(v) > 0 {
+				current = v[0]
+			} else {
+				return nil
+			}
+		default:
+			return nil
+		}
+	}
+	return current
 }
 
 // normalizeAndValidateParameters recursively normalizes and validates parameters
@@ -183,7 +199,7 @@ func inferTypeFromValue(val any) string {
 }
 
 // generateDummyData creates dummy data tree from parameter definitions
-func generateDummyData(params map[string]any) (any, error) {
+func generateDummyData(params map[string]any) (map[string]any, error) {
 	result := make(map[string]any, len(params))
 	for k, v := range params {
 		switch val := v.(type) {
@@ -227,17 +243,17 @@ func generateDummyValueFromString(typeStr string) any {
 	case "string", "text", "varchar", "str":
 		return "dummy"
 	case "int":
-		return int64(1)
+		return int64(1) // int: 1
 	case "int32":
-		return int32(1)
+		return int32(2) // int32: 2
 	case "int16":
-		return int16(1)
+		return int16(3) // int16: 3
 	case "int8":
-		return int8(1)
+		return int8(4) // int8: 4
 	case "float":
-		return 1.0
+		return 1.1 // float64: 1.1
 	case "float32":
-		return float32(1.0)
+		return float32(2.2) // float32: 2.2
 	case "decimal":
 		return "1.0"
 	case "bool":
@@ -257,7 +273,7 @@ func generateDummyValueFromString(typeStr string) any {
 	case "any":
 		return nil
 	}
-	// 配列型: int[], string[], float32[] など
+	// list types like int[]
 	if strings.HasSuffix(t, "[]") {
 		base := t[:len(t)-2]
 		return []any{generateDummyValueFromString(base)}

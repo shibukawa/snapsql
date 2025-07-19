@@ -13,7 +13,7 @@ func TestFunctionDefinition(t *testing.T) {
 		yamlSrc        string
 		expectedOrder  []string
 		expectedParams map[string]any
-		expectedDummy  any
+		expectedDummy  map[string]any
 		wantErr        bool
 	}
 	tests := []testCase{
@@ -302,7 +302,7 @@ parameters:
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedOrder, def.ParameterOrder)
 				assert.Equal(t, tc.expectedParams, def.Parameters)
-				assert.Equal(t, tc.expectedDummy, def.DummyData())
+				assert.Equal(t, tc.expectedDummy, def.DummyData().(map[string]any))
 			}
 		})
 	}

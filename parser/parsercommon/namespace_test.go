@@ -243,48 +243,6 @@ func TestExtractElementFromList(t *testing.T) {
 	}
 }
 
-func TestDummyDataGeneration(t *testing.T) {
-	tests := []struct {
-		name     string
-		schema   *FunctionDefinition
-		expected map[string]any
-	}{
-		{
-			name: "basic type dummy data generation",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"name":    "str",
-					"age":     "int",
-					"active":  "bool",
-					"score":   "float",
-					"fields":  []any{"str"},
-					"numbers": []any{"int"},
-				},
-			},
-			expected: map[string]any{
-				"name":    "",
-				"age":     0,
-				"active":  false,
-				"score":   0.0,
-				"fields":  []string{"dummy"},
-				"numbers": []int{0},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := generateDummyDataFromSchema(tt.schema)
-
-			for key, expectedValue := range tt.expected {
-				_, exists := result[key]
-				assert.True(t, exists, "key '%s' should be included in result", key)
-				assert.Equal(t, expectedValue, result[key])
-			}
-		})
-	}
-}
-
 func TestEnvironmentAndParameterSeparation(t *testing.T) {
 	schema := &FunctionDefinition{
 		Parameters: map[string]any{
