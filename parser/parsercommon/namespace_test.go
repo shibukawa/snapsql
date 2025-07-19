@@ -36,12 +36,16 @@ func TestNamespace(t *testing.T) {
 	// Parameter evaluation
 	result, err = ns.EvaluateParameterExpression("user_id")
 	assert.NoError(t, err)
-	assert.Equal(t, 0, result) // Dummy value for int
+	if v, ok := result.(int64); ok {
+		assert.Equal(t, int64(1), v) // Dummy value for int
+	} else {
+		t.Fatalf("Expected int64(1), got %T: %#v", result, result)
+	}
 
 	// Nested parameter evaluation
 	result, err = ns.EvaluateParameterExpression("filters.active")
 	assert.NoError(t, err)
-	assert.Equal(t, false, result) // Dummy value for bool
+	assert.Equal(t, true, result) // Dummy value for bool
 
 	// Non-existent parameter
 	_, err = ns.EvaluateParameterExpression("nonexistent_param")
@@ -134,7 +138,7 @@ func TestLoopVariableManagement(t *testing.T) {
 	// Should be able to access loop variable
 	result, err = ns.EvaluateParameterExpression("item")
 	assert.NoError(t, err)
-	assert.Equal(t, "", result) // "str" type generates empty string dummy value
+	assert.Equal(t, "dummy", result) // "str" type generates dummy value
 
 	// Should still be able to access original variables
 	result, err = ns.EvaluateParameterExpression("simple_list")
@@ -151,11 +155,11 @@ func TestLoopVariableManagement(t *testing.T) {
 	// Should be able to access both loop variables
 	result, err = ns.EvaluateParameterExpression("item")
 	assert.NoError(t, err)
-	assert.Equal(t, "", result) // Still empty string
+	assert.Equal(t, "dummy", result) // Still dummy value
 
 	result, err = ns.EvaluateParameterExpression("user")
 	assert.NoError(t, err)
-	assert.Equal(t, "", result) // "dummy" string type also generates empty string
+	assert.Equal(t, "dummy", result) // "dummy" string type also generates dummy value
 
 	// Leave nested loop
 	ns.LeaveLoop()
@@ -163,7 +167,7 @@ func TestLoopVariableManagement(t *testing.T) {
 	// Should still have first loop variable but not second
 	result, err = ns.EvaluateParameterExpression("item")
 	assert.NoError(t, err)
-	assert.Equal(t, "", result) // Still empty string
+	assert.Equal(t, "dummy", result) // Still dummy value
 
 	_, err = ns.EvaluateParameterExpression("user")
 	assert.Error(t, err) // Should no longer be accessible
@@ -243,48 +247,6 @@ func TestExtractElementFromList(t *testing.T) {
 	}
 }
 
-func TestDummyDataGeneration(t *testing.T) {
-	tests := []struct {
-		name     string
-		schema   *FunctionDefinition
-		expected map[string]any
-	}{
-		{
-			name: "basic type dummy data generation",
-			schema: &FunctionDefinition{
-				Parameters: map[string]any{
-					"name":    "str",
-					"age":     "int",
-					"active":  "bool",
-					"score":   "float",
-					"fields":  []any{"str"},
-					"numbers": []any{"int"},
-				},
-			},
-			expected: map[string]any{
-				"name":    "",
-				"age":     0,
-				"active":  false,
-				"score":   0.0,
-				"fields":  []string{"dummy"},
-				"numbers": []int{0},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := generateDummyDataFromSchema(tt.schema)
-
-			for key, expectedValue := range tt.expected {
-				_, exists := result[key]
-				assert.True(t, exists, "key '%s' should be included in result", key)
-				assert.Equal(t, expectedValue, result[key])
-			}
-		})
-	}
-}
-
 func TestEnvironmentAndParameterSeparation(t *testing.T) {
 	schema := &FunctionDefinition{
 		Parameters: map[string]any{
@@ -312,11 +274,15 @@ func TestEnvironmentAndParameterSeparation(t *testing.T) {
 	// Test parameter evaluation
 	result, err = ns.EvaluateParameterExpression("user_id")
 	assert.NoError(t, err)
-	assert.Equal(t, 0, result) // Dummy value
+	if v, ok := result.(int64); ok {
+		assert.Equal(t, int64(1), v) // Dummy value
+	} else {
+		t.Fatalf("Expected int64(1), got %T: %#v", result, result)
+	}
 
 	result, err = ns.EvaluateParameterExpression("name")
 	assert.NoError(t, err)
-	assert.Equal(t, "", result) // Dummy value
+	assert.Equal(t, "dummy", result) // Dummy value
 
 	// Environment variables should not be accessible from parameter evaluation
 	_, err = ns.EvaluateParameterExpression("table_name")

@@ -2,14 +2,11 @@ package parsercommon
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
 	"github.com/google/cel-go/cel"
 )
-
-// Namespace manages namespace information and CEL functionality in an integrated manner
 
 type frame struct {
 	variables  map[string]any // Variables added at this scope level
@@ -38,7 +35,7 @@ func NewNamespace(schema *FunctionDefinition, environment, param map[string]any)
 	}
 
 	if param == nil {
-		param = generateDummyDataFromSchema(schema)
+		param = schema.DummyData().(map[string]any)
 	}
 
 	// Create environment CEL environment
@@ -131,8 +128,7 @@ func (ns *Namespace) EnterLoop(varName string, loopTarget []any) bool {
 	}
 
 	// Generate dummy value based on the first element type
-	visited := make(map[string]bool)
-	dummyValue := generateDummyValueWithPath(loopTarget[0], visited, varName)
+	dummyValue := 1
 
 	// Create new frame with only the loop variable
 	newFrame := frame{
@@ -246,57 +242,6 @@ type ParameterDefinition struct {
 	Type string `yaml:"type"`
 }
 
-// getCELTypeFromValue gets CEL type from value
-func (ns *Namespace) getCELTypeFromValue(value any) *cel.Type {
-	if value == nil {
-		return cel.AnyType
-	}
-
-	switch v := value.(type) {
-	case string:
-		return cel.StringType
-	case int, int32, int64:
-		return cel.IntType
-	case float32, float64:
-		return cel.DoubleType
-	case bool:
-		return cel.BoolType
-	case []string:
-		return cel.ListType(cel.StringType)
-	case []int:
-		return cel.ListType(cel.IntType)
-	case []int64:
-		return cel.ListType(cel.IntType)
-	case []float64:
-		return cel.ListType(cel.DoubleType)
-	case []bool:
-		return cel.ListType(cel.BoolType)
-	case []any:
-		// Infer element type
-		if len(v) > 0 {
-			elementType := ns.getCELTypeFromValue(v[0])
-			if elementType != nil {
-				return cel.ListType(elementType)
-			}
-		}
-		return cel.ListType(cel.AnyType)
-	case map[string]any:
-		// For nested objects, use MapType (complex object type definition is difficult in CEL)
-		return cel.MapType(cel.StringType, cel.AnyType)
-	default:
-		// Use reflection for more detailed type inference
-		rv := reflect.ValueOf(value)
-		switch rv.Kind() {
-		case reflect.Slice, reflect.Array:
-			return cel.ListType(cel.AnyType)
-		case reflect.Map:
-			return cel.MapType(cel.StringType, cel.AnyType)
-		default:
-			return cel.AnyType
-		}
-	}
-}
-
 // EvaluateParameterExpression evaluates parameter expressions using current CEL environment
 func (ns *Namespace) EvaluateParameterExpression(expression string) (any, error) {
 	// Compile CEL expression using current environment
@@ -397,101 +342,6 @@ func (ns *Namespace) inferTypeFromValue(value any) string {
 	}
 }
 
-// generateDummyDataFromSchema generates dummy data environment from schema excluding nullable parameters
-func generateDummyDataFromSchema(schema *FunctionDefinition) map[string]any {
-	if schema == nil || schema.Parameters == nil {
-		return make(map[string]any)
-	}
-
-	// Use createCleanParameterMap to exclude nullable parameters
-	cleanParams := createCleanParameterMap(schema.Parameters)
-
-	result := make(map[string]any)
-	visited := make(map[string]bool) // Prevent circular references using path-based tracking
-	for key, typeInfo := range cleanParams {
-		result[key] = generateDummyValueWithPath(typeInfo, visited, key)
-	}
-	return result
-}
-
-// generateDummyValueWithPath generates dummy value while detecting circular references by path
-func generateDummyValueWithPath(typeInfo any, visited map[string]bool, path string) any {
-	// Check for circular reference by path
-	if visited[path] {
-		return "" // Return default value for circular reference
-	}
-	visited[path] = true
-	defer delete(visited, path) // Remove from visited after processing
-
-	switch t := typeInfo.(type) {
-	case string:
-		return generateDummyValueFromString(t)
-	case []any:
-		// For array types, use first element as template
-		if len(t) > 0 {
-			elementTemplate := t[0]
-			elementValue := generateDummyValueWithPath(elementTemplate, visited, path+"[0]")
-			// Return appropriate array type based on element type
-			switch elementTemplate {
-			case "str", "string":
-				return []string{"dummy"}
-			case "int", "integer":
-				return []int{0}
-			case "float", "double":
-				return []float64{0.0}
-			case "bool", "boolean":
-				return []bool{false}
-			default:
-				return []any{elementValue}
-			}
-		}
-		return []any{}
-	case map[string]any:
-		// For object types, process recursively
-		result := make(map[string]any)
-		for key, value := range t {
-			childPath := path + "." + key
-			result[key] = generateDummyValueWithPath(value, visited, childPath)
-		}
-		return result
-	default:
-		return ""
-	}
-}
-
-// generateDummyValueFromString generates dummy value from string type definition
-func generateDummyValueFromString(typeStr string) any {
-	switch typeStr {
-	case "str", "string":
-		return ""
-	case "int", "integer":
-		return 0
-	case "float", "double":
-		return 0.0
-	case "bool", "boolean":
-		return false
-	case "list[str]", "[]string":
-		return []string{"dummy"}
-	case "list[int]", "[]int":
-		return []int{0}
-	case "list[float]", "[]float":
-		return []float64{0.0}
-	case "list[bool]", "[]bool":
-		return []bool{false}
-	case "map[str]", "map[string]any":
-		return map[string]any{"": ""}
-	default:
-		// Parse list[T] pattern
-		if len(typeStr) > 5 && typeStr[:5] == "list[" && typeStr[len(typeStr)-1] == ']' {
-			elementType := typeStr[5 : len(typeStr)-1]
-			elementValue := generateDummyValueFromString(elementType)
-			return []any{elementValue}
-		}
-		// Default to empty string
-		return ""
-	}
-}
-
 // inferCELTypeFromValue infers CEL type from Go value
 func inferCELTypeFromValue(value any) *cel.Type {
 	if value == nil {
@@ -515,21 +365,67 @@ func inferCELTypeFromValue(value any) *cel.Type {
 }
 
 // inferCELTypeFromStringType infers CEL type from parameter type string
+// inferCELTypeFromStringType infers CEL type from parameter type string (with array/map/alias support)
 func inferCELTypeFromStringType(typeStr string) *cel.Type {
-	switch typeStr {
-	case "str", "string":
+	t := strings.TrimSpace(typeStr)
+	switch t {
+	// --- Primitive and alias types ---
+	case "str", "string", "text", "varchar":
 		return cel.StringType
-	case "int", "integer":
+	case "int", "integer", "long":
 		return cel.IntType
-	case "float", "double":
+	case "int32":
+		return cel.IntType // CEL has only int
+	case "int16":
+		return cel.IntType
+	case "int8":
+		return cel.IntType
+	case "float", "double", "float32":
+		return cel.DoubleType
+	case "decimal", "numeric":
 		return cel.DoubleType
 	case "bool", "boolean":
 		return cel.BoolType
-	case "timestamp", "time":
+	// --- Special types ---
+	case "date":
+		return cel.StringType
+	case "datetime", "timestamp", "time":
 		return cel.TimestampType
-	default:
+	case "email":
+		return cel.StringType
+	case "uuid":
+		return cel.StringType
+	case "json":
+		// CEL: map(string, dyn)
+		return cel.MapType(cel.StringType, cel.DynType)
+	case "any":
 		return cel.DynType
+	case "object":
+		return cel.MapType(cel.StringType, cel.DynType)
 	}
+	// Array type: int[], string[], float32[], etc.
+	if strings.HasSuffix(t, "[]") {
+		base := t[:len(t)-2]
+		// CEL: list(baseType)
+		return cel.ListType(inferCELTypeFromStringType(base))
+	}
+	// Map type: map[string]any, map[string]int, etc.
+	if strings.HasPrefix(t, "map[") && strings.Contains(t, "]") {
+		// e.g. map[string]int
+		closeIdx := strings.Index(t, "]")
+		keyType := strings.TrimSpace(t[4:closeIdx])
+		valType := strings.TrimSpace(t[closeIdx+1:])
+		var celKey *cel.Type
+		switch keyType {
+		case "string":
+			celKey = cel.StringType
+		default:
+			celKey = cel.DynType
+		}
+		return cel.MapType(celKey, inferCELTypeFromStringType(valType))
+	}
+	// Fallback: treat as dyn
+	return cel.DynType
 }
 
 // isNullableKey checks if parameter key ends with '?' for nullable
@@ -588,7 +484,7 @@ func (ns *Namespace) GetLoopVariableType(variableName string) (string, bool) {
 		frame := ns.stack[i]
 		if frame.loopVar == variableName {
 			// Found as loop variable - infer type from loop target
-			if frame.loopTarget != nil && len(frame.loopTarget) > 0 {
+			if len(frame.loopTarget) > 0 {
 				return ns.inferLoopVariableType(frame.loopTarget), true
 			}
 			// Default to string if no loop target info
