@@ -1,294 +1,229 @@
 package parsercommon
 
 import (
+	"log"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/goccy/go-yaml"
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
-func TestNamespace(t *testing.T) {
-	ifs := &FunctionDefinition{
-		Parameters: map[string]any{
-			"user_id": "int",
-			"filters": map[string]any{
-				"active":      "bool",
-				"departments": []any{"str"},
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
+func TestNamespace_Eval(t *testing.T) {
+	type args struct {
+		src string
+		exp string
+	}
+	tests := []struct {
+		name      string
+		args      args
+		wantValue any
+		wantType  string
+		wantErr   bool
+	}{
+		{
+			name: "simple expression",
+			args: args{
+				src: `
+name: simple
+function_name: simpleFunc
+parameters:
+  a: int
+  b: string
+  c: bool
+`,
+				exp: "a",
 			},
+			wantValue: 1,
+			wantType:  "int",
+			wantErr:   false,
+		},
+		{
+			name: "comples expression",
+			args: args{
+				src: `
+name: simple
+function_name: simpleFunc
+parameters:
+  persons:
+    - id: int
+      name: string
+      hobbies: string[]
+`,
+				exp: "persons[0].hobbies[0]",
+			},
+			wantValue: "dummy",
+			wantType:  "string",
+			wantErr:   false,
+		},
+		{
+			name: "non-existent parameter",
+			args: args{
+				src: `name: simple
+function_name: simpleFunc
+parameters:
+  a: int
+  b: string`,
+				exp: "c",
+			},
+			wantErr: true,
 		},
 	}
-
-	environment := map[string]any{
-		"table_suffix": "prod",
-		"tenant_id":    "12345",
-	}
-
-	ns := NewNamespace(ifs, environment, nil)
-
-	// Environment constant evaluation
-	result, err := ns.EvaluateEnvironmentExpression("table_suffix")
-	assert.NoError(t, err)
-	assert.Equal(t, "prod", result)
-
-	// Non-existent environment constant
-	_, err = ns.EvaluateEnvironmentExpression("nonexistent")
-	assert.Error(t, err)
-
-	// Parameter evaluation
-	result, err = ns.EvaluateParameterExpression("user_id")
-	assert.NoError(t, err)
-	if v, ok := result.(int64); ok {
-		assert.Equal(t, int64(1), v) // Dummy value for int
-	} else {
-		t.Fatalf("Expected int64(1), got %T: %#v", result, result)
-	}
-
-	// Nested parameter evaluation
-	result, err = ns.EvaluateParameterExpression("filters.active")
-	assert.NoError(t, err)
-	assert.Equal(t, true, result) // Dummy value for bool
-
-	// Non-existent parameter
-	_, err = ns.EvaluateParameterExpression("nonexistent_param")
-	assert.Error(t, err)
-}
-
-func TestValueToLiteral(t *testing.T) {
-	ns := NewNamespace(nil, map[string]any{}, nil)
-
-	tests := []struct {
-		name     string
-		value    any
-		expected string
-	}{
-		{
-			name:     "string",
-			value:    "test",
-			expected: "'test'",
-		},
-		{
-			name:     "string with single quote",
-			value:    "test's value",
-			expected: "'test''s value'",
-		},
-		{
-			name:     "integer",
-			value:    123,
-			expected: "123",
-		},
-		{
-			name:     "floating point number",
-			value:    123.45,
-			expected: "123.45",
-		},
-		{
-			name:     "boolean value (true)",
-			value:    true,
-			expected: "true",
-		},
-		{
-			name:     "boolean value (false)",
-			value:    false,
-			expected: "false",
-		},
-		{
-			name:     "string array",
-			value:    []string{"admin", "user"},
-			expected: "'admin', 'user'",
-		},
-		{
-			name:     "any array",
-			value:    []any{"admin", 123, true},
-			expected: "'admin', 123, true",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result := ns.valueToLiteral(test.value)
-			assert.Equal(t, test.expected, result)
-		})
-	}
-}
-
-func TestLoopVariableManagement(t *testing.T) {
-	schema := &FunctionDefinition{
-		Parameters: map[string]any{
-			"simple_list": []any{"str"}, // Simple string list for testing
-		},
-	}
-
-	ns := NewNamespace(schema, map[string]any{}, nil)
-
-	// Initially should have base variables
-	result, err := ns.EvaluateParameterExpression("simple_list")
-	assert.NoError(t, err)
-	// Debug: print the actual type and value
-	t.Logf("simple_list result type: %T, value: %+v", result, result)
-	// simple_list should be []string
-	simpleList, ok := result.([]string)
-	if !ok {
-		t.Fatalf("Expected []string, got %T", result)
-	}
-	assert.Equal(t, 1, len(simpleList))
-	assert.Equal(t, "dummy", simpleList[0])
-
-	// Enter loop - add loop variable
-	ns.EnterLoop("item", []any{"str"})
-
-	// Should be able to access loop variable
-	result, err = ns.EvaluateParameterExpression("item")
-	assert.NoError(t, err)
-	assert.Equal(t, "dummy", result) // "str" type generates dummy value
-
-	// Should still be able to access original variables
-	result, err = ns.EvaluateParameterExpression("simple_list")
-	assert.NoError(t, err)
-	// simple_list should be []string
-	simpleList, ok = result.([]string)
-	assert.True(t, ok)
-	assert.Equal(t, 1, len(simpleList))
-	assert.Equal(t, "dummy", simpleList[0])
-
-	// Enter nested loop
-	ns.EnterLoop("user", []any{"dummy"})
-
-	// Should be able to access both loop variables
-	result, err = ns.EvaluateParameterExpression("item")
-	assert.NoError(t, err)
-	assert.Equal(t, "dummy", result) // Still dummy value
-
-	result, err = ns.EvaluateParameterExpression("user")
-	assert.NoError(t, err)
-	assert.Equal(t, "dummy", result) // "dummy" string type also generates dummy value
-
-	// Leave nested loop
-	ns.LeaveLoop()
-
-	// Should still have first loop variable but not second
-	result, err = ns.EvaluateParameterExpression("item")
-	assert.NoError(t, err)
-	assert.Equal(t, "dummy", result) // Still dummy value
-
-	_, err = ns.EvaluateParameterExpression("user")
-	assert.Error(t, err) // Should no longer be accessible
-
-	// Leave first loop
-	ns.LeaveLoop()
-
-	// Should be back to original state
-	_, err = ns.EvaluateParameterExpression("item")
-	assert.Error(t, err) // Should no longer be accessible
-
-	result, err = ns.EvaluateParameterExpression("simple_list")
-	assert.NoError(t, err)
-	simpleList, ok = result.([]string)
-	assert.True(t, ok)
-	assert.Equal(t, []string{"dummy"}, simpleList)
-}
-
-func TestExtractElementFromList(t *testing.T) {
-	ns := NewNamespace(nil, map[string]any{}, nil)
-
-	tests := []struct {
-		name          string
-		listResult    any
-		expectedValue any
-		expectedType  string
-		expectError   bool
-	}{
-		{
-			name:          "string list",
-			listResult:    []string{"hello", "world"},
-			expectedValue: "hello",
-			expectedType:  "str",
-			expectError:   false,
-		},
-		{
-			name:          "integer list",
-			listResult:    []int{1, 2, 3},
-			expectedValue: 1,
-			expectedType:  "int",
-			expectError:   false,
-		},
-		{
-			name:          "empty string list",
-			listResult:    []string{},
-			expectedValue: "",
-			expectedType:  "str",
-			expectError:   false,
-		},
-		{
-			name:          "any type list",
-			listResult:    []any{"test", 123},
-			expectedValue: "test",
-			expectedType:  "str",
-			expectError:   false,
-		},
-		{
-			name:        "non-list value",
-			listResult:  "not a list",
-			expectError: true,
-		},
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, typeStr, err := ns.extractElementFromList(tt.listResult)
-
-			if tt.expectError {
-				assert.Error(t, err)
-				return
-			}
-
+			var def FunctionDefinition
+			err := yaml.Unmarshal([]byte(tt.args.src), &def)
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedValue, value)
-			assert.Equal(t, tt.expectedType, typeStr)
+			err = def.Finalize()
+			assert.NoError(t, err)
+			ns, err := NewNamespaceFromDefinition(&def)
+			assert.NoError(t, err)
+			v, tp, err := ns.Eval(tt.args.exp)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantValue, v)
+				assert.Equal(t, tt.wantType, tp)
+			}
 		})
 	}
 }
 
-func TestEnvironmentAndParameterSeparation(t *testing.T) {
-	schema := &FunctionDefinition{
-		Parameters: map[string]any{
-			"user_id": "int",
-			"name":    "str",
-		},
-	}
+func TestNamespace_Loop(t *testing.T) {
+	yamlSrc := `name: loop_test
+function_name: loopTestFunc
+parameters:
+  global: bool
+  items:
+    - id: int
+      name: string
+      hobbies: string[]`
 
-	environment := map[string]any{
-		"table_name": "users",
-		"env_flag":   true,
-	}
-
-	ns := NewNamespace(schema, environment, nil)
-
-	// Test environment variable evaluation
-	result, err := ns.EvaluateEnvironmentExpression("table_name")
+	var def FunctionDefinition
+	err := yaml.Unmarshal([]byte(yamlSrc), &def)
 	assert.NoError(t, err)
-	assert.Equal(t, "users", result)
-
-	result, err = ns.EvaluateEnvironmentExpression("env_flag")
+	err = def.Finalize()
 	assert.NoError(t, err)
-	assert.Equal(t, true, result)
-
-	// Test parameter evaluation
-	result, err = ns.EvaluateParameterExpression("user_id")
+	ns, err := NewNamespaceFromDefinition(&def)
 	assert.NoError(t, err)
-	if v, ok := result.(int64); ok {
-		assert.Equal(t, int64(1), v) // Dummy value
-	} else {
-		t.Fatalf("Expected int64(1), got %T: %#v", result, result)
-	}
 
-	result, err = ns.EvaluateParameterExpression("name")
+	// enter Loop
+	err = ns.EnterLoop("item", "items")
 	assert.NoError(t, err)
-	assert.Equal(t, "dummy", result) // Dummy value
 
-	// Environment variables should not be accessible from parameter evaluation
-	_, err = ns.EvaluateParameterExpression("table_name")
+	// it access via loop variable
+	v, tp, err := ns.Eval("item.id")
+	assert.NoError(t, err)
+	assert.Equal(t, "int", tp)
+	assert.Equal(t, 1, v)
+
+	// it access global variable
+	v, tp, err = ns.Eval("global")
+	assert.NoError(t, err)
+	assert.Equal(t, "bool", tp)
+	assert.Equal(t, true, v)
+
+	// it enter nested loop
+	err = ns.EnterLoop("hobby", "item.hobbies")
+	assert.NoError(t, err)
+
+	// it access via nested loop variable
+	v, tp, err = ns.Eval("hobby")
+	assert.NoError(t, err)
+	assert.Equal(t, "string", tp)
+	assert.Equal(t, "dummy", v)
+
+	// exit nested loop
+	err = ns.ExitLoop()
+	assert.NoError(t, err)
+
+	// can't access exited loop variable
+	_, _, err = ns.Eval("hobby")
 	assert.Error(t, err)
 
-	// Parameters should not be accessible from environment evaluation
-	_, err = ns.EvaluateEnvironmentExpression("user_id")
+	// exit outer loop
+	err = ns.ExitLoop()
+	assert.NoError(t, err)
+
+	// can't access exited loop variable
+	_, _, err = ns.Eval("item")
 	assert.Error(t, err)
+}
+
+func TestNamespace_ConstantMode(t *testing.T) {
+	uuidVal := uuid.New()
+	constants := map[string]any{
+		"constant_int":       42,
+		"constant_string":    "hello",
+		"constant_float":     3.14,
+		"constant_bool":      true,
+		"constant_list":      []any{"a", "b", "c"},
+		"constant_map":       map[string]any{"key1": "value1", "key2": 2},
+		"constant_date":      time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		"constant_datetime":  time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+		"constant_timestamp": time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+		"constant_uuid":      uuidVal,
+		"constant_decimal":   decimal.NewFromInt(100),
+	}
+
+	ns, err := NewNamespaceFromConstants(constants)
+	assert.NoError(t, err)
+
+	log.Println("🐧 init")
+
+	val, tp, err := ns.Eval("constant_int")
+	assert.NoError(t, err)
+	assert.Equal(t, 42, val)
+	assert.Equal(t, "int", tp)
+
+	val, tp, err = ns.Eval("constant_string")
+	assert.NoError(t, err)
+	assert.Equal(t, "hello", val)
+	assert.Equal(t, "string", tp)
+
+	val, tp, err = ns.Eval("constant_float")
+	assert.NoError(t, err)
+	assert.Equal(t, 3.14, val)
+	assert.Equal(t, "float", tp)
+
+	val, tp, err = ns.Eval("constant_bool")
+	assert.NoError(t, err)
+	assert.Equal(t, true, val)
+	assert.Equal(t, "bool", tp)
+
+	val, tp, err = ns.Eval("constant_list")
+	assert.NoError(t, err)
+	assert.Equal(t, any([]any{"a", "b", "c"}), val)
+	assert.Equal(t, "list", tp)
+
+	val, tp, err = ns.Eval("constant_map")
+	assert.NoError(t, err)
+	assert.Equal(t, any(map[string]any{"key1": "value1", "key2": 2}), val)
+	assert.Equal(t, "map", tp)
+
+	val, tp, err = ns.Eval("constant_date")
+	assert.NoError(t, err)
+	assert.Equal(t, any(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)), val)
+	assert.Equal(t, "timestamp", tp)
+
+	val, tp, err = ns.Eval("constant_uuid")
+	assert.NoError(t, err)
+	assert.Equal(t, any(uuidVal), val)
+	assert.Equal(t, "uuid", tp)
+
+	val, tp, err = ns.Eval("constant_decimal")
+	assert.NoError(t, err)
+	assert.Equal(t, any(decimal.NewFromInt(100)), val)
+	assert.Equal(t, "decimal", tp)
+}
+
+func TestNamespace_WithCustomRequestObject(t *testing.T) {
+
 }

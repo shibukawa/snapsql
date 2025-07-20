@@ -2,389 +2,180 @@ package parsercommon
 
 import (
 	"fmt"
-	"strings"
+	"maps"
 	"time"
 
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/decls"
+	"github.com/google/cel-go/common/types/ref"
+	"github.com/google/uuid"
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"github.com/shopspring/decimal"
 )
 
 type frame struct {
-	variables  map[string]any // Variables added at this scope level
-	param      map[string]any // Parameter values at this scope level (for compatibility)
-	loopTarget []any          // Loop target array (if this is a loop frame)
-	loopIndex  int            // Current loop index
-	loopVar    string         // Loop variable name
+	variable cel.EnvOption
+	values   map[string]any
+	env      *cel.Env
 }
 
 type Namespace struct {
-	environment  map[string]any // CEL evaluation variables
-	envCEL       *cel.Env       // CEL environment for environment variables
-	paramBaseCEL *cel.Env       // Base CEL environment for parameters
-	currentCEL   *cel.Env       // Current CEL environment with all variables
-	stack        []frame        // Stack of variable scopes
+	fd               *FunctionDefinition
+	frames           []frame
+	currentEnv       *cel.Env
+	currentValues    map[string]any
+	currentVariables cel.EnvOption
 }
 
-// NewNamespace creates a new namespace with efficient CEL environment management
-// If schema is nil, creates an empty InterfaceSchema
-func NewNamespace(schema *FunctionDefinition, environment, param map[string]any) *Namespace {
-	// Create empty schema if nil
-	if schema == nil {
-		schema = &FunctionDefinition{
-			Parameters: make(map[string]any),
-		}
+func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
+	var vars []*decls.VariableDecl
+	for key, val := range fd.Parameters {
+		vars = append(vars, decls.NewVariable(key, snapSqlToCel(val)))
 	}
 
-	if param == nil {
-		param = schema.DummyData().(map[string]any)
-	}
-
-	// Create environment CEL environment
-	envOptions := []cel.EnvOption{
+	root := cel.VariableDecls(vars...)
+	current, err := cel.NewEnv(
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
-	}
-	for key := range environment {
-		envOptions = append(envOptions, cel.Variable(key, cel.DynType))
-	}
-
-	envCEL, err := cel.NewEnv(envOptions...)
+		snapsqlgo.DecimalLibrary,
+		root,
+	)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
+	}
+	result := &Namespace{
+		fd:               fd,
+		currentVariables: root,
+		currentEnv:       current,
+		currentValues:    fd.DummyData().(map[string]any),
 	}
 
-	// Create base CEL environment for parameters with type inference
-	paramBaseOptions := []cel.EnvOption{
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-	}
-
-	// Add typed variable declarations for parameters
-	if schema != nil && schema.Parameters != nil {
-		paramBaseOptions = append(paramBaseOptions, createCELVariableDeclarations(schema.Parameters)...)
-	} else {
-		// Fallback to dynamic type for all parameters
-		for key := range param {
-			paramBaseOptions = append(paramBaseOptions, cel.Variable(key, cel.DynType))
-		}
-	}
-	paramBaseCEL, err := cel.NewEnv(paramBaseOptions...)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	ns := &Namespace{
-		environment:  environment,
-		envCEL:       envCEL,
-		paramBaseCEL: paramBaseCEL,
-		currentCEL:   paramBaseCEL, // Initially same as base
-		stack: []frame{
-			{
-				variables: make(map[string]any), // No additional variables at base level
-				param:     param,
-			},
-		},
-	}
-	return ns
+	return result, nil
 }
 
-// rebuildCurrentCEL rebuilds the current CEL environment with all variables from the stack
-func (ns *Namespace) rebuildCurrentCEL() error {
-	// Start with base parameter environment options (reuse base declarations)
+func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
+	var consts []*decls.VariableDecl
+	for key, val := range constants {
+		consts = append(consts, decls.NewVariable(key, snapSqlToCel(inferTypeStringFromActualValues(val, nil))))
+	}
+	root := cel.VariableDecls(consts...)
+	current, err := cel.NewEnv(
+		cel.HomogeneousAggregateLiterals(),
+		cel.EagerlyValidateDeclarations(true),
+		snapsqlgo.DecimalLibrary,
+		root,
+	)
+	if err != nil {
+		return nil, err
+	}
+	result := &Namespace{
+		currentVariables: root,
+		currentEnv:       current,
+		currentValues:    constants,
+	}
+	return result, nil
+}
+
+func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
+	ast, issues := ns.currentEnv.Parse(exp)
+	if issues != nil && issues.Err() != nil {
+		return nil, "", fmt.Errorf("%w: CEL expression parse error: %v", ErrInvalidForSnapSQL, issues.Err())
+	}
+	checked, issues := ns.currentEnv.Check(ast)
+	if issues != nil && issues.Err() != nil {
+		return nil, "", fmt.Errorf("%w: CEL expression check error: %v", ErrInvalidForSnapSQL, issues.Err())
+	}
+	prg, err := ns.currentEnv.Program(checked)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: CEL program creation error: %v", ErrInvalidForSnapSQL, err)
+	}
+
+	v, _, err := prg.Eval(ns.currentValues)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: CEL program evaluation error: %v", ErrInvalidForSnapSQL, err)
+	}
+	if ns.fd != nil {
+		return v.Value(), inferTypeStringFromDummyValue(v.Value()), nil
+	}
+	if v.Type() == cel.BytesType {
+		var result, _ = v.Value().([]byte)
+		if len(result) == 16 {
+			uuidObj, err := uuid.FromBytes(result)
+			if err != nil {
+				return nil, "", fmt.Errorf("%w: error converting bytes to UUID: %v", ErrInvalidForSnapSQL, err)
+			}
+			return uuidObj, "uuid", nil
+		}
+	}
+	result := v.Value()
+	return result, inferTypeStringFromActualValues(result, v.Type()), nil
+}
+
+func (ns *Namespace) EnterLoop(variableName, exp string) error {
+	v, _, err := ns.Eval(exp)
+	if err != nil {
+		return err
+	}
+	a, ok := v.([]any)
+	if !ok {
+		return fmt.Errorf("%w: expected array for loop variable %s, got %T", ErrInvalidForSnapSQL, variableName, v)
+	}
+	ns.frames = append(ns.frames, frame{
+		variable: ns.currentVariables,
+		values:   ns.currentValues,
+		env:      ns.currentEnv,
+	})
+	newVariable := cel.Variable(variableName, snapSqlToCel(inferTypeStringFromDummyValue(a[0])))
+	newValues := maps.Clone(ns.currentValues)
+	newValues[variableName] = a[0] // Set the first item as the loop variable
 	options := []cel.EnvOption{
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
 	}
-
-	// Add base parameter variables (these already have proper types from base env)
-	baseFrame := ns.stack[0]
-	for key := range baseFrame.param {
-		// Reuse type inference from value or use dyn as fallback
-		celType := inferCELTypeFromValue(baseFrame.param[key])
-		options = append(options, cel.Variable(key, celType))
+	for _, f := range ns.frames {
+		options = append(options, f.variable)
 	}
-
-	// Add variables from all stack frames (loop variables etc.)
-	for _, frame := range ns.stack {
-		for key := range frame.variables {
-			// Loop variables and dynamic variables use dyn type
-			options = append(options, cel.Variable(key, cel.DynType))
-		}
-	}
-
-	// Create new environment
-	currentCEL, err := cel.NewEnv(options...)
+	options = append(options, newVariable)
+	newEnv, err := cel.NewEnv(options...)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: error creating new CEL environment for loop: %v", ErrInvalidForSnapSQL, err)
 	}
-
-	ns.currentCEL = currentCEL
+	ns.currentEnv = newEnv
+	ns.currentValues = newValues
+	ns.currentVariables = newVariable
 	return nil
 }
 
-// EnterLoop enters a new loop scope with efficient variable management
-func (ns *Namespace) EnterLoop(varName string, loopTarget []any) bool {
-	if len(loopTarget) == 0 {
-		return false
+func (ns *Namespace) ExitLoop() error {
+	if len(ns.frames) == 0 {
+		return fmt.Errorf("%w: no loop to exit", ErrInvalidForSnapSQL)
 	}
-
-	// Generate dummy value based on the first element type
-	dummyValue := 1
-
-	// Create new frame with only the loop variable
-	newFrame := frame{
-		variables: map[string]any{
-			varName: dummyValue,
-		},
-		param:      make(map[string]any), // Empty for compatibility
-		loopTarget: loopTarget,
-		loopIndex:  0,
-		loopVar:    varName,
-	}
-	ns.stack = append(ns.stack, newFrame)
-
-	// Rebuild CEL environment to include the new variable
-	if err := ns.rebuildCurrentCEL(); err != nil {
-		// Rollback on error
-		ns.stack = ns.stack[:len(ns.stack)-1]
-		return false
-	}
-
-	return true
+	lastFrame := ns.frames[len(ns.frames)-1]
+	ns.frames = ns.frames[:len(ns.frames)-1]
+	ns.currentEnv = lastFrame.env
+	ns.currentValues = lastFrame.values
+	ns.currentVariables = lastFrame.variable
+	return nil
 }
 
-func (ns *Namespace) Next() bool {
-	if len(ns.stack) == 0 {
-		return false
-	}
-	last := &ns.stack[len(ns.stack)-1]
-	if last.loopIndex+1 >= len(last.loopTarget) {
-		return false // No more elements in loop
-	}
-
-	// Move to next element in loop
-	last.loopIndex++
-	last.variables[last.loopVar] = last.loopTarget[last.loopIndex]
-	return true
-}
-
-func (ns *Namespace) LeaveLoop() {
-	if len(ns.stack) > 1 {
-		ns.stack = ns.stack[:len(ns.stack)-1]
-		// Rebuild CEL environment after leaving loop
-		ns.rebuildCurrentCEL()
-	}
-}
-
-// valueToLiteral converts values to SQL literals
-func (ns *Namespace) valueToLiteral(value any) string {
-	switch v := value.(type) {
-	case string:
-		// Escape single quotes in strings
-		return fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
-	case int, int32, int64:
-		return fmt.Sprintf("%d", v)
-	case float32, float64:
-		return fmt.Sprintf("%g", v)
-	case bool:
-		if v {
-			return "true"
-		}
-		return "false"
-	case []any:
-		// Convert array to comma-separated literals
-		var literals []string
-		for _, item := range v {
-			literals = append(literals, ns.valueToLiteral(item))
-		}
-		return strings.Join(literals, ", ")
-	case []string:
-		// Special handling for string arrays
-		var literals []string
-		for _, item := range v {
-			literals = append(literals, fmt.Sprintf("'%s'", strings.ReplaceAll(item, "'", "''")))
-		}
-		return strings.Join(literals, ", ")
-	default:
-		return fmt.Sprintf("'%v'", v)
-	}
-}
-
-// EvaluateEnvironmentExpression evaluates environment constant expressions (/*# */)
-func (ns *Namespace) EvaluateEnvironmentExpression(expression string) (any, error) {
-	if ns.envCEL == nil {
-		return nil, ErrEnvironmentCELNotInit
-	}
-
-	// Compile CEL expression
-	ast, issues := ns.envCEL.Compile(expression)
-	if issues != nil && issues.Err() != nil {
-		return nil, fmt.Errorf("CEL compilation error: %w", issues.Err())
-	}
-
-	// Create program
-	program, err := ns.envCEL.Program(ast)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CEL program: %w", err)
-	}
-
-	// Evaluate expression
-	result, _, err := program.Eval(ns.environment)
-	if err != nil {
-		return nil, fmt.Errorf("CEL evaluation error: %w", err)
-	}
-
-	return result.Value(), nil
-}
-
-// ParameterDefinition represents parameter definition
-type ParameterDefinition struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
-}
-
-// EvaluateParameterExpression evaluates parameter expressions using current CEL environment
-func (ns *Namespace) EvaluateParameterExpression(expression string) (any, error) {
-	// Compile CEL expression using current environment
-	ast, issues := ns.currentCEL.Compile(expression)
-	if issues != nil && issues.Err() != nil {
-		return nil, fmt.Errorf("CEL compilation error: %w", issues.Err())
-	}
-
-	// Create program
-	program, err := ns.currentCEL.Program(ast)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CEL program: %w", err)
-	}
-
-	// Collect all variables from stack
-	allVars := make(map[string]any)
-
-	// Add base parameters
-	baseFrame := ns.stack[0]
-	for k, v := range baseFrame.param {
-		allVars[k] = v
-	}
-
-	// Add variables from all stack frames
-	for _, frame := range ns.stack {
-		for k, v := range frame.variables {
-			allVars[k] = v
-		}
-	}
-
-	// Evaluate using collected variables
-	result, _, err := program.Eval(allVars)
-	if err != nil {
-		return nil, fmt.Errorf("CEL evaluation error: %w", err)
-	}
-
-	return result.Value(), nil
-}
-
-// extractElementFromList extracts element value and type from list result
-func (ns *Namespace) extractElementFromList(listResult any) (elementValue any, elementType string, err error) {
-	switch list := listResult.(type) {
-	case []any:
-		if len(list) > 0 {
-			element := list[0]
-			return element, ns.inferTypeFromValue(element), nil
-		}
-		return "", "str", nil // Default for empty list
-	case []string:
-		if len(list) > 0 {
-			return list[0], "str", nil
-		}
-		return "", "str", nil
-	case []int:
-		if len(list) > 0 {
-			return list[0], "int", nil
-		}
-		return 0, "int", nil
-	case []int64:
-		if len(list) > 0 {
-			return list[0], "int", nil
-		}
-		return 0, "int", nil
-	case []float64:
-		if len(list) > 0 {
-			return list[0], "float", nil
-		}
-		return 0.0, "float", nil
-	case []bool:
-		if len(list) > 0 {
-			return list[0], "bool", nil
-		}
-		return false, "bool", nil
-	default:
-		// Error if not a list
-		return nil, "", ErrExpressionNotList
-	}
-}
-
-// inferTypeFromValue infers type from value
-func (ns *Namespace) inferTypeFromValue(value any) string {
-	switch value.(type) {
-	case string:
-		return "str"
-	case int, int32, int64:
-		return "int"
-	case float32, float64:
-		return "float"
-	case bool:
-		return "bool"
-	case map[string]any:
-		// For nested objects, return as object type
-		return "object"
-	case []any:
-		return "list"
-	default:
-		return "any"
-	}
-}
-
-// inferCELTypeFromValue infers CEL type from Go value
-func inferCELTypeFromValue(value any) *cel.Type {
-	if value == nil {
-		return cel.DynType
-	}
-
-	switch value.(type) {
-	case string:
-		return cel.StringType
-	case int, int8, int16, int32, int64:
-		return cel.IntType
-	case float32, float64:
-		return cel.DoubleType
-	case bool:
-		return cel.BoolType
-	case time.Time:
-		return cel.TimestampType
-	default:
-		return cel.DynType
-	}
-}
-
-// inferCELTypeFromStringType infers CEL type from parameter type string
-// inferCELTypeFromStringType infers CEL type from parameter type string (with array/map/alias support)
-func inferCELTypeFromStringType(typeStr string) *cel.Type {
-	t := strings.TrimSpace(typeStr)
-	switch t {
+func snapSqlToCel(val any) *cel.Type {
+	switch val {
 	// --- Primitive and alias types ---
-	case "str", "string", "text", "varchar":
+	case "string":
 		return cel.StringType
-	case "int", "integer", "long":
+	case "int":
 		return cel.IntType
 	case "int32":
-		return cel.IntType // CEL has only int
+		return cel.IntType
 	case "int16":
 		return cel.IntType
 	case "int8":
 		return cel.IntType
-	case "float", "double", "float32":
+	case "float":
 		return cel.DoubleType
-	case "decimal", "numeric":
-		return cel.DoubleType
-	case "bool", "boolean":
+	case "decimal":
+		return snapsqlgo.DecimalType
+	case "bool":
 		return cel.BoolType
 	// --- Special types ---
 	case "date":
@@ -396,110 +187,50 @@ func inferCELTypeFromStringType(typeStr string) *cel.Type {
 	case "uuid":
 		return cel.StringType
 	case "json":
-		// CEL: map(string, dyn)
 		return cel.MapType(cel.StringType, cel.DynType)
-	case "any":
+	case "list":
+		return cel.ListType(cel.DynType)
+	case "any", "map":
 		return cel.DynType
-	case "object":
-		return cel.MapType(cel.StringType, cel.DynType)
-	}
-	// Array type: int[], string[], float32[], etc.
-	if strings.HasSuffix(t, "[]") {
-		base := t[:len(t)-2]
-		// CEL: list(baseType)
-		return cel.ListType(inferCELTypeFromStringType(base))
-	}
-	// Map type: map[string]any, map[string]int, etc.
-	if strings.HasPrefix(t, "map[") && strings.Contains(t, "]") {
-		// e.g. map[string]int
-		closeIdx := strings.Index(t, "]")
-		keyType := strings.TrimSpace(t[4:closeIdx])
-		valType := strings.TrimSpace(t[closeIdx+1:])
-		var celKey *cel.Type
-		switch keyType {
-		case "string":
-			celKey = cel.StringType
-		default:
-			celKey = cel.DynType
-		}
-		return cel.MapType(celKey, inferCELTypeFromStringType(valType))
-	}
-	// Fallback: treat as dyn
-	return cel.DynType
-}
-
-// isNullableKey checks if parameter key ends with '?' for nullable
-func isNullableKey(key string) (string, bool) {
-	if strings.HasSuffix(key, "?") {
-		return key[:len(key)-1], true
-	}
-	return key, false
-}
-
-// createCELVariableDeclarations creates cel.VariableDecls from parameter map with type inference
-func createCELVariableDeclarations(parameters map[string]any) []cel.EnvOption {
-	var options []cel.EnvOption
-
-	for key, value := range parameters {
-		cleanKey, isNullable := isNullableKey(key)
-
-		var celType *cel.Type
-		if isNullable {
-			// Nullable parameters use dyn type
-			celType = cel.DynType
-		} else {
-			// Infer type from value or type string
-			if typeStr, ok := value.(string); ok {
-				celType = inferCELTypeFromStringType(typeStr)
-			} else {
-				celType = inferCELTypeFromValue(value)
-			}
-		}
-
-		options = append(options, cel.Variable(cleanKey, celType))
-	}
-
-	return options
-}
-
-// createCleanParameterMap creates parameter map excluding nullable keys for dummy data
-func createCleanParameterMap(parameters map[string]any) map[string]any {
-	clean := make(map[string]any)
-
-	for key, value := range parameters {
-		cleanKey, isNullable := isNullableKey(key)
-		if !isNullable {
-			clean[cleanKey] = value
+	default:
+		switch val.(type) {
+		case []any:
+			return cel.ListType(cel.DynType)
+		case map[string]any:
+			return cel.DynType
 		}
 	}
-
-	return clean
+	panic(fmt.Sprintf("Unsupported type for CEL conversion: %T of %v", val, val))
 }
 
-// GetLoopVariableType returns the type of a loop variable if it exists in the current stack
-// Returns the type string and true if found, empty string and false if not found
-func (ns *Namespace) GetLoopVariableType(variableName string) (string, bool) {
-	// Check from current frame to outer frames
-	for i := len(ns.stack) - 1; i >= 0; i-- {
-		frame := ns.stack[i]
-		if frame.loopVar == variableName {
-			// Found as loop variable - infer type from loop target
-			if len(frame.loopTarget) > 0 {
-				return ns.inferLoopVariableType(frame.loopTarget), true
-			}
-			// Default to string if no loop target info
-			return "string", true
-		}
-	}
-	return "", false
-}
-
-// inferLoopVariableType infers type from loop target (usually an array element)
-func (ns *Namespace) inferLoopVariableType(loopTarget []any) string {
-	if len(loopTarget) == 0 {
+func inferTypeStringFromActualValues(v any, rt ref.Type) string {
+	switch v2 := v.(type) {
+	case int, int64, int32, int16, int8, uint64, uint32, uint16, uint8:
+		return "int"
+	case string:
 		return "string"
+	case bool:
+		return "bool"
+	case float64, float32:
+		return "float"
+	case uuid.UUID, [16]byte:
+		return "uuid"
+	case []byte:
+		if rt == cel.BytesType {
+			if len(v2) == 16 {
+				return "uuid"
+			}
+		}
+		return "string"
+	case []any:
+		return "list"
+	case map[string]any:
+		return "map"
+	case time.Time:
+		return "timestamp"
+	case *snapsqlgo.Decimal, decimal.Decimal:
+		return "decimal"
+	default:
+		return "unknown"
 	}
-
-	// Use the existing inferTypeFromValue method
-	return ns.inferTypeFromValue(loopTarget[0])
 }
