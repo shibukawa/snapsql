@@ -2,6 +2,7 @@ package parsercommon
 
 import (
 	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -80,7 +81,8 @@ parameters:
 			var def FunctionDefinition
 			err := yaml.Unmarshal([]byte(tt.args.src), &def)
 			assert.NoError(t, err)
-			err = def.Finalize()
+			dir, _ := os.Getwd()
+			err = def.Finalize(dir, dir)
 			assert.NoError(t, err)
 			ns, err := NewNamespaceFromDefinition(&def)
 			assert.NoError(t, err)
@@ -109,7 +111,8 @@ parameters:
 	var def FunctionDefinition
 	err := yaml.Unmarshal([]byte(yamlSrc), &def)
 	assert.NoError(t, err)
-	err = def.Finalize()
+	dir, _ := os.Getwd()
+	err = def.Finalize(dir, dir)
 	assert.NoError(t, err)
 	ns, err := NewNamespaceFromDefinition(&def)
 	assert.NoError(t, err)
@@ -175,8 +178,6 @@ func TestNamespace_ConstantMode(t *testing.T) {
 
 	ns, err := NewNamespaceFromConstants(constants)
 	assert.NoError(t, err)
-
-	log.Println("🐧 init")
 
 	val, tp, err := ns.Eval("constant_int")
 	assert.NoError(t, err)
