@@ -100,7 +100,7 @@ func parseSQLSimple(sql string) (parser.StatementNode, error) {
 	}
 
 	// Use basic parser without subquery analysis
-	stmt, err := parser.Parse(tokens, nil, nil)
+	stmt, err := parser.RawParse(tokens, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +345,7 @@ func parseWithSubqueryAnalysis(sqlText string) (stmt parser.StatementNode, err e
 	}
 
 	// Use basic parser for now (subquery analysis integration would be added later)
-	stmt, err = parser.Parse(tokens, nil, nil)
+	stmt, err = parser.RawParse(tokens, nil, nil)
 	return stmt, err
 }
 
@@ -372,7 +372,7 @@ func createMockStatementWithSubqueryAnalysis(sqlText string) parser.StatementNod
 	}
 
 	// Parse using the basic parser
-	stmt, err := parser.Parse(tokens, nil, nil)
+	stmt, err := parser.RawParse(tokens, nil, nil)
 	if err != nil {
 		// If parsing fails, return minimal statement
 		return &parser.SelectStatement{}

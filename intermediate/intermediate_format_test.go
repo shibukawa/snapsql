@@ -867,7 +867,7 @@ SELECT CAST(/*= value */ AS INTEGER) as int_value, CAST(/*= value */ AS REAL) as
 			assert.NoError(t, err)
 
 			// Parse SQL using manual approach
-			stmt, err := parser.Parse(tokens, functionDef, nil)
+			stmt, err := parser.RawParse(tokens, functionDef, nil)
 			assert.NoError(t, err)
 			assert.NotEqual(t, nil, stmt)
 
@@ -971,7 +971,7 @@ SELECT CAST(/*= value */ AS INTEGER) as int_value, CAST(/*= value */ AS REAL) as
 			assert.NoError(t, err)
 
 			// Parse SQL using manual approach
-			stmt, err := parser.Parse(tokens, functionDef, nil)
+			stmt, err := parser.RawParse(tokens, functionDef, nil)
 			assert.NoError(t, err)
 			assert.NotEqual(t, nil, stmt)
 
@@ -1088,7 +1088,7 @@ SELECT CAST(/*= value */ AS INTEGER) as int_value, CAST(/*= value */ AS REAL) as
 			assert.NoError(t, err)
 
 			// Parse SQL using manual approach
-			stmt, err := parser.Parse(tokens, functionDef, nil)
+			stmt, err := parser.RawParse(tokens, functionDef, nil)
 			assert.NoError(t, err)
 			assert.NotEqual(t, nil, stmt)
 
@@ -1235,7 +1235,7 @@ GROUP BY u.id, u.name, u.age`
 		assert.NoError(t, err)
 
 		// Parse SQL using manual approach
-		stmt, err := parser.Parse(tokens, functionDef, nil)
+		stmt, err := parser.RawParse(tokens, functionDef, nil)
 		assert.NoError(t, err)
 		assert.NotEqual(t, nil, stmt)
 
@@ -1465,7 +1465,7 @@ SELECT id FROM users WHERE id = /*= user_id */123`,
 			assert.NoError(t, err)
 
 			// Parse SQL using manual approach
-			stmt, err := parser.Parse(tokens, functionDef, nil)
+			stmt, err := parser.RawParse(tokens, functionDef, nil)
 			assert.NoError(t, err)
 			assert.NotEqual(t, nil, stmt)
 

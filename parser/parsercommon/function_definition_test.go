@@ -2,8 +2,10 @@ package parsercommon
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -151,4 +153,146 @@ parameters:
 			}
 		})
 	}
+}
+
+func TestParseFunctionDefinitionFromSnapSQLDocument(t *testing.T) {
+	// Create a sample markdown content
+	markdownContent := `---
+name: GetUserByID
+function_name: getUserById
+generators:
+  go:
+    package: "user"
+    output: "./generated/user.go"
+---
+
+# Get User By ID
+
+## Overview
+
+This function retrieves user information by ID.
+
+## Parameters
+
+` + "```yaml" + `
+id: int
+includeDetails: bool
+` + "```" + `
+
+## SQL
+
+` + "```sql" + `
+SELECT * FROM users WHERE id = :id
+` + "```" + `
+`
+
+	// Parse the markdown content
+	reader := strings.NewReader(markdownContent)
+	doc, err := markdownparser.Parse(reader)
+	assert.NoError(t, err)
+	
+	// Create a FunctionDefinition from the SnapSQLDocument
+	projectRoot := filepath.Join("testdata", "commontype")
+	basePath := filepath.Join(projectRoot, "api", "users")
+	
+	def, err := ParseFunctionDefinitionFromSnapSQLDocument(doc, basePath, projectRoot)
+	assert.NoError(t, err)
+	assert.NotNil(t, def)
+	
+	// Check that the metadata was correctly extracted
+	assert.Equal(t, "GetUserByID", def.Name)
+	assert.Equal(t, "getUserById", def.FunctionName)
+	
+	// Check that the generators were correctly extracted
+	assert.NotNil(t, def.Generators)
+	assert.Contains(t, def.Generators, "go")
+	assert.Equal(t, "user", def.Generators["go"]["package"])
+	assert.Equal(t, "./generated/user.go", def.Generators["go"]["output"])
+	
+	// Check that the parameters were correctly extracted and ordered
+	assert.Len(t, def.Parameters, 2)
+	assert.Equal(t, "int", def.Parameters["id"])
+	assert.Equal(t, "bool", def.Parameters["includeDetails"])
+	assert.Equal(t, []string{"id", "includeDetails"}, def.ParameterOrder)
+}
+
+func TestParseFunctionDefinitionFromSnapSQLDocumentWithCommonTypes(t *testing.T) {
+	// Create a sample markdown content with common type references
+	markdownContent := `---
+name: GetUserWithDepartment
+function_name: getUserWithDepartment
+generators:
+  go:
+    package: "user"
+    output: "./generated/user_with_department.go"
+---
+
+# Get User With Department
+
+## Overview
+
+This function retrieves user information with department details.
+
+## Parameters
+
+` + "```yaml" + `
+user: User
+department: Department
+includeDetails: bool
+` + "```" + `
+
+## SQL
+
+` + "```sql" + `
+SELECT u.*, d.* 
+FROM users u
+JOIN departments d ON u.department_id = d.id
+WHERE u.id = :user.id
+` + "```" + `
+`
+
+	// Parse the markdown content
+	reader := strings.NewReader(markdownContent)
+	doc, err := markdownparser.Parse(reader)
+	assert.NoError(t, err)
+	
+	// Create a FunctionDefinition from the SnapSQLDocument
+	projectRoot := filepath.Join("testdata", "commontype")
+	basePath := filepath.Join(projectRoot, "api", "users")
+	
+	def, err := ParseFunctionDefinitionFromSnapSQLDocument(doc, basePath, projectRoot)
+	assert.NoError(t, err)
+	assert.NotNil(t, def)
+	
+	// Check that the metadata was correctly extracted
+	assert.Equal(t, "GetUserWithDepartment", def.Name)
+	assert.Equal(t, "getUserWithDepartment", def.FunctionName)
+	
+	// Check that the generators were correctly extracted
+	assert.NotNil(t, def.Generators)
+	assert.Contains(t, def.Generators, "go")
+	assert.Equal(t, "user", def.Generators["go"]["package"])
+	assert.Equal(t, "./generated/user_with_department.go", def.Generators["go"]["output"])
+	
+	// Check that the parameters were correctly extracted and ordered
+	assert.Len(t, def.Parameters, 3)
+	assert.Contains(t, def.Parameters, "user")
+	assert.Contains(t, def.Parameters, "department")
+	assert.Equal(t, "bool", def.Parameters["includeDetails"])
+	
+	// Check parameter order
+	assert.Equal(t, []string{"user", "department", "includeDetails"}, def.ParameterOrder)
+	
+	// Check that common types were resolved
+	user, ok := def.Parameters["user"].(map[string]any)
+	assert.True(t, ok, "user parameter should be a map")
+	assert.Contains(t, user, "id")
+	assert.Contains(t, user, "name")
+	assert.Contains(t, user, "email")
+	
+	department, ok := def.Parameters["department"].(map[string]any)
+	assert.True(t, ok, "department parameter should be a map")
+	assert.Contains(t, department, "id")
+	assert.Contains(t, department, "name")
+	assert.Contains(t, department, "manager_id")
 }

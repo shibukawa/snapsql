@@ -49,7 +49,7 @@ func processTokens(tokens []tokenizer.Token, ns *cmn.Namespace, perr *cmn.ParseE
 					loopTokens := tokens[i+1 : endIndex]
 					processTokens(loopTokens, ns, perr)
 					i = endIndex // Skip to after the end directive
-					ns.LeaveLoop()
+					ns.ExitLoop()
 					continue
 				}
 			case "elseif":
@@ -73,7 +73,7 @@ func validateVariableDirective(token tokenizer.Token, ns *cmn.Namespace, perr *c
 	}
 
 	// Validate the expression using parameter CEL
-	if _, err := ns.EvaluateParameterExpression(expression); err != nil {
+	if _, _, err := ns.Eval(expression); err != nil {
 		perr.Add(fmt.Errorf("undefined variable in expression '%s': %w at %s", expression, err, token.Position.String()))
 	}
 }
@@ -86,7 +86,7 @@ func validateConstDirective(token tokenizer.Token, ns *cmn.Namespace, perr *cmn.
 		return
 	}
 	// Validate as environment expression
-	if _, err := ns.EvaluateEnvironmentExpression(expression); err != nil {
+	if _, _, err := ns.Eval(expression); err != nil {
 		perr.Add(fmt.Errorf("undefined variable in environment expression '%s': %w at %s", expression, err, token.Position.String()))
 	}
 }
@@ -104,7 +104,7 @@ func validateIfDirective(token tokenizer.Token, ns *cmn.Namespace, perr *cmn.Par
 	}
 
 	// Validate the condition expression using CEL
-	if _, err := ns.EvaluateParameterExpression(condition); err != nil {
+	if _, _, err := ns.Eval(condition); err != nil {
 		perr.Add(fmt.Errorf("undefined variable in condition '%s': %w at %s", condition, err, token.Position.String()))
 	}
 }
@@ -122,7 +122,7 @@ func validateElseIfDirective(token tokenizer.Token, ns *cmn.Namespace, perr *cmn
 	}
 
 	// Validate the condition expression using CEL
-	if _, err := ns.EvaluateParameterExpression(condition); err != nil {
+	if _, _, err := ns.Eval(condition); err != nil {
 		perr.Add(fmt.Errorf("undefined variable in condition '%s': %w at %s", condition, err, token.Position.String()))
 	}
 }
@@ -156,13 +156,17 @@ func processForLoop(tokens []tokenizer.Token, startIndex int, ns *cmn.Namespace,
 	listExpr := parts[2]
 
 	// Validate that the list expression exists
-	if loopTarget, err := ns.EvaluateParameterExpression(listExpr); err != nil {
+	if loopTarget, _, err := ns.Eval(listExpr); err != nil {
 		perr.Add(fmt.Errorf("undefined variable in expression '%s': %w at %s", listExpr, err, forToken.Position.String()))
 		return false, startIndex
 	} else if loopTarget2, ok := loopTarget.([]any); ok {
 		endIndex := findMatchingEnd(tokens, startIndex)
-		success := ns.EnterLoop(loopVar, loopTarget2)
-		return success, endIndex
+		err := ns.EnterLoop(loopVar, loopTarget2)
+		if err != nil {
+			perr.Add(fmt.Errorf("failed to enter loop: %w at %s", err, forToken.Position.String()))
+			return false, startIndex
+		}
+		return true, endIndex
 	} else {
 		perr.Add(fmt.Errorf("%w at %s: loop target '%s' is not list: %v", cmn.ErrInvalidForSnapSQL, forToken.Position.String(), listExpr, loopTarget))
 		return false, startIndex

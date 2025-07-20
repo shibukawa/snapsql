@@ -111,23 +111,51 @@ func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 	return result, inferTypeStringFromActualValues(result, v.Type()), nil
 }
 
-func (ns *Namespace) EnterLoop(variableName, exp string) error {
-	v, _, err := ns.Eval(exp)
-	if err != nil {
-		return err
+// EnterLoop creates a new frame for a loop variable
+// It can accept either an expression string or a slice of values
+func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
+	var a []any
+
+	// Handle different types of loop targets
+	switch v := loopTarget.(type) {
+	case string:
+		// If the loop target is a string, evaluate it as an expression
+		val, _, err := ns.Eval(v)
+		if err != nil {
+			return err
+		}
+
+		// Check if the result is a slice
+		var ok bool
+		a, ok = val.([]any)
+		if !ok {
+			return fmt.Errorf("%w: expected array for loop variable %s, got %T", ErrInvalidForSnapSQL, variableName, val)
+		}
+	case []any:
+		// If the loop target is already a slice, use it directly
+		a = v
+	default:
+		return fmt.Errorf("%w: expected array or expression for loop variable %s, got %T", ErrInvalidForSnapSQL, variableName, loopTarget)
 	}
-	a, ok := v.([]any)
-	if !ok {
-		return fmt.Errorf("%w: expected array for loop variable %s, got %T", ErrInvalidForSnapSQL, variableName, v)
+
+	// If the slice is empty, return an error
+	if len(a) == 0 {
+		return fmt.Errorf("%w: empty array for loop variable %s", ErrInvalidForSnapSQL, variableName)
 	}
+
+	// Save the current frame
 	ns.frames = append(ns.frames, frame{
 		variable: ns.currentVariables,
 		values:   ns.currentValues,
 		env:      ns.currentEnv,
 	})
+
+	// Create a new frame with the loop variable
 	newVariable := cel.Variable(variableName, snapSqlToCel(inferTypeStringFromDummyValue(a[0])))
 	newValues := maps.Clone(ns.currentValues)
 	newValues[variableName] = a[0] // Set the first item as the loop variable
+
+	// Create a new environment with all previous variables plus the new loop variable
 	options := []cel.EnvOption{
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
@@ -140,6 +168,8 @@ func (ns *Namespace) EnterLoop(variableName, exp string) error {
 	if err != nil {
 		return fmt.Errorf("%w: error creating new CEL environment for loop: %v", ErrInvalidForSnapSQL, err)
 	}
+
+	// Update the current frame
 	ns.currentEnv = newEnv
 	ns.currentValues = newValues
 	ns.currentVariables = newVariable
@@ -233,4 +263,57 @@ func inferTypeStringFromActualValues(v any, rt ref.Type) string {
 	default:
 		return "unknown"
 	}
+}
+
+// NewNamespace creates a new Namespace from a function definition and optional environment and parameters.
+// This is a convenience function that handles the different cases of creating a Namespace.
+func NewNamespace(fd *FunctionDefinition, environment map[string]any, parameters map[string]any) *Namespace {
+	// If no function definition is provided, create a namespace from constants
+	if fd == nil {
+		// Combine environment and parameters into a single map
+		constants := make(map[string]any)
+		for k, v := range environment {
+			constants[k] = v
+		}
+		for k, v := range parameters {
+			constants[k] = v
+		}
+
+		// Create a namespace from constants
+		ns, err := NewNamespaceFromConstants(constants)
+		if err != nil {
+			// This should not happen with valid constants
+			panic(fmt.Sprintf("Failed to create namespace from constants: %v", err))
+		}
+		return ns
+	}
+
+	// Create a namespace from the function definition
+	ns, err := NewNamespaceFromDefinition(fd)
+	if err != nil {
+		// This should not happen with a valid function definition
+		panic(fmt.Sprintf("Failed to create namespace from function definition: %v", err))
+	}
+
+	// Override dummy data with provided parameters if any
+	if parameters != nil {
+		for k, v := range parameters {
+			ns.currentValues[k] = v
+		}
+	}
+
+	// Add environment variables
+	for k, v := range environment {
+		ns.currentValues[k] = v
+	}
+
+	return ns
+}
+
+// GetLoopVariableType returns the type of a loop variable and whether it exists
+func (ns *Namespace) GetLoopVariableType(variableName string) (string, bool) {
+	if val, ok := ns.currentValues[variableName]; ok {
+		return inferTypeStringFromActualValues(val, nil), true
+	}
+	return "", false
 }

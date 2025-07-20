@@ -10,6 +10,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"github.com/shibukawa/snapsql/markdownparser"
 )
 
 // ParseFunctionDefinitionFromYAML parses a YAML string into a FunctionDefinition and calls Finalize.
@@ -601,4 +602,79 @@ func deepCopySlice(s []any) []any {
 		}
 	}
 	return result
+}
+// ParseFunctionDefinitionFromSnapSQLDocument creates a FunctionDefinition from a SnapSQLDocument.
+// It extracts metadata, description, and parameters from the document and calls Finalize.
+func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string) (*FunctionDefinition, error) {
+	// Create a new FunctionDefinition
+	def := &FunctionDefinition{
+		// Copy metadata fields
+		Name:        getStringFromMap(doc.Metadata, "name", ""),
+		FunctionName: getStringFromMap(doc.Metadata, "function_name", ""),
+		Description: getStringFromMap(doc.Metadata, "description", ""),
+	}
+
+	// Copy generators if present
+	if generators, ok := doc.Metadata["generators"]; ok {
+		def.Generators = make(map[string]map[string]any)
+		
+		// Handle different types of generators data structure
+		switch g := generators.(type) {
+		case map[string]any:
+			// Direct map[string]any format
+			for lang, config := range g {
+				if langConfig, ok := config.(map[string]any); ok {
+					def.Generators[lang] = langConfig
+				}
+			}
+		case map[string]map[string]any:
+			// Already in the right format
+			def.Generators = g
+		case map[any]any:
+			// Convert from map[any]any
+			for langAny, configAny := range g {
+				if lang, ok := langAny.(string); ok {
+					if config, ok := configAny.(map[any]any); ok {
+						langConfig := make(map[string]any)
+						for keyAny, valAny := range config {
+							if key, ok := keyAny.(string); ok {
+								langConfig[key] = valAny
+							}
+						}
+						def.Generators[lang] = langConfig
+					} else if config, ok := configAny.(map[string]any); ok {
+						def.Generators[lang] = config
+					}
+				}
+			}
+		}
+	}
+
+	// Parse parameters from the parameter block
+	// We need to preserve the order of parameters as defined in the YAML
+	if doc.ParameterBlock != "" {
+		// Parse parameters while preserving order
+		var rawParams yaml.MapSlice
+		if err := yaml.Unmarshal([]byte(doc.ParameterBlock), &rawParams); err != nil {
+			return nil, fmt.Errorf("failed to parse parameters: %w", err)
+		}
+		def.RawParameters = rawParams
+	}
+
+	// Finalize the definition
+	if err := def.Finalize(basePath, projectRootPath); err != nil {
+		return nil, err
+	}
+
+	return def, nil
+}
+
+// getStringFromMap safely extracts a string value from a map with a default fallback
+func getStringFromMap(m map[string]any, key string, defaultValue string) string {
+	if val, ok := m[key]; ok {
+		if strVal, ok := val.(string); ok {
+			return strVal
+		}
+	}
+	return defaultValue
 }

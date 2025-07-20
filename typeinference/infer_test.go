@@ -27,7 +27,7 @@ func parseSQL(sql string) (parser.StatementNode, error) {
 		return nil, err
 	}
 
-	stmt, err := parser.Parse(tokens, nil, nil)
+	stmt, err := parser.RawParse(tokens, nil, nil)
 	if err != nil {
 		return nil, err
 	}
