@@ -1,0 +1,10 @@
+User: # User information
+  id: int # User ID
+  name: string # User name
+  email: string # Email address
+  department: Department # Department
+
+Department: # Department information
+  id: int # Department ID
+  name: string # Department name
+  manager_id: int # Manager ID

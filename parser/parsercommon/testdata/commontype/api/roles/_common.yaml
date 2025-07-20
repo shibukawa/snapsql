@@ -1,0 +1,4 @@
+Role: # Role information
+  id: int # Role ID
+  name: string # Role name
+  permissions: string[] # Permission list

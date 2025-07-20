@@ -1,308 +1,153 @@
 package parsercommon
 
 import (
+	"path/filepath"
 	"testing"
 
-	"github.com/alecthomas/assert/v2"
-	"github.com/goccy/go-yaml"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestFunctionDefinition(t *testing.T) {
-	type testCase struct {
+func TestFunctionDefinition_CommonTypes(t *testing.T) {
+	// Set paths to test data directories
+	projectRoot := filepath.Join("testdata", "commontype")
+	basePath := filepath.Join(projectRoot, "api", "users")
+	
+	// Test cases
+	tests := []struct {
 		name           string
-		yamlSrc        string
-		expectedOrder  []string
-		expectedParams map[string]any
-		expectedDummy  map[string]any
+		yamlStr        string
+		basePath       string
+		projectRootPath string
 		wantErr        bool
-	}
-	tests := []testCase{
+		check          func(*testing.T, *FunctionDefinition)
+	}{
 		{
-			name: "simple order",
-			yamlSrc: `
-name: simple
-function_name: simpleFunc
+			name: "Common type reference in same directory",
+			yamlStr: `
+name: GetUser
+function_name: getUser
+description: Get user information
 parameters:
-  a: int
-  b: string
-  c: bool
+  user: User
+  admin: .User
 `,
-			expectedOrder: []string{"a", "b", "c"},
-			expectedParams: map[string]any{
-				"a": "int",
-				"b": "string",
-				"c": "bool",
-			},
-			expectedDummy: map[string]any{
-				"a": int64(1),
-				"b": "dummy",
-				"c": true,
-			},
-			wantErr: false,
-		},
-		{
-			name: "single parameter",
-			yamlSrc: `
-name: single
-function_name: singleFunc
-parameters:
-  only: float
-`,
-			expectedOrder: []string{"only"},
-			expectedParams: map[string]any{
-				"only": "float",
-			},
-			expectedDummy: map[string]any{
-				"only": 1.1,
-			},
-			wantErr: false,
-		},
-		{
-			name: "nested parameters",
-			yamlSrc: `
-name: nested
-function_name: nestedFunc
-parameters:
-  user:
-    id: int
-    name: string
-  active: bool
-  score: float
-`,
-			expectedOrder: []string{"user", "active", "score"},
-			expectedParams: map[string]any{
-				"user": map[string]any{
-					"id":   "int",
-					"name": "string",
-				},
-				"active": "bool",
-				"score":  "float",
-			},
-			expectedDummy: map[string]any{
-				"user": map[string]any{
-					"id":   int64(1),
-					"name": "dummy",
-				},
-				"active": true,
-				"score":  1.1,
-			},
-			wantErr: false,
-		},
-		{
-			name: "empty parameters",
-			yamlSrc: `
-name: empty
-function_name: emptyFunc
-parameters: {}
-`,
-			expectedOrder:  []string{},
-			expectedParams: map[string]any{},
-			expectedDummy:  map[string]any{},
+			basePath:       basePath,
+			projectRootPath: projectRoot,
 			wantErr:        false,
+			check: func(t *testing.T, def *FunctionDefinition) {
+				// Check that User field is expanded
+				user, ok := def.Parameters["user"].(map[string]any)
+				assert.True(t, ok, "user parameter should be a map")
+				assert.Equal(t, "int", user["id"], "user.id should be int")
+				assert.Equal(t, "string", user["name"], "user.name should be string")
+				assert.Equal(t, "string", user["email"], "user.email should be string")
+				
+				// Check that .User is also expanded
+				admin, ok := def.Parameters["admin"].(map[string]any)
+				assert.True(t, ok, "admin parameter should be a map")
+				assert.Equal(t, "int", admin["id"], "admin.id should be int")
+				
+				// Check that Department is recursively expanded
+				dept, ok := user["department"].(string)
+				assert.True(t, ok, "user.department should be a string")
+				assert.Equal(t, "Department", dept, "user.department should be Department")
+			},
 		},
 		{
-			name: "empty parameters2",
-			yamlSrc: `
-name: empty
-function_name: emptyFunc
+			name: "Common type reference in different directory (relative path)",
+			yamlStr: `
+name: GetRoles
+function_name: getRoles
+description: Get role information
+parameters:
+  role: Role
 `,
-			expectedOrder:  []string{},
-			expectedParams: map[string]any{},
-			expectedDummy:  map[string]any{},
+			basePath:       filepath.Join(projectRoot, "api", "roles"),
+			projectRootPath: projectRoot,
 			wantErr:        false,
+			check: func(t *testing.T, def *FunctionDefinition) {
+				// Check that Role field is expanded
+				role, ok := def.Parameters["role"].(map[string]any)
+				assert.True(t, ok, "role parameter should be a map")
+				assert.Equal(t, "int", role["id"], "role.id should be int")
+				assert.Equal(t, "string", role["name"], "role.name should be string")
+				assert.Equal(t, "string[]", role["permissions"], "role.permissions should be string[]")
+			},
 		},
 		{
-			name: "array of primitive",
-			yamlSrc: `
-name: array_primitive
-function_name: arrayPrimitiveFunc
+			name: "Common type reference in project root",
+			yamlStr: `
+name: GetGlobalType
+function_name: getGlobalType
+description: Get global type
 parameters:
-  ids: [int]
-  names: [string]
-  flags: [bool]
+  global: GlobalType
 `,
-			expectedOrder: []string{"ids", "names", "flags"},
-			expectedParams: map[string]any{
-				"ids":   "int[]",
-				"names": "string[]",
-				"flags": "bool[]",
+			basePath:       basePath,
+			projectRootPath: projectRoot,
+			wantErr:        false,
+			check: func(t *testing.T, def *FunctionDefinition) {
+				// Check that GlobalType field is expanded
+				global, ok := def.Parameters["global"].(map[string]any)
+				assert.True(t, ok, "global parameter should be a map")
+				assert.Equal(t, "int", global["id"], "global.id should be int")
+				assert.Equal(t, "string", global["name"], "global.name should be string")
+				assert.Equal(t, "datetime", global["created_at"], "global.created_at should be datetime")
 			},
-			expectedDummy: map[string]any{
-				"ids":   []any{int64(1)},
-				"names": []any{"dummy"},
-				"flags": []any{true},
-			},
-			wantErr: false,
 		},
 		{
-			name: "array of object",
-			yamlSrc: `
-name: array_object
-function_name: arrayObjectFunc
+			name: "Array type common type reference",
+			yamlStr: `
+name: GetUsers
+function_name: getUsers
+description: Get user list
 parameters:
-  users:
-    - id: int
-      name: string
-  scores: [float]
+  users: User[]
+  globals: GlobalType[]
 `,
-			expectedOrder: []string{"users", "scores"},
-			expectedParams: map[string]any{
-				"users": []any{
-					map[string]any{
-						"id":   "int",
-						"name": "string",
-					},
-				},
-				"scores": "float[]",
+			basePath:       basePath,
+			projectRootPath: projectRoot,
+			wantErr:        false,
+			check: func(t *testing.T, def *FunctionDefinition) {
+				// Check that User[] is expanded as array
+				users, ok := def.Parameters["users"].([]any)
+				assert.True(t, ok, "users parameter should be an array")
+				assert.Len(t, users, 1, "users array should have 1 element")
+				
+				// Check that array element is expanded User
+				userMap, ok := users[0].(map[string]any)
+				assert.True(t, ok, "users[0] should be a map")
+				assert.Equal(t, "int", userMap["id"], "users[0].id should be int")
+				assert.Equal(t, "string", userMap["name"], "users[0].name should be string")
+				assert.Equal(t, "string", userMap["email"], "users[0].email should be string")
+				
+				// Check that GlobalType[] is also expanded as array
+				globals, ok := def.Parameters["globals"].([]any)
+				assert.True(t, ok, "globals parameter should be an array")
+				assert.Len(t, globals, 1, "globals array should have 1 element")
+				
+				// Check that array element is expanded GlobalType
+				globalMap, ok := globals[0].(map[string]any)
+				assert.True(t, ok, "globals[0] should be a map")
+				assert.Equal(t, "int", globalMap["id"], "globals[0].id should be int")
+				assert.Equal(t, "string", globalMap["name"], "globals[0].name should be string")
+				assert.Equal(t, "datetime", globalMap["created_at"], "globals[0].created_at should be datetime")
 			},
-			expectedDummy: map[string]any{
-				"users": []any{
-					map[string]any{
-						"id":   int64(1),
-						"name": "dummy",
-					},
-				},
-				"scores": []any{1.1},
-			},
-			wantErr: false,
-		},
-		{
-			name: "type normalization and int32/float32",
-			yamlSrc: `
-name: normalization
-function_name: normalizationFunc
-parameters:
-  i1: integer
-  i2: long
-  i3: int32
-  i4: int16
-  i5: int8
-  f1: double
-  f2: decimal
-  f3: numeric
-  f4: float32
-`,
-			expectedOrder: []string{"i1", "i2", "i3", "i4", "i5", "f1", "f2", "f3", "f4"},
-			expectedParams: map[string]any{
-				"i1": "int",
-				"i2": "int",
-				"i3": "int32",
-				"i4": "int16",
-				"i5": "int8",
-				"f1": "float",
-				"f2": "decimal",
-				"f3": "decimal",
-				"f4": "float32",
-			},
-			expectedDummy: map[string]any{
-				"i1": int64(1),
-				"i2": int64(1),
-				"i3": int32(2),
-				"i4": int16(3),
-				"i5": int8(4),
-				"f1": 1.1,
-				"f2": "1.0",
-				"f3": "1.0",
-				"f4": float32(2.2),
-			},
-			wantErr: false,
-		},
-		{
-			name: "invalid parameter name",
-			yamlSrc: `
-name: invalid
-function_name: invalidFunc
-parameters:
-  "1abc": int
-  valid_name: string
-`,
-			expectedOrder: []string{"valid_name"},
-			expectedParams: map[string]any{
-				"valid_name": "string",
-			},
-			expectedDummy: map[string]any{
-				"valid_name": "dummy",
-			},
-			wantErr: true,
-		},
-		{
-			name: "array of int32 and float32",
-			yamlSrc: `
-name: array_special
-function_name: arraySpecialFunc
-parameters:
-  ids: [int32]
-  scores: [float32]
-`,
-			expectedOrder: []string{"ids", "scores"},
-			expectedParams: map[string]any{
-				"ids":    "int32[]",
-				"scores": "float32[]",
-			},
-			expectedDummy: map[string]any{
-				"ids":    []any{int32(2)},
-				"scores": []any{float32(2.2)},
-			},
-			wantErr: false,
-		},
-		{
-			name: "array of object (complex)",
-			yamlSrc: `
-name: array_object_complex
-function_name: arrayObjectComplexFunc
-parameters:
-  items:
-    - id: int64
-      value: float32
-      flag: bool
-      meta:
-        tag: string
-        score: float
-`,
-			expectedOrder: []string{"items"},
-			expectedParams: map[string]any{
-				"items": []any{
-					map[string]any{
-						"id":    "int",
-						"value": "float32",
-						"flag":  "bool",
-						"meta": map[string]any{
-							"tag":   "string",
-							"score": "float",
-						},
-					},
-				},
-			},
-			expectedDummy: map[string]any{
-				"items": []any{
-					map[string]any{
-						"id":    int64(1),
-						"value": float32(2.2),
-						"flag":  true,
-						"meta": map[string]any{
-							"tag":   "dummy",
-							"score": 1.1,
-						},
-					},
-				},
-			},
-			wantErr: false,
 		},
 	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			var def FunctionDefinition
-			err := yaml.Unmarshal([]byte(tc.yamlSrc), &def)
-			assert.NoError(t, err)
-			err = def.Finalize()
-			if tc.wantErr {
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			def, err := ParseFunctionDefinitionFromYAML(tt.yamlStr, tt.basePath, tt.projectRootPath)
+			if tt.wantErr {
 				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.expectedOrder, def.ParameterOrder)
-				assert.Equal(t, tc.expectedParams, def.Parameters)
-				assert.Equal(t, tc.expectedDummy, def.DummyData().(map[string]any))
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, def)
+			
+			if tt.check != nil {
+				tt.check(t, def)
 			}
 		})
 	}

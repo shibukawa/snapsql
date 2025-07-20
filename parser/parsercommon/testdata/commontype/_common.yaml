@@ -1,0 +1,4 @@
+GlobalType: # Global type
+  id: int # ID
+  name: string # Name
+  created_at: datetime # Creation date
