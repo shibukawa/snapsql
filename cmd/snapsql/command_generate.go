@@ -23,9 +23,9 @@ import (
 // Error definitions
 var (
 	ErrGeneratorNotConfigured = errors.New("generator not configured")
-	ErrPluginNotFound        = errors.New("generator plugin not found")
-	ErrInputFileNotExist     = errors.New("input file does not exist")
-	ErrNoASTGenerated        = errors.New("no AST generated")
+	ErrPluginNotFound         = errors.New("generator plugin not found")
+	ErrInputFileNotExist      = errors.New("input file does not exist")
+	ErrNoASTGenerated         = errors.New("no AST generated")
 )
 
 // GenerateCmd represents the generate command
@@ -101,7 +101,7 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 
 	// JSON is always generated
 	generatedLanguages++
-	
+
 	if ctx.Verbose {
 		color.Blue("Generating files from %d intermediate files", len(intermediateFiles))
 	}
@@ -208,7 +208,7 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 	if outputDir == "" {
 		outputDir = fmt.Sprintf("./generated/%s", lang)
 	}
-	
+
 	if err := ensureDir(outputDir); err != nil {
 		return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 	}
@@ -237,7 +237,7 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 		args := []string{
 			"--output", outputDir,
 		}
-		
+
 		// Add settings as command line arguments
 		for key, value := range generator.Settings {
 			// Convert setting value to string
@@ -253,7 +253,7 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 				// Skip complex types
 				continue
 			}
-			
+
 			args = append(args, fmt.Sprintf("--%s", key), strValue)
 		}
 
@@ -291,7 +291,7 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 		if err != nil {
 			return err
 		}
-		
+
 		// Find generator config
 		generator, exists := config.Generation.Generators[g.Lang]
 		if !exists || !generator.Enabled {
@@ -300,12 +300,12 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 			}
 			// Use default config
 			generator = GeneratorConfig{
-				Output:  fmt.Sprintf("./generated/%s", g.Lang),
-				Enabled: true,
+				Output:   fmt.Sprintf("./generated/%s", g.Lang),
+				Enabled:  true,
 				Settings: map[string]any{},
 			}
 		}
-		
+
 		// If package name is specified, add it to settings
 		if g.Package != "" {
 			if generator.Settings == nil {
@@ -313,7 +313,7 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 			}
 			generator.Settings["package"] = g.Package
 		}
-		
+
 		// Generate code
 		return generateForLanguage(g.Lang, generator, intermediateFiles, ctx)
 	default:
@@ -322,18 +322,18 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 		if err != nil {
 			return err
 		}
-		
+
 		// Find generator config
 		generator, exists := config.Generation.Generators[g.Lang]
 		if !exists {
 			// Use default config
 			generator = GeneratorConfig{
-				Output:  fmt.Sprintf("./generated/%s", g.Lang),
-				Enabled: true,
+				Output:   fmt.Sprintf("./generated/%s", g.Lang),
+				Enabled:  true,
 				Settings: map[string]any{},
 			}
 		}
-		
+
 		// Generate code using external plugin
 		return generateWithExternalPlugin(g.Lang, generator, intermediateFiles, ctx)
 	}
@@ -384,7 +384,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 	// Process each file
 	processedCount := 0
 	generatedFiles := make([]string, 0, len(files))
-	
+
 	for _, file := range files {
 		if ctx.Verbose {
 			color.Blue("Processing: %s", file)
@@ -450,12 +450,12 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantF
 			Hash:    calculateHash(string(content)),
 		},
 	}
-	
+
 	// Add schema if available
 	if parseResult.Schema != nil {
 		format.InterfaceSchema = g.convertSchemaToIntermediate(parseResult.Schema)
 	}
-	
+
 	// Add dependencies
 	format.Dependencies = intermediate.VariableDependencies{
 		AllVariables:        extractVariableNames(parseResult.Schema),
@@ -463,7 +463,7 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantF
 		ParameterVariables:  extractVariableNames(parseResult.Schema),
 		CacheKeyTemplate:    "static",
 	}
-	
+
 	// Add simple instruction
 	format.Instructions = []intermediate.Instruction{
 		{
@@ -499,12 +499,12 @@ func extractVariableNames(schema *parser.FunctionDefinition) []string {
 	if schema == nil || len(schema.Parameters) == 0 {
 		return []string{}
 	}
-	
+
 	names := make([]string, 0, len(schema.Parameters))
 	for name := range schema.Parameters {
 		names = append(names, name)
 	}
-	
+
 	sort.Strings(names)
 	return names
 }
@@ -540,7 +540,7 @@ func (g *GenerateCmd) parseSQLFile(content string, constantFiles []string, ctx *
 	}
 
 	// Parse SQL
-	ast, err := parser.Parse(tokens, functionDef, nil)
+	ast, err := parser.RawParse(tokens, functionDef, nil)
 	if err != nil {
 		return nil, fmt.Errorf("parsing failed: %w", err)
 	}
@@ -601,7 +601,7 @@ func (g *GenerateCmd) parseMarkdownFile(content string, constantFiles []string, 
 			}
 
 			// Parse SQL using the correct API
-			ast, err = parser.Parse(tokens, schema, nil)
+			ast, err = parser.RawParse(tokens, schema, nil)
 			if err != nil {
 				return nil, fmt.Errorf("parsing failed: %w", err)
 			}
@@ -626,7 +626,7 @@ func (g *GenerateCmd) convertSchemaToIntermediate(schema *parser.FunctionDefinit
 		// Determine parameter type
 		typeStr := "any"
 		optional := false
-		
+
 		switch v := paramType.(type) {
 		case string:
 			typeStr = v
@@ -637,7 +637,7 @@ func (g *GenerateCmd) convertSchemaToIntermediate(schema *parser.FunctionDefinit
 		case []any:
 			typeStr = "array"
 		}
-		
+
 		param := intermediate.Parameter{
 			Name:     name,
 			Type:     typeStr,

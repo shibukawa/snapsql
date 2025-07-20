@@ -3,7 +3,6 @@ package query
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
@@ -186,7 +185,7 @@ func TestExecutor(t *testing.T) {
 				"user_id": 789,
 			},
 			Options: QueryOptions{
-				Explain:       true,
+				Explain:        true,
 				ExplainAnalyze: true,
 			},
 			ExpectedSQL:    "EXPLAIN ANALYZE SELECT id, name FROM users WHERE id = $1",
@@ -218,16 +217,16 @@ func TestExecutor(t *testing.T) {
 			},
 		},
 		{
-			Name: "Dangerous query without flag",
-			SQL: `DELETE FROM users`,
-			Params: map[string]interface{}{},
+			Name:           "Dangerous query without flag",
+			SQL:            `DELETE FROM users`,
+			Params:         map[string]interface{}{},
 			ExpectedSQL:    "DELETE FROM users",
 			ExpectedParams: []interface{}{},
 			ExpectedError:  "dangerous query detected",
 		},
 		{
-			Name: "Dangerous query with flag",
-			SQL: `DELETE FROM users`,
+			Name:   "Dangerous query with flag",
+			SQL:    `DELETE FROM users`,
 			Params: map[string]interface{}{},
 			Options: QueryOptions{
 				ExecuteDangerousQuery: true,
@@ -515,7 +514,7 @@ func createIntermediateFormat(sqlTemplate string) (*intermediate.IntermediateFor
 	}
 
 	// Parse SQL
-	ast, err := parser.Parse(tokens, functionDef, nil)
+	ast, err := parser.RawParse(tokens, functionDef, nil)
 	if err != nil {
 		return nil, fmt.Errorf("parsing failed: %w", err)
 	}
@@ -559,12 +558,12 @@ func extractVariableNames(schema *parser.FunctionDefinition) []string {
 	if schema == nil || len(schema.Parameters) == 0 {
 		return []string{}
 	}
-	
+
 	names := make([]string, 0, len(schema.Parameters))
 	for name := range schema.Parameters {
 		names = append(names, name)
 	}
-	
+
 	sort.Strings(names)
 	return names
 }

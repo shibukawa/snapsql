@@ -264,12 +264,12 @@ func preRegisterLoopVariablesInTokens(tokens []tokenizer.Token, namespace *cmn.N
 			listExpr := parts[2]
 
 			// Try to evaluate the list expression to get the loop target
-			if loopTarget, err := namespace.EvaluateParameterExpression(listExpr); err == nil {
+			if loopTarget, _, err := namespace.Eval(listExpr); err == nil {
 				if loopTarget2, ok := loopTarget.([]any); ok {
 					// Register the loop variable in the namespace
 					namespace.EnterLoop(loopVar, loopTarget2)
 
-					// Note: We don't need to call LeaveLoop here since this is just
+					// Note: We don't need to call ExitLoop here since this is just
 					// for DUMMY_LITERAL resolution. The actual loop processing in
 					// validateVariables will handle proper loop lifecycle.
 				}

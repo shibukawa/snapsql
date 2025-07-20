@@ -18,7 +18,7 @@ func TestGenerateFromStatementNode(t *testing.T) {
 	tokens, err := tokenizer.Tokenize("SELECT id, name FROM users")
 	assert.NoError(t, err)
 
-	stmt, err := parser.Parse(tokens, nil, nil)
+	stmt, err := parser.RawParse(tokens, nil, nil)
 	assert.NoError(t, err)
 
 	// Create a basic function definition

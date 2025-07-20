@@ -3,7 +3,9 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"io"
 
+	"github.com/shibukawa/snapsql/markdownparser"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/parser/parserstep1"
 	"github.com/shibukawa/snapsql/parser/parserstep2"
@@ -60,7 +62,6 @@ type (
 	// Schema and namespace types
 	FunctionDefinition = cmn.FunctionDefinition
 	Namespace          = cmn.Namespace
-	CELVariable        = cmn.CELVariable
 
 	// Error types
 	ParseError = cmn.ParseError
@@ -158,12 +159,8 @@ var (
 
 // Re-export helper functions
 var (
-	NewNamespace                     = cmn.NewNamespace
-	AsParseError                     = cmn.AsParseError
-	NewFunctionDefinitionFromSQL     = cmn.NewFunctionDefinitionFromSQL
-	NewFunctionDefinitionFromYAML    = cmn.NewFunctionDefinitionFromYAML
-	NewFunctionDefinitionFromMarkdown = cmn.NewFunctionDefinitionFromMarkdown
-	NewFunctionDefinitionFromMarkdownContext = cmn.NewFunctionDefinitionFromMarkdownContext
+	NewNamespace = cmn.NewNamespace
+	AsParseError = cmn.AsParseError
 )
 
 // ParseOptions contains options for the Parse function
@@ -176,7 +173,7 @@ type ParseOptions struct {
 	EnableSubqueryAnalysis bool
 }
 
-// Parse is the main entry point for parsing SQL templates from pre-tokenized tokens.
+// RawParse is the main entry point for parsing SQL templates from pre-tokenized tokens.
 // It takes tokenized SQL and optional additional YAML function definitions,
 // runs the complete parsing pipeline (parserstep1-6), and returns a StatementNode.
 //
@@ -194,7 +191,7 @@ type ParseOptions struct {
 // Returns:
 //   - StatementNode: The parsed statement AST (may contain parserstep7 results)
 //   - error: Any parsing errors encountered
-func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *ParseOptions) (StatementNode, error) {
+func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *ParseOptions) (StatementNode, error) {
 	if options == nil {
 		options = &ParseOptions{}
 	}
@@ -267,4 +264,73 @@ func Parse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *P
 	}
 
 	return stmt, nil
+}
+
+// ParseSQLFile parses an SQL file from an io.Reader and returns a StatementNode.
+// This is a convenience function that handles tokenization internally.
+//
+// Parameters:
+//   - reader: An io.Reader containing the SQL content
+//   - functionDef: Function definition schema (optional, can be nil)
+//   - options: Optional parsing options for environment and parameter values
+//
+// Returns:
+//   - StatementNode: The parsed statement AST
+//   - error: Any parsing errors encountered
+func ParseSQLFile(reader io.Reader, functionDef *FunctionDefinition, options *ParseOptions) (StatementNode, error) {
+	// Read all content from the reader
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read SQL content: %w", err)
+	}
+
+	// Create a tokenizer
+	sqlTokenizer := tokenizer.NewSqlTokenizer(string(content))
+
+	// Collect all tokens
+	var tokens []tokenizer.Token
+	for token, err := range sqlTokenizer.Tokens() {
+		if err != nil {
+			return nil, fmt.Errorf("tokenization failed: %w", err)
+		}
+		tokens = append(tokens, token)
+	}
+
+	// Parse the tokens
+	return RawParse(tokens, functionDef, options)
+}
+
+// ParseMarkdownFile parses a SnapSQLDocument and returns a StatementNode.
+// This function extracts the SQL and parameters from the document and parses them.
+//
+// Parameters:
+//   - doc: A SnapSQLDocument from the markdownparser package
+//   - basePath: Base path for resolving relative paths in common type references
+//   - projectRootPath: Project root path for resolving common type references
+//   - options: Optional parsing options for environment and parameter values
+//
+// Returns:
+//   - StatementNode: The parsed statement AST
+//   - error: Any parsing errors encountered
+func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, options *ParseOptions) (StatementNode, error) {
+	// Create a function definition from the SnapSQLDocument
+	functionDef, err := cmn.ParseFunctionDefinitionFromSnapSQLDocument(doc, basePath, projectRootPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create function definition: %w", err)
+	}
+
+	// Create a tokenizer for the SQL content
+	sqlTokenizer := tokenizer.NewSqlTokenizer(doc.SQL)
+
+	// Collect all tokens
+	var tokens []tokenizer.Token
+	for token, err := range sqlTokenizer.Tokens() {
+		if err != nil {
+			return nil, fmt.Errorf("tokenization failed: %w", err)
+		}
+		tokens = append(tokens, token)
+	}
+
+	// Parse the tokens
+	return RawParse(tokens, functionDef, options)
 }
