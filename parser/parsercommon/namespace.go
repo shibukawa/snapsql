@@ -76,6 +76,13 @@ func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 	return result, nil
 }
 
+func (ns *Namespace) RootVariables() cel.EnvOption {
+	if len(ns.frames) > 0 {
+		return ns.frames[0].variable
+	}
+	return ns.currentVariables
+}
+
 func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 	ast, issues := ns.currentEnv.Parse(exp)
 	if issues != nil && issues.Err() != nil {
@@ -95,7 +102,7 @@ func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 		return nil, "", fmt.Errorf("%w: CEL program evaluation error: %v", ErrInvalidForSnapSQL, err)
 	}
 	if ns.fd != nil {
-		return v.Value(), inferTypeStringFromDummyValue(v.Value()), nil
+		return v.Value(), InferTypeStringFromDummyValue(v.Value()), nil
 	}
 	if v.Type() == cel.BytesType {
 		var result, _ = v.Value().([]byte)

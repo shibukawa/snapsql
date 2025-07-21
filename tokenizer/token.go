@@ -26,6 +26,8 @@ const (
 	IDENTIFIER    // quoted identifiers ("col")
 	NUMBER        // numeric literals
 	BOOLEAN       // boolean literals (true, false)
+	DUMMY_START   // marker for start of dummy literal
+	DUMMY_END     // marker for end of dummy literal
 	DUMMY_LITERAL // placeholder for /*= variable */ directives
 	OPENED_PARENS // (
 	CLOSED_PARENS // )
@@ -186,6 +188,10 @@ func (t TokenType) String() string {
 		return "STRING"
 	case BOOLEAN:
 		return "BOOLEAN"
+	case DUMMY_START:
+		return "DUMMY_START"
+	case DUMMY_END:
+		return "DUMMY_END"
 	case IDENTIFIER:
 		return "IDENTIFIER"
 	case NUMBER:

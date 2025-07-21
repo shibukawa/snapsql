@@ -13,6 +13,8 @@ type ClauseNode interface {
 	IfCondition() string              // Returns implicit if condition for the clause
 	SetIfCondition(condition string)  // Sets implicit if condition for the clause
 	Type() NodeType
+	InsertTokensAfterIndex(index int, tokens []tokenizer.Token) // Inserts tokens after the specified index
+	ReplaceTokens(startIndex, endIndex int, token tokenizer.Token) // Replaces tokens from startIndex to endIndex with the specified token
 }
 
 type clauseBaseNode struct {
@@ -47,7 +49,71 @@ func (cbn *clauseBaseNode) SetIfCondition(condition string) {
 	cbn.ifCondition = condition
 }
 
-// WithClause represents WITH clause for CTEs
+// InsertTokensAfterIndex は指定されたインデックスの後にトークンを挿入します
+// インデックスはheadingTokensとbodyTokensの両方を考慮した全体のインデックスです
+func (cbn *clauseBaseNode) InsertTokensAfterIndex(index int, newTokens []tokenizer.Token) {
+	headingLen := len(cbn.headingTokens)
+	
+	// インデックスがheadingTokens内にある場合
+	if index < headingLen {
+		// headingTokensを分割して挿入
+		result := make([]tokenizer.Token, 0, len(cbn.headingTokens)+len(newTokens))
+		result = append(result, cbn.headingTokens[:index+1]...)
+		result = append(result, newTokens...)
+		result = append(result, cbn.headingTokens[index+1:]...)
+		cbn.headingTokens = result
+	} else {
+		// bodyTokens内のインデックスに変換
+		bodyIndex := index - headingLen
+		if bodyIndex >= len(cbn.bodyTokens) {
+			bodyIndex = len(cbn.bodyTokens) - 1
+		}
+		
+		// bodyTokensを分割して挿入
+		result := make([]tokenizer.Token, 0, len(cbn.bodyTokens)+len(newTokens))
+		result = append(result, cbn.bodyTokens[:bodyIndex+1]...)
+		result = append(result, newTokens...)
+		result = append(result, cbn.bodyTokens[bodyIndex+1:]...)
+		cbn.bodyTokens = result
+	}
+}
+
+// ReplaceTokens は指定された範囲のトークンを新しいトークンに置き換えます
+// startIndexからendIndex-1までのトークンが置き換えられます
+func (cbn *clauseBaseNode) ReplaceTokens(startIndex, endIndex int, newToken tokenizer.Token) {
+	headingLen := len(cbn.headingTokens)
+	
+	// 置換範囲がheadingTokens内にある場合
+	if startIndex < headingLen && endIndex <= headingLen {
+		// headingTokensを分割して置換
+		result := make([]tokenizer.Token, 0, len(cbn.headingTokens)-(endIndex-startIndex)+1)
+		result = append(result, cbn.headingTokens[:startIndex]...)
+		result = append(result, newToken)
+		result = append(result, cbn.headingTokens[endIndex:]...)
+		cbn.headingTokens = result
+	} else if startIndex < headingLen && endIndex > headingLen {
+		// 置換範囲がheadingTokensとbodyTokensにまたがる場合
+		headingResult := make([]tokenizer.Token, 0, startIndex+1)
+		headingResult = append(headingResult, cbn.headingTokens[:startIndex]...)
+		headingResult = append(headingResult, newToken)
+		cbn.headingTokens = headingResult
+		
+		bodyResult := make([]tokenizer.Token, 0, len(cbn.bodyTokens)-(endIndex-headingLen))
+		bodyResult = append(bodyResult, cbn.bodyTokens[endIndex-headingLen:]...)
+		cbn.bodyTokens = bodyResult
+	} else {
+		// 置換範囲がbodyTokens内にある場合
+		bodyStartIndex := startIndex - headingLen
+		bodyEndIndex := endIndex - headingLen
+		
+		// bodyTokensを分割して置換
+		result := make([]tokenizer.Token, 0, len(cbn.bodyTokens)-(bodyEndIndex-bodyStartIndex)+1)
+		result = append(result, cbn.bodyTokens[:bodyStartIndex]...)
+		result = append(result, newToken)
+		result = append(result, cbn.bodyTokens[bodyEndIndex:]...)
+		cbn.bodyTokens = result
+	}
+}
 type WithClause struct {
 	clauseBaseNode
 	Recursive      bool
