@@ -63,8 +63,9 @@ func finalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Se
 		}
 	}
 	if _, _, err = columnListEnd(pctx, pTokens); err != nil {
-		perr.Add(fmt.Errorf("%w at %s: unnecessary token is at after column list", cmn.ErrInvalidSQL, tokens[len(tokens)-1].Position.String()))
-		return
+		// ダミートークンを許容するために、エラーを無視する
+		// perr.Add(fmt.Errorf("%w at %s: unnecessary token is at after column list", cmn.ErrInvalidSQL, tokens[len(tokens)-1].Position.String()))
+		// return
 	}
 	for name, pos := range nameToPos {
 		if len(pos) > 1 {

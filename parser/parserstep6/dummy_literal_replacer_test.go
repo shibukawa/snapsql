@@ -54,12 +54,20 @@ func parseUpToStep5(sql string) (cmn.StatementNode, error) {
 
 // findVariableDirectiveTokens は指定された変数名のディレクティブトークンとその周辺のトークンを検索します
 func findVariableDirectiveTokens(stmt cmn.StatementNode, varName string, isConst bool) ([]tokenizer.Token, bool) {
+	if stmt == nil {
+		return nil, false
+	}
+
 	prefix := "/*= "
 	if isConst {
 		prefix = "/*$ "
 	}
 	
 	for _, clause := range stmt.Clauses() {
+		if clause == nil {
+			continue
+		}
+		
 		tokens := clause.RawTokens()
 		for i, token := range tokens {
 			if token.Type == tokenizer.BLOCK_COMMENT && token.Value == prefix+varName+" */" {
@@ -221,10 +229,75 @@ func TestDummyLiteralReplacer(t *testing.T) {
 				"isActive": true,
 			},
 		},
-		// SELECT文のWHERE句のテストケース
+		// INSERT文のテストケース
+		{
+			name: "INSERT with dummy literals",
+			sql:  "INSERT INTO users (id, name) VALUES (/*= id */, /*= name */)",
+			params: map[string]any{
+				"id":   1,
+				"name": "John",
+			},
+			expectedValues: map[string]string{
+				"id":   "1",
+				"name": "'John'",
+			},
+			isConst: map[string]bool{
+				"id":   false,
+				"name": false,
+			},
+		},
+		{
+			name: "INSERT with const literals",
+			sql:  "INSERT INTO users (id, name) VALUES (/*$ id */, /*$ name */)",
+			params: map[string]any{
+				"id":   1,
+				"name": "John",
+			},
+			expectedValues: map[string]string{
+				"id":   "1",
+				"name": "'John'",
+			},
+			isConst: map[string]bool{
+				"id":   true,
+				"name": true,
+			},
+		},
+		// UPDATE文のテストケース
+		{
+			name: "UPDATE with dummy literals",
+			sql:  "UPDATE users SET name = /*= name */ WHERE id = /*= id */",
+			params: map[string]any{
+				"name": "John",
+				"id":   1,
+			},
+			expectedValues: map[string]string{
+				"name": "'John'",
+				"id":   "1",
+			},
+			isConst: map[string]bool{
+				"name": false,
+				"id":   false,
+			},
+		},
+		{
+			name: "UPDATE with const literals",
+			sql:  "UPDATE users SET name = /*$ name */ WHERE id = /*$ id */",
+			params: map[string]any{
+				"name": "John",
+				"id":   1,
+			},
+			expectedValues: map[string]string{
+				"name": "'John'",
+				"id":   "1",
+			},
+			isConst: map[string]bool{
+				"name": true,
+				"id":   true,
+			},
+		},
 		{
 			name: "SELECT with WHERE clause and literals",
-			sql:  "SELECT * FROM users WHERE id = /*= id */ AND name LIKE /*= pattern */",
+			sql:  "SELECT id, name FROM users WHERE id = /*= id */ AND name LIKE /*= pattern */",
 			params: map[string]any{
 				"id":      1,
 				"pattern": "J%",
@@ -240,7 +313,7 @@ func TestDummyLiteralReplacer(t *testing.T) {
 		},
 		{
 			name: "SELECT with complex WHERE clause and literals",
-			sql:  "SELECT * FROM users WHERE id = /*= id */ OR name = /*= name */",
+			sql:  "SELECT id, name FROM users WHERE id = /*= id */ OR name = /*= name */",
 			params: map[string]any{
 				"id":   1,
 				"name": "John",
@@ -256,7 +329,7 @@ func TestDummyLiteralReplacer(t *testing.T) {
 		},
 		{
 			name: "SELECT with WHERE IN clause and literals",
-			sql:  "SELECT * FROM users WHERE id IN (/*= id1 */, /*= id2 */, /*= id3 */)",
+			sql:  "SELECT id, name FROM users WHERE id IN (/*= id1 */, /*= id2 */, /*= id3 */)",
 			params: map[string]any{
 				"id1": 1,
 				"id2": 2,
@@ -275,7 +348,7 @@ func TestDummyLiteralReplacer(t *testing.T) {
 		},
 		{
 			name: "SELECT with WHERE clause and mix of dummy and const literals",
-			sql:  "SELECT * FROM users WHERE id = /*= id */ AND name LIKE /*$ pattern */",
+			sql:  "SELECT id, name FROM users WHERE id = /*= id */ AND name LIKE /*$ pattern */",
 			params: map[string]any{
 				"id":      1,
 				"pattern": "J%",

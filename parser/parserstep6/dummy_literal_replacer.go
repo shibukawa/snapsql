@@ -13,9 +13,16 @@ import (
 // 例: /*= value */ → /*= value */ DUMMY_START 42 DUMMY_END
 // 例: /*$ value */ → /*$ value */ 42
 func replaceDummyLiterals(statement cmn.StatementNode, paramNamespace *cmn.Namespace, perr *cmn.ParseError) {
+	// nilチェック
+	if statement == nil || paramNamespace == nil || perr == nil {
+		return
+	}
+
 	// 各句を処理
 	for _, clause := range statement.Clauses() {
-		processClauseTokens(clause, paramNamespace, perr)
+		if clause != nil {
+			processClauseTokens(clause, paramNamespace, perr)
+		}
 	}
 }
 

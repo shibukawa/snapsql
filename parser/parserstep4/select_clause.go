@@ -2,6 +2,7 @@ package parserstep4
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
@@ -122,6 +123,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		if len(token.Skipped) == 0 {
 			continue
 		}
+		log.Println("parse field:", token.Skipped)
 
 		field, fieldTokens := parseFieldQualifier(token.Skipped)
 
@@ -184,7 +186,16 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 			clause.Fields = append(clause.Fields, field)
 		case "asterisk": // asterisk (*)
 			p := v.Position
+			// エラーメッセージを明確にして、確実にperrに追加
 			perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow asterisk (*) in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String()))
+			// 明示的にエラーフラグを設定
+			clause.Fields = append(clause.Fields, cmn.SelectField{
+				Pos:       p,
+				FieldName: "*",
+				FieldKind: cmn.InvalidField, // 無効なフィールドとしてマーク
+			})
+			// 確実にエラーが検出されるようにする
+			return
 		case "literal": // literal (boolean/number/string/null) or DUMMY_LITERAL
 			// Check if this is a DUMMY_LITERAL token (allowed as variable placeholder)
 			isDummyLiteral := false
@@ -204,6 +215,10 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 				// Regular literals are still restricted in SELECT clause
 				p := v.Position
 				perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow literal('%s') in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String(), v.Value))
+				// 明示的にエラーフラグを設定
+				field.FieldKind = cmn.InvalidField
+				field.Expression = cmn.ToToken(match)
+				clause.Fields = append(clause.Fields, field)
 			}
 		case "not *": // not null/true/false
 			p := match[0].Val.Position

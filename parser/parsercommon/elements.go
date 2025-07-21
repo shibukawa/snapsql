@@ -22,6 +22,7 @@ const (
 	FunctionField                      // Function field (e.g., "COUNT(field)")
 	ComplexField                       // Complex field (e.g., "table.field->'key'")
 	LiteralField                       // Literal field (e.g., "123", "'string'", "NULL")
+	InvalidField                       // Invalid field (e.g., "*")
 )
 
 func (ft FieldType) String() string {
@@ -36,6 +37,8 @@ func (ft FieldType) String() string {
 		return "ComplexField"
 	case LiteralField:
 		return "LiteralField"
+	case InvalidField:
+		return "InvalidField"
 	default:
 		return "UnknownFieldType"
 	}

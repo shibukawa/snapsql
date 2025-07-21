@@ -29,6 +29,7 @@ const (
 	DUMMY_START   // marker for start of dummy literal
 	DUMMY_END     // marker for end of dummy literal
 	DUMMY_LITERAL // placeholder for /*= variable */ directives
+	DUMMY_PLACEHOLDER // placeholder for parsing only, will be replaced
 	OPENED_PARENS // (
 	CLOSED_PARENS // )
 	COMMA         // ,
@@ -192,6 +193,10 @@ func (t TokenType) String() string {
 		return "DUMMY_START"
 	case DUMMY_END:
 		return "DUMMY_END"
+	case DUMMY_LITERAL:
+		return "DUMMY_LITERAL"
+	case DUMMY_PLACEHOLDER:
+		return "DUMMY_PLACEHOLDER"
 	case IDENTIFIER:
 		return "IDENTIFIER"
 	case NUMBER:

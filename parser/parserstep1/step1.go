@@ -115,16 +115,21 @@ func insertMinimalDummyLiterals(tokens []tokenizer.Token) []tokenizer.Token {
 	return result
 }
 
-// isVariableDirective checks if comment is a variable directive /*= variable */
+// isVariableDirective checks if comment is a variable directive /*= variable */ or /*$ variable */
 func isVariableDirective(comment string) bool {
 	trimmed := strings.TrimSpace(comment)
-	return strings.HasPrefix(trimmed, "/*=") && strings.HasSuffix(trimmed, "*/")
+	return (strings.HasPrefix(trimmed, "/*=") || strings.HasPrefix(trimmed, "/*$")) && strings.HasSuffix(trimmed, "*/")
 }
 
-// extractVariableName extracts variable name from /*= variable */ comment
+// extractVariableName extracts variable name from /*= variable */ or /*$ variable */ comment
 func extractVariableName(comment string) string {
 	trimmed := strings.TrimSpace(comment)
-	// Remove /*= and */
-	content := strings.TrimSpace(trimmed[3 : len(trimmed)-2])
+	// Remove /*= or /*$ and */
+	var content string
+	if strings.HasPrefix(trimmed, "/*=") {
+		content = strings.TrimSpace(trimmed[3 : len(trimmed)-2])
+	} else if strings.HasPrefix(trimmed, "/*$") {
+		content = strings.TrimSpace(trimmed[3 : len(trimmed)-2])
+	}
 	return content
 }

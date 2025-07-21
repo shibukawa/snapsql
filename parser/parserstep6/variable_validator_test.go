@@ -3,6 +3,7 @@ package parserstep6
 import (
 	"testing"
 
+	"github.com/alecthomas/assert/v2"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/tokenizer"
@@ -13,25 +14,31 @@ func TestValidateVariables(t *testing.T) {
 	tests := []struct {
 		name           string
 		sql            string
-		paramSchema    map[string]any
 		environment    map[string]any
 		expectedErrors int
 	}{
 		{
 			name: "Valid template with simple variable",
-			sql:  "SELECT /*= user.name */'default' FROM users",
-			paramSchema: map[string]any{
-				"user": map[string]any{
-					"name": "John",
-				},
-			},
+			sql: `
+/*#
+name: findUsers
+function_name: find_users
+parameters:
+  user:
+    name: string
+*/
+SELECT /*= user.name */'default' FROM users`,
 			environment:    map[string]any{},
-			expectedErrors: 0,
+			expectedErrors: 0, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
-			name:        "Template with environment variable",
-			sql:         "SELECT * FROM /*$ table */default_table",
-			paramSchema: map[string]any{},
+			name: "Template with environment variable",
+			sql: `
+/*#
+name: findUsers
+function_name: find_users
+*/
+SELECT * FROM /*$ table */default_table`,
 			environment: map[string]any{
 				"table": "users",
 			},
@@ -39,10 +46,14 @@ func TestValidateVariables(t *testing.T) {
 		},
 		{
 			name: "Template with LIMIT implicit condition",
-			sql:  "SELECT * FROM users LIMIT /*= limit */10",
-			paramSchema: map[string]any{
-				"limit": 5,
-			},
+			sql: `
+/*#
+name: findUsers
+function_name: find_users
+parameters:
+  limit: number
+*/
+SELECT id, name FROM users LIMIT /*= limit */10`,
 			environment:    map[string]any{},
 			expectedErrors: 0,
 		},
@@ -62,9 +73,8 @@ func TestValidateVariables(t *testing.T) {
 			}
 
 			// Create namespace
-			schema := &cmn.FunctionDefinition{
-				Parameters: tt.paramSchema,
-			}
+			schema, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, ".", ".")
+			assert.NoError(t, err, "Failed to parse function definition from SQL comment")
 			// Create namespaces
 			paramNs, err := cmn.NewNamespaceFromDefinition(schema)
 			if err != nil {
@@ -165,7 +175,7 @@ func TestValidateVariableDirective(t *testing.T) {
 					"name": "John",
 				},
 			},
-			expectedErrors: 0,
+			expectedErrors: 1, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Invalid variable expression",

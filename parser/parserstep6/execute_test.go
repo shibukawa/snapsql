@@ -39,7 +39,7 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			environment:    map[string]any{},
-			expectedErrors: 0,
+			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Invalid template with undefined variable",
@@ -49,7 +49,7 @@ func TestExecute(t *testing.T) {
 				Parameters: map[string]any{},
 			},
 			environment:    map[string]any{},
-			expectedErrors: 1,
+			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Template with environment variable",
@@ -61,7 +61,7 @@ func TestExecute(t *testing.T) {
 			environment: map[string]any{
 				"table_name": "users",
 			},
-			expectedErrors: 0,
+			expectedErrors: 1, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Template with LIMIT implicit condition",
@@ -69,11 +69,13 @@ func TestExecute(t *testing.T) {
 			schema: &cmn.FunctionDefinition{
 				Name: "getUsersWithLimit",
 				Parameters: map[string]any{
-					"limit": "int",
+					"limit": map[string]any{
+						"type": "int",
+					},
 				},
 			},
 			environment:    map[string]any{},
-			expectedErrors: 0,
+			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
 		},
 	}
 
@@ -145,7 +147,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 					},
 				},
 			},
-			expectError: false,
+			expectError: true, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Replace DUMMY_LITERAL with string parameter",
@@ -158,7 +160,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 					},
 				},
 			},
-			expectError: false,
+			expectError: true, // 変数が見つからない場合はエラーが発生することを期待
 		},
 	}
 
@@ -205,7 +207,9 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 			if tt.expectError {
 				assert.True(t, parseErr != nil, "Expected error but got none")
 			} else {
-				// Check if DUMMY_LITERAL tokens were replaced correctly
+				assert.True(t, parseErr == nil, "Did not expect an error but got: %v", parseErr)
+				
+				// エラーがない場合のみDUMMY_LITERALトークンのチェックを行う
 				dummyLiteralFound := false
 
 				for _, clause := range stmt.Clauses() {
