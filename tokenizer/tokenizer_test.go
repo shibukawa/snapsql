@@ -7,9 +7,10 @@ import (
 	"github.com/alecthomas/assert/v2"
 )
 
-func TestTokenIterator(t *testing.T) {
+func TestTokenize(t *testing.T) {
 	sql := "SELECT id, name FROM users WHERE active = true;"
-	tokenizer := NewSqlTokenizer(sql)
+	tokens, err := Tokenize(sql)
+	assert.NoError(t, err)
 
 	expectedTypes := []TokenType{
 		SELECT, WHITESPACE, IDENTIFIER, COMMA, WHITESPACE, IDENTIFIER, WHITESPACE,
@@ -18,61 +19,11 @@ func TestTokenIterator(t *testing.T) {
 	}
 
 	var actualTypes []TokenType
-	for token, err := range tokenizer.Tokens() {
-		assert.NoError(t, err)
-
+	for _, token := range tokens {
 		actualTypes = append(actualTypes, token.Type)
-
-		if token.Type == EOF {
-			break
-		}
 	}
 
 	assert.Equal(t, expectedTypes, actualTypes)
-}
-
-func TestTokenIteratorWithOptions(t *testing.T) {
-	sql := "SELECT id, name FROM users -- comment\nWHERE active = true;"
-	tokenizer := NewSqlTokenizer(sql, TokenizerOptions{
-		SkipWhitespace: true,
-		SkipComments:   true,
-	})
-
-	expectedTypes := []TokenType{
-		SELECT, IDENTIFIER, COMMA, IDENTIFIER, FROM, IDENTIFIER, WHERE, IDENTIFIER, EQUAL, BOOLEAN, SEMICOLON, EOF,
-	}
-
-	var actualTypes []TokenType
-	for token, err := range tokenizer.Tokens() {
-		assert.NoError(t, err)
-
-		actualTypes = append(actualTypes, token.Type)
-
-		if token.Type == EOF {
-			break
-		}
-	}
-
-	assert.Equal(t, expectedTypes, actualTypes)
-}
-
-func TestIteratorEarlyTermination(t *testing.T) {
-	sql := "SELECT id, name FROM users WHERE active = true;"
-	tokenizer := NewSqlTokenizer(sql)
-
-	count := 0
-	for _, err := range tokenizer.Tokens() {
-		assert.NoError(t, err)
-
-		count++
-
-		// 5つ目のトークンで終了
-		if count >= 5 {
-			break
-		}
-	}
-
-	assert.Equal(t, 5, count)
 }
 
 func TestBasicTokens(t *testing.T) {
@@ -152,10 +103,11 @@ func TestBasicTokens(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input)
+			tokens, err := Tokenize(test.input)
+			assert.NoError(t, err)
 
 			var actualTypes []TokenType
-			for token, err := range tokenizer.Tokens() {
+			for _, token := range tokens {
 				assert.NoError(t, err)
 				actualTypes = append(actualTypes, token.Type)
 				if token.Type == EOF {
@@ -236,11 +188,11 @@ func TestSnapSQLDirectives(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input)
+			tokens, err := Tokenize(test.input)
+			assert.NoError(t, err)
 
 			var foundToken Token
-			for token, err := range tokenizer.Tokens() {
-				assert.NoError(t, err)
+			for _, token := range tokens {
 				if token.Type != EOF {
 					foundToken = token
 					break
@@ -259,27 +211,24 @@ func TestSnapSQLDirectives(t *testing.T) {
 // Helper function to test for specific token types
 func testForTokenType(t *testing.T, input string, expectedTokenType TokenType, expectError bool, errorMsg string) {
 	t.Helper()
-	tokenizer := NewSqlTokenizer(input)
+	tokens, err := Tokenize(input)
 
-	var hasError bool
+	if expectError {
+		assert.Error(t, err)
+		return
+	}
+
+	assert.NoError(t, err)
+
 	var foundToken bool
-	for token, err := range tokenizer.Tokens() {
-		if err != nil {
-			hasError = true
-			break
-		}
+	for _, token := range tokens {
 		if token.Type == expectedTokenType {
 			foundToken = true
-		}
-		if token.Type == EOF {
 			break
 		}
 	}
 
-	assert.Equal(t, expectError, hasError)
-	if !expectError {
-		assert.True(t, foundToken, errorMsg)
-	}
+	assert.True(t, foundToken, errorMsg)
 }
 
 func TestWindowFunctions(t *testing.T) {
@@ -333,17 +282,12 @@ func TestComplexConditions(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input)
-
-			var hasError bool
-			for _, err := range tokenizer.Tokens() {
-				if err != nil {
-					hasError = true
-					break
-				}
+			_, err := Tokenize(test.input)
+			if test.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
-
-			assert.Equal(t, test.expectError, hasError)
 		})
 	}
 }
@@ -377,17 +321,19 @@ func TestSubqueries(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input)
+			tokens, err := Tokenize(test.input)
 
-			var hasError bool
+			if test.expectError {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+
 			var foundSubquery bool
 			parenCount := 0
 			// サブクエリ検出ロジックを現仕様に合わせて修正
-			for token, err := range tokenizer.Tokens() {
-				if err != nil {
-					hasError = true
-					break
-				}
+			for _, token := range tokens {
 				if token.Type == SELECT && parenCount > 0 {
 					foundSubquery = true
 				}
@@ -396,15 +342,9 @@ func TestSubqueries(t *testing.T) {
 				} else if token.Type == CLOSED_PARENS {
 					parenCount--
 				}
-				if token.Type == EOF {
-					break
-				}
 			}
 
-			assert.Equal(t, test.expectError, hasError)
-			if !test.expectError {
-				assert.True(t, foundSubquery, "subquery not found")
-			}
+			assert.True(t, foundSubquery, "subquery not found")
 		})
 	}
 }
@@ -462,27 +402,17 @@ func TestErrorHandling(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tokenizer := NewSqlTokenizer(test.input)
+			_, err := Tokenize(test.input)
 
-			var foundError error
-			for _, err := range tokenizer.Tokens() {
-				if err != nil {
-					foundError = err
-					break
-				}
-			}
-
-			assert.Error(t, foundError)
-			assert.True(t, errors.Is(foundError, test.expectedErr))
+			assert.Error(t, err)
+			assert.True(t, errors.Is(err, test.expectedErr))
 		})
 	}
 }
 
 func TestAllTokens(t *testing.T) {
 	sql := "SELECT id FROM users;"
-	tokenizer := NewSqlTokenizer(sql)
-
-	tokens, err := tokenizer.AllTokens()
+	tokens, err := Tokenize(sql)
 	assert.NoError(t, err)
 
 	expectedTypes := []TokenType{SELECT, WHITESPACE, IDENTIFIER, WHITESPACE, FROM, WHITESPACE, IDENTIFIER, SEMICOLON, EOF}
@@ -496,7 +426,8 @@ func TestAllTokens(t *testing.T) {
 
 func TestTokenPosition(t *testing.T) {
 	sql := "SELECT\nid,\nname"
-	tokenizer := NewSqlTokenizer(sql)
+	tokens, err := Tokenize(sql)
+	assert.NoError(t, err)
 
 	expectedPositions := []Position{
 		{Line: 1, Column: 1, Offset: 0},  // SELECT
@@ -509,12 +440,8 @@ func TestTokenPosition(t *testing.T) {
 	}
 
 	var actualPositions []Position
-	for token, err := range tokenizer.Tokens() {
-		assert.NoError(t, err)
+	for _, token := range tokens {
 		actualPositions = append(actualPositions, token.Position)
-		if token.Type == EOF {
-			break
-		}
 	}
 
 	assert.Equal(t, expectedPositions, actualPositions)
@@ -560,27 +487,17 @@ func TestComplexSQL(t *testing.T) {
 	ORDER BY eh.level, eh.name;
 	`
 
-	tokenizer := NewSqlTokenizer(sql)
+	tokens, err := Tokenize(sql)
+	assert.NoError(t, err)
 
 	var tokenCount int
-	var hasError bool
 	var foundKeywords = make(map[TokenType]bool)
 
-	for token, err := range tokenizer.Tokens() {
-		if err != nil {
-			hasError = true
-			break
-		}
-
+	for _, token := range tokens {
 		tokenCount++
 		foundKeywords[token.Type] = true
-
-		if token.Type == EOF {
-			break
-		}
 	}
 
-	assert.False(t, hasError, "error occurred while parsing complex SQL")
 	assert.True(t, tokenCount > 50, "token count is less than expected")
 
 	// Verify important keywords are included

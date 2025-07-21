@@ -268,33 +268,38 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options
 
 // ParseSQLFile parses an SQL file from an io.Reader and returns a StatementNode.
 // This is a convenience function that handles tokenization internally.
+// It always attempts to extract the function definition from SQL comments.
 //
 // Parameters:
 //   - reader: An io.Reader containing the SQL content
-//   - functionDef: Function definition schema (optional, can be nil)
 //   - options: Optional parsing options for environment and parameter values
+//   - basePath: Base path for resolving relative paths in common type references (optional)
+//   - projectRootPath: Project root path for resolving common type references (optional)
 //
 // Returns:
 //   - StatementNode: The parsed statement AST
 //   - error: Any parsing errors encountered
-func ParseSQLFile(reader io.Reader, functionDef *FunctionDefinition, options *ParseOptions) (StatementNode, error) {
+func ParseSQLFile(reader io.Reader, options *ParseOptions, basePath string, projectRootPath string) (StatementNode, error) {
 	// Read all content from the reader
 	content, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read SQL content: %w", err)
 	}
 
-	// Create a tokenizer
-	sqlTokenizer := tokenizer.NewSqlTokenizer(string(content))
-
-	// Collect all tokens
-	var tokens []tokenizer.Token
-	for token, err := range sqlTokenizer.Tokens() {
-		if err != nil {
-			return nil, fmt.Errorf("tokenization failed: %w", err)
-		}
-		tokens = append(tokens, token)
+	// Tokenize the SQL content
+	tokens, err := tokenizer.Tokenize(string(content))
+	if err != nil {
+		return nil, fmt.Errorf("tokenization failed: %w", err)
 	}
+
+	// Extract function definition from SQL comments
+	var functionDef *FunctionDefinition
+	extractedDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
+	if err == nil {
+		functionDef = extractedDef
+	}
+	// We don't return an error if no function definition is found in comments
+	// as it's optional and the SQL might not have one
 
 	// Parse the tokens
 	return RawParse(tokens, functionDef, options)
@@ -319,16 +324,10 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 		return nil, fmt.Errorf("failed to create function definition: %w", err)
 	}
 
-	// Create a tokenizer for the SQL content
-	sqlTokenizer := tokenizer.NewSqlTokenizer(doc.SQL)
-
-	// Collect all tokens
-	var tokens []tokenizer.Token
-	for token, err := range sqlTokenizer.Tokens() {
-		if err != nil {
-			return nil, fmt.Errorf("tokenization failed: %w", err)
-		}
-		tokens = append(tokens, token)
+	// Tokenize the SQL content
+	tokens, err := tokenizer.Tokenize(doc.SQL)
+	if err != nil {
+		return nil, fmt.Errorf("tokenization failed: %w", err)
 	}
 
 	// Parse the tokens

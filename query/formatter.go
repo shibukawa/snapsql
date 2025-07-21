@@ -61,7 +61,7 @@ func (f *Formatter) formatAsTable(result *QueryResult, output io.Writer) error {
 	// Create table formatter
 	table := formatdata.NewTableFormatter()
 	table.SetHeader(result.Columns)
-	
+
 	// Add footer with count and duration
 	footer := []string{
 		fmt.Sprintf("%d rows", result.Count),
@@ -95,10 +95,10 @@ func (f *Formatter) formatAsMarkdown(result *QueryResult, output io.Writer) erro
 
 	// Format and output
 	formatted := md.Format(data)
-	
+
 	// Add footer as a comment
 	footer := fmt.Sprintf("\n<!-- %d rows, Time: %v -->", result.Count, result.Duration)
-	
+
 	_, err := fmt.Fprintln(output, formatted+footer)
 	return err
 }

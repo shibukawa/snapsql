@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,14 +17,6 @@ import (
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/tokenizer"
-)
-
-// Error definitions
-var (
-	ErrGeneratorNotConfigured = errors.New("generator not configured")
-	ErrPluginNotFound         = errors.New("generator plugin not found")
-	ErrInputFileNotExist      = errors.New("input file does not exist")
-	ErrNoASTGenerated         = errors.New("no AST generated")
 )
 
 // GenerateCmd represents the generate command

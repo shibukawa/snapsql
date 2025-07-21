@@ -10,43 +10,26 @@ import (
 // TokenIterator uses Go 1.24 iterator pattern
 type TokenIterator iter.Seq2[Token, error]
 
-// SqlTokenizer is a tokenizer that returns an iterator
-type SqlTokenizer struct {
-	input   string
-	options TokenizerOptions
+// sqlTokenizer is a tokenizer that returns an iterator (non-exported)
+type sqlTokenizer struct {
+	input string
 }
 
-// TokenizerOptions are options for the tokenizer
-type TokenizerOptions struct {
-	SkipWhitespace bool
-	SkipComments   bool
-}
-
-// NewSqlTokenizer creates a new SqlTokenizer
-func NewSqlTokenizer(input string, options ...TokenizerOptions) *SqlTokenizer {
-	opts := TokenizerOptions{
-		SkipWhitespace: false,
-		SkipComments:   false,
-	}
-	if len(options) > 0 {
-		opts = options[0]
-	}
-
-	return &SqlTokenizer{
-		input:   input,
-		options: opts,
+// newSqlTokenizer creates a new sqlTokenizer (non-exported)
+func newSqlTokenizer(input string) *sqlTokenizer {
+	return &sqlTokenizer{
+		input: input,
 	}
 }
 
 // Tokens returns an iterator of tokens
-func (t *SqlTokenizer) Tokens() TokenIterator {
+func (t *sqlTokenizer) tokens() TokenIterator {
 	return func(yield func(Token, error) bool) {
 		tokenizer := &tokenizer{
 			input:    t.input,
 			position: 0,
 			line:     1,
 			column:   1,
-			options:  t.options,
 		}
 
 		tokenizer.readChar()
@@ -65,14 +48,7 @@ func (t *SqlTokenizer) Tokens() TokenIterator {
 				return
 			}
 
-			// Filtering based on options
-			if t.options.SkipWhitespace && token.Type == WHITESPACE {
-				continue
-			}
-			if t.options.SkipComments && (token.Type == LINE_COMMENT || token.Type == BLOCK_COMMENT) {
-				continue
-			}
-
+			// Always include whitespace and comments
 			if !yield(token, nil) {
 				return
 			}
@@ -80,12 +56,12 @@ func (t *SqlTokenizer) Tokens() TokenIterator {
 	}
 }
 
-// AllTokens gets all tokens as a slice (for debugging)
-func (t *SqlTokenizer) AllTokens() ([]Token, error) {
+// allTokens gets all tokens as a slice (non-exported)
+func (t *sqlTokenizer) allTokens() ([]Token, error) {
 	tokens := make([]Token, 0, 64)
 	var lastError error
 
-	for token, err := range t.Tokens() {
+	for token, err := range t.tokens() {
 		if err != nil {
 			lastError = err
 			continue
@@ -99,10 +75,11 @@ func (t *SqlTokenizer) AllTokens() ([]Token, error) {
 	return tokens, lastError
 }
 
-// Tokenize is a helper that tokenizes SQL and returns all tokens (for tests).
+// Tokenize is the public API that tokenizes SQL and returns all tokens.
+// It always includes whitespace and comments as they are important information.
 func Tokenize(sql string) ([]Token, error) {
-	t := NewSqlTokenizer(sql)
-	tokens, err := t.AllTokens()
+	t := newSqlTokenizer(sql)
+	tokens, err := t.allTokens()
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +99,6 @@ type tokenizer struct {
 	line     int
 	column   int
 	current  rune
-	options  TokenizerOptions
 }
 
 // nextToken gets the next token
