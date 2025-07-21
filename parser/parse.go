@@ -276,10 +276,9 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 	} else {
 		// Create an empty function definition if none was found
 		functionDef = &FunctionDefinition{
-			Name:          "EmptyFunction",
-			FunctionName:  "emptyFunction",
-			Description:   "Auto-generated empty function",
-			Parameters:    make(map[string]any),
+			FunctionName:   "empty_function",
+			Description:    "Auto-generated empty function",
+			Parameters:     make(map[string]any),
 			ParameterOrder: []string{},
 		}
 	}

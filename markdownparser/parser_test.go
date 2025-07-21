@@ -75,7 +75,7 @@ SELECT * FROM users;
 	assert.NotEqual(t, nil, doc)
 
 	// Check that function_name was generated from title
-	assert.Equal(t, "getUserData", doc.Metadata["function_name"])
+	assert.Equal(t, "get_user_data", doc.Metadata["function_name"])
 }
 
 func TestParseWithTestCases(t *testing.T) {
@@ -160,7 +160,7 @@ SELECT * FROM users;
 	assert.NotEqual(t, nil, doc)
 
 	// Check that function_name was generated from title
-	assert.Equal(t, "userQuery", doc.Metadata["function_name"])
+	assert.Equal(t, "user_query", doc.Metadata["function_name"])
 }
 
 func TestGenerateFunctionNameFromTitle(t *testing.T) {
@@ -168,8 +168,8 @@ func TestGenerateFunctionNameFromTitle(t *testing.T) {
 		title    string
 		expected string
 	}{
-		{"Get User Data", "getUserData"},
-		{"Search Users By Email", "searchUsersByEmail"},
+		{"Get User Data", "get_user_data"},
+		{"Search Users By Email", "search_users_by_email"},
 		{"user-profile_query", "userprofilequery"},
 		{"", "query"},
 		{"Single", "single"},

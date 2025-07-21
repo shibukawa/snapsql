@@ -132,8 +132,9 @@ func fixFrontmatter(metaData map[string]any) map[string]any {
 }
 
 // generateFunctionNameFromTitle generates a function name from title
+// using space or underscore as separator
 func generateFunctionNameFromTitle(title string) string {
-	// Convert to camelCase
+	// Convert to snake_case or space separated
 	words := strings.Fields(title)
 	if len(words) == 0 {
 		return "query"
@@ -147,13 +148,16 @@ func generateFunctionNameFromTitle(title string) string {
 			continue
 		}
 
-		if i == 0 {
-			// First word is lowercase
-			result.WriteString(strings.ToLower(cleanWord))
-		} else {
-			// Subsequent words are title case
-			result.WriteString(strings.Title(cleanWord))
+		// Convert to lowercase
+		cleanWord = strings.ToLower(cleanWord)
+
+		// Add separator between words
+		if i > 0 {
+			// Use underscore as separator (can be changed to space if preferred)
+			result.WriteString("_")
 		}
+
+		result.WriteString(cleanWord)
 	}
 
 	functionName := result.String()
