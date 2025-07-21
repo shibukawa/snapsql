@@ -16,6 +16,7 @@ var (
 	ErrNaturalJoinWithCondition = fmt.Errorf("%w: natural join can't have condition (on/using)", cmn.ErrInvalidSQL)
 	ErrNaturalJoin              = fmt.Errorf("%w: natural join is not allowed in SnapSQL", cmn.ErrInvalidForSnapSQL)
 	ErrSubQueryNeedsAlias       = fmt.Errorf("%w: sub query needs alias", cmn.ErrInvalidSQL)
+	ErrRequiredClauseMissing    = fmt.Errorf("%w: required clause missing", cmn.ErrInvalidSQL)
 )
 
 var (
@@ -38,6 +39,12 @@ var (
 // finalizeFromClause checks if a FROM clause contains a subquery without an alias.
 // If found, it adds an error to perr. No return value.
 func finalizeFromClause(clause *cmn.FromClause, perr *cmn.ParseError) {
+	// Check if the FROM clause is empty
+	if clause == nil || len(clause.ContentTokens()) == 0 {
+		perr.Add(fmt.Errorf("%w: FROM clause is required", ErrRequiredClauseMissing))
+		return
+	}
+
 	var joinHead []pc.Token[tok.Token]
 
 	tokens := clause.ContentTokens()
@@ -56,7 +63,12 @@ func finalizeFromClause(clause *cmn.FromClause, perr *cmn.ParseError) {
 	}
 
 	if len(clause.Tables) == 0 {
-		perr.Add(fmt.Errorf("%w: at %s", cmn.ErrInvalidSQL, clause.RawTokens()[0].Position.String()))
+		// Use the first token's position if available, otherwise report a generic error
+		if len(clause.RawTokens()) > 0 {
+			perr.Add(fmt.Errorf("%w: at %s", cmn.ErrInvalidSQL, clause.RawTokens()[0].Position.String()))
+		} else {
+			perr.Add(fmt.Errorf("%w: no tables specified in FROM clause", cmn.ErrInvalidSQL))
+		}
 	}
 }
 

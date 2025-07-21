@@ -2,278 +2,215 @@ package parserstep6
 
 import (
 	"fmt"
-	"reflect"
+	"strconv"
 	"strings"
-	"unsafe"
 
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// replaceDummyLiterals replaces DUMMY_LITERAL tokens with actual literals based on FunctionDefinition
-func replaceDummyLiterals(statement cmn.StatementNode, namespace *cmn.Namespace, functionDef cmn.FunctionDefinition, perr *cmn.ParseError) {
-	// Step 1: Pre-scan for loop directives to register loop variables
-	preRegisterLoopVariables(statement, namespace, perr)
+// replaceDummyLiterals はステートメント内のコメント形式の変数参照をリテラルに置き換えます
+// 例: /*= value */ → /*= value */ DUMMY_START 42 DUMMY_END
+// 例: /*$ value */ → /*$ value */ 42
+func replaceDummyLiterals(statement cmn.StatementNode, paramNamespace *cmn.Namespace, perr *cmn.ParseError) {
+	// nilチェック
+	if statement == nil || paramNamespace == nil || perr == nil {
+		return
+	}
 
-	// Step 2: Process all clauses in the statement
+	// 各句を処理
 	for _, clause := range statement.Clauses() {
-		replaceDummyLiteralsInClause(clause, namespace, functionDef, perr)
+		if clause != nil {
+			processClauseTokens(clause, paramNamespace, perr)
+		}
 	}
 }
 
-// replaceDummyLiteralsInClause replaces DUMMY_LITERAL tokens in a single clause
-func replaceDummyLiteralsInClause(clause cmn.ClauseNode, namespace *cmn.Namespace, functionDef cmn.FunctionDefinition, perr *cmn.ParseError) {
-	// Use reflection to access private fields
-	clauseValue := reflect.ValueOf(clause)
-	if clauseValue.Kind() == reflect.Ptr {
-		clauseValue = clauseValue.Elem()
-	}
-
-	// Look for the embedded clauseBaseNode
-	clauseBaseField := clauseValue.FieldByName("clauseBaseNode")
-	if !clauseBaseField.IsValid() {
-		fmt.Printf("[DEBUG] Could not find clauseBaseNode field\n")
-		return
-	}
-
-	// Access headingTokens and bodyTokens fields
-	headingTokensField := clauseBaseField.FieldByName("headingTokens")
-	bodyTokensField := clauseBaseField.FieldByName("bodyTokens")
-
-	if !headingTokensField.IsValid() || !bodyTokensField.IsValid() {
-		fmt.Printf("[DEBUG] Could not access token fields\n")
-		return
-	}
-
-	// Make fields accessible
-	headingTokensField = reflect.NewAt(headingTokensField.Type(), unsafe.Pointer(headingTokensField.UnsafeAddr())).Elem()
-	bodyTokensField = reflect.NewAt(bodyTokensField.Type(), unsafe.Pointer(bodyTokensField.UnsafeAddr())).Elem()
-
-	// Process heading tokens
-	headingTokens := headingTokensField.Interface().([]tokenizer.Token)
-	for i := range headingTokens {
-		if headingTokens[i].Type == tokenizer.DUMMY_LITERAL {
-			replaceDummyLiteralToken(&headingTokens[i], namespace, functionDef, perr)
-		}
-	}
-
-	// Process body tokens
-	bodyTokens := bodyTokensField.Interface().([]tokenizer.Token)
-	for i := range bodyTokens {
-		if bodyTokens[i].Type == tokenizer.DUMMY_LITERAL {
-			replaceDummyLiteralToken(&bodyTokens[i], namespace, functionDef, perr)
-		}
-	}
-
-	// Update the fields
-	headingTokensField.Set(reflect.ValueOf(headingTokens))
-	bodyTokensField.Set(reflect.ValueOf(bodyTokens))
-}
-
-// replaceDummyLiteralToken replaces a single DUMMY_LITERAL token with actual literal
-func replaceDummyLiteralToken(token *tokenizer.Token, namespace *cmn.Namespace, functionDef cmn.FunctionDefinition, perr *cmn.ParseError) {
-	variableName := token.Value
-
-	// Get parameter type from FunctionDefinition or Namespace loop variables
-	paramType, err := getParameterTypeWithNamespace(variableName, functionDef.Parameters, namespace)
-	if err != nil {
-		// If parameter not found, log error but use default string type
-		perr.Add(fmt.Errorf("parameter '%s' not found in FunctionDefinition or loop variables at %s: %w",
-			variableName, token.Position.String(), err))
-		paramType = "string"
-	}
-
-	// Generate actual literal value based on type
-	literalValue := generateLiteralFromType(paramType)
-	tokenType := inferTokenTypeFromLiteral(literalValue)
-
-	// Replace the token
-	token.Type = tokenType
-	token.Value = literalValue
-}
-
-// getParameterType retrieves parameter type from FunctionDefinition parameters
-// Supports dot notation for nested parameters (e.g., "user.name")
-func getParameterType(variableName string, parameters map[string]any) (string, error) {
-	parts := strings.Split(variableName, ".")
-	current := parameters
-
-	// Navigate through nested structure
-	for i, part := range parts {
-		value, exists := current[part]
-		if !exists {
-			return "", fmt.Errorf("parameter '%s' not found", variableName)
-		}
-
-		if i == len(parts)-1 {
-			// Last part - extract type
-			if paramMap, ok := value.(map[string]any); ok {
-				if typeStr, ok := paramMap["type"].(string); ok {
-					return typeStr, nil
+// processClauseTokens は句内のトークンを処理し、変数参照をリテラルに置き換えます
+func processClauseTokens(clause cmn.ClauseNode, paramNs *cmn.Namespace, perr *cmn.ParseError) {
+	tokens := clause.RawTokens()
+	
+	// 変数参照を検出し、リテラルを挿入または置換するインデックスと値のリストを作成
+	var insertions []tokenInsertion
+	var replacements []tokenReplacement
+	
+	for i, token := range tokens {
+		if token.Type == tokenizer.BLOCK_COMMENT {
+			if strings.HasPrefix(token.Value, "/*=") && strings.HasSuffix(token.Value, "*/") {
+				// /*= value */ 形式の変数参照（ダミーリテラル）
+				varName := extractExpressionFromDirective(token.Value, "/*=", "*/")
+				if varName == "" {
+					perr.Add(fmt.Errorf("%w at %s: invalid variable directive format", cmn.ErrInvalidForSnapSQL, token.Position.String()))
+					continue
+				}
+				
+				// 変数の値を評価
+				value, valueType, err := paramNs.Eval(varName)
+				if err != nil {
+					perr.Add(fmt.Errorf("undefined variable in expression '%s': %w at %s", varName, err, token.Position.String()))
+					continue
+				}
+				
+				// 値をリテラル表現に変換
+				literalTokens := createLiteralTokens(value, valueType, token.Position)
+				if len(literalTokens) == 0 {
+					perr.Add(fmt.Errorf("failed to create literal tokens for variable '%s' with type '%s'", varName, valueType))
+					continue
+				}
+				
+				// 挿入位置と挿入するトークンを記録
+				insertions = append(insertions, tokenInsertion{
+					index:  i, // トークンの配列内のインデックス
+					tokens: literalTokens,
+				})
+			} else if strings.HasPrefix(token.Value, "/*$") && strings.HasSuffix(token.Value, "*/") {
+				// /*$ value */ 形式の変数参照（正式な値）
+				varName := extractExpressionFromDirective(token.Value, "/*$", "*/")
+				if varName == "" {
+					perr.Add(fmt.Errorf("%w at %s: invalid const directive format", cmn.ErrInvalidForSnapSQL, token.Position.String()))
+					continue
+				}
+				
+				// 変数の値を評価
+				value, valueType, err := paramNs.Eval(varName)
+				if err != nil {
+					perr.Add(fmt.Errorf("undefined variable in expression '%s': %w at %s", varName, err, token.Position.String()))
+					continue
+				}
+				
+				// 値をリテラル表現に変換（DUMMY_STARTとDUMMY_ENDなし）
+				valueToken := createValueToken(value, valueType, token.Position)
+				if valueToken.Type == tokenizer.EOF { // 無効なトークンタイプとしてEOFを使用
+					perr.Add(fmt.Errorf("failed to create value token for variable '%s' with type '%s'", varName, valueType))
+					continue
+				}
+				
+				// 既存のダミーリテラルを検索して削除対象にする
+				if i+1 < len(tokens) && tokens[i+1].Type == tokenizer.DUMMY_LITERAL {
+					// ダミーリテラルを置換する
+					replacements = append(replacements, tokenReplacement{
+						startIndex: i + 1,
+						endIndex:   i + 2, // ダミーリテラルは1つのトークン
+						token:      valueToken,
+					})
+				} else {
+					// コメントの後に値を挿入する
+					insertions = append(insertions, tokenInsertion{
+						index:  i,
+						tokens: []tokenizer.Token{valueToken},
+					})
 				}
 			}
-			// If no type specified, try to infer from value
-			return inferTypeFromValue(value), nil
+		}
+	}
+	
+	// 置換を実行（後ろから実行することで、インデックスのずれを防ぐ）
+	for i := len(replacements) - 1; i >= 0; i-- {
+		replacement := replacements[i]
+		replaceTokens(clause, replacement.startIndex, replacement.endIndex, replacement.token)
+	}
+	
+	// 挿入を実行（後ろから実行することで、インデックスのずれを防ぐ）
+	for i := len(insertions) - 1; i >= 0; i-- {
+		insertion := insertions[i]
+		// ClauseNodeのInsertTokensAfterIndexメソッドを使用してトークンを挿入
+		clause.InsertTokensAfterIndex(insertion.index, insertion.tokens)
+	}
+}
+
+// tokenInsertion はトークンの挿入情報を表します
+type tokenInsertion struct {
+	index  int              // 挿入位置
+	tokens []tokenizer.Token // 挿入するトークン
+}
+
+// tokenReplacement はトークンの置換情報を表します
+type tokenReplacement struct {
+	startIndex int             // 置換開始位置
+	endIndex   int             // 置換終了位置
+	token      tokenizer.Token // 置換するトークン
+}
+
+// replaceTokens は指定された範囲のトークンを新しいトークンに置き換えます
+func replaceTokens(clause cmn.ClauseNode, startIndex, endIndex int, newToken tokenizer.Token) {
+	// ClauseNodeのReplaceTokensメソッドを使用してトークンを置換
+	clause.ReplaceTokens(startIndex, endIndex, newToken)
+}
+
+// createLiteralTokens は値と型に基づいてダミーリテラルトークンを作成します
+func createLiteralTokens(value any, valueType string, pos tokenizer.Position) []tokenizer.Token {
+	// DUMMY_STARTトークン
+	startToken := tokenizer.Token{
+		Type:     tokenizer.DUMMY_START,
+		Value:    "DUMMY_START",
+		Position: pos,
+	}
+	
+	// DUMMY_ENDトークン
+	endToken := tokenizer.Token{
+		Type:     tokenizer.DUMMY_END,
+		Value:    "DUMMY_END",
+		Position: pos,
+	}
+	
+	// 値のトークン
+	valueToken := createValueToken(value, valueType, pos)
+	
+	return []tokenizer.Token{startToken, valueToken, endToken}
+}
+
+// createValueToken は値と型に基づいて値のトークンを作成します
+func createValueToken(value any, valueType string, pos tokenizer.Position) tokenizer.Token {
+	var valueToken tokenizer.Token
+	
+	switch valueType {
+	case "int":
+		// 整数リテラル
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.NUMBER,
+			Value:    fmt.Sprintf("%d", value),
+			Position: pos,
+		}
+	case "float":
+		// 浮動小数点リテラル
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.NUMBER,
+			Value:    strconv.FormatFloat(value.(float64), 'f', -1, 64),
+			Position: pos,
+		}
+	case "string":
+		// 文字列リテラル（シングルクォートで囲む）
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.STRING,
+			Value:    fmt.Sprintf("'%s'", escapeString(value.(string))),
+			Position: pos,
+		}
+	case "bool":
+		// 真偽値リテラル
+		var boolStr string
+		if value.(bool) {
+			boolStr = "TRUE"
 		} else {
-			// Intermediate part - navigate deeper
-			if paramMap, ok := value.(map[string]any); ok {
-				current = paramMap
-			} else {
-				return "", fmt.Errorf("parameter '%s' is not a nested object", strings.Join(parts[:i+1], "."))
-			}
+			boolStr = "FALSE"
+		}
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.BOOLEAN,
+			Value:    boolStr,
+			Position: pos,
+		}
+	default:
+		// その他の型は文字列として扱う
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.STRING,
+			Value:    fmt.Sprintf("'%s'", escapeString(fmt.Sprintf("%v", value))),
+			Position: pos,
 		}
 	}
-
-	return "", fmt.Errorf("parameter '%s' not found", variableName)
+	
+	return valueToken
 }
 
-// getParameterTypeWithNamespace retrieves parameter type from FunctionDefinition parameters or Namespace loop variables
-// First checks FunctionDefinition, then checks current loop variables in Namespace
-func getParameterTypeWithNamespace(variableName string, parameters map[string]any, namespace *cmn.Namespace) (string, error) {
-	// First try to get from FunctionDefinition parameters
-	paramType, err := getParameterType(variableName, parameters)
-	if err == nil {
-		return paramType, nil
-	}
-
-	// If not found in parameters, check loop variables in Namespace
-	if namespace != nil {
-		if loopVarType, found := namespace.GetLoopVariableType(variableName); found {
-			return loopVarType, nil
-		}
-	}
-
-	// Not found in either parameters or loop variables
-	return "", fmt.Errorf("parameter '%s' not found in FunctionDefinition or loop variables", variableName)
-}
-
-// inferTypeFromValue infers type from parameter value
-func inferTypeFromValue(value any) string {
-	switch value.(type) {
-	case int, int64, int32:
-		return "int"
-	case float64, float32:
-		return "float"
-	case bool:
-		return "bool"
-	case string:
-		return "string"
-	default:
-		return "string"
-	}
-}
-
-// generateLiteralFromType generates appropriate literal value based on parameter type
-func generateLiteralFromType(paramType string) string {
-	switch strings.ToLower(paramType) {
-	case "int", "integer", "long":
-		return "1"
-	case "float", "double", "decimal", "number":
-		return "1.0"
-	case "bool", "boolean":
-		return "true"
-	case "string", "text":
-		return "'dummy'"
-	case "date":
-		return "'2024-01-01'"
-	case "datetime", "timestamp":
-		return "'2024-01-01 00:00:00'"
-	case "email":
-		return "'user@example.com'"
-	case "uuid":
-		return "'00000000-0000-0000-0000-000000000000'"
-	case "json":
-		return "'{}'"
-	case "array":
-		return "'[]'"
-	default:
-		return "'dummy'" // Default to string
-	}
-}
-
-// inferTokenTypeFromLiteral infers token type from literal value
-func inferTokenTypeFromLiteral(literalValue string) tokenizer.TokenType {
-	switch {
-	case strings.HasPrefix(literalValue, "'"):
-		return tokenizer.STRING
-	case literalValue == "true" || literalValue == "false":
-		return tokenizer.BOOLEAN
-	case strings.Contains(literalValue, "."):
-		return tokenizer.NUMBER // Floating-point number
-	default:
-		return tokenizer.NUMBER // Integer
-	}
-}
-
-// preRegisterLoopVariables scans for loop directives and pre-registers loop variables in the namespace
-func preRegisterLoopVariables(statement cmn.StatementNode, namespace *cmn.Namespace, perr *cmn.ParseError) {
-	for _, clause := range statement.Clauses() {
-		preRegisterLoopVariablesInClause(clause, namespace, perr)
-	}
-}
-
-// preRegisterLoopVariablesInClause scans a single clause for loop directives
-func preRegisterLoopVariablesInClause(clause cmn.ClauseNode, namespace *cmn.Namespace, perr *cmn.ParseError) {
-	// Use reflection to access private fields
-	clauseValue := reflect.ValueOf(clause)
-	if clauseValue.Kind() == reflect.Ptr {
-		clauseValue = clauseValue.Elem()
-	}
-
-	clauseBaseField := clauseValue.FieldByName("clauseBaseNode")
-	if !clauseBaseField.IsValid() {
-		return
-	}
-
-	headingTokensField := clauseBaseField.FieldByName("headingTokens")
-	bodyTokensField := clauseBaseField.FieldByName("bodyTokens")
-
-	if !headingTokensField.IsValid() || !bodyTokensField.IsValid() {
-		return
-	}
-
-	// Make fields accessible
-	headingTokensField = reflect.NewAt(headingTokensField.Type(), unsafe.Pointer(headingTokensField.UnsafeAddr())).Elem()
-	bodyTokensField = reflect.NewAt(bodyTokensField.Type(), unsafe.Pointer(bodyTokensField.UnsafeAddr())).Elem()
-
-	// Process both heading and body tokens
-	headingTokens := headingTokensField.Interface().([]tokenizer.Token)
-	bodyTokens := bodyTokensField.Interface().([]tokenizer.Token)
-
-	preRegisterLoopVariablesInTokens(headingTokens, namespace, perr)
-	preRegisterLoopVariablesInTokens(bodyTokens, namespace, perr)
-}
-
-// preRegisterLoopVariablesInTokens scans tokens for loop directives and registers loop variables
-func preRegisterLoopVariablesInTokens(tokens []tokenizer.Token, namespace *cmn.Namespace, perr *cmn.ParseError) {
-	for _, token := range tokens {
-		if token.Directive != nil && token.Directive.Type == "for" {
-			// Parse the for condition to extract loop variable and target
-			condition := token.Directive.Condition
-			if condition == "" {
-				continue
-			}
-
-			// Parse the for condition: "item : items"
-			parts := strings.Fields(condition)
-			if len(parts) != 3 || parts[1] != ":" {
-				continue
-			}
-
-			loopVar := parts[0]
-			listExpr := parts[2]
-
-			// Try to evaluate the list expression to get the loop target
-			if loopTarget, _, err := namespace.Eval(listExpr); err == nil {
-				if loopTarget2, ok := loopTarget.([]any); ok {
-					// Register the loop variable in the namespace
-					namespace.EnterLoop(loopVar, loopTarget2)
-
-					// Note: We don't need to call ExitLoop here since this is just
-					// for DUMMY_LITERAL resolution. The actual loop processing in
-					// validateVariables will handle proper loop lifecycle.
-				}
-			}
-		}
-	}
+// escapeString は文字列内のシングルクォートをエスケープします
+func escapeString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }

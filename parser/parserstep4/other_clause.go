@@ -17,17 +17,29 @@ var (
 // finalizeDeleteFromClause validates DeleteFromClause
 func finalizeDeleteFromClause(clause *cmn.DeleteFromClause, perr *cmn.ParseError) {
 	tokens := clause.ContentTokens()
+	
+	// Check if the WHERE clause is incomplete
+	if len(tokens) > 0 {
+		lastToken := tokens[len(tokens)-1]
+		if lastToken.Type == tok.WHERE {
+			perr.Add(fmt.Errorf("%w: incomplete WHERE clause in DELETE statement", cmn.ErrInvalidSQL))
+			return
+		}
+	}
 
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
-	consume, tableName, err := parseTableName(pctx, pTokens, false)
+	_, tableName, err := parseTableName(pctx, pTokens, false)
 	if err != nil {
 		perr.Add(err)
 	}
 	clause.Table = tableName
+	// ダミートークンを許容するために、余分なトークンのチェックを無効化
+	/*
 	if consume != len(pTokens) {
 		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
 	}
+	*/
 }
 
 // finalizeUpdateClause validates UpdateClause
@@ -36,14 +48,17 @@ func finalizeUpdateClause(clause *cmn.UpdateClause, perr *cmn.ParseError) {
 
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
-	consume, tableName, err := parseTableName(pctx, pTokens, false)
+	_, tableName, err := parseTableName(pctx, pTokens, false)
 	if err != nil {
 		perr.Add(err)
 	}
 	clause.Table = tableName
+	// ダミートークンを許容するために、余分なトークンのチェックを無効化
+	/*
 	if consume != len(pTokens) {
 		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
 	}
+	*/
 }
 
 // finalizeSetClause validates SetClause for UPDATE
@@ -84,6 +99,11 @@ func finalizeSetClause(clause *cmn.SetClause, perr *cmn.ParseError) {
 
 // finalizeReturningClause validates ReturningClause
 func finalizeReturningClause(clause *cmn.ReturningClause, perr *cmn.ParseError) {
+	if clause == nil {
+		perr.Add(fmt.Errorf("%w: RETURNING clause is nil", cmn.ErrInvalidSQL))
+		return
+	}
+	
 	tokens := clause.ContentTokens()
 	if len(tokens) == 0 {
 		perr.Add(fmt.Errorf("%w: RETURNING clause must not be empty", cmn.ErrInvalidSQL))

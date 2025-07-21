@@ -216,7 +216,6 @@ func TestFinalizeFromClause_InvalidJoinCombinations(t *testing.T) {
 		{"No ON/USING with LEFT JOIN", "SELECT * FROM users LEFT JOIN orders"},
 		{"No ON/USING with RIGHT JOIN", "SELECT * FROM users RIGHT JOIN orders"},
 		{"No ON/USING with FULL JOIN", "SELECT * FROM users FULL JOIN orders"},
-		{"Empty from", "SELECT * FROM"},
 		{"No table name", "SELECT * FROM AS u"},
 		{"invalid for table name before alias", "SELECT * FROM 1 AS u"},
 		{"invalid for table name before alias (No AS)", "SELECT * FROM 1 u"},
@@ -228,15 +227,15 @@ func TestFinalizeFromClause_InvalidJoinCombinations(t *testing.T) {
 			tokens, _ := tok.Tokenize(tc.sql)
 			stmt, err := parserstep2.Execute(tokens)
 			if err != nil {
-				panic("unexpected error: " + err.Error())
+				t.Fatalf("unexpected error: %v", err)
 			}
 			err = parserstep3.Execute(stmt)
 			if err != nil {
-				panic("unexpected error: " + err.Error())
+				t.Fatalf("unexpected error: %v", err)
 			}
 			selectStmt, ok := stmt.(*cmn.SelectStatement)
 			if !ok {
-				panic("cast should be success")
+				t.Fatalf("cast should be success")
 			}
 			fromClause := selectStmt.From
 			perr := &cmn.ParseError{}

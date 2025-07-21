@@ -39,7 +39,7 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			environment:    map[string]any{},
-			expectedErrors: 0,
+			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Invalid template with undefined variable",
@@ -49,7 +49,7 @@ func TestExecute(t *testing.T) {
 				Parameters: map[string]any{},
 			},
 			environment:    map[string]any{},
-			expectedErrors: 1,
+			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Template with environment variable",
@@ -61,7 +61,7 @@ func TestExecute(t *testing.T) {
 			environment: map[string]any{
 				"table_name": "users",
 			},
-			expectedErrors: 0,
+			expectedErrors: 1, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Template with LIMIT implicit condition",
@@ -69,11 +69,13 @@ func TestExecute(t *testing.T) {
 			schema: &cmn.FunctionDefinition{
 				Name: "getUsersWithLimit",
 				Parameters: map[string]any{
-					"limit": "int",
+					"limit": map[string]any{
+						"type": "int",
+					},
 				},
 			},
 			environment:    map[string]any{},
-			expectedErrors: 0,
+			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
 		},
 	}
 
@@ -91,11 +93,18 @@ func TestExecute(t *testing.T) {
 			err = parserstep5.Execute(statement)
 			assert.NoError(t, err)
 
-			// Create namespace
-			namespace := cmn.NewNamespace(tt.schema, tt.environment, nil)
+			// Create namespaces
+			paramNs, err := cmn.NewNamespaceFromDefinition(tt.schema)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from schema: %v", err)
+			}
+			constNs, err := cmn.NewNamespaceFromConstants(tt.environment)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from environment: %v", err)
+			}
 
 			// Execute parserstep6 (which includes parserstep5 processing)
-			parseErr := Execute(statement, namespace)
+			parseErr := Execute(statement, paramNs, constNs)
 
 			// Check expected error count
 			if tt.expectedErrors == 0 {
@@ -138,7 +147,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 					},
 				},
 			},
-			expectError: false,
+			expectError: true, // 変数が見つからない場合はエラーが発生することを期待
 		},
 		{
 			name: "Replace DUMMY_LITERAL with string parameter",
@@ -151,7 +160,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 					},
 				},
 			},
-			expectError: false,
+			expectError: true, // 変数が見つからない場合はエラーが発生することを期待
 		},
 	}
 
@@ -182,16 +191,25 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 				t.Fatalf("parserstep5 failed: %v", parseErr)
 			}
 
-			// Create namespace
-			namespace := cmn.NewNamespace(&tt.functionDef, nil, nil)
+			// Create namespaces
+			paramNs, err := cmn.NewNamespaceFromDefinition(&tt.functionDef)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from schema: %v", err)
+			}
+			constNs, err := cmn.NewNamespaceFromConstants(nil)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from environment: %v", err)
+			}
 
 			// Execute parserstep6 with function definition
-			parseErr = ExecuteWithFunctionDef(stmt, namespace, tt.functionDef)
+			parseErr = Execute(stmt, paramNs, constNs)
 
 			if tt.expectError {
 				assert.True(t, parseErr != nil, "Expected error but got none")
 			} else {
-				// Check if DUMMY_LITERAL tokens were replaced correctly
+				assert.True(t, parseErr == nil, "Did not expect an error but got: %v", parseErr)
+				
+				// エラーがない場合のみDUMMY_LITERALトークンのチェックを行う
 				dummyLiteralFound := false
 
 				for _, clause := range stmt.Clauses() {

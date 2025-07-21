@@ -12,6 +12,7 @@ func Execute(stmt cmn.StatementNode) error {
 	switch s := stmt.(type) {
 	case *cmn.SelectStatement:
 		finalizeSelectClause(s.Select, perr)
+
 		finalizeFromClause(s.From, perr)
 		if s.With != nil {
 			emptyCheck(s.With, perr)

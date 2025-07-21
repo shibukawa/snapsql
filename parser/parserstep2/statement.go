@@ -181,42 +181,6 @@ var statementStart = pc.Or(
 	updateStatement,
 	deleteFromStatement)
 
-// clauseStart is a parser that matches any SQL clause.
-// It matches all clauses that can appear in a SQL statement.
-// Availability of clauses is checked in next step.
-func clauseStart(tt tok.TokenType) pc.Parser[Entity] {
-	return pc.Or(
-		// for subquery
-		subQuery,
-
-		// for select
-		selectStatement,
-		fromClause,
-		whereClause,
-		groupByClause,
-		orderByClause,
-		havingClause,
-		limitClause,
-		offsetClause,
-		forClause,
-		returningClause,
-
-		// for insert
-		insertIntoStatement,
-		valuesClause,
-		onConflictClause,
-
-		// for update
-		// on conflict do update, for update
-		when(tt != tok.INSERT && tt != tok.SELECT, updateStatement),
-		// on conflict do update set
-		when(tt != tok.INSERT, setClause),
-
-		// for delete
-		deleteFromStatement,
-	)
-}
-
 func DumpStatement(tokens []pc.Token[Entity]) string {
 	var sb strings.Builder
 	for i, token := range tokens {
@@ -464,18 +428,16 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 	var consumes int
 	for i, clause := range clauseIter(pctx, tt, tokens) {
 		consumes += clause.Consume + len(clause.Skipped)
-		clauseBody := append(clause.Skipped, clause.Match...)
-		if len(clauseBody) > 0 {
-			if i == 0 {
-				clauseHead = clause.Match
-				prevClauseBody = clauseBody
-			} else {
-				if len(clauseHead) > 0 {
-					clauses = append(clauses, newClauseNode(clauseHead, clauseBody, prevClauseBody))
-				}
-				clauseHead = clause.Match
-				prevClauseBody = clauseBody
+		clauseBody := clause.Skipped
+		if i == 0 {
+			clauseHead = clause.Match
+			prevClauseBody = clauseBody
+		} else {
+			if len(clauseHead) > 0 {
+				clauses = append(clauses, newClauseNode(clauseHead, clauseBody, prevClauseBody))
 			}
+			clauseHead = clause.Match
+			prevClauseBody = clauseBody
 		}
 	}
 	return consumes, clauses, nil

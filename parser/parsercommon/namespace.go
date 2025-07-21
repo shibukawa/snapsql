@@ -76,6 +76,13 @@ func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 	return result, nil
 }
 
+func (ns *Namespace) RootVariables() cel.EnvOption {
+	if len(ns.frames) > 0 {
+		return ns.frames[0].variable
+	}
+	return ns.currentVariables
+}
+
 func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 	ast, issues := ns.currentEnv.Parse(exp)
 	if issues != nil && issues.Err() != nil {
@@ -95,7 +102,7 @@ func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 		return nil, "", fmt.Errorf("%w: CEL program evaluation error: %v", ErrInvalidForSnapSQL, err)
 	}
 	if ns.fd != nil {
-		return v.Value(), inferTypeStringFromDummyValue(v.Value()), nil
+		return v.Value(), InferTypeStringFromDummyValue(v.Value()), nil
 	}
 	if v.Type() == cel.BytesType {
 		var result, _ = v.Value().([]byte)
@@ -151,55 +158,72 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 	})
 
 	// Create a new frame with the loop variable
-	newVariable := cel.Variable(variableName, snapSqlToCel(inferTypeStringFromDummyValue(a[0])))
 	newValues := maps.Clone(ns.currentValues)
-	newValues[variableName] = a[0] // Set the first item as the loop variable
+	newValues[variableName] = a[0]
 
-	// Create a new environment with all previous variables plus the new loop variable
-	options := []cel.EnvOption{
+	// Create a new environment with the loop variable
+	newVars := []*decls.VariableDecl{
+		decls.NewVariable(variableName, snapSqlToCel(inferTypeStringFromActualValues(a[0], nil))),
+	}
+	newVariables := cel.VariableDecls(newVars...)
+
+	// Create a new environment with the loop variable
+	newEnv, err := cel.NewEnv(
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
-	}
-	for _, f := range ns.frames {
-		options = append(options, f.variable)
-	}
-	options = append(options, newVariable)
-	newEnv, err := cel.NewEnv(options...)
+		snapsqlgo.DecimalLibrary,
+		ns.currentVariables,
+		newVariables,
+	)
 	if err != nil {
-		return fmt.Errorf("%w: error creating new CEL environment for loop: %v", ErrInvalidForSnapSQL, err)
+		return fmt.Errorf("%w: error creating new environment for loop variable %s: %v", ErrInvalidForSnapSQL, variableName, err)
 	}
 
 	// Update the current frame
-	ns.currentEnv = newEnv
 	ns.currentValues = newValues
-	ns.currentVariables = newVariable
+	ns.currentVariables = newVariables
+	ns.currentEnv = newEnv
+
 	return nil
 }
 
+// ExitLoop restores the previous frame
 func (ns *Namespace) ExitLoop() error {
 	if len(ns.frames) == 0 {
-		return fmt.Errorf("%w: no loop to exit", ErrInvalidForSnapSQL)
+		return fmt.Errorf("%w: no frames to exit", ErrInvalidForSnapSQL)
 	}
-	lastFrame := ns.frames[len(ns.frames)-1]
+
+	// Restore the previous frame
+	frame := ns.frames[len(ns.frames)-1]
 	ns.frames = ns.frames[:len(ns.frames)-1]
-	ns.currentEnv = lastFrame.env
-	ns.currentValues = lastFrame.values
-	ns.currentVariables = lastFrame.variable
+
+	ns.currentVariables = frame.variable
+	ns.currentValues = frame.values
+	ns.currentEnv = frame.env
 	return nil
 }
 
+// snapSqlToCel converts a SnapSQL type to a CEL type
 func snapSqlToCel(val any) *cel.Type {
+	switch v := val.(type) {
+	case string:
+		return snapSqlTypeToCel(v)
+	case map[string]any:
+		if tp, ok := v["type"]; ok {
+			if tpStr, ok := tp.(string); ok {
+				return snapSqlTypeToCel(tpStr)
+			}
+		}
+	}
+	return cel.DynType
+}
+
+// snapSqlTypeToCel converts a SnapSQL type string to a CEL type
+func snapSqlTypeToCel(val any) *cel.Type {
 	switch val {
-	// --- Primitive and alias types ---
 	case "string":
 		return cel.StringType
-	case "int":
-		return cel.IntType
-	case "int32":
-		return cel.IntType
-	case "int16":
-		return cel.IntType
-	case "int8":
+	case "int", "int64", "int32", "int16", "int8":
 		return cel.IntType
 	case "float":
 		return cel.DoubleType
@@ -263,51 +287,6 @@ func inferTypeStringFromActualValues(v any, rt ref.Type) string {
 	default:
 		return "unknown"
 	}
-}
-
-// NewNamespace creates a new Namespace from a function definition and optional environment and parameters.
-// This is a convenience function that handles the different cases of creating a Namespace.
-func NewNamespace(fd *FunctionDefinition, environment map[string]any, parameters map[string]any) *Namespace {
-	// If no function definition is provided, create a namespace from constants
-	if fd == nil {
-		// Combine environment and parameters into a single map
-		constants := make(map[string]any)
-		for k, v := range environment {
-			constants[k] = v
-		}
-		for k, v := range parameters {
-			constants[k] = v
-		}
-
-		// Create a namespace from constants
-		ns, err := NewNamespaceFromConstants(constants)
-		if err != nil {
-			// This should not happen with valid constants
-			panic(fmt.Sprintf("Failed to create namespace from constants: %v", err))
-		}
-		return ns
-	}
-
-	// Create a namespace from the function definition
-	ns, err := NewNamespaceFromDefinition(fd)
-	if err != nil {
-		// This should not happen with a valid function definition
-		panic(fmt.Sprintf("Failed to create namespace from function definition: %v", err))
-	}
-
-	// Override dummy data with provided parameters if any
-	if parameters != nil {
-		for k, v := range parameters {
-			ns.currentValues[k] = v
-		}
-	}
-
-	// Add environment variables
-	for k, v := range environment {
-		ns.currentValues[k] = v
-	}
-
-	return ns
 }
 
 // GetLoopVariableType returns the type of a loop variable and whether it exists
