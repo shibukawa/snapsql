@@ -208,10 +208,10 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	if err != nil {
 		return nil, fmt.Errorf("failed to create parameter namespace: %w", err)
 	}
-	
+
 	// Create a separate namespace for constants if provided
 	var constNamespace *cmn.Namespace
-	if constants != nil && len(constants) > 0 {
+	if len(constants) > 0 {
 		constNamespace, err = cmn.NewNamespaceFromConstants(constants)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create constants namespace: %w", err)
@@ -223,7 +223,7 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 			return nil, fmt.Errorf("failed to create empty constants namespace: %w", err)
 		}
 	}
-	
+
 	// Execute parserstep6 with both namespaces
 	if parseErr := parserstep6.Execute(stmt, paramNamespace, constNamespace); parseErr != nil {
 		return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
@@ -242,7 +242,7 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	return stmt, nil
 }
 
-// ParseSQLFile parses an SQL file from an io.Reader and returns a StatementNode.
+// ParseSQLFile parses an SQL file from an io.Reader and returns a StatementNode and FunctionDefinition.
 // This is a convenience function that handles tokenization internally.
 // It always attempts to extract the function definition from SQL comments.
 //
@@ -254,18 +254,19 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 //
 // Returns:
 //   - StatementNode: The parsed statement AST
+//   - *FunctionDefinition: The function definition extracted from the SQL file
 //   - error: Any parsing errors encountered
-func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, projectRootPath string) (StatementNode, error) {
+func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, projectRootPath string) (StatementNode, *FunctionDefinition, error) {
 	// Read all content from the reader
 	content, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read SQL content: %w", err)
+		return nil, nil, fmt.Errorf("failed to read SQL content: %w", err)
 	}
 
 	// Tokenize the SQL content
 	tokens, err := tokenizer.Tokenize(string(content))
 	if err != nil {
-		return nil, fmt.Errorf("tokenization failed: %w", err)
+		return nil, nil, fmt.Errorf("tokenization failed: %w", err)
 	}
 
 	// Extract function definition from SQL comments
@@ -284,10 +285,11 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 	}
 
 	// Parse the tokens
-	return RawParse(tokens, functionDef, constants)
+	stmt, err := RawParse(tokens, functionDef, constants)
+	return stmt, functionDef, err
 }
 
-// ParseMarkdownFile parses a SnapSQLDocument and returns a StatementNode.
+// ParseMarkdownFile parses a SnapSQLDocument and returns a StatementNode and FunctionDefinition.
 // This function extracts the SQL and parameters from the document and parses them.
 //
 // Parameters:
@@ -298,20 +300,22 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 //
 // Returns:
 //   - StatementNode: The parsed statement AST
+//   - *FunctionDefinition: The function definition extracted from the document
 //   - error: Any parsing errors encountered
-func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any) (StatementNode, error) {
+func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any) (StatementNode, *FunctionDefinition, error) {
 	// Create a function definition from the SnapSQLDocument
 	functionDef, err := cmn.ParseFunctionDefinitionFromSnapSQLDocument(doc, basePath, projectRootPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create function definition: %w", err)
+		return nil, nil, fmt.Errorf("failed to create function definition: %w", err)
 	}
 
 	// Tokenize the SQL content
 	tokens, err := tokenizer.Tokenize(doc.SQL)
 	if err != nil {
-		return nil, fmt.Errorf("tokenization failed: %w", err)
+		return nil, functionDef, fmt.Errorf("tokenization failed: %w", err)
 	}
 
 	// Parse the tokens
-	return RawParse(tokens, functionDef, constants)
+	stmt, err := RawParse(tokens, functionDef, constants)
+	return stmt, functionDef, err
 }
