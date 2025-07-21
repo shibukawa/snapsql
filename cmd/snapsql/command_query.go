@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,21 +27,21 @@ var (
 
 // QueryCmd represents the query command
 type QueryCmd struct {
-	TemplateFile string   `arg:"" help:"SQL template file (.snap.sql or .snap.md)" type:"path"`
-	ParamsFile   string   `short:"p" long:"params" help:"Parameters file (JSON/YAML)" type:"path"`
-	Param        []string `long:"param" help:"Individual parameter (key=value format)"`
-	ConstFiles   []string `long:"const" help:"Constant definition files" type:"path"`
-	DBConnection string   `long:"db" help:"Database connection string"`
-	Environment  string   `long:"env" help:"Environment name from config"`
-	Format       string   `long:"format" help:"Output format (table, json, csv, yaml, markdown)" default:"table"`
-	OutputFile   string   `short:"o" long:"output" help:"Output file (defaults to stdout)" type:"path"`
-	Timeout      int      `long:"timeout" help:"Query timeout in seconds" default:"30"`
-	Explain      bool     `long:"explain" help:"Show query execution plan"`
-	ExplainAnalyze bool   `long:"explain-analyze" help:"Show detailed query execution plan with actual execution statistics"`
-	Limit        int      `long:"limit" help:"Limit number of rows returned"`
-	Offset       int      `long:"offset" help:"Offset for result set"`
-	ExecuteDangerousQuery bool `long:"execute-dangerous-query" help:"Execute DELETE/UPDATE queries without WHERE clause (dangerous!)"`
-	DryRun       bool     `long:"dry-run" help:"Show generated SQL without executing"`
+	TemplateFile          string   `arg:"" help:"SQL template file (.snap.sql or .snap.md)" type:"path"`
+	ParamsFile            string   `short:"p" long:"params" help:"Parameters file (JSON/YAML)" type:"path"`
+	Param                 []string `long:"param" help:"Individual parameter (key=value format)"`
+	ConstFiles            []string `long:"const" help:"Constant definition files" type:"path"`
+	DBConnection          string   `long:"db" help:"Database connection string"`
+	Environment           string   `long:"env" help:"Environment name from config"`
+	Format                string   `long:"format" help:"Output format (table, json, csv, yaml, markdown)" default:"table"`
+	OutputFile            string   `short:"o" long:"output" help:"Output file (defaults to stdout)" type:"path"`
+	Timeout               int      `long:"timeout" help:"Query timeout in seconds" default:"30"`
+	Explain               bool     `long:"explain" help:"Show query execution plan"`
+	ExplainAnalyze        bool     `long:"explain-analyze" help:"Show detailed query execution plan with actual execution statistics"`
+	Limit                 int      `long:"limit" help:"Limit number of rows returned"`
+	Offset                int      `long:"offset" help:"Offset for result set"`
+	ExecuteDangerousQuery bool     `long:"execute-dangerous-query" help:"Execute DELETE/UPDATE queries without WHERE clause (dangerous!)"`
+	DryRun                bool     `long:"dry-run" help:"Show generated SQL without executing"`
 }
 
 // Run executes the query command
@@ -80,13 +79,13 @@ func (q *QueryCmd) Run(ctx *Context) error {
 
 	// Create query options
 	options := query.QueryOptions{
-		Timeout:       q.Timeout,
-		Format:        query.OutputFormat(strings.ToLower(q.Format)),
-		OutputFile:    q.OutputFile,
-		Explain:       q.Explain,
-		ExplainAnalyze: q.ExplainAnalyze,
-		Limit:         q.Limit,
-		Offset:        q.Offset,
+		Timeout:               q.Timeout,
+		Format:                query.OutputFormat(strings.ToLower(q.Format)),
+		OutputFile:            q.OutputFile,
+		Explain:               q.Explain,
+		ExplainAnalyze:        q.ExplainAnalyze,
+		Limit:                 q.Limit,
+		Offset:                q.Offset,
 		ExecuteDangerousQuery: q.ExecuteDangerousQuery,
 	}
 
@@ -94,7 +93,7 @@ func (q *QueryCmd) Run(ctx *Context) error {
 	if options.ExplainAnalyze {
 		options.Explain = true
 	}
-	
+
 	// If ExecuteDangerousQuery is not set in command line, check config
 	if !q.ExecuteDangerousQuery {
 		options.ExecuteDangerousQuery = config.Query.ExecuteDangerousQuery
@@ -312,14 +311,14 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 	if !ctx.Quiet {
 		color.Blue("Generated SQL:")
 		fmt.Println(result.SQL)
-		
+
 		if len(result.Parameters) > 0 {
 			color.Blue("Parameters:")
 			for i, param := range result.Parameters {
 				fmt.Printf("  $%d: %v\n", i+1, param)
 			}
 		}
-		
+
 		// Check if this is a dangerous query and show a warning
 		if query.IsDangerousQuery(result.SQL) {
 			color.Yellow("\nWARNING: This query contains DELETE or UPDATE without a WHERE clause!")

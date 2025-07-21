@@ -18,8 +18,6 @@ func TestIntegrationWithIntermediateFile(t *testing.T) {
 	assert.Equal(t, "queries/users.snap.sql", format.Source.File)
 	assert.True(t, len(format.Source.Content) > 0)
 	assert.True(t, len(format.Source.Hash) > 0)
-	assert.Equal(t, "2.0.0", format.Metadata.Version)
-	assert.Equal(t, "snapsql-intermediate-generator", format.Metadata.Generator)
 
 	// Convert intermediate instructions to runtime instructions
 	runtimeInstructions := make([]Instruction, len(format.Instructions))
@@ -101,12 +99,6 @@ func TestIntermediateFormatStructure(t *testing.T) {
 	assert.True(t, format.Dependencies.ParameterVariables != nil)
 	assert.True(t, format.Dependencies.DependencyGraph != nil)
 	assert.True(t, len(format.Dependencies.CacheKeyTemplate) > 0)
-
-	// Test metadata
-	assert.True(t, len(format.Metadata.Version) > 0)
-	assert.True(t, len(format.Metadata.GeneratedAt) > 0)
-	assert.True(t, len(format.Metadata.Generator) > 0)
-	assert.True(t, len(format.Metadata.SchemaURL) > 0)
 }
 
 func TestCacheKeyGeneration(t *testing.T) {

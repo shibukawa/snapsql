@@ -1,6 +1,7 @@
 package parsercommon
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,19 +12,8 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"github.com/shibukawa/snapsql/markdownparser"
+	"github.com/shibukawa/snapsql/tokenizer"
 )
-
-// ParseFunctionDefinitionFromYAML parses a YAML string into a FunctionDefinition and calls Finalize.
-func ParseFunctionDefinitionFromYAML(yamlStr string, basePath string, projectRootPath string) (*FunctionDefinition, error) {
-	var def FunctionDefinition
-	if err := yaml.Unmarshal([]byte(yamlStr), &def); err != nil {
-		return nil, err
-	}
-	if err := def.Finalize(basePath, projectRootPath); err != nil {
-		return nil, err
-	}
-	return &def, nil
-}
 
 // Sentinel errors
 var (
@@ -39,6 +29,7 @@ var (
 
 // Regular expression for valid parameter names
 var validParameterNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
 // Regular expression for common type references
 var commonTypeRefRegex = regexp.MustCompile(`^([\.\/]*)([A-Z][a-zA-Z0-9_]*)(\[\])?$`)
 
@@ -51,11 +42,110 @@ type FunctionDefinition struct {
 	RawParameters  yaml.MapSlice             `yaml:"parameters"`
 	Generators     map[string]map[string]any `yaml:"generators"`
 	dummyData      map[string]any
-	
+
 	// Common type related fields
-	commonTypes     map[string]map[string]any  // Loaded common type definitions
-	basePath        string                     // Base path for resolving relative paths (location of definition file)
-	projectRootPath string                     // Project root path
+	commonTypes     map[string]map[string]any // Loaded common type definitions
+	basePath        string                    // Base path for resolving relative paths (location of definition file)
+	projectRootPath string                    // Project root path
+}
+
+func ParseFunctionDefinitionFromSQLComment(tokens []tokenizer.Token, basePath string, projectRootPath string) (*FunctionDefinition, error) {
+	// Extract from comment tokens (inline extractCommentDefinitionFromTokens)
+	for _, token := range tokens {
+		if token.Type == tokenizer.BLOCK_COMMENT {
+			content := strings.TrimSpace(token.Value)
+
+			// Only process comments that start with /*# (def marker)
+			if strings.HasPrefix(content, "/*#") && strings.HasSuffix(content, "*/") {
+				// Remove /*# and */ markers
+				content = strings.TrimSpace(content[3 : len(content)-2])
+
+				// This should be YAML content
+				if content != "" {
+					return parseFunctionDefinitionFromYAML(content, basePath, projectRootPath)
+				}
+			}
+		}
+	}
+	return nil, errors.New("no function definition found in SQL comment")
+}
+
+// ParseFunctionDefinitionFromSnapSQLDocument creates a FunctionDefinition from a SnapSQLDocument.
+// It extracts metadata, description, and parameters from the document and calls Finalize.
+func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string) (*FunctionDefinition, error) {
+	// Create a new FunctionDefinition
+	def := &FunctionDefinition{
+		// Copy metadata fields
+		Name:         getStringFromMap(doc.Metadata, "name", ""),
+		FunctionName: getStringFromMap(doc.Metadata, "function_name", ""),
+		Description:  getStringFromMap(doc.Metadata, "description", ""),
+	}
+
+	// Copy generators if present
+	if generators, ok := doc.Metadata["generators"]; ok {
+		def.Generators = make(map[string]map[string]any)
+
+		// Handle different types of generators data structure
+		switch g := generators.(type) {
+		case map[string]any:
+			// Direct map[string]any format
+			for lang, config := range g {
+				if langConfig, ok := config.(map[string]any); ok {
+					def.Generators[lang] = langConfig
+				}
+			}
+		case map[string]map[string]any:
+			// Already in the right format
+			def.Generators = g
+		case map[any]any:
+			// Convert from map[any]any
+			for langAny, configAny := range g {
+				if lang, ok := langAny.(string); ok {
+					if config, ok := configAny.(map[any]any); ok {
+						langConfig := make(map[string]any)
+						for keyAny, valAny := range config {
+							if key, ok := keyAny.(string); ok {
+								langConfig[key] = valAny
+							}
+						}
+						def.Generators[lang] = langConfig
+					} else if config, ok := configAny.(map[string]any); ok {
+						def.Generators[lang] = config
+					}
+				}
+			}
+		}
+	}
+
+	// Parse parameters from the parameter block
+	// We need to preserve the order of parameters as defined in the YAML
+	if doc.ParameterBlock != "" {
+		// Parse parameters while preserving order
+		var rawParams yaml.MapSlice
+		if err := yaml.Unmarshal([]byte(doc.ParameterBlock), &rawParams); err != nil {
+			return nil, fmt.Errorf("failed to parse parameters: %w", err)
+		}
+		def.RawParameters = rawParams
+	}
+
+	// Finalize the definition
+	if err := def.Finalize(basePath, projectRootPath); err != nil {
+		return nil, err
+	}
+
+	return def, nil
+}
+
+// parseFunctionDefinitionFromYAML parses a YAML string into a FunctionDefinition and calls Finalize.
+func parseFunctionDefinitionFromYAML(yamlStr string, basePath string, projectRootPath string) (*FunctionDefinition, error) {
+	var def FunctionDefinition
+	if err := yaml.Unmarshal([]byte(yamlStr), &def); err != nil {
+		return nil, err
+	}
+	if err := def.Finalize(basePath, projectRootPath); err != nil {
+		return nil, err
+	}
+	return &def, nil
 }
 
 // Finalize normalizes, validates, and caches dummy data for parameters
@@ -333,7 +423,7 @@ func inferTypeStringFromDummyValue(val any) string {
 // loadCommonTypesFile loads common type definitions from _common.yaml file
 func (f *FunctionDefinition) loadCommonTypesFile(dirPath string) error {
 	filePath := filepath.Join(dirPath, "_common.yaml")
-	
+
 	// Check if file exists
 	_, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
@@ -342,19 +432,19 @@ func (f *FunctionDefinition) loadCommonTypesFile(dirPath string) error {
 	} else if err != nil {
 		return err
 	}
-	
+
 	// Read file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
-	
+
 	// Parse YAML
 	var commonTypes map[string]any
 	if err := yaml.Unmarshal(data, &commonTypes); err != nil {
 		return err
 	}
-	
+
 	// Extract only type definitions that start with uppercase letter
 	for typeName, typeDef := range commonTypes {
 		if len(typeName) > 0 && unicode.IsUpper(rune(typeName[0])) {
@@ -364,17 +454,17 @@ func (f *FunctionDefinition) loadCommonTypesFile(dirPath string) error {
 				relPath := "." + string(filepath.Separator)
 				fullTypeName := relPath + typeName
 				f.commonTypes[fullTypeName] = typeDefMap
-				
+
 				// Also register without path (e.g., User)
 				f.commonTypes[typeName] = typeDefMap
-				
+
 				// Register with the directory path as prefix
 				dirTypeName := dirPath + string(filepath.Separator) + typeName
 				f.commonTypes[dirTypeName] = typeDefMap
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -383,7 +473,7 @@ func (f *FunctionDefinition) normalizeAndResolveParameters(params yaml.MapSlice)
 	result := make(map[string]any, len(params))
 	order := make([]string, 0, len(params))
 	errs := &ParseError{}
-	
+
 	for _, item := range params {
 		key, ok := item.Key.(string)
 		if !ok {
@@ -396,10 +486,10 @@ func (f *FunctionDefinition) normalizeAndResolveParameters(params yaml.MapSlice)
 			continue
 		}
 		order = append(order, key)
-		
+
 		result[key] = f.normalizeAndResolveAny(item.Value, key, errs)
 	}
-	
+
 	if len(errs.Errors) > 0 {
 		return result, order, errs
 	}
@@ -465,11 +555,11 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) any {
 	if matches == nil {
 		return nil
 	}
-	
-	path := matches[1]    // Path part (e.g., "../", "./", "")
-	typeName := matches[2] // Type name part (e.g., "User")
+
+	path := matches[1]          // Path part (e.g., "../", "./", "")
+	typeName := matches[2]      // Type name part (e.g., "User")
 	isArray := matches[3] != "" // Whether it's an array (has "[]" or not)
-	
+
 	// If path is specified, load _common.yaml from the corresponding directory
 	if path != "" {
 		var targetPath string
@@ -479,7 +569,7 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) any {
 			// First try path relative to basePath
 			targetPath = filepath.Clean(filepath.Join(f.basePath, path))
 		}
-		
+
 		if err := f.loadCommonTypesFile(targetPath); err == nil {
 			// Loading successful
 		} else if f.projectRootPath != "" {
@@ -490,7 +580,7 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) any {
 				// Will error later if type is not found
 			}
 		}
-		
+
 		// Try to find the type with the full path
 		if path != "." {
 			// For relative paths like "../roles/Role", we need to construct the key correctly
@@ -498,59 +588,59 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) any {
 				// Try with the full path
 				fullPath := filepath.Clean(filepath.Join(f.basePath, path))
 				fullTypeName := fullPath + string(filepath.Separator) + typeName
-				
+
 				typeDef, found := f.commonTypes[fullTypeName]
 				if found {
 					// Make a deep copy of the type definition
 					typeCopy := deepCopyMap(typeDef)
-					
+
 					// If it's an array
 					if isArray {
 						return []any{typeCopy}
 					}
-					
+
 					return typeCopy
 				}
-				
+
 				// Try with just the directory name + type name
 				dirName := filepath.Base(fullPath)
 				dirTypeName := dirName + string(filepath.Separator) + typeName
-				
+
 				typeDef, found = f.commonTypes[dirTypeName]
 				if found {
 					// Make a deep copy of the type definition
 					typeCopy := deepCopyMap(typeDef)
-					
+
 					// If it's an array
 					if isArray {
 						return []any{typeCopy}
 					}
-					
+
 					return typeCopy
 				}
-				
+
 				// Try with the target path + type name
 				targetTypeName := targetPath + string(filepath.Separator) + typeName
-				
+
 				typeDef, found = f.commonTypes[targetTypeName]
 				if found {
 					// Make a deep copy of the type definition
 					typeCopy := deepCopyMap(typeDef)
-					
+
 					// If it's an array
 					if isArray {
 						return []any{typeCopy}
 					}
-					
+
 					return typeCopy
 				}
 			}
 		}
 	}
-	
+
 	// Convert type name to full form (including path)
 	fullTypeName := path + typeName
-	
+
 	// Search for common type
 	typeDef, found := f.commonTypes[fullTypeName]
 	if !found {
@@ -560,15 +650,15 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) any {
 			return nil
 		}
 	}
-	
+
 	// Make a deep copy of the type definition
 	typeCopy := deepCopyMap(typeDef)
-	
+
 	// If it's an array
 	if isArray {
 		return []any{typeCopy}
 	}
-	
+
 	return typeCopy
 }
 
@@ -602,71 +692,6 @@ func deepCopySlice(s []any) []any {
 		}
 	}
 	return result
-}
-// ParseFunctionDefinitionFromSnapSQLDocument creates a FunctionDefinition from a SnapSQLDocument.
-// It extracts metadata, description, and parameters from the document and calls Finalize.
-func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string) (*FunctionDefinition, error) {
-	// Create a new FunctionDefinition
-	def := &FunctionDefinition{
-		// Copy metadata fields
-		Name:        getStringFromMap(doc.Metadata, "name", ""),
-		FunctionName: getStringFromMap(doc.Metadata, "function_name", ""),
-		Description: getStringFromMap(doc.Metadata, "description", ""),
-	}
-
-	// Copy generators if present
-	if generators, ok := doc.Metadata["generators"]; ok {
-		def.Generators = make(map[string]map[string]any)
-		
-		// Handle different types of generators data structure
-		switch g := generators.(type) {
-		case map[string]any:
-			// Direct map[string]any format
-			for lang, config := range g {
-				if langConfig, ok := config.(map[string]any); ok {
-					def.Generators[lang] = langConfig
-				}
-			}
-		case map[string]map[string]any:
-			// Already in the right format
-			def.Generators = g
-		case map[any]any:
-			// Convert from map[any]any
-			for langAny, configAny := range g {
-				if lang, ok := langAny.(string); ok {
-					if config, ok := configAny.(map[any]any); ok {
-						langConfig := make(map[string]any)
-						for keyAny, valAny := range config {
-							if key, ok := keyAny.(string); ok {
-								langConfig[key] = valAny
-							}
-						}
-						def.Generators[lang] = langConfig
-					} else if config, ok := configAny.(map[string]any); ok {
-						def.Generators[lang] = config
-					}
-				}
-			}
-		}
-	}
-
-	// Parse parameters from the parameter block
-	// We need to preserve the order of parameters as defined in the YAML
-	if doc.ParameterBlock != "" {
-		// Parse parameters while preserving order
-		var rawParams yaml.MapSlice
-		if err := yaml.Unmarshal([]byte(doc.ParameterBlock), &rawParams); err != nil {
-			return nil, fmt.Errorf("failed to parse parameters: %w", err)
-		}
-		def.RawParameters = rawParams
-	}
-
-	// Finalize the definition
-	if err := def.Finalize(basePath, projectRootPath); err != nil {
-		return nil, err
-	}
-
-	return def, nil
 }
 
 // getStringFromMap safely extracts a string value from a map with a default fallback

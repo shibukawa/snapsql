@@ -1,20 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/fatih/color"
 	"github.com/shibukawa/snapsql/pull"
-)
-
-// Error definitions
-var (
-	ErrNoDatabasesConfigured  = errors.New("no databases configured")
-	ErrEnvironmentNotFound    = errors.New("environment not found")
-	ErrMissingDBOrEnv        = errors.New("either database URL or environment must be specified")
-	ErrEmptyConnectionString = errors.New("database connection string is empty")
-	ErrEmptyDatabaseType     = errors.New("database type is not specified")
 )
 
 // PullCmd represents the pull command
