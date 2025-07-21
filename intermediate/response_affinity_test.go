@@ -75,7 +75,7 @@ func TestDetermineResponseAffinity(t *testing.T) {
 			}
 
 			// Parse statement
-			stmt, err := parser.Parse(tokens, nil, nil)
+			stmt, err := parser.RawParse(tokens, nil, nil)
 			if err != nil {
 				t.Skipf("Parser not fully implemented yet: %v", err)
 				return

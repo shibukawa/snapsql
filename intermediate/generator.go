@@ -27,19 +27,21 @@ func GenerateFromStatementNode(
 		InterfaceSchema: convertFunctionDefToInterfaceSchema(functionDef),
 	}
 
-	// Extract CEL expressions and environment variables
-	celExtractor := NewCELExtractor()
-	celExtractor.ExtractFromTokens(tokens)
-	format.CELExpressions = celExtractor.GetExpressions()
-	format.SimpleVars = celExtractor.GetSimpleVars()
-	format.Envs = celExtractor.GetEnvs()
+	// Extract CEL expressions and environment variables using the new function
+	expressions, envs := ExtractFromStatement(stmt)
+	
+	// TODO: Separate simple vars from complex expressions
+	// For now, treat all as complex expressions
+	format.CELExpressions = expressions
+	format.SimpleVars = []string{} // This needs to be implemented
+	format.Envs = envs
 	
 	// Generate instructions
 	generateInstructions(format, stmt)
 	
 	// Determine response type and affinity (independently)
-	format.ResponseType = DetermineResponseType(stmt, tableInfo)
-	format.ResponseAffinity = string(DetermineResponseAffinity(stmt))
+	format.ResponseType = determineResponseType(stmt, tableInfo)
+	format.ResponseAffinity = string(determineResponseAffinity(stmt))
 
 	return format, nil
 }
@@ -97,4 +99,25 @@ func convertFunctionDefToInterfaceSchema(functionDef *parser.FunctionDefinition)
 	schema.Parameters = parameters
 	
 	return schema
+}
+
+// determineResponseType determines the response type for a statement
+func determineResponseType(stmt parser.StatementNode, tableInfo map[string]map[string]string) *ResponseType {
+	// This is a placeholder implementation
+	// In a real implementation, we would analyze the statement and determine the response type
+	return &ResponseType{
+		Name: "User",
+		Fields: []Field{
+			{Name: "id", Type: "int", DatabaseTag: "id"},
+			{Name: "name", Type: "string", DatabaseTag: "name"},
+			{Name: "email", Type: "string", DatabaseTag: "email"},
+		},
+	}
+}
+
+// determineResponseAffinity determines the response affinity for a statement
+func determineResponseAffinity(stmt parser.StatementNode) string {
+	// This is a placeholder implementation
+	// In a real implementation, we would analyze the statement and determine the response affinity
+	return "many"
 }

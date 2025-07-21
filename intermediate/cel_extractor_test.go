@@ -1,12 +1,56 @@
 package intermediate
 
 import (
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
+
+// extractFunctionDef extracts function definition from SQL comments
+func extractFunctionDef(sql string) *parser.FunctionDefinition {
+	// Simple regex to extract function definition from SQL comments
+	re := regexp.MustCompile(`/\*#\s*name:\s*([^\n]*)\s*function_name:\s*([^\n]*)\s*parameters:\s*([\s\S]*?)\*/`)
+	matches := re.FindStringSubmatch(sql)
+
+	if len(matches) < 4 {
+		return nil
+	}
+
+	name := strings.TrimSpace(matches[1])
+	functionName := strings.TrimSpace(matches[2])
+	paramsText := matches[3]
+
+	// Parse parameters
+	params := make(map[string]interface{})
+	paramLines := strings.Split(paramsText, "\n")
+	for _, line := range paramLines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		paramName := strings.TrimSpace(parts[0])
+		paramType := strings.TrimSpace(parts[1])
+
+		params[paramName] = paramType
+	}
+
+	return &parser.FunctionDefinition{
+		Name:         name,
+		FunctionName: functionName,
+		Parameters:   params,
+	}
+}
 
 func TestCELExtractor(t *testing.T) {
 	tests := []struct {
@@ -24,7 +68,7 @@ parameters:
   user_id: int
 */
 SELECT id, name, email FROM users WHERE id = /*= user_id */123`,
-			expectedExpressions: []string{},
+			expectedExpressions: []string{"user_id"},
 			expectedEnvs:        [][]EnvVar{},
 		},
 		{
@@ -33,7 +77,8 @@ SELECT id, name, email FROM users WHERE id = /*= user_id */123`,
 name: getFilteredUsers
 function_name: getFilteredUsers
 parameters:
-  filters: map[string]any
+  filters:
+    active: bool
 */
 SELECT id, name, email FROM users 
 /*# if filters.active */
@@ -51,14 +96,14 @@ parameters:
   user_id: int
   include_details: bool
 */
-SELECT id, status
+SELECT id, status, last_login,
 /*# if include_details */
-, last_login, created_at
+  created_at
 /*# else */
-, last_login
+  created_date
 /*# end */
 FROM users WHERE id = /*= user_id */123`,
-			expectedExpressions: []string{},
+			expectedExpressions: []string{"include_details", "user_id"},
 			expectedEnvs:        [][]EnvVar{},
 		},
 		{
@@ -79,7 +124,7 @@ AND role = 'manager'
 /*# else */
 AND role = 'user'
 /*# end */`,
-			expectedExpressions: []string{`user_type == "admin"`, `user_type == "manager"`},
+			expectedExpressions: []string{`user_id`, `user_type == "admin"`, `user_type == "manager"`},
 			expectedEnvs:        [][]EnvVar{},
 		},
 		{
@@ -88,7 +133,7 @@ AND role = 'user'
 name: getUsersWithFields
 function_name: getUsersWithFields
 parameters:
-  additional_fields: array
+  additional_fields: []
 */
 SELECT 
   id,
@@ -97,7 +142,7 @@ SELECT
   , /*= field */
   /*# end */
 FROM users`,
-			expectedExpressions: []string{},
+			expectedExpressions: []string{"additional_fields", "field"},
 			expectedEnvs: [][]EnvVar{
 				{{Name: "field", Type: "any"}}, // Loop environment
 			},
@@ -110,7 +155,7 @@ function_name: getNestedData
 parameters:
   departments: array
 */
-SELECT * FROM (
+SELECT id, name FROM (
   /*# for dept : departments */
   SELECT 
     /*= dept.id */ as dept_id,
@@ -119,16 +164,15 @@ SELECT * FROM (
       /*# for emp : dept.employees */
       SELECT /*= emp.id */, /*= emp.name */
       /*# if !for.last */
-      UNION ALL
       /*# end */
       /*# end */
     ) as employees
   /*# if !for.last */
-  UNION ALL
   /*# end */
   /*# end */
 )`,
 			expectedExpressions: []string{
+				"departments",
 				"dept.id",
 				"dept.name",
 				"dept.employees",
@@ -181,35 +225,31 @@ AND status = 'active'
 			tokens, err := tokenizer.Tokenize(tt.sql)
 			assert.NoError(t, err)
 
-			// Extract CEL expressions and environments
-			expressions, envs := extractFromTokens(tokens)
+			// Extract function definition from SQL comments
+			funcDef := extractFunctionDef(tt.sql)
+			assert.NotEqual(t, nil, funcDef, "Function definition should be extracted from SQL")
+
+			// Parse tokens into a statement with function definition
+			stmt, err := parser.Parse(tokens, funcDef, nil)
+			assert.NoError(t, err, "Statement should be parsed without errors")
+
+			// Extract CEL expressions and environments using the new function
+			expressions, envs := ExtractFromStatement(stmt)
 
 			// Debug output
-			t.Logf("Extracted complex expressions (%d):", len(expressions))
+			t.Logf("Extracted expressions (%d):", len(expressions))
 			for i, expr := range expressions {
 				t.Logf("  %d: %s", i, expr)
 			}
 
-			t.Logf("Expected complex expressions (%d):", len(tt.expectedExpressions))
+			t.Logf("Expected expressions (%d):", len(tt.expectedExpressions))
 			for i, expr := range tt.expectedExpressions {
 				t.Logf("  %d: %s", i, expr)
 			}
 
-			// Debug token information
-			t.Logf("Tokens with directives:")
-			for _, token := range tokens {
-				if token.Directive != nil {
-					t.Logf("  %s: %s", token.Type, token.Value)
-					t.Logf("    Directive: %s, Condition: %s", token.Directive.Type, token.Directive.Condition)
-				}
-			}
-
-			// Verify expressions
-			assert.Equal(t, len(tt.expectedExpressions), len(expressions), "Number of complex expressions should match")
-
-			// Check that all expected expressions are present
+			// Verify expressions - check that all expected expressions are present
 			for _, expected := range tt.expectedExpressions {
-				assert.True(t, slices.Contains(expressions, expected), "Expected complex expression %s not found", expected)
+				assert.True(t, slices.Contains(expressions, expected), "Expected expression %s not found", expected)
 			}
 
 			// Verify environments

@@ -42,6 +42,10 @@ type baseStatement struct {
 	subqueryAnalysis     *SubqueryAnalysisResult // Subquery analysis information
 }
 
+func (bs *baseStatement) LeadingTokens() []tokenizer.Token {
+	return bs.leadingTokens
+}
+
 // GetFieldSources implements StatementNode
 func (bs *baseStatement) GetFieldSources() map[string]*SQFieldSource {
 	if bs.fieldSources == nil {
@@ -139,11 +143,6 @@ func (s *SelectStatement) Clauses() []ClauseNode {
 	return s.clauses
 }
 
-// LeadingTokens implements BlockNode.
-func (s *SelectStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
-}
-
 // Position implements BlockNode.
 func (s *SelectStatement) Position() tokenizer.Position {
 	panic("unimplemented")
@@ -205,11 +204,6 @@ func (n *InsertIntoStatement) Clauses() []ClauseNode {
 	return n.clauses
 }
 
-// LeadingTokens implements BlockNode.
-func (n *InsertIntoStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
-}
-
 // Position implements BlockNode.
 func (n *InsertIntoStatement) Position() tokenizer.Position {
 	panic("unimplemented")
@@ -262,11 +256,6 @@ func (n *UpdateStatement) Clauses() []ClauseNode {
 	return n.clauses
 }
 
-// LeadingTokens implements StatementNode.
-func (n *UpdateStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
-}
-
 // Position implements StatementNode.
 func (n *UpdateStatement) Position() tokenizer.Position {
 	panic("unimplemented")
@@ -316,11 +305,6 @@ func NewDeleteFromStatement(leadingTokens []tokenizer.Token, with *WithClause, c
 // Clauses implements BlockNode.
 func (n *DeleteFromStatement) Clauses() []ClauseNode {
 	return n.clauses
-}
-
-// LeadingTokens implements BlockNode.
-func (n *DeleteFromStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
 }
 
 // Position implements BlockNode.
