@@ -30,7 +30,7 @@ func TestExecute(t *testing.T) {
 			name: "Valid template with simple variable",
 			sql:  "SELECT /*= user.name */default FROM users",
 			schema: &cmn.FunctionDefinition{
-				Name: "getUserData",
+				FunctionName: "get_user_data",
 				Parameters: map[string]any{
 					"user": map[string]any{
 						"name": "str",
@@ -45,7 +45,7 @@ func TestExecute(t *testing.T) {
 			name: "Invalid template with undefined variable",
 			sql:  "SELECT /*= undefined_var */default FROM users",
 			schema: &cmn.FunctionDefinition{
-				Name:       "getUserData",
+				FunctionName: "get_user_data",
 				Parameters: map[string]any{},
 			},
 			environment:    map[string]any{},
@@ -55,7 +55,7 @@ func TestExecute(t *testing.T) {
 			name: "Template with environment variable",
 			sql:  "SELECT name FROM /*$ table_name */default_table",
 			schema: &cmn.FunctionDefinition{
-				Name:       "getTableData",
+				FunctionName: "get_table_data",
 				Parameters: map[string]any{},
 			},
 			environment: map[string]any{
@@ -67,7 +67,7 @@ func TestExecute(t *testing.T) {
 			name: "Template with LIMIT implicit condition",
 			sql:  "SELECT name FROM users LIMIT /*= limit */10",
 			schema: &cmn.FunctionDefinition{
-				Name: "getUsersWithLimit",
+				FunctionName: "get_users_with_limit",
 				Parameters: map[string]any{
 					"limit": map[string]any{
 						"type": "int",
@@ -140,7 +140,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 			name: "Replace DUMMY_LITERAL with int parameter",
 			sql:  "SELECT /*= user_id */ FROM users",
 			functionDef: cmn.FunctionDefinition{
-				Name: "test_query",
+				FunctionName: "test_query",
 				Parameters: map[string]any{
 					"user_id": map[string]any{
 						"type": "int",
@@ -153,7 +153,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 			name: "Replace DUMMY_LITERAL with string parameter",
 			sql:  "SELECT /*= user_name */ FROM users",
 			functionDef: cmn.FunctionDefinition{
-				Name: "test_query",
+				FunctionName: "test_query",
 				Parameters: map[string]any{
 					"user_name": map[string]any{
 						"type": "string",

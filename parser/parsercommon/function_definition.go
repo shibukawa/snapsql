@@ -34,9 +34,8 @@ var validParameterNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 var commonTypeRefRegex = regexp.MustCompile(`^([\.\/]*)([A-Z][a-zA-Z0-9_]*)(\[\])?$`)
 
 type FunctionDefinition struct {
-	Name           string                    `yaml:"name"`
-	Description    string                    `yaml:"description"`
 	FunctionName   string                    `yaml:"function_name"`
+	Description    string                    `yaml:"description"`
 	Parameters     map[string]any            `yaml:"-"` // normalized, checked
 	ParameterOrder []string                  `yaml:"-"`
 	RawParameters  yaml.MapSlice             `yaml:"parameters"`
@@ -76,7 +75,6 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 	// Create a new FunctionDefinition
 	def := &FunctionDefinition{
 		// Copy metadata fields
-		Name:         getStringFromMap(doc.Metadata, "name", ""),
 		FunctionName: getStringFromMap(doc.Metadata, "function_name", ""),
 		Description:  getStringFromMap(doc.Metadata, "description", ""),
 	}

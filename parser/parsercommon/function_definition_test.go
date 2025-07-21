@@ -200,7 +200,6 @@ SELECT * FROM users WHERE id = :id
 	assert.NotNil(t, def)
 
 	// Check that the metadata was correctly extracted
-	assert.Equal(t, "GetUserByID", def.Name)
 	assert.Equal(t, "getUserById", def.FunctionName)
 
 	// Check that the generators were correctly extracted
@@ -265,7 +264,6 @@ WHERE u.id = :user.id
 	assert.NotNil(t, def)
 
 	// Check that the metadata was correctly extracted
-	assert.Equal(t, "GetUserWithDepartment", def.Name)
 	assert.Equal(t, "getUserWithDepartment", def.FunctionName)
 
 	// Check that the generators were correctly extracted
