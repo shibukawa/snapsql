@@ -159,43 +159,22 @@ var (
 
 // Re-export helper functions
 var (
-	NewNamespace = cmn.NewNamespace
 	AsParseError = cmn.AsParseError
 )
 
-// ParseOptions contains options for the Parse function
-type ParseOptions struct {
-	// Environment variables for CEL evaluation
-	Environment map[string]any
-	// Parameter values for CEL evaluation (optional, will generate dummy data if nil)
-	Parameters map[string]any
-	// Enable subquery dependency analysis (parserstep7)
-	EnableSubqueryAnalysis bool
-}
-
 // RawParse is the main entry point for parsing SQL templates from pre-tokenized tokens.
-// It takes tokenized SQL and optional additional YAML function definitions,
-// runs the complete parsing pipeline (parserstep1-6), and returns a StatementNode.
-//
-// When EnableSubqueryAnalysis is true, parserstep7 will be executed and its results
-// will be stored directly in the StatementNode for easy access via:
-// - stmt.GetFieldSources()
-// - stmt.GetTableReferences()
-// - stmt.GetSubqueryDependencies()
+// It takes tokenized SQL and function definition, runs the complete parsing pipeline (parserstep1-7),
+// and returns a StatementNode.
 //
 // Parameters:
 //   - tokens: Pre-tokenized SQL tokens
-//   - functionDef: Function definition schema
-//   - options: Optional parsing options for environment and parameter values
+//   - functionDef: Function definition schema (always required)
+//   - constants: Optional constants for CEL evaluation
 //
 // Returns:
-//   - StatementNode: The parsed statement AST (may contain parserstep7 results)
+//   - StatementNode: The parsed statement AST with subquery analysis results
 //   - error: Any parsing errors encountered
-func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options *ParseOptions) (StatementNode, error) {
-	if options == nil {
-		options = &ParseOptions{}
-	}
-
+func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constants map[string]any) (StatementNode, error) {
 	// Step 1: Run parserstep1 - Basic syntax validation and dummy literal insertion
 	processedTokens, err := parserstep1.Execute(tokens)
 	if err != nil {
@@ -224,43 +203,40 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options
 	}
 
 	// Step 6: Run parserstep6 - Variable and directive validation
-	// Create namespace from function definition if available
-	var environment map[string]any
-	var parameters map[string]any
-
-	if options.Environment != nil {
-		environment = options.Environment
-	} else {
-		environment = make(map[string]any)
+	// Create namespace from function definition for parameters
+	paramNamespace, err := cmn.NewNamespaceFromDefinition(functionDef)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create parameter namespace: %w", err)
 	}
-
-	if options.Parameters != nil {
-		parameters = options.Parameters
-	}
-
-	namespace := NewNamespace(functionDef, environment, parameters)
-
-	// Use ExecuteWithFunctionDef only if functionDef is provided
-	if functionDef != nil {
-		if parseErr := parserstep6.ExecuteWithFunctionDef(stmt, namespace, *functionDef); parseErr != nil {
-			return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
+	
+	// Create a separate namespace for constants if provided
+	var constNamespace *cmn.Namespace
+	if constants != nil && len(constants) > 0 {
+		constNamespace, err = cmn.NewNamespaceFromConstants(constants)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create constants namespace: %w", err)
 		}
 	} else {
-		if parseErr := parserstep6.Execute(stmt, namespace); parseErr != nil {
-			return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
+		// Create an empty constants namespace if none provided
+		constNamespace, err = cmn.NewNamespaceFromConstants(make(map[string]any))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create empty constants namespace: %w", err)
 		}
 	}
+	
+	// Execute parserstep6 with both namespaces
+	if parseErr := parserstep6.Execute(stmt, paramNamespace, constNamespace); parseErr != nil {
+		return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
+	}
 
-	// Step 7: Run parserstep7 - Subquery dependency analysis (optional)
-	if options.EnableSubqueryAnalysis {
-		subqueryParser := parserstep7.NewSubqueryParserIntegrated()
-		subErr := subqueryParser.ParseStatement(stmt, functionDef)
+	// Step 7: Run parserstep7 - Subquery dependency analysis (always enabled)
+	subqueryParser := parserstep7.NewSubqueryParserIntegrated()
+	subErr := subqueryParser.ParseStatement(stmt, functionDef)
 
-		if subErr != nil {
-			// Don't fail the entire parse for subquery analysis errors
-			// The error can be detected via stmt.GetSubqueryDependencies() == nil
-			// This allows graceful degradation
-		}
+	if subErr != nil {
+		// Don't fail the entire parse for subquery analysis errors
+		// The error can be detected via stmt.GetSubqueryDependencies() == nil
+		// This allows graceful degradation
 	}
 
 	return stmt, nil
@@ -272,14 +248,14 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, options
 //
 // Parameters:
 //   - reader: An io.Reader containing the SQL content
-//   - options: Optional parsing options for environment and parameter values
+//   - constants: Optional constants for CEL evaluation
 //   - basePath: Base path for resolving relative paths in common type references (optional)
 //   - projectRootPath: Project root path for resolving common type references (optional)
 //
 // Returns:
 //   - StatementNode: The parsed statement AST
 //   - error: Any parsing errors encountered
-func ParseSQLFile(reader io.Reader, options *ParseOptions, basePath string, projectRootPath string) (StatementNode, error) {
+func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, projectRootPath string) (StatementNode, error) {
 	// Read all content from the reader
 	content, err := io.ReadAll(reader)
 	if err != nil {
@@ -297,12 +273,19 @@ func ParseSQLFile(reader io.Reader, options *ParseOptions, basePath string, proj
 	extractedDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
 	if err == nil {
 		functionDef = extractedDef
+	} else {
+		// Create an empty function definition if none was found
+		functionDef = &FunctionDefinition{
+			Name:          "EmptyFunction",
+			FunctionName:  "emptyFunction",
+			Description:   "Auto-generated empty function",
+			Parameters:    make(map[string]any),
+			ParameterOrder: []string{},
+		}
 	}
-	// We don't return an error if no function definition is found in comments
-	// as it's optional and the SQL might not have one
 
 	// Parse the tokens
-	return RawParse(tokens, functionDef, options)
+	return RawParse(tokens, functionDef, constants)
 }
 
 // ParseMarkdownFile parses a SnapSQLDocument and returns a StatementNode.
@@ -312,12 +295,12 @@ func ParseSQLFile(reader io.Reader, options *ParseOptions, basePath string, proj
 //   - doc: A SnapSQLDocument from the markdownparser package
 //   - basePath: Base path for resolving relative paths in common type references
 //   - projectRootPath: Project root path for resolving common type references
-//   - options: Optional parsing options for environment and parameter values
+//   - constants: Optional constants for CEL evaluation
 //
 // Returns:
 //   - StatementNode: The parsed statement AST
 //   - error: Any parsing errors encountered
-func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, options *ParseOptions) (StatementNode, error) {
+func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any) (StatementNode, error) {
 	// Create a function definition from the SnapSQLDocument
 	functionDef, err := cmn.ParseFunctionDefinitionFromSnapSQLDocument(doc, basePath, projectRootPath)
 	if err != nil {
@@ -331,5 +314,5 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 	}
 
 	// Parse the tokens
-	return RawParse(tokens, functionDef, options)
+	return RawParse(tokens, functionDef, constants)
 }

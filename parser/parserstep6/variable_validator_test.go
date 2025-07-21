@@ -65,11 +65,19 @@ func TestValidateVariables(t *testing.T) {
 			schema := &cmn.FunctionDefinition{
 				Parameters: tt.paramSchema,
 			}
-			namespace := cmn.NewNamespace(schema, tt.environment, nil)
+			// Create namespaces
+			paramNs, err := cmn.NewNamespaceFromDefinition(schema)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from schema: %v", err)
+			}
+			constNs, err := cmn.NewNamespaceFromConstants(tt.environment)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from environment: %v", err)
+			}
 
 			// Validate variables
 			perr := &cmn.ParseError{}
-			validateVariables(parsed, namespace, perr)
+			validateVariables(parsed, paramNs, constNs, perr)
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))
@@ -187,11 +195,14 @@ func TestValidateVariableDirective(t *testing.T) {
 			schema := &cmn.FunctionDefinition{
 				Parameters: tt.paramSchema,
 			}
-			namespace := cmn.NewNamespace(schema, map[string]any{}, nil)
-
+			// Create namespaces
+			paramNs, err := cmn.NewNamespaceFromDefinition(schema)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from schema: %v", err)
+			}
 			// Validate
 			perr := &cmn.ParseError{}
-			validateVariableDirective(tt.token, namespace, perr)
+			validateVariableDirective(tt.token, paramNs, perr)
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))
@@ -247,15 +258,14 @@ func TestValidateConstDirective(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create namespace
-			schema := &cmn.FunctionDefinition{
-				Parameters: map[string]any{},
+			// Create namespaces
+			constNs, err := cmn.NewNamespaceFromConstants(tt.environment)
+			if err != nil {
+				t.Fatalf("Failed to create namespace from environment: %v", err)
 			}
-			namespace := cmn.NewNamespace(schema, tt.environment, nil)
-
 			// Validate
 			perr := &cmn.ParseError{}
-			validateConstDirective(tt.token, namespace, perr)
+			validateConstDirective(tt.token, constNs, perr)
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))
