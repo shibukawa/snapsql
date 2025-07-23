@@ -8,13 +8,14 @@ import (
 
 type ClauseNode interface {
 	AstNode
-	SourceText() string               // Return case sensitive source text of the clause
-	ContentTokens() []tokenizer.Token // Returns tokens that make up the clause
-	IfCondition() string              // Returns implicit if condition for the clause
-	SetIfCondition(condition string)  // Sets implicit if condition for the clause
+	SourceText() string                                                            // Return case sensitive source text of the clause
+	ContentTokens() []tokenizer.Token                                              // Returns tokens that make up the clause
+	IfCondition() string                                                           // Returns implicit if condition for the clause
+	SetIfCondition(condition string, ifIndex, endIndex int, prevClause ClauseNode) // Sets implicit if condition for the clause and removes if directive from previous clause
 	Type() NodeType
-	InsertTokensAfterIndex(index int, tokens []tokenizer.Token) // Inserts tokens after the specified index
+	InsertTokensAfterIndex(index int, tokens []tokenizer.Token)    // Inserts tokens after the specified index
 	ReplaceTokens(startIndex, endIndex int, token tokenizer.Token) // Replaces tokens from startIndex to endIndex with the specified token
+	baseNode() *clauseBaseNode                                     // Returns the base node for common functionality
 }
 
 type clauseBaseNode struct {
@@ -45,15 +46,24 @@ func (cbn *clauseBaseNode) IfCondition() string {
 	return cbn.ifCondition
 }
 
-func (cbn *clauseBaseNode) SetIfCondition(condition string) {
+func (cbn *clauseBaseNode) baseNode() *clauseBaseNode {
+	return cbn
+}
+
+func (cbn *clauseBaseNode) SetIfCondition(condition string, ifIndex, endIndex int, prevClause ClauseNode) {
 	cbn.ifCondition = condition
+	if endIndex != -1 { // for implicit if condition
+		cbn.bodyTokens = cbn.bodyTokens[:endIndex]
+		pbn := prevClause.baseNode()
+		pbn.bodyTokens = cbn.bodyTokens[:ifIndex]
+	}
 }
 
 // InsertTokensAfterIndex は指定されたインデックスの後にトークンを挿入します
 // インデックスはheadingTokensとbodyTokensの両方を考慮した全体のインデックスです
 func (cbn *clauseBaseNode) InsertTokensAfterIndex(index int, newTokens []tokenizer.Token) {
 	headingLen := len(cbn.headingTokens)
-	
+
 	// インデックスがheadingTokens内にある場合
 	if index < headingLen {
 		// headingTokensを分割して挿入
@@ -68,7 +78,7 @@ func (cbn *clauseBaseNode) InsertTokensAfterIndex(index int, newTokens []tokeniz
 		if bodyIndex >= len(cbn.bodyTokens) {
 			bodyIndex = len(cbn.bodyTokens) - 1
 		}
-		
+
 		// bodyTokensを分割して挿入
 		result := make([]tokenizer.Token, 0, len(cbn.bodyTokens)+len(newTokens))
 		result = append(result, cbn.bodyTokens[:bodyIndex+1]...)
@@ -82,7 +92,7 @@ func (cbn *clauseBaseNode) InsertTokensAfterIndex(index int, newTokens []tokeniz
 // startIndexからendIndex-1までのトークンが置き換えられます
 func (cbn *clauseBaseNode) ReplaceTokens(startIndex, endIndex int, newToken tokenizer.Token) {
 	headingLen := len(cbn.headingTokens)
-	
+
 	// 置換範囲がheadingTokens内にある場合
 	if startIndex < headingLen && endIndex <= headingLen {
 		// headingTokensを分割して置換
@@ -97,7 +107,7 @@ func (cbn *clauseBaseNode) ReplaceTokens(startIndex, endIndex int, newToken toke
 		headingResult = append(headingResult, cbn.headingTokens[:startIndex]...)
 		headingResult = append(headingResult, newToken)
 		cbn.headingTokens = headingResult
-		
+
 		bodyResult := make([]tokenizer.Token, 0, len(cbn.bodyTokens)-(endIndex-headingLen))
 		bodyResult = append(bodyResult, cbn.bodyTokens[endIndex-headingLen:]...)
 		cbn.bodyTokens = bodyResult
@@ -105,7 +115,7 @@ func (cbn *clauseBaseNode) ReplaceTokens(startIndex, endIndex int, newToken toke
 		// 置換範囲がbodyTokens内にある場合
 		bodyStartIndex := startIndex - headingLen
 		bodyEndIndex := endIndex - headingLen
-		
+
 		// bodyTokensを分割して置換
 		result := make([]tokenizer.Token, 0, len(cbn.bodyTokens)-(bodyEndIndex-bodyStartIndex)+1)
 		result = append(result, cbn.bodyTokens[:bodyStartIndex]...)
@@ -114,6 +124,7 @@ func (cbn *clauseBaseNode) ReplaceTokens(startIndex, endIndex int, newToken toke
 		cbn.bodyTokens = result
 	}
 }
+
 type WithClause struct {
 	clauseBaseNode
 	Recursive      bool
@@ -191,13 +202,12 @@ type WhereClause struct {
 	Condition AstNode // Expression
 }
 
-func NewWhereClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *WhereClause {
+func NewWhereClause(srcText string, heading, body []tokenizer.Token) *WhereClause {
 	return &WhereClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
-			ifCondition:      ifCondition,
 		},
 	}
 }
@@ -269,13 +279,12 @@ type OrderByClause struct {
 	Fields []OrderByField
 }
 
-func NewOrderByClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *OrderByClause {
+func NewOrderByClause(srcText string, heading, body []tokenizer.Token) *OrderByClause {
 	return &OrderByClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
-			ifCondition:      ifCondition,
 		},
 	}
 }
@@ -295,13 +304,12 @@ type LimitClause struct {
 	Count int // Expression
 }
 
-func NewLimitClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *LimitClause {
+func NewLimitClause(srcText string, heading, body []tokenizer.Token) *LimitClause {
 	return &LimitClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
-			ifCondition:      ifCondition,
 		},
 	}
 }
@@ -321,13 +329,12 @@ type OffsetClause struct {
 	Count int // Expression
 }
 
-func NewOffsetClause(srcText string, heading, body []tokenizer.Token, ifCondition string) *OffsetClause {
+func NewOffsetClause(srcText string, heading, body []tokenizer.Token) *OffsetClause {
 	return &OffsetClause{
 		clauseBaseNode: clauseBaseNode{
 			clauseSourceText: srcText,
 			headingTokens:    heading,
 			bodyTokens:       body,
-			ifCondition:      ifCondition,
 		},
 	}
 }

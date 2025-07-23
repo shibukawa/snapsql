@@ -23,6 +23,7 @@ const (
 	ComplexField                       // Complex field (e.g., "table.field->'key'")
 	LiteralField                       // Literal field (e.g., "123", "'string'", "NULL")
 	InvalidField                       // Invalid field (e.g., "*")
+	DummyField                         // Dummy field (e.g., "/*= user.name */")
 )
 
 func (ft FieldType) String() string {
@@ -39,6 +40,8 @@ func (ft FieldType) String() string {
 		return "LiteralField"
 	case InvalidField:
 		return "InvalidField"
+	case DummyField:
+		return "DummyField"
 	default:
 		return "UnknownFieldType"
 	}

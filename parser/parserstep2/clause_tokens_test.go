@@ -1,7 +1,6 @@
 package parserstep2_test
 
 import (
-	"log"
 	"strings"
 	"testing"
 
@@ -87,7 +86,6 @@ func TestClauseContentTokensAndRawTokens(t *testing.T) {
 			stmt, err := parserstep2.Execute(tokens)
 			assert.NoError(t, err)
 			clause := stmt.Clauses()[len(stmt.Clauses())-1] // Get the last clause
-			log.Println(dumpTokens(t, clause.RawTokens()))
 			assert.Equal(t, tc.wantRawLen, len(clause.RawTokens()), "RawTokens() length unexpected for %s: got=%v", tc.name, clause.RawTokens())
 			assert.Equal(t, tc.wantBodyLen, len(clause.ContentTokens()), "ContentTokens() length unexpected for %s: got=%v", tc.name, clause.ContentTokens())
 		})

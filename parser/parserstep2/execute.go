@@ -11,7 +11,8 @@ import (
 func Execute(tokens []tok.Token) (cmn.StatementNode, error) {
 	entityTokens := tokenToEntity(tokens)
 	pctx := pc.NewParseContext[Entity]()
-	_, parsed, err := ParseStatement()(pctx, entityTokens)
+	perr := &cmn.ParseError{}
+	_, parsed, err := ParseStatement(perr)(pctx, entityTokens)
 	if err != nil {
 		return nil, err
 	}
