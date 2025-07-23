@@ -1,15 +1,12 @@
 package intermediate
 
 import (
-	"regexp"
 	"slices"
 	"strings"
 
-	"github.com/shibukawa/snapsql/parser"
+	"github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
-
-var simpleVarRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // EnvVar represents an environment variable
 type EnvVar struct {
@@ -18,11 +15,18 @@ type EnvVar struct {
 }
 
 // ExtractFromStatement extracts CEL expressions and environment variables from a parsed statement
-func ExtractFromStatement(stmt parser.StatementNode) (expressions []string, envs [][]EnvVar) {
+func ExtractFromStatement(stmt parsercommon.StatementNode) (expressions []string, envs [][]EnvVar) {
 	expressions = make([]string, 0)
 	envs = make([][]EnvVar, 0)
 	envLevel := 0
 	forLoopStack := make([]string, 0) // Stack of loop variable names
+
+	// Helper function to add an expression if it's not already in the list
+	addExpression := func(expr string) {
+		if expr != "" && !slices.Contains(expressions, expr) {
+			expressions = append(expressions, expr)
+		}
+	}
 
 	// Process all tokens from the statement
 	processTokens := func(tokens []tokenizer.Token) {
@@ -31,8 +35,9 @@ func ExtractFromStatement(stmt parser.StatementNode) (expressions []string, envs
 			if token.Directive != nil {
 				switch token.Directive.Type {
 				case "if", "elseif":
-					if token.Directive.Condition != "" && !slices.Contains(expressions, token.Directive.Condition) {
-						expressions = append(expressions, token.Directive.Condition)
+					if token.Directive.Condition != "" {
+						// Add the full condition expression
+						addExpression(token.Directive.Condition)
 					}
 
 				case "for":
@@ -43,9 +48,10 @@ func ExtractFromStatement(stmt parser.StatementNode) (expressions []string, envs
 						collection := strings.TrimSpace(parts[1])
 
 						// Extract collection expression
-						if collection != "" && !slices.Contains(expressions, collection) {
-							expressions = append(expressions, collection)
-						}
+						addExpression(collection)
+						
+						// Also add the loop variable as an expression
+						addExpression(variable)
 
 						// Increase environment level for the loop body
 						envLevel++
@@ -80,11 +86,11 @@ func ExtractFromStatement(stmt parser.StatementNode) (expressions []string, envs
 					// Extract variable expression from the token value
 					// The format is /*= variable_name */
 					if token.Value != "" && strings.HasPrefix(token.Value, "/*=") && strings.HasSuffix(token.Value, "*/") {
-						// Extract variable name between /*= and */
+						// Extract variable expression between /*= and */
 						varExpr := strings.TrimSpace(token.Value[3 : len(token.Value)-2])
-						if varExpr != "" && !slices.Contains(expressions, varExpr) {
-							expressions = append(expressions, varExpr)
-						}
+						
+						// Add the full expression, not just simple variables
+						addExpression(varExpr)
 					}
 				}
 			}

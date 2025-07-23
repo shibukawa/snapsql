@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/testhelper"
 )
 
 func TestInferTypeFromFunction(t *testing.T) {
@@ -14,57 +15,57 @@ func TestInferTypeFromFunction(t *testing.T) {
 		expectedType string
 	}{
 		{
-			name:         "Count",
+			name:         "Count" + testhelper.GetCaller(t),
 			functionName: "count(*)",
 			expectedType: "int",
 		},
 		{
-			name:         "Sum",
+			name:         "Sum" + testhelper.GetCaller(t),
 			functionName: "sum(total)",
 			expectedType: "number",
 		},
 		{
-			name:         "Avg",
+			name:         "Avg" + testhelper.GetCaller(t),
 			functionName: "avg(score)",
 			expectedType: "number",
 		},
 		{
-			name:         "Min",
+			name:         "Min" + testhelper.GetCaller(t),
 			functionName: "min(price)",
 			expectedType: "any",
 		},
 		{
-			name:         "Max",
+			name:         "Max" + testhelper.GetCaller(t),
 			functionName: "max(price)",
 			expectedType: "any",
 		},
 		{
-			name:         "JsonFunction",
+			name:         "JsonFunction" + testhelper.GetCaller(t),
 			functionName: "json_extract(data, '$.name')",
 			expectedType: "any",
 		},
 		{
-			name:         "ToChar",
+			name:         "ToChar" + testhelper.GetCaller(t),
 			functionName: "to_char(created_at, 'YYYY-MM-DD')",
 			expectedType: "string",
 		},
 		{
-			name:         "ToNumber",
+			name:         "ToNumber" + testhelper.GetCaller(t),
 			functionName: "to_number(price_str)",
 			expectedType: "number",
 		},
 		{
-			name:         "ToDate",
+			name:         "ToDate" + testhelper.GetCaller(t),
 			functionName: "to_date(date_str, 'YYYY-MM-DD')",
 			expectedType: "datetime",
 		},
 		{
-			name:         "Coalesce",
+			name:         "Coalesce" + testhelper.GetCaller(t),
 			functionName: "coalesce(name, 'Unknown')",
 			expectedType: "any",
 		},
 		{
-			name:         "UnknownFunction",
+			name:         "UnknownFunction" + testhelper.GetCaller(t),
 			functionName: "custom_function(arg1, arg2)",
 			expectedType: "any",
 		},
@@ -88,37 +89,37 @@ func TestInferTypeFromLiteral(t *testing.T) {
 		expectedType string
 	}{
 		{
-			name:         "StringLiteral",
+			name:         "StringLiteral" + testhelper.GetCaller(t),
 			literal:      "'Hello, World!'",
 			expectedType: "string",
 		},
 		{
-			name:         "IntegerLiteral",
+			name:         "IntegerLiteral" + testhelper.GetCaller(t),
 			literal:      "42",
 			expectedType: "int",
 		},
 		{
-			name:         "FloatLiteral",
+			name:         "FloatLiteral" + testhelper.GetCaller(t),
 			literal:      "3.14",
 			expectedType: "number",
 		},
 		{
-			name:         "BooleanLiteralTrue",
+			name:         "BooleanLiteralTrue" + testhelper.GetCaller(t),
 			literal:      "true",
 			expectedType: "bool",
 		},
 		{
-			name:         "BooleanLiteralFalse",
+			name:         "BooleanLiteralFalse" + testhelper.GetCaller(t),
 			literal:      "false",
 			expectedType: "bool",
 		},
 		{
-			name:         "NullLiteral",
+			name:         "NullLiteral" + testhelper.GetCaller(t),
 			literal:      "NULL",
 			expectedType: "null",
 		},
 		{
-			name:         "UnknownLiteral",
+			name:         "UnknownLiteral" + testhelper.GetCaller(t),
 			literal:      "unknown_literal",
 			expectedType: "any",
 		},
@@ -183,11 +184,11 @@ func TestExtractFieldsFromSelectClause(t *testing.T) {
 	assert.Equal(t, "id", responseType.Fields[0].Name, "Field name should match")
 	assert.Equal(t, "string", responseType.Fields[0].Type, "Field type should match")
 	assert.Equal(t, "id", responseType.Fields[0].DatabaseTag, "Field database tag should match")
-	
+
 	assert.Equal(t, "name", responseType.Fields[1].Name, "Field name should match")
 	assert.Equal(t, "string", responseType.Fields[1].Type, "Field type should match")
 	assert.Equal(t, "users.name", responseType.Fields[1].DatabaseTag, "Field database tag should match")
-	
+
 	assert.Equal(t, "user_email", responseType.Fields[2].Name, "Field name should match")
 	assert.Equal(t, "string", responseType.Fields[2].Type, "Field type should match")
 	assert.Equal(t, "email", responseType.Fields[2].DatabaseTag, "Field database tag should match")
@@ -233,7 +234,7 @@ func TestExtractFieldsFromReturningClause(t *testing.T) {
 	assert.Equal(t, "id", responseType.Fields[0].Name, "Field name should match")
 	assert.Equal(t, "int", responseType.Fields[0].Type, "Field type should match")
 	assert.Equal(t, "users.id", responseType.Fields[0].DatabaseTag, "Field database tag should match")
-	
+
 	assert.Equal(t, "name", responseType.Fields[1].Name, "Field name should match")
 	assert.Equal(t, "string", responseType.Fields[1].Type, "Field type should match")
 	assert.Equal(t, "users.name", responseType.Fields[1].DatabaseTag, "Field database tag should match")

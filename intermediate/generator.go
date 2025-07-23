@@ -84,7 +84,7 @@ func convertFunctionDefToInterfaceSchema(functionDef *parser.FunctionDefinition)
 	
 	// Create interface schema
 	schema := &InterfaceSchema{
-		Name:         functionDef.Name,
+		Name:         functionDef.FunctionName, // Use FunctionName for both fields
 		FunctionName: functionDef.FunctionName,
 	}
 	

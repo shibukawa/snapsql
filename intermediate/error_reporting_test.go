@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/shibukawa/snapsql/testhelper"
 )
 
 func TestExecutionError_Error(t *testing.T) {
@@ -14,7 +15,7 @@ func TestExecutionError_Error(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "Error with file and position",
+			name: "Error with file and position" + testhelper.GetCaller(t),
 			err: &ExecutionError{
 				Message:    "variable not found",
 				Pos:        []int{5, 12, 45},
@@ -23,7 +24,7 @@ func TestExecutionError_Error(t *testing.T) {
 			expected: "queries/users.snap.sql:5:12: variable not found",
 		},
 		{
-			name: "Error with position only",
+			name: "Error with position only" + testhelper.GetCaller(t),
 			err: &ExecutionError{
 				Message: "invalid expression",
 				Pos:     []int{3, 8, 20},
@@ -110,7 +111,7 @@ FROM users`
 		expectErrors int
 	}{
 		{
-			name: "Valid positions",
+			name: "Valid positions" + testhelper.GetCaller(t),
 			instructions: []Instruction{
 				{Op: "EMIT_LITERAL", Pos: []int{1, 1, 0}, Value: "SELECT id, name"},
 				{Op: "EMIT_LITERAL", Pos: []int{2, 1, 16}, Value: "FROM users"},
@@ -118,28 +119,28 @@ FROM users`
 			expectErrors: 0,
 		},
 		{
-			name: "Invalid position format",
+			name: "Invalid position format" + testhelper.GetCaller(t),
 			instructions: []Instruction{
 				{Op: "EMIT_LITERAL", Pos: []int{1, 1}, Value: "SELECT id, name"}, // Missing offset
 			},
 			expectErrors: 1,
 		},
 		{
-			name: "Invalid line number",
+			name: "Invalid line number" + testhelper.GetCaller(t),
 			instructions: []Instruction{
 				{Op: "EMIT_LITERAL", Pos: []int{5, 1, 0}, Value: "SELECT id, name"},
 			},
 			expectErrors: 1,
 		},
 		{
-			name: "Invalid column number",
+			name: "Invalid column number" + testhelper.GetCaller(t),
 			instructions: []Instruction{
 				{Op: "EMIT_LITERAL", Pos: []int{1, 50, 0}, Value: "SELECT id, name"},
 			},
 			expectErrors: 1,
 		},
 		{
-			name: "Invalid offset",
+			name: "Invalid offset" + testhelper.GetCaller(t),
 			instructions: []Instruction{
 				{Op: "EMIT_LITERAL", Pos: []int{1, 1, 100}, Value: "SELECT id, name"},
 			},

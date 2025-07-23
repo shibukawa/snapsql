@@ -25,32 +25,36 @@ const (
 	OpLoopEnd        = "LOOP_END"         // End of loop block
 
 	// System directive instructions
-	OpEmitExplain      = "EMIT_EXPLAIN"       // Output EXPLAIN clause
-	OpJumpIfForceLimit = "JUMP_IF_FORCE_LIMIT" // Jump if force limit is set
+	OpEmitExplain       = "EMIT_EXPLAIN"         // Output EXPLAIN clause
+	OpJumpIfForceLimit  = "JUMP_IF_FORCE_LIMIT"  // Jump if force limit is set
 	OpJumpIfForceOffset = "JUMP_IF_FORCE_OFFSET" // Jump if force offset is set
-	OpEmitSystemFields = "EMIT_SYSTEM_FIELDS" // Output system fields
-	OpEmitSystemValues = "EMIT_SYSTEM_VALUES" // Output system values
+	OpEmitSystemFields  = "EMIT_SYSTEM_FIELDS"   // Output system fields
+	OpEmitSystemValues  = "EMIT_SYSTEM_VALUES"   // Output system values
 )
 
 // Instruction represents a single instruction in the instruction set
 type Instruction struct {
-	Op          string `json:"op"`
-	Pos         []int  `json:"pos,omitempty"`          // Position [line, column, offset] from original template
-	Value       string `json:"value,omitempty"`        // For EMIT_LITERAL
-	Param       string `json:"param,omitempty"`        // For EMIT_PARAM, JUMP_IF_PARAM
-	ExpIndex    int    `json:"exp_index,omitempty"`    // Index into pre-compiled expressions
-	EnvLevel    int    `json:"env_level,omitempty"`    // Environment level for CEL evaluation
-	Placeholder string `json:"placeholder,omitempty"`  // For EMIT_PARAM, EMIT_EVAL
-	Target      int    `json:"target,omitempty"`       // For JUMP, JUMP_IF_EXP, JUMP_IF_PARAM
-	Name        string `json:"name,omitempty"`         // For LABEL
-	Variable    string `json:"variable,omitempty"`     // For LOOP_START_PARAM, LOOP_START_EXP
-	Collection  string `json:"collection,omitempty"`   // For LOOP_START_PARAM
-	CollectionExpIndex int `json:"collection_exp_index,omitempty"` // Index into pre-compiled expressions for collection
-	EndLabel    string `json:"end_label,omitempty"`    // For LOOP_START_PARAM, LOOP_START_EXP
-	StartLabel  string `json:"start_label,omitempty"`  // For LOOP_NEXT
-	Label       string `json:"label,omitempty"`        // For LOOP_END
-	Analyze     bool   `json:"analyze,omitempty"`      // For EMIT_EXPLAIN
-	Fields      []string `json:"fields,omitempty"`     // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
+	Op                 string   `json:"op"`
+	Pos                []int    `json:"pos,omitempty"`                  // Position [line, column, offset] from original template
+	Value              string   `json:"value,omitempty"`                // For EMIT_LITERAL
+	Param              string   `json:"param,omitempty"`                // For EMIT_PARAM, JUMP_IF_PARAM
+	ExpIndex           int      `json:"exp_index,omitempty"`            // Index into pre-compiled expressions
+	EnvLevel           int      `json:"env_level,omitempty"`            // Environment level for CEL evaluation
+	Placeholder        string   `json:"placeholder,omitempty"`          // For EMIT_PARAM, EMIT_EVAL
+	Target             int      `json:"target,omitempty"`               // For JUMP, JUMP_IF_EXP, JUMP_IF_PARAM
+	Name               string   `json:"name,omitempty"`                 // For LABEL
+	Variable           string   `json:"variable,omitempty"`             // For LOOP_START_PARAM, LOOP_START_EXP
+	Collection         string   `json:"collection,omitempty"`           // For LOOP_START_PARAM
+	CollectionExpIndex int      `json:"collection_exp_index,omitempty"` // Index into pre-compiled expressions for collection
+	EndLabel           string   `json:"end_label,omitempty"`            // For LOOP_START_PARAM, LOOP_START_EXP
+	StartLabel         string   `json:"start_label,omitempty"`          // For LOOP_NEXT
+	Label              string   `json:"label,omitempty"`                // For LOOP_END
+	Analyze            bool     `json:"analyze,omitempty"`              // For EMIT_EXPLAIN
+	Fields             []string `json:"fields,omitempty"`               // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
+}
+
+func (i Instruction) MarshalJSON() ([]byte, error) {
+	return json.Marshal(i)
 }
 
 // InterfaceSchema contains extracted parameter definitions and metadata
@@ -93,19 +97,19 @@ type IntermediateFormat struct {
 
 	// Response type information
 	ResponseType *ResponseType `json:"response_type,omitempty"`
-	
+
 	// Response affinity (database type mapping)
 	ResponseAffinity string `json:"response_affinity,omitempty"`
 
 	// Instruction sequence
 	Instructions []Instruction `json:"instructions"`
-	
+
 	// Complex CEL expressions
 	CELExpressions []string `json:"cel_expressions,omitempty"`
-	
+
 	// Simple variables
 	SimpleVars []string `json:"simple_vars,omitempty"`
-	
+
 	// Environment variables by level
 	Envs [][]EnvVar `json:"envs,omitempty"`
 }
