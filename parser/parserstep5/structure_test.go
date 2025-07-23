@@ -7,6 +7,7 @@ import (
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/parser/parserstep3"
+	"github.com/shibukawa/snapsql/parser/parserstep4"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -26,18 +27,10 @@ func parseFullPipeline(t *testing.T, sql string) cmn.StatementNode {
 	err = parserstep3.Execute(step2Result)
 	assert.NoError(t, err, "parserstep3 failed")
 
-	return step2Result
-}
+	err = parserstep4.Execute(step2Result)
+	assert.NoError(t, err, "parserstep4 failed")
 
-// TestCase represents a single test case for directive validation
-type TestCase struct {
-	name            string
-	sql             string
-	shouldSucceed   bool
-	expectedError   string
-	clauseType      cmn.NodeType
-	expectedCount   int
-	directiveChecks []DirectiveCheck
+	return step2Result
 }
 
 // DirectiveCheck represents expected directive properties
@@ -48,7 +41,15 @@ type DirectiveCheck struct {
 }
 
 func TestValidateAndLinkDirectives(t *testing.T) {
-	testCases := []TestCase{
+	testCases := []struct {
+		name            string
+		sql             string
+		shouldSucceed   bool
+		expectedError   string
+		clauseType      cmn.NodeType
+		expectedCount   int
+		directiveChecks []DirectiveCheck
+	}{
 		// Success cases
 		{
 			name: "SimpleIfEnd",
@@ -65,6 +66,22 @@ func TestValidateAndLinkDirectives(t *testing.T) {
 				{index: 0, directiveType: "if"},
 				{index: 1, directiveType: "end"},
 			},
+		},
+		{
+			name: "IfCoveringWhereClause: clause covers if is removed at parser step2",
+			sql: `SELECT id, name, email FROM users /*# if filters.active */
+WHERE active = /*= filters.active */true /*# end */`,
+			shouldSucceed: true,
+			clauseType:    cmn.FROM_CLAUSE,
+			expectedCount: 0,
+		},
+		{
+			name: "EndInWhereClause: clause covers if is removed at parser step2",
+			sql: `SELECT id, name, email FROM users /*# if filters.active */
+WHERE active = /*= filters.active */true /*# end */`,
+			shouldSucceed: true,
+			clauseType:    cmn.WHERE_CLAUSE,
+			expectedCount: 0,
 		},
 		{
 			name: "ForEnd",
@@ -182,6 +199,16 @@ func TestValidateAndLinkDirectives(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 			var parseErr cmn.ParseError
+
+			// Debug for IfCoveringWhereClause test
+			if tc.name == "IfCoveringWhereClause" {
+				t.Log("Debugging IfCoveringWhereClause test")
+				for _, clause := range stmt.Clauses() {
+					t.Logf("Clause type: %s", clause.Type())
+					debugTokens(t, clause.ContentTokens())
+				}
+			}
+
 			validateAndLinkDirectives(stmt, &parseErr)
 
 			if tc.shouldSucceed {
@@ -369,8 +396,9 @@ func TestValidateAndLinkDirectives_NextIndexLinking(t *testing.T) {
 	}
 }
 
-// Helper functions
+// Helper functions for testing
 
+// findClauseByType finds a clause of the specified type in a statement
 func findClauseByType(t *testing.T, stmt cmn.StatementNode, clauseType cmn.NodeType) cmn.ClauseNode {
 	t.Helper()
 	for _, clause := range stmt.Clauses() {
@@ -379,6 +407,20 @@ func findClauseByType(t *testing.T, stmt cmn.StatementNode, clauseType cmn.NodeT
 		}
 	}
 	return nil
+}
+
+// debugTokens prints token information for debugging
+func debugTokens(t *testing.T, tokens []tokenizer.Token) {
+	t.Helper()
+	t.Logf("Total tokens: %d", len(tokens))
+	for i, token := range tokens {
+		if token.Directive != nil {
+			t.Logf("Token[%d]: Type=%s, Value=%s, Directive.Type=%s",
+				i, token.Type, token.Value, token.Directive.Type)
+		} else {
+			t.Logf("Token[%d]: Type=%s, Value=%s", i, token.Type, token.Value)
+		}
+	}
 }
 
 func extractDirectiveTokens(t *testing.T, tokens []tokenizer.Token) []tokenizer.Token {

@@ -19,13 +19,13 @@ func applyImplicitIfConditions(statement parsercommon.StatementNode) {
 		case *parsercommon.LimitClause:
 			if typedClause.IfCondition() == "" {
 				if condition := extractImplicitCondition(typedClause.RawTokens()); condition != "" {
-					typedClause.SetIfCondition(condition)
+					typedClause.SetIfCondition(condition, -1, -1, nil)
 				}
 			}
 		case *parsercommon.OffsetClause:
 			if typedClause.IfCondition() == "" {
 				if condition := extractImplicitCondition(typedClause.RawTokens()); condition != "" {
-					typedClause.SetIfCondition(condition)
+					typedClause.SetIfCondition(condition, -1, -1, nil)
 				}
 			}
 		}
