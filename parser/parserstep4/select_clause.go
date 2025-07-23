@@ -2,7 +2,6 @@ package parserstep4
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	pc "github.com/shibukawa/parsercombinator"
@@ -123,7 +122,6 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		if len(token.Skipped) == 0 {
 			continue
 		}
-		log.Println("parse field:", token.Skipped)
 
 		field, fieldTokens := parseFieldQualifier(token.Skipped)
 
@@ -208,15 +206,12 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 
 			if isDummyLiteral {
 				// DUMMY_LITERAL tokens are allowed as they represent variable directives
-				field.FieldKind = cmn.LiteralField
+				field.FieldKind = cmn.DummyField
 				field.Expression = cmn.ToToken(match)
 				clause.Fields = append(clause.Fields, field)
 			} else {
-				// Regular literals are still restricted in SELECT clause
-				p := v.Position
-				perr.Add(fmt.Errorf("%w at %s: snapsql doesn't allow literal('%s') in SELECT clause", cmn.ErrInvalidForSnapSQL, p.String(), v.Value))
-				// 明示的にエラーフラグを設定
-				field.FieldKind = cmn.InvalidField
+				// todo: warning
+				field.FieldKind = cmn.LiteralField
 				field.Expression = cmn.ToToken(match)
 				clause.Fields = append(clause.Fields, field)
 			}
