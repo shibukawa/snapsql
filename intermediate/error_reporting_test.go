@@ -18,7 +18,7 @@ func TestExecutionError_Error(t *testing.T) {
 			name: "Error with file and position" + testhelper.GetCaller(t),
 			err: &ExecutionError{
 				Message:    "variable not found",
-				Pos:        []int{5, 12, 45},
+				Pos:        "5:12",
 				SourceFile: "queries/users.snap.sql",
 			},
 			expected: "queries/users.snap.sql:5:12: variable not found",
@@ -27,9 +27,9 @@ func TestExecutionError_Error(t *testing.T) {
 			name: "Error with position only" + testhelper.GetCaller(t),
 			err: &ExecutionError{
 				Message: "invalid expression",
-				Pos:     []int{3, 8, 20},
+				Pos:     "3:8",
 			},
-			expected: "line 3, column 8: invalid expression",
+			expected: "position 3:8: invalid expression",
 		},
 	}
 
@@ -43,7 +43,7 @@ func TestExecutionError_Error(t *testing.T) {
 func TestExecutionError_DetailedError(t *testing.T) {
 	err := &ExecutionError{
 		Message:    "variable 'include_email' not found",
-		Pos:        []int{1, 18, 17},
+		Pos:        "1:18",
 		SourceFile: "test.sql",
 		SourceLine: "SELECT id, name /*# if include_email */, email",
 	}
@@ -66,16 +66,16 @@ FROM users
 WHERE id = /*= user_id */123`
 
 	instruction := &Instruction{
-		Op:       "JUMP_IF_EXP",
-		Pos:      []int{1, 18, 17},
-		ExpIndex: 0,
+		Op:        OpIf,
+		Pos:       "1:18",
+		Condition: "include_email",
 	}
 
 	err := NewExecutionError("variable not found", 1, instruction, "test.sql", sourceContent)
 
 	assert.Equal(t, "variable not found", err.Message)
 	assert.Equal(t, 1, err.Instruction)
-	assert.Equal(t, []int{1, 18, 17}, err.Pos)
+	assert.Equal(t, "1:18", err.Pos)
 	assert.Equal(t, "test.sql", err.SourceFile)
 	assert.Equal(t, "SELECT id, name /*# if include_email */, email", err.SourceLine)
 }
@@ -86,9 +86,9 @@ FROM users
 WHERE id = /*= user_id */123`
 
 	instructions := []Instruction{
-		{Op: "EMIT_LITERAL", Pos: []int{1, 1, 0}, Value: "SELECT id, name"},
-		{Op: "JUMP_IF_EXP", Pos: []int{1, 18, 17}, ExpIndex: 0, Target: 4},
-		{Op: "EMIT_LITERAL", Pos: []int{1, 42, 41}, Value: ", email"},
+		{Op: OpEmitStatic, Pos: "1:1", Value: "SELECT id, name"},
+		{Op: OpIf, Pos: "1:18", Condition: "include_email"},
+		{Op: OpEmitStatic, Pos: "1:42", Value: ", email"},
 	}
 
 	reporter := NewErrorReporter("test.sql", sourceContent, instructions)
@@ -96,7 +96,7 @@ WHERE id = /*= user_id */123`
 
 	assert.Equal(t, "condition evaluation failed", err.Message)
 	assert.Equal(t, 1, err.Instruction)
-	assert.Equal(t, []int{1, 18, 17}, err.Pos)
+	assert.Equal(t, "1:18", err.Pos)
 	assert.Equal(t, "test.sql", err.SourceFile)
 	assert.Equal(t, "SELECT id, name /*# if include_email */, email", err.SourceLine)
 }
@@ -113,36 +113,29 @@ FROM users`
 		{
 			name: "Valid positions" + testhelper.GetCaller(t),
 			instructions: []Instruction{
-				{Op: "EMIT_LITERAL", Pos: []int{1, 1, 0}, Value: "SELECT id, name"},
-				{Op: "EMIT_LITERAL", Pos: []int{2, 1, 16}, Value: "FROM users"},
+				{Op: OpEmitStatic, Pos: "1:1", Value: "SELECT id, name"},
+				{Op: OpEmitStatic, Pos: "2:1", Value: "FROM users"},
 			},
 			expectErrors: 0,
 		},
 		{
 			name: "Invalid position format" + testhelper.GetCaller(t),
 			instructions: []Instruction{
-				{Op: "EMIT_LITERAL", Pos: []int{1, 1}, Value: "SELECT id, name"}, // Missing offset
+				{Op: OpEmitStatic, Pos: "1", Value: "SELECT id, name"}, // Missing column
 			},
 			expectErrors: 1,
 		},
 		{
 			name: "Invalid line number" + testhelper.GetCaller(t),
 			instructions: []Instruction{
-				{Op: "EMIT_LITERAL", Pos: []int{5, 1, 0}, Value: "SELECT id, name"},
+				{Op: OpEmitStatic, Pos: "5:1", Value: "SELECT id, name"},
 			},
 			expectErrors: 1,
 		},
 		{
 			name: "Invalid column number" + testhelper.GetCaller(t),
 			instructions: []Instruction{
-				{Op: "EMIT_LITERAL", Pos: []int{1, 50, 0}, Value: "SELECT id, name"},
-			},
-			expectErrors: 1,
-		},
-		{
-			name: "Invalid offset" + testhelper.GetCaller(t),
-			instructions: []Instruction{
-				{Op: "EMIT_LITERAL", Pos: []int{1, 1, 100}, Value: "SELECT id, name"},
+				{Op: OpEmitStatic, Pos: "1:50", Value: "SELECT id, name"},
 			},
 			expectErrors: 1,
 		},
@@ -158,7 +151,7 @@ FROM users`
 
 func TestErrorReporter_InvalidInstructionIndex(t *testing.T) {
 	instructions := []Instruction{
-		{Op: "EMIT_LITERAL", Pos: []int{1, 1, 0}, Value: "SELECT"},
+		{Op: OpEmitStatic, Pos: "1:1", Value: "SELECT"},
 	}
 
 	reporter := NewErrorReporter("test.sql", "SELECT", instructions)
@@ -168,13 +161,13 @@ func TestErrorReporter_InvalidInstructionIndex(t *testing.T) {
 
 	assert.Equal(t, "error message", err.Message)
 	assert.Equal(t, 10, err.Instruction)
-	assert.Equal(t, []int{0, 0, 0}, err.Pos) // Default position for invalid index
+	assert.Equal(t, "0:0", err.Pos) // Default position for invalid index
 }
 
 func TestExecutionError_DetailedErrorWithoutSourceLine(t *testing.T) {
 	err := &ExecutionError{
 		Message:    "some error",
-		Pos:        []int{1, 5, 4},
+		Pos:        "1:5",
 		SourceFile: "test.sql",
 		// No SourceLine
 	}

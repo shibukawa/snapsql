@@ -46,7 +46,7 @@ func TestExecute(t *testing.T) {
 			sql:  "SELECT /*= undefined_var */default FROM users",
 			schema: &cmn.FunctionDefinition{
 				FunctionName: "get_user_data",
-				Parameters: map[string]any{},
+				Parameters:   map[string]any{},
 			},
 			environment:    map[string]any{},
 			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
@@ -56,7 +56,7 @@ func TestExecute(t *testing.T) {
 			sql:  "SELECT name FROM /*$ table_name */default_table",
 			schema: &cmn.FunctionDefinition{
 				FunctionName: "get_table_data",
-				Parameters: map[string]any{},
+				Parameters:   map[string]any{},
 			},
 			environment: map[string]any{
 				"table_name": "users",
@@ -208,8 +208,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 				assert.True(t, parseErr != nil, "Expected error but got none")
 			} else {
 				assert.True(t, parseErr == nil, "Did not expect an error but got: %v", parseErr)
-				
-				// エラーがない場合のみDUMMY_LITERALトークンのチェックを行う
+
 				dummyLiteralFound := false
 
 				for _, clause := range stmt.Clauses() {

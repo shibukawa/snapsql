@@ -18,9 +18,7 @@ The intermediate instruction set is stored in JSON format:
 ```json
 {
   "metadata": {
-    "source_file": "queries/users.snap.sql",
-    "hash": "sha256:...",
-    "timestamp": "2025-06-26T10:00:00Z"
+    "format_version": "1"
   },
   "parameters": {
     "include_email": {"type": "boolean"},
@@ -46,24 +44,28 @@ The intermediate instruction set is stored in JSON format:
   "instructions": [
     {
       "type": "static",
+      "pos": [1, 1, 0],
       "content": "SELECT id, name"
     },
     {
-      "type": "conditional",
+      "type": "jump_if_false",
+      "pos": [1, 18, 17],
       "condition": "include_email",
-      "instructions": [
-        {
-          "type": "static",
-          "content": ", email"
-        }
-      ]
+      "target": 3
     },
     {
       "type": "static",
+      "pos": [1, 42, 41],
+      "content": ", email"
+    },
+    {
+      "type": "static",
+      "pos": [1, 65, 64],
       "content": " FROM users_"
     },
     {
       "type": "variable",
+      "pos": [1, 76, 75],
       "name": "env",
       "validation": {
         "type": "string",
@@ -71,18 +73,20 @@ The intermediate instruction set is stored in JSON format:
       }
     },
     {
-      "type": "conditional",
+      "type": "jump_if_false",
+      "pos": [1, 85, 84],
       "condition": "filters.active != null",
-      "instructions": [
-        {
-          "type": "static",
-          "content": " WHERE active = "
-        },
-        {
-          "type": "variable",
-          "name": "filters.active"
-        }
-      ]
+      "target": 8
+    },
+    {
+      "type": "static",
+      "pos": [1, 110, 109],
+      "content": " WHERE active = "
+    },
+    {
+      "type": "variable",
+      "pos": [1, 125, 124],
+      "name": "filters.active"
     }
   ]
 }
@@ -90,9 +94,7 @@ The intermediate instruction set is stored in JSON format:
 
 ### Metadata Section
 
-* `source_file`: Path to the original SQL template file
-* `hash`: Hash of the source file (for change detection)
-* `timestamp`: Generation timestamp
+* `format_version`: Format version. Currently only 1.
 
 ### Parameters Section
 
@@ -108,6 +110,7 @@ Supports the following instruction types:
    ```json
    {
      "type": "static",
+     "pos": [1, 1, 0],
      "content": "SELECT * FROM"
    }
    ```
@@ -116,6 +119,7 @@ Supports the following instruction types:
    ```json
    {
      "type": "variable",
+     "pos": [1, 15, 14],
      "name": "table_name",
      "validation": {
        "type": "string",
@@ -124,32 +128,62 @@ Supports the following instruction types:
    }
    ```
 
-3. `conditional`: Conditional branching
+3. `jump_if_false`: Jump to specified instruction index if condition is false
    ```json
    {
-     "type": "conditional",
+     "type": "jump_if_false",
+     "pos": [1, 25, 24],
      "condition": "include_email",
-     "instructions": [...]
+     "target": 5
    }
    ```
 
-4. `loop`: Iteration
+4. `loop_start`: Start of loop block
    ```json
    {
-     "type": "loop",
-     "source": "sort_fields",
-     "separator": ", ",
-     "instructions": [...]
+     "type": "loop_start",
+     "pos": [1, 30, 29],
+     "variable": "item",
+     "collection": "sort_fields",
+     "end_target": 10
    }
    ```
 
-5. `array_expansion`: Array expansion (for IN clauses)
+5. `loop_end`: End of loop block (jumps back to loop start)
+   ```json
+   {
+     "type": "loop_end",
+     "pos": [1, 100, 99],
+     "start_target": 4
+   }
+   ```
+
+6. `array_expansion`: Array expansion (for IN clauses)
    ```json
    {
      "type": "array_expansion",
+     "pos": [1, 50, 49],
      "source": "departments",
      "separator": ", ",
      "quote": true
+   }
+   ```
+
+7. `emit_if_not_boundary`: Only emit content if not at a boundary (commas, AND, OR, etc.)
+   ```json
+   {
+     "type": "emit_if_not_boundary",
+     "pos": [1, 60, 59],
+     "content": ", "
+   }
+   ```
+
+8. `emit_static_boundary`: Static text that represents a boundary (closing parentheses, clause boundaries, etc.)
+   ```json
+   {
+     "type": "emit_static_boundary",
+     "pos": [1, 70, 69],
+     "content": ") FROM"
    }
    ```
 

@@ -270,21 +270,11 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 	}
 
 	// Extract function definition from SQL comments
-	var functionDef *FunctionDefinition
-	extractedDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
-	if err == nil {
-		functionDef = extractedDef
-	} else {
-		// Create an empty function definition if none was found
-		functionDef = &FunctionDefinition{
-			FunctionName:   "empty_function",
-			Description:    "Auto-generated empty function",
-			Parameters:     make(map[string]any),
-			ParameterOrder: []string{},
-		}
+	functionDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// Parse the tokens
 	stmt, err := RawParse(tokens, functionDef, constants)
 	return stmt, functionDef, err
 }

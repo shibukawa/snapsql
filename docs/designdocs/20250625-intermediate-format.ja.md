@@ -1,12 +1,12 @@
 # SnapSQL 中間形式仕様
 
-**ドキュメントバージョン:** 1.2  
-**日付:** 2025-07-18  
+**ドキュメントバージョン:** 1.3  
+**日付:** 2025-07-23  
 **ステータス:** 実装フェーズ
 
 ## 概要
 
-このドキュメントは、SnapSQLテンプレートの中間JSON形式を定義します。中間形式は、SQLテンプレートパーサーとコードジェネレータ間の橋渡しとして機能し、解析されたSQLテンプレートのメタデータ、命令列、インターフェーススキーマの言語非依存表現を提供します。
+このドキュメントは、SnapSQLテンプレートの中間JSON形式を定義します。中間形式は、SQLテンプレートパーサーとコードジェネレータ間の橋渡しとして機能し、解析されたSQLテンプレートのメタデータ、CEL式、関数定義の言語非依存表現を提供します。
 
 ## 設計目標
 
@@ -16,10 +16,9 @@
 - SQL構造と言語固有メタデータの明確な分離
 
 ### 2. 完全な情報保持
-- 命令列による効率的なテンプレート表現
-- テンプレートメタデータとインターフェーススキーマ
-- 変数参照とその型情報
-- 制御フロー構造（if/forブロック）
+- テンプレートメタデータと関数定義
+- CEL式の完全な抽出と型情報
+- 制御フロー構造（if/forブロック）の命令表現
 
 ### 3. コード生成対応
 - テンプレートベースのコード生成に適した構造化データ
@@ -38,108 +37,141 @@
 
 ```json
 {
-  "interface_schema": { /* InterfaceSchemaオブジェクト */ },
-  "response_type": { /* ResponseTypeオブジェクト */ },
+  "format_version": 1,
+  "function_name": "get_user_by_id",
+  "description": "Get user by ID",
+  "parameters": [ /* パラメータ定義 */ ],
+  "generators": { /* ジェネレータ設定 */ },
+  "responses": { /* レスポンス型定義 */ },
   "response_affinity": "one",
   "instructions": [ /* 命令列 */ ],
-  "cel_expressions": [ /* 複雑なCEL式リスト */ ],
-  "envs": [ /* 環境変数の階層構造 */ ]
+  "expressions": [ /* CEL式リスト */ ],
+  "environments": [ /* 環境変数の階層構造 */ ],
+  "cache_keys": [ /* キャッシュキーのインデックス */ ]
 }
 ```
 
-## CEL式と単純変数の区別
+## CEL式の抽出
 
-### 単純変数と複雑なCEL式
+SnapSQLでは、テンプレート内のすべてのCEL式を抽出します。これには以下が含まれます：
 
-SnapSQLでは、テンプレート内の変数参照を2つのカテゴリに分類します：
+1. **変数置換**: `/*= expression */` 形式の式
+2. **条件式**: `/*# if condition */` や `/*# elseif condition */` の条件部分
+3. **ループ式**: `/*# for variable : collection */` のコレクション部分
 
-1. **単純変数**: ピリオドや演算子を含まない単純な変数名（例: `active`, `min_age`, `include_email`）
-2. **複雑なCEL式**: 演算子、メソッド呼び出し、または複合参照を含む式（例: `min_age > 0`, `departments != null && departments.size() > 0`, `dept.employees`）
+### CEL式の例
 
-この区別により、実行時の効率が向上します：
+```sql
+-- 変数置換
+SELECT * FROM users WHERE id = /*= user_id */123
 
-- **単純変数**: `map[string]any` から直接アクセスでき、CEL環境の評価が不要
-- **複雑なCEL式**: CEL環境での評価が必要
+-- 条件式
+/*# if min_age > 0 */
+AND age >= /*= min_age */18
+/*# end */
 
-### 命令タイプの拡張
+-- ループ式
+/*# for dept : departments */
+SELECT /*= dept.name */
+/*# end */
 
-単純変数と複雑なCEL式を区別するために、以下の命令タイプが追加されています：
-
-- **JUMP_IF_PARAM**: 単純変数の真偽値に基づくジャンプ
-- **LOOP_START_PARAM**: 単純変数のコレクションに対するループ開始
-- **LOOP_START_EXP**: CEL式で取得したコレクションに対するループ開始
+-- 複雑な式
+ORDER BY /*= sort_field + " " + (sort_direction || "ASC") */
+```
 
 ### 中間形式での表現
 
 ```json
 {
-  "instructions": [
-    {
-      "op": "JUMP_IF_PARAM",
-      "param": "active",  // 単純変数名を直接指定
-      "target": 3,
-      "pos": [1, 1, 0]
-    },
-    {
-      "op": "JUMP_IF_EXP",
-      "exp_index": 0,  // CEL式リストの参照
-      "target": 5,
-      "pos": [2, 1, 50]
-    },
-    {
-      "op": "LOOP_START_PARAM",
-      "variable": "item",
-      "collection": "items",  // 単純変数名を直接指定
-      "end_label": "loop_end_1",
-      "env_level": 1,
-      "pos": [3, 1, 100]
-    },
-    {
-      "op": "LOOP_START_EXP",
-      "variable": "emp",
-      "collection_exp_index": 1,  // CEL式リストの参照
-      "end_label": "loop_end_2",
-      "env_level": 2,
-      "pos": [4, 1, 150]
-    }
+  "expressions": [
+    "user_id",
+    "min_age > 0",
+    "min_age",
+    "departments",
+    "dept",
+    "dept.name",
+    "sort_field + \" \" + (sort_direction || \"ASC\")"
   ],
-  "cel_expressions": [
-    "departments != null && departments.size() > 0",  // 複雑なCEL式のみ
-    "dept.employees"  // 複雑なCEL式のみ
-  ]
+  "environments": [
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      }
+    ]
+  ],
+  "cache_keys": [1, 3]
 }
 ```
 
-この方法により、単純変数は命令に直接埋め込まれ、複雑なCEL式のみがCEL式リストに含まれます。これにより、実行時のパフォーマンスが向上し、不要なCEL評価のオーバーヘッドを避けることができます。
+`environments` セクションには、ループ変数の階層構造が含まれます。各レベルは、そのレベルで定義されたループ変数のリストを含みます。
 
-### インターフェーススキーマセクション
+`cache_keys` セクションには、if/for文で使用されるCEL式のインデックス値の配列が含まれます。これらの式は頻繁に評価される可能性があるため、キャッシュの対象となります。上記の例では、`min_age > 0`（インデックス1）と`departments`（インデックス3）がキャッシュキーとして指定されています。
+
+## 関数定義セクション
+
+関数定義は、テンプレートのヘッダーコメントから抽出されたメタデータを含みます。
 
 ```json
 {
-  "interface_schema": {
-    "name": "getUserById",
-    "function_name": "getUserById",
-    "parameters": [
-      {
-        "name": "user_id",
-        "type": "int",
-        "optional": false
-      },
-      {
-        "name": "include_details",
-        "type": "bool",
-        "optional": true
-      }
-    ]
+  "function_name": "get_user_by_id",
+  "description": "Get user by ID",
+  "parameters": [
+    {
+      "name": "user_id",
+      "type": "int",
+      "optional": false
+    },
+    {
+      "name": "include_details",
+      "type": "bool",
+      "optional": true
+    }
+  ],
+  "generators": {
+    "go": {
+      "package": "queries",
+      "imports": ["context", "database/sql"]
+    },
+    "typescript": {
+      "module": "esm",
+      "types": true
+    }
   }
 }
 ```
 
-### レスポンスタイプセクション
+### パラメータ定義
+
+パラメータ定義は、テンプレートのヘッダーコメントから抽出されます。
+
+```yaml
+/*#
+name: get_user_by_id
+function_name: get_user_by_id
+description: Get user by ID
+parameters:
+  user_id: int
+  include_details: bool
+generators:
+  go:
+    package: queries
+    imports:
+      - context
+      - database/sql
+  typescript:
+    module: esm
+    types: true
+*/
+```
+
+## レスポンス型セクション
+
+レスポンス型は、クエリの結果の型情報を示します。
 
 ```json
 {
-  "response_type": {
+  "responses": {
     "name": "User",
     "fields": [
       {
@@ -165,237 +197,168 @@ SnapSQLでは、テンプレート内の変数参照を2つのカテゴリに分
 
 ## 命令セット
 
-命令セットは、SQLテンプレートの実行可能な表現です。完全なASTではなく、固定値部分は結合されて1つの命令になります。
+命令セットは、SQLテンプレートの実行可能な表現です。命令セットは、テンプレートの実行フローを制御し、動的なSQL生成を可能にします。
 
-### 命令タイプと引数
+### 命令タイプ
 
 #### 基本出力命令
-- **EMIT_LITERAL**
-  - `value`: 出力するSQLリテラル文字列
-  - `pos`: ソースコード上の位置 [行, 列, オフセット]
+- **EMIT_STATIC**: 静的なSQLテキストを出力
+  ```json
+  {
+    "op": "EMIT_STATIC",
+    "value": "SELECT id, name FROM users WHERE ",
+    "pos": "1:1"
+  }
+  ```
 
-- **EMIT_PARAM**
-  - `param`: パラメータ変数名（単純変数）
-  - `placeholder`: 開発時のダミー値
-  - `pos`: ソースコード上の位置
-
-- **EMIT_EVAL**
-  - `exp_index`: CELExpressionsリスト内のインデックス
-  - `placeholder`: 開発時のダミー値
-  - `pos`: ソースコード上の位置
+- **EMIT_EVAL**: CEL式を評価して結果を出力
+  ```json
+  {
+    "op": "EMIT_EVAL",
+    "exp_index": 0,
+    "placeholder": "123",
+    "pos": "1:43"
+  }
+  ```
 
 #### 制御フロー命令
-- **JUMP**
-  - `target`: 遷移先の命令インデックス
-  - `pos`: ソースコード上の位置
+- **JUMP**: 無条件ジャンプ
+  ```json
+  {
+    "op": "JUMP",
+    "target": 5,
+    "pos": "5:1"
+  }
+  ```
 
-- **JUMP_IF_EXP**
-  - `exp_index`: CELExpressionsリスト内のインデックス
-  - `target`: 条件が真の場合の遷移先インデックス
-  - `pos`: ソースコード上の位置
+- **JUMP_IF**: CEL式の評価結果に基づくジャンプ
+  ```json
+  {
+    "op": "JUMP_IF",
+    "exp_index": 1,
+    "target": 3,
+    "pos": "3:1"
+  }
+  ```
 
-- **JUMP_IF_PARAM**
-  - `param`: パラメータ変数名（単純変数）
-  - `target`: 条件が真の場合の遷移先インデックス
-  - `pos`: ソースコード上の位置
-
-- **LABEL**
-  - `name`: ラベル名
-  - `pos`: ソースコード上の位置
+- **LABEL**: ジャンプ先ラベル
+  ```json
+  {
+    "op": "LABEL",
+    "name": "end_if_1",
+    "pos": "6:1"
+  }
+  ```
 
 #### ループ命令
-- **LOOP_START_PARAM**
-  - `variable`: ループ変数名
-  - `collection`: コレクション変数名（単純変数）
-  - `end_label`: ループ終了ラベル
-  - `env_level`: 環境レベルのインデックス
-  - `pos`: ソースコード上の位置
+- **LOOP_START**: CEL式で取得したコレクションに対するループ開始
+  ```json
+  {
+    "op": "LOOP_START",
+    "variable": "dept",
+    "exp_index": 3,
+    "env_level": 0,
+    "end_label": "loop_end_1",
+    "pos": "2:3"
+  }
+  ```
 
-- **LOOP_START_EXP**
-  - `variable`: ループ変数名
-  - `collection_exp_index`: CELExpressionsリスト内のインデックス
-  - `end_label`: ループ終了ラベル
-  - `env_level`: 環境レベルのインデックス
-  - `pos`: ソースコード上の位置
+- **LOOP_END**: ループ終了
+  ```json
+  {
+    "op": "LOOP_END",
+    "start_label": "loop_start_1",
+    "pos": "17:3"
+  }
+  ```
 
-- **LOOP_NEXT**
-  - `start_label`: ループ開始ラベル
-  - `pos`: ソースコード上の位置
+#### システム命令
+- **SYSTEM_EXPLAIN**: 実行オプションでEXPLAIN句が挿入される場所
+  ```json
+  {
+    "op": "SYSTEM_EXPLAIN"
+  }
+  ```
 
-- **LOOP_END**
-  - `label`: 対応するループのラベル
-  - `env_level`: 環境レベルのインデックス
-  - `pos`: ソースコード上の位置
+- **SYSTEM_JUMP_IF_LIMIT**: 実行時オプションでLIMITが設定された場合にジャンプ
+  ```json
+  {
+    "op": "SYSTEM_JUMP_IF_LIMIT",
+    "target": 10
+  }
+  ```
 
-#### システムディレクティブ命令
-- **EMIT_EXPLAIN**
-  - `analyze`: ANALYZE句を含めるかどうか（真偽値）
+- **SYSTEM_JUMP_IF_OFFSET**: 実行時オプションでOFFSETが設定された場合にジャンプ
+  ```json
+  {
+    "op": "SYSTEM_JUMP_IF_OFFSET",
+    "target": 12
+  }
+  ```
 
-- **JUMP_IF_FORCE_LIMIT**
-  - `target`: 強制LIMITが設定されている場合の遷移先インデックス
-
-- **JUMP_IF_FORCE_OFFSET**
-  - `target`: 強制OFFSETが設定されている場合の遷移先インデックス
-
-- **EMIT_SYSTEM_FIELDS**
-  - `fields`: システムカラム名の配列
-
-- **EMIT_SYSTEM_VALUES**
-  - `fields`: システムカラム名の配列（EMIT_SYSTEM_FIELDSと対応）
-
-### 命令列セクション
+### 命令列の例
 
 ```json
 {
   "instructions": [
     {
-      "op": "EMIT_LITERAL",
-      "pos": [1, 1, 0],
-      "value": "SELECT id, name FROM users WHERE active = "
+      "op": "SYSTEM_EXPLAIN"
     },
     {
-      "op": "EMIT_PARAM",
-      "pos": [1, 43, 42],
-      "param": "active",
-      "placeholder": "true"
+      "op": "EMIT_STATIC",
+      "value": "SELECT id, name FROM users WHERE active = ",
+      "pos": "1:1"
     },
     {
-      "op": "JUMP_IF_EXP",
-      "pos": [2, 1, 50],
+      "op": "EMIT_EVAL",
       "exp_index": 0,
-      "target": 5
+      "placeholder": "true",
+      "pos": "1:43"
     },
     {
-      "op": "EMIT_LITERAL",
-      "pos": [2, 24, 73],
-      "value": ", email"
+      "op": "JUMP_IF",
+      "exp_index": 1,
+      "target": 6,
+      "pos": "2:1"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": " AND age >= ",
+      "pos": "3:1"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 2,
+      "placeholder": "18",
+      "pos": "3:12"
+    },
+    {
+      "op": "LABEL",
+      "name": "end_if_1",
+      "pos": "4:1"
+    },
+    {
+      "op": "SYSTEM_JUMP_IF_LIMIT",
+      "target": 10
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": " LIMIT 100",
+      "pos": "5:1"
     },
     {
       "op": "JUMP",
-      "pos": [4, 3, 100],
-      "target": 6
+      "target": 11,
+      "pos": "5:12"
     },
     {
-      "op": "EMIT_LITERAL",
-      "pos": [5, 1, 110],
-      "value": ""
-    },
-    {
-      "op": "EMIT_LITERAL",
-      "pos": [6, 1, 120],
-      "value": " FROM users"
+      "op": "LABEL",
+      "name": "end_limit",
+      "pos": "6:1"
     }
   ]
 }
 ```
-
-### CEL式セクション
-
-```json
-{
-  "cel_expressions": [
-    "filters.department != null && filters.department.size() > 0"
-  ]
-}
-```
-
-### 環境変数セクション
-
-```json
-{
-  "envs": [
-    [  // レベル0（最初のループ内）
-      {
-        "name": "department",
-        "type": "string"
-      }
-    ],
-    [  // レベル1（ネストされたループ内）
-      {
-        "name": "employee",
-        "type": "object"
-      }
-    ]
-  ]
-}
-```
-
-この情報を使用して、CEL環境を事前に構築することができます。実行時には、適切な環境レベルで式を評価するだけで済みます。
-
-### システムディレクティブの実装
-
-以前の設計では、システムディレクティブは別のセクションに保持されていましたが、現在の実装では命令列の中に含まれています。これにより、以下の利点があります：
-
-1. **一貫性**: すべての実行制御が命令列内で統一的に表現される
-2. **効率性**: 実行時の追加の処理ステップが不要
-3. **柔軟性**: システムディレクティブとユーザーディレクティブを同じ方法で処理できる
-
-システムディレクティブは、クエリの実行計画（EXPLAIN）やLIMITの上書きなど、クエリ実行に関する追加の制御を提供します。これらは命令列内の特定の命令として表現されます：
-
-```json
-[
-  {
-    "op": "EMIT_EXPLAIN",
-    "analyze": false
-  },
-  {
-    "op": "EMIT_LITERAL",
-    "value": "SELECT id, name FROM users",
-    "pos": [1, 9, 8]
-  },
-  {
-    "op": "JUMP_IF_FORCE_LIMIT",
-    "target": 5
-  },
-  {
-    "op": "EMIT_LITERAL",
-    "value": " LIMIT 100",
-    "pos": [1, 32, 31]
-  },
-  {
-    "op": "JUMP",
-    "target": 6,
-    "pos": [1, 43, 42]
-  },
-  {
-    "op": "EMIT_LITERAL",
-    "value": "",
-    "pos": [1, 43, 42]
-  }
-]
-```
-
-また、INSERT文やUPDATE文では、システム共通で更新日時やバージョン情報などをシステムカラムとして挿入する必要がある場合があります。これらは以下のように表現されます：
-
-```json
-[
-  {
-    "op": "EMIT_LITERAL",
-    "value": "INSERT INTO users (name, email",
-    "pos": [1, 1, 0]
-  },
-  {
-    "op": "EMIT_SYSTEM_FIELDS",
-    "fields": ["created_at", "updated_at", "version"]
-  },
-  {
-    "op": "EMIT_LITERAL",
-    "value": ") VALUES ('John', 'john@example.com'",
-    "pos": [1, 28, 27]
-  },
-  {
-    "op": "EMIT_SYSTEM_VALUES",
-    "fields": ["created_at", "updated_at", "version"]
-  },
-  {
-    "op": "EMIT_LITERAL",
-    "value": ")",
-    "pos": [1, 62, 61]
-  }
-]
-```
-
-トランザクション管理やタイムアウトなどの外部制御は、このコード生成の範囲外であり、アプリケーションコードやcontextを通じて処理されます。
 
 ## レスポンスaffinityの決定
 
@@ -467,27 +430,6 @@ SnapSQLでは、テンプレート内の変数参照を2つのカテゴリに分
    DELETE FROM users WHERE department = 'Engineering'
    ```
 
-### レスポンスaffinityの使用方法
-
-レスポンスaffinityは、言語固有のコード生成時に以下のように使用されます：
-
-- **one**: 単一のオブジェクトを返す関数を生成
-  ```go
-  func GetUserById(id int) (*User, error)
-  ```
-
-- **many**: オブジェクトのスライス/配列/リストを返す関数を生成
-  ```go
-  func GetUsersByDepartment(department string) ([]*User, error)
-  ```
-
-- **none**: 影響を受けた行数のみを返す関数を生成
-  ```go
-  func UpdateUserName(id int, name string) (int, error)
-  ```
-
-これにより、クエリの結果の形式に合わせた適切な関数シグネチャが生成され、型安全性が向上します。
-
 ## レスポンスタイプの型推論
 
 レスポンスタイプは、クエリの結果の型情報を示します。型推論は、以下のルールに基づいて行われます：
@@ -541,55 +483,341 @@ SnapSQLでは、テンプレート内の変数参照を2つのカテゴリに分
 | `NULL` | `null` |
 | その他 | `any` |
 
-### 型推論の例
+## 実装例
+
+### 単純な変数置換
 
 ```sql
--- テーブル情報が利用可能な場合
-SELECT users.id, users.name FROM users
--- id: int, name: string
-
--- 関数の戻り値型推論
-SELECT COUNT(*) AS count, SUM(total) AS total_sum FROM orders
--- count: int, total_sum: number
-
--- リテラル値の型推論
-SELECT 'Constant' AS text, 42 AS num, true AS flag
--- text: string, num: int, flag: bool
-
--- 複雑なフィールドの型推論
-SELECT data->>'name' AS json_name, CASE WHEN active THEN 'Yes' ELSE 'No' END AS status
--- json_name: any, status: any
+SELECT id, name, email FROM users WHERE id = /*= user_id */123
 ```
 
-### 型推論の使用方法
+中間形式：
 
-型推論の結果は、言語固有のコード生成時に以下のように使用されます：
+```json
+{
+  "format_version": 1,
+  "function_name": "get_user_by_id",
+  "parameters": [
+    {
+      "name": "user_id",
+      "type": "int"
+    }
+  ],
+  "expressions": [
+    "user_id"
+  ],
+  "instructions": [
+    {
+      "op": "EMIT_STATIC",
+      "value": "SELECT id, name, email FROM users WHERE id = ",
+      "pos": "1:1"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 0,
+      "placeholder": "123",
+      "pos": "1:43"
+    }
+  ]
+}
+```
 
-- **Go**:
-  ```go
-  type User struct {
-    ID   int    `db:"id"`
-    Name string `db:"name"`
-  }
-  ```
+### 条件付きクエリ
 
-- **TypeScript**:
-  ```typescript
-  interface User {
-    id: number;
-    name: string;
-  }
-  ```
+```sql
+SELECT id, name, age, department 
+FROM users
+WHERE 1=1
+/*# if min_age > 0 */
+AND age >= /*= min_age */18
+/*# end */
+/*# if max_age > 0 */
+AND age <= /*= max_age */65
+/*# end */
+```
 
-- **Python**:
-  ```python
-  @dataclass
-  class User:
-      id: int
-      name: str
-  ```
+中間形式：
 
-これにより、クエリの結果の型に合わせた適切なデータ構造が生成され、型安全性が向上します。
+```json
+{
+  "format_version": 1,
+  "function_name": "get_filtered_users",
+  "parameters": [
+    {
+      "name": "min_age",
+      "type": "int"
+    },
+    {
+      "name": "max_age",
+      "type": "int"
+    }
+  ],
+  "expressions": [
+    "min_age > 0",
+    "min_age",
+    "max_age > 0",
+    "max_age"
+  ],
+  "cache_keys": [0, 2],
+  "instructions": [
+    {
+      "op": "EMIT_STATIC",
+      "value": "SELECT id, name, age, department \nFROM users\nWHERE 1=1",
+      "pos": "1:1"
+    },
+    {
+      "op": "JUMP_IF",
+      "exp_index": 0,
+      "target": 5,
+      "pos": "4:1"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\nAND age >= ",
+      "pos": "5:1"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 1,
+      "placeholder": "18",
+      "pos": "5:11"
+    },
+    {
+      "op": "JUMP",
+      "target": 5,
+      "pos": "6:1"
+    },
+    {
+      "op": "LABEL",
+      "name": "end_if_1",
+      "pos": "6:1"
+    },
+    {
+      "op": "JUMP_IF",
+      "exp_index": 2,
+      "target": 10,
+      "pos": "7:1"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\nAND age <= ",
+      "pos": "8:1"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 3,
+      "placeholder": "65",
+      "pos": "8:11"
+    },
+    {
+      "op": "JUMP",
+      "target": 10,
+      "pos": "9:1"
+    },
+    {
+      "op": "LABEL",
+      "name": "end_if_2",
+      "pos": "9:1"
+    }
+  ]
+}
+```
+
+### ネストされたループ
+
+```sql
+SELECT id, name FROM (
+  /*# for dept : departments */
+  SELECT 
+    /*= dept.id */ as dept_id,
+    /*= dept.name */ as dept_name,
+    (
+      /*# for emp : dept.employees */
+      SELECT /*= emp.id */, /*= emp.name */
+      /*# if !for.last */
+      UNION ALL
+      /*# end */
+      /*# end */
+    ) as employees
+  /*# if !for.last */
+  UNION ALL
+  /*# end */
+  /*# end */
+)
+```
+
+中間形式：
+
+```json
+{
+  "format_version": 1,
+  "function_name": "get_nested_data",
+  "parameters": [
+    {
+      "name": "departments",
+      "type": "string[]"
+    }
+  ],
+  "expressions": [
+    "departments",
+    "dept.id",
+    "dept.name",
+    "dept.employees",
+    "emp.id",
+    "emp.name",
+    "!for.last"
+  ],
+  "environments": [
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      }
+    ],
+    [
+      {
+        "name": "emp",
+        "type": "any"
+      }
+    ]
+  ],
+  "cache_keys": [0, 3, 6],
+  "instructions": [
+    {
+      "op": "EMIT_STATIC",
+      "value": "SELECT id, name FROM (",
+      "pos": "1:1"
+    },
+    {
+      "op": "LOOP_START",
+      "variable": "dept",
+      "exp_index": 0,
+      "env_level": 0,
+      "end_label": "loop_end_1",
+      "pos": "2:3"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\n  SELECT \n    ",
+      "pos": "3:3"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 1,
+      "placeholder": "1",
+      "pos": "4:5"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": " as dept_id,\n    ",
+      "pos": "4:19"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 2,
+      "placeholder": "'Engineering'",
+      "pos": "5:5"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": " as dept_name,\n    (",
+      "pos": "5:21"
+    },
+    {
+      "op": "LOOP_START",
+      "variable": "emp",
+      "exp_index": 3,
+      "env_level": 1,
+      "end_label": "loop_end_2",
+      "pos": "7:7"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\n      SELECT ",
+      "pos": "8:7"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 4,
+      "placeholder": "1",
+      "pos": "8:14"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": ", ",
+      "pos": "8:24"
+    },
+    {
+      "op": "EMIT_EVAL",
+      "exp_index": 5,
+      "placeholder": "'John'",
+      "pos": "8:29"
+    },
+    {
+      "op": "JUMP_IF",
+      "exp_index": 6,
+      "target": 15,
+      "pos": "9:7"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\n      UNION ALL",
+      "pos": "10:7"
+    },
+    {
+      "op": "JUMP",
+      "target": 16,
+      "pos": "11:7"
+    },
+    {
+      "op": "LABEL",
+      "name": "end_if_1",
+      "pos": "11:7"
+    },
+    {
+      "op": "LOOP_END",
+      "start_label": "loop_start_2",
+      "pos": "12:7"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\n    ) as employees",
+      "pos": "13:5"
+    },
+    {
+      "op": "JUMP_IF",
+      "exp_index": 6,
+      "target": 21,
+      "pos": "14:3"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\n  UNION ALL",
+      "pos": "15:3"
+    },
+    {
+      "op": "JUMP",
+      "target": 22,
+      "pos": "16:3"
+    },
+    {
+      "op": "LABEL",
+      "name": "end_if_2",
+      "pos": "16:3"
+    },
+    {
+      "op": "LOOP_END",
+      "start_label": "loop_start_1",
+      "pos": "17:3"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "value": "\n)",
+      "pos": "18:1"
+    }
+  ]
+}
+```
 
 ## JSONスキーマ定義
 
@@ -602,29 +830,36 @@ SELECT data->>'name' AS json_name, CASE WHEN active THEN 'Yes' ELSE 'No' END AS 
   "title": "SnapSQL中間形式",
   "description": "SnapSQLテンプレートの中間JSON形式",
   "type": "object",
-  "required": ["instructions"],
   "properties": {
-    "interface_schema": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "function_name": { "type": "string" },
-        "parameters": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "type": { "type": "string" },
-              "optional": { "type": "boolean" }
-            },
-            "required": ["name", "type"]
-          }
-        }
-      },
-      "required": ["name", "parameters"]
+    "format_version": {
+      "type": "integer",
+      "enum": [1]
     },
-    "response_type": {
+    "function_name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "optional": { "type": "boolean" }
+        },
+        "required": ["name", "type"]
+      }
+    },
+    "generators": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "responses": {
       "type": "object",
       "properties": {
         "name": { "type": "string" },
@@ -640,8 +875,7 @@ SELECT data->>'name' AS json_name, CASE WHEN active THEN 'Yes' ELSE 'No' END AS 
             "required": ["name", "type"]
           }
         }
-      },
-      "required": ["name", "fields"]
+      }
     },
     "response_affinity": {
       "type": "string",
@@ -652,22 +886,41 @@ SELECT data->>'name' AS json_name, CASE WHEN active THEN 'Yes' ELSE 'No' END AS 
       "items": {
         "type": "object",
         "properties": {
-          "op": { "type": "string" },
-          "pos": {
-            "type": "array",
-            "items": { "type": "integer" },
-            "minItems": 3,
-            "maxItems": 3
-          }
+          "op": { 
+            "type": "string",
+            "enum": [
+              "EMIT_STATIC", 
+              "EMIT_EVAL", 
+              "JUMP", 
+              "JUMP_IF", 
+              "LABEL", 
+              "LOOP_START", 
+              "LOOP_END",
+              "SYSTEM_EXPLAIN",
+              "SYSTEM_JUMP_IF_LIMIT",
+              "SYSTEM_JUMP_IF_OFFSET"
+            ]
+          },
+          "value": { "type": "string" },
+          "exp_index": { "type": "integer" },
+          "placeholder": { "type": "string" },
+          "target": { "type": "integer" },
+          "name": { "type": "string" },
+          "variable": { "type": "string" },
+          "env_level": { "type": "integer" },
+          "end_label": { "type": "string" },
+          "start_label": { "type": "string" },
+          "analyze": { "type": "boolean" },
+          "pos": { "type": "string" }
         },
         "required": ["op"]
       }
     },
-    "cel_expressions": {
+    "expressions": {
       "type": "array",
       "items": { "type": "string" }
     },
-    "envs": {
+    "environments": {
       "type": "array",
       "items": {
         "type": "array",
@@ -680,6 +933,23 @@ SELECT data->>'name' AS json_name, CASE WHEN active THEN 'Yes' ELSE 'No' END AS 
           "required": ["name", "type"]
         }
       }
+    },
+    "cache_keys": {
+      "type": "array",
+      "items": { "type": "integer" }
     }
-  }
+  },
+  "required": ["format_version", "instructions"]
 }
+```
+
+## 今後の拡張
+
+現在の中間形式は、基本的なCEL式の抽出と命令セットの実装に焦点を当てています。将来的には、以下の機能が追加される予定です：
+
+1. **命令セットの最適化**: 命令列の最適化による実行効率の向上
+2. **型推論の強化**: より正確な型情報の提供
+3. **最適化情報**: クエリの最適化に関する情報
+4. **テーブルスキーマ統合**: データベーススキーマ情報との統合
+
+これらの拡張により、より強力なコード生成と実行時の最適化が可能になります。

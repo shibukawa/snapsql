@@ -3,6 +3,7 @@ package intermediate
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -11,14 +12,13 @@ var (
 	ErrInvalidPositionFormat = errors.New("instruction has invalid position format")
 	ErrInvalidLineNumber     = errors.New("instruction has invalid line number")
 	ErrInvalidColumnNumber   = errors.New("instruction has invalid column number")
-	ErrInvalidOffset         = errors.New("instruction has invalid offset")
 )
 
 // ExecutionError represents an error that occurred during instruction execution
 type ExecutionError struct {
 	Message     string `json:"message"`
 	Instruction int    `json:"instruction_index"`
-	Pos         []int  `json:"pos"` // Position [line, column, offset] from original template (required)
+	Pos         string `json:"pos"` // Position "line:column" from original template (required)
 	SourceFile  string `json:"source_file,omitempty"`
 	SourceLine  string `json:"source_line,omitempty"` // The actual line from source
 }
@@ -26,9 +26,9 @@ type ExecutionError struct {
 // Error implements the error interface
 func (e *ExecutionError) Error() string {
 	if e.SourceFile != "" {
-		return fmt.Sprintf("%s:%d:%d: %s", e.SourceFile, e.Pos[0], e.Pos[1], e.Message)
+		return fmt.Sprintf("%s:%s: %s", e.SourceFile, e.Pos, e.Message)
 	}
-	return fmt.Sprintf("line %d, column %d: %s", e.Pos[0], e.Pos[1], e.Message)
+	return fmt.Sprintf("position %s: %s", e.Pos, e.Message)
 }
 
 // DetailedError returns a detailed error message with source context
@@ -46,11 +46,15 @@ func (e *ExecutionError) DetailedError() string {
 		builder.WriteString("\n")
 
 		// Add pointer to the error location
-		if e.Pos[1] > 1 {
-			builder.WriteString(strings.Repeat(" ", e.Pos[1]-1))
+		parts := strings.Split(e.Pos, ":")
+		if len(parts) == 2 {
+			col, err := strconv.Atoi(parts[1])
+			if err == nil && col > 1 {
+				builder.WriteString(strings.Repeat(" ", col-1))
+				builder.WriteString("^")
+				builder.WriteString("\n")
+			}
 		}
-		builder.WriteString("^")
-		builder.WriteString("\n")
 	}
 
 	return builder.String()
@@ -68,9 +72,12 @@ func NewExecutionError(message string, instructionIndex int, instruction *Instru
 	// Extract the source line if we have the content
 	if sourceContent != "" {
 		lines := strings.Split(sourceContent, "\n")
-		lineNum := instruction.Pos[0]
-		if lineNum > 0 && lineNum <= len(lines) {
-			err.SourceLine = lines[lineNum-1]
+		parts := strings.Split(instruction.Pos, ":")
+		if len(parts) == 2 {
+			lineNum, parseErr := strconv.Atoi(parts[0])
+			if parseErr == nil && lineNum > 0 && lineNum <= len(lines) {
+				err.SourceLine = lines[lineNum-1]
+			}
 		}
 	}
 
@@ -100,7 +107,7 @@ func (er *ErrorReporter) ReportError(message string, instructionIndex int) *Exec
 		return &ExecutionError{
 			Message:     message,
 			Instruction: instructionIndex,
-			Pos:         []int{0, 0, 0}, // Default position
+			Pos:         "0:0", // Default position
 			SourceFile:  er.SourceFile,
 		}
 	}
@@ -115,29 +122,31 @@ func ValidateInstructionPositions(instructions []Instruction, sourceContent stri
 	lines := strings.Split(sourceContent, "\n")
 
 	for i, inst := range instructions {
-		if len(inst.Pos) < 3 {
-			validationErrors = append(validationErrors, fmt.Errorf("%w: expected [line, column, offset], got %v for instruction %d (%s)", ErrInvalidPositionFormat, inst.Pos, i, inst.Op))
+		parts := strings.Split(inst.Pos, ":")
+		if len(parts) != 2 {
+			validationErrors = append(validationErrors, fmt.Errorf("%w: expected 'line:column', got %v for instruction %d (%s)", ErrInvalidPositionFormat, inst.Pos, i, inst.Op))
 			continue
 		}
 
-		line, col, offset := inst.Pos[0], inst.Pos[1], inst.Pos[2]
+		lineNum, err1 := strconv.Atoi(parts[0])
+		colNum, err2 := strconv.Atoi(parts[1])
+		
+		if err1 != nil || err2 != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%w: invalid format '%s' for instruction %d (%s)", ErrInvalidPositionFormat, inst.Pos, i, inst.Op))
+			continue
+		}
 
 		// Validate line number
-		if line < 1 || line > len(lines) {
-			validationErrors = append(validationErrors, fmt.Errorf("%w: %d for instruction %d (%s)", ErrInvalidLineNumber, line, i, inst.Op))
+		if lineNum < 1 || lineNum > len(lines) {
+			validationErrors = append(validationErrors, fmt.Errorf("%w: %d for instruction %d (%s)", ErrInvalidLineNumber, lineNum, i, inst.Op))
 		}
 
 		// Validate column number
-		if line >= 1 && line <= len(lines) {
-			lineContent := lines[line-1]
-			if col < 1 || col > len(lineContent)+1 {
-				validationErrors = append(validationErrors, fmt.Errorf("%w: %d for instruction %d (%s)", ErrInvalidColumnNumber, col, i, inst.Op))
+		if lineNum >= 1 && lineNum <= len(lines) {
+			lineContent := lines[lineNum-1]
+			if colNum < 1 || colNum > len(lineContent)+1 {
+				validationErrors = append(validationErrors, fmt.Errorf("%w: %d for instruction %d (%s)", ErrInvalidColumnNumber, colNum, i, inst.Op))
 			}
-		}
-
-		// Validate offset
-		if offset < 0 || offset > len(sourceContent) {
-			validationErrors = append(validationErrors, fmt.Errorf("%w: %d for instruction %d (%s)", ErrInvalidOffset, offset, i, inst.Op))
 		}
 	}
 

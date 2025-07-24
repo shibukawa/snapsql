@@ -25,44 +25,136 @@
         }
       }
     },
-    "interface_schema": {
-      "type": "object",
-      "description": "Optional interface schema extracted from template metadata",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Interface or query name"
-        },
-        "function_name": {
-          "type": "string",
-          "description": "Generated function name"
-        },
-        "parameters": {
-          "type": "array",
-          "description": "Function parameters",
-          "items": {
-            "type": "object",
-            "required": ["name", "type"],
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "Parameter name"
-              },
-              "type": {
-                "type": "string",
-                "description": "Parameter type"
-              },
-              "optional": {
-                "type": "boolean",
-                "description": "Whether parameter is optional"
-              },
-              "description": {
-                "type": "string",
-                "description": "Parameter description"
+    "format_version": {
+      "type": "string",
+      "description": "Format version of the intermediate format",
+      "default": "1"
+    },
+    "name": {
+      "type": "string",
+      "description": "Query name"
+    },
+    "function_name": {
+      "type": "string",
+      "description": "Generated function name"
+    },
+    "parameters": {
+      "type": "array",
+      "description": "Function parameters",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Parameter name"
+          },
+          "type": {
+            "type": "string",
+            "description": "Parameter type"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Whether parameter is optional"
+          },
+          "description": {
+            "type": "string",
+            "description": "Parameter description"
+          }
+        }
+      }
+    },
+    "responses": {
+      "type": "array",
+      "description": "Expected result structures",
+      "items": {
+        "type": "object",
+        "required": ["name", "fields"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Response type name"
+          },
+          "fields": {
+            "type": "array",
+            "description": "Result fields",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Field name"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Field type"
+                },
+                "database_tag": {
+                  "type": "string",
+                  "description": "Database column tag"
+                },
+                "base_type": {
+                  "type": "string",
+                  "description": "Base type for complex types"
+                },
+                "is_nullable": {
+                  "type": "boolean",
+                  "description": "Whether field can be null"
+                },
+                "max_length": {
+                  "type": "integer",
+                  "description": "Maximum length for string fields"
+                },
+                "precision": {
+                  "type": "integer",
+                  "description": "Precision for numeric fields"
+                },
+                "scale": {
+                  "type": "integer",
+                  "description": "Scale for numeric fields"
+                }
               }
             }
           }
-        },
+        }
+      }
+    },
+    "expressions": {
+      "type": "array",
+      "description": "List of all CEL expressions used in the template",
+      "items": {
+        "type": "string"
+      }
+    },
+    "envs": {
+      "type": "array",
+      "description": "Environment variables by level",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "type"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Variable name"
+            },
+            "type": {
+              "type": "string",
+              "description": "Variable type"
+            }
+          }
+        }
+      }
+    },
+    "cache_keys": {
+      "type": "array",
+      "description": "List of expressions that should be cached for performance",
+      "items": {
+        "type": "string"
+      }
+    },
         "result_type": {
           "type": "object",
           "description": "Expected result structure",
@@ -112,11 +204,16 @@
               "EMIT_EVAL",
               "JUMP",
               "JUMP_IF_EXP",
-              "LABEL",
+              "JUMP_IF_PARAM",
               "LOOP_START",
-              "LOOP_NEXT",
               "LOOP_END",
-              "NOP"
+              "EMIT_IF_NOT_BOUNDARY",
+              "EMIT_STATIC_BOUNDARY",
+              "EMIT_EXPLAIN",
+              "JUMP_IF_FORCE_LIMIT",
+              "JUMP_IF_FORCE_OFFSET",
+              "EMIT_SYSTEM_FIELDS",
+              "EMIT_SYSTEM_VALUES"
             ],
             "description": "Instruction operation"
           },
@@ -135,11 +232,15 @@
           },
           "param": {
             "type": "string",
-            "description": "Parameter name for EMIT_PARAM"
+            "description": "Parameter name for EMIT_PARAM, JUMP_IF_PARAM"
           },
-          "exp": {
-            "type": "string",
-            "description": "CEL expression for EMIT_EVAL or JUMP_IF_EXP"
+          "exp_index": {
+            "type": "integer",
+            "description": "Index into pre-compiled expressions for EMIT_EVAL or JUMP_IF_EXP"
+          },
+          "env_level": {
+            "type": "integer",
+            "description": "Environment level for CEL evaluation"
           },
           "placeholder": {
             "type": "string",
@@ -149,29 +250,36 @@
             "type": "integer",
             "description": "Target instruction index for jumps"
           },
-          "name": {
-            "type": "string",
-            "description": "Label name for LABEL instruction"
-          },
           "variable": {
             "type": "string",
-            "description": "Loop variable name"
+            "description": "Loop variable name for LOOP_START"
           },
           "collection": {
             "type": "string",
-            "description": "Collection expression for loops"
+            "description": "Collection expression for LOOP_START"
           },
-          "end_label": {
-            "type": "string",
-            "description": "End label for loop start"
+          "collection_exp_index": {
+            "type": "integer",
+            "description": "Index into pre-compiled expressions for collection"
           },
-          "start_label": {
-            "type": "string",
-            "description": "Start label for loop continuation"
+          "end_target": {
+            "type": "integer",
+            "description": "Target instruction index to jump to after loop"
           },
-          "label": {
-            "type": "string",
-            "description": "Label for loop end"
+          "start_target": {
+            "type": "integer",
+            "description": "Target instruction index to jump back to for loop"
+          },
+          "analyze": {
+            "type": "boolean",
+            "description": "Whether to include ANALYZE in EXPLAIN"
+          },
+          "fields": {
+            "type": "array",
+            "description": "Fields for EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }
@@ -251,21 +359,40 @@
         "content": "SELECT id, name /*# if include_email */, email/*# end */ FROM users WHERE id = /*= user_id */123",
         "hash": "a1b2c3d4e5f6789..."
       },
-      "interface_schema": {
-        "name": "GetUser",
-        "function_name": "getUser",
-        "parameters": [
-          {
-            "name": "user_id",
-            "type": "int"
-          },
-          {
-            "name": "include_email",
-            "type": "bool",
-            "optional": true
-          }
-        ]
-      },
+      "format_version": "1",
+      "name": "GetUser",
+      "function_name": "get_user",
+      "parameters": [
+        {
+          "name": "user_id",
+          "type": "int"
+        },
+        {
+          "name": "include_email",
+          "type": "bool",
+          "optional": true
+        }
+      ],
+      "responses": [
+        {
+          "name": "User",
+          "fields": [
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "email",
+              "type": "string",
+              "is_nullable": true
+            }
+          ]
+        }
+      ],
       "instructions": [
         {
           "op": "EMIT_LITERAL",
@@ -275,18 +402,13 @@
         {
           "op": "JUMP_IF_EXP",
           "pos": [1, 18, 17],
-          "exp": "!include_email",
-          "target": 4
+          "exp_index": 0,
+          "target": 3
         },
         {
           "op": "EMIT_LITERAL",
           "pos": [1, 42, 41],
           "value": ", email"
-        },
-        {
-          "op": "LABEL",
-          "pos": [1, 56, 55],
-          "name": "end_email"
         },
         {
           "op": "EMIT_LITERAL",
@@ -300,14 +422,13 @@
           "placeholder": "123"
         }
       ],
+      "expressions": ["!include_email", "user_id"],
+      "envs": [],
+      "cache_keys": ["include_email"],
       "dependencies": {
         "all_variables": ["include_email", "user_id"],
         "structural_variables": ["include_email"],
-        "parameter_variables": ["user_id"],
-        "dependency_graph": {
-          "include_email": ["include_email"]
-        },
-        "cache_key_template": "include_email"
+        "parameter_variables": ["user_id"]
       },
       "metadata": {
         "version": "2.0.0",

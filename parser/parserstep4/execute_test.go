@@ -8,6 +8,7 @@ import (
 	"github.com/shibukawa/snapsql/parser/parserstep1"
 	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/parser/parserstep3"
+	"github.com/shibukawa/snapsql/testhelper"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -63,42 +64,42 @@ func TestExecuteParserStep4WithDummyLiterals(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:      "select with dummy literal",
+			name:      "select with dummy literal" + testhelper.GetCaller(t),
 			sql:       "SELECT /*= user_id */ FROM users",
 			wantError: false,
 		},
 		{
-			name:      "select with multiple dummy literals",
+			name:      "select with multiple dummy literals" + testhelper.GetCaller(t),
 			sql:       "SELECT /*= user_id */, /*= user_name */ FROM users",
 			wantError: false,
 		},
 		{
-			name:      "insert with dummy literal in values",
+			name:      "insert with dummy literal in values" + testhelper.GetCaller(t),
 			sql:       "INSERT INTO users(id, name) VALUES(/*= user_id */, /*= user_name */)",
 			wantError: false,
 		},
 		{
-			name:      "update with dummy literal in set",
+			name:      "update with dummy literal in set" + testhelper.GetCaller(t),
 			sql:       "UPDATE users SET name = /*= new_name */ WHERE id = /*= user_id */",
 			wantError: false,
 		},
 		{
-			name:      "delete with dummy literal in where",
+			name:      "delete with dummy literal in where" + testhelper.GetCaller(t),
 			sql:       "DELETE FROM users WHERE id = /*= user_id */",
 			wantError: false,
 		},
 		{
-			name:      "select with dummy literal and alias",
+			name:      "select with dummy literal and alias" + testhelper.GetCaller(t),
 			sql:       "SELECT /*= user_id */ AS id, /*= user_name */ AS name FROM users",
 			wantError: false,
 		},
 		{
-			name:      "select with dummy literal in function call",
+			name:      "select with dummy literal in function call" + testhelper.GetCaller(t),
 			sql:       "SELECT COUNT(/*= user_id */) FROM users",
 			wantError: false,
 		},
 		{
-			name:      "select with complex dummy literal expression",
+			name:      "select with complex dummy literal expression" + testhelper.GetCaller(t),
 			sql:       "SELECT /*= user.profile.name */ FROM users",
 			wantError: false,
 		},

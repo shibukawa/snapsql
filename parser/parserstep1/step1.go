@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	tokenizer "github.com/shibukawa/snapsql/tokenizer"
+	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
 // Sentinel errors
@@ -20,13 +20,13 @@ var (
 
 // validateParentheses checks that all parentheses are properly matched.
 // Returns nil if all pairs are matched, otherwise returns an error.
-func validateParentheses(tokens []tokenizer.Token) error {
-	var stack []tokenizer.Token
-	for _, tok := range tokens {
-		switch tok.Type {
-		case tokenizer.OPENED_PARENS:
-			stack = append(stack, tok)
-		case tokenizer.CLOSED_PARENS:
+func validateParentheses(tokens []tok.Token) error {
+	var stack []tok.Token
+	for _, t := range tokens {
+		switch t.Type {
+		case tok.OPENED_PARENS:
+			stack = append(stack, t)
+		case tok.CLOSED_PARENS:
 			if len(stack) == 0 {
 				return ErrUnmatchedCloseParenthesis
 			}
@@ -41,11 +41,11 @@ func validateParentheses(tokens []tokenizer.Token) error {
 
 // validateSnapSQLDirectives checks SnapSQL if/for/end directive matching.
 // Returns nil if all pairs are matched, otherwise returns an error.
-func validateSnapSQLDirectives(tokens []tokenizer.Token) error {
+func validateSnapSQLDirectives(tokens []tok.Token) error {
 	var stack []string
-	for _, tok := range tokens {
-		if tok.Type == tokenizer.BLOCK_COMMENT && tok.Directive != nil {
-			dir := tok.Directive.Type
+	for _, t := range tokens {
+		if t.Type == tok.BLOCK_COMMENT && t.Directive != nil {
+			dir := t.Directive.Type
 			switch dir {
 			case "if", "for":
 				stack = append(stack, dir)
@@ -74,7 +74,7 @@ func validateSnapSQLDirectives(tokens []tokenizer.Token) error {
 // Execute receives a slice of tokenizer.Token, performs basic syntax validation,
 // and inserts minimal dummy literals for /*= */ directives to ensure SQL syntax validity.
 // Detailed variable validation and CEL expression processing remains in parserstep6.
-func Execute(tokens []tokenizer.Token) ([]tokenizer.Token, error) {
+func Execute(tokens []tok.Token) ([]tok.Token, error) {
 	// Basic syntax validation
 	if err := validateParentheses(tokens); err != nil {
 		return tokens, err
@@ -91,25 +91,37 @@ func Execute(tokens []tokenizer.Token) ([]tokenizer.Token, error) {
 
 // insertMinimalDummyLiterals inserts simple dummy literals for /*= */ directives
 // to ensure SQL syntax validity. Does not perform type checking or CEL parsing.
-func insertMinimalDummyLiterals(tokens []tokenizer.Token) []tokenizer.Token {
-	var result []tokenizer.Token
+func insertMinimalDummyLiterals(tokens []tok.Token) []tok.Token {
+	var result []tok.Token
 
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
 
-		if token.Type == tokenizer.BLOCK_COMMENT && isVariableDirective(token.Value) {
-			// Insert DUMMY_LITERAL token before the comment
-			// Actual literal replacement will be done in parserstep6
-			dummyLiteral := tokenizer.Token{
-				Type:     tokenizer.DUMMY_LITERAL,
-				Value:    extractVariableName(token.Value),
-				Position: token.Position,
-			}
-			result = append(result, dummyLiteral)
-		}
+		if token.Type == tok.BLOCK_COMMENT && isVariableDirective(token.Value) {
+			// Always keep the original comment token first
+			result = append(result, token)
 
-		// Always keep the original token
-		result = append(result, token)
+			// Check if there's a whitespace token immediately after this comment
+			shouldInsert := true
+			if i+1 < len(tokens) {
+				switch tokens[i+1].Type {
+				case tok.NUMBER, tok.STRING, tok.BOOLEAN, tok.IDENTIFIER:
+					shouldInsert = false
+				}
+			}
+			if shouldInsert {
+				// Insert DUMMY_LITERAL token immediately after the comment (before the whitespace)
+				dummyLiteral := tok.Token{
+					Type:     tok.DUMMY_LITERAL,
+					Value:    extractVariableName(token.Value),
+					Position: token.Position,
+				}
+				result = append(result, dummyLiteral)
+			}
+		} else {
+			// Keep the original token
+			result = append(result, token)
+		}
 	}
 
 	return result

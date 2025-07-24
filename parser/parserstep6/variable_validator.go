@@ -11,20 +11,10 @@ import (
 // validateVariables validates template variables and directives in a parsed statement
 func validateVariables(statement cmn.StatementNode, paramNamespace *cmn.Namespace, constNamespace *cmn.Namespace, perr *cmn.ParseError) {
 	// Process all clauses in the statement
-	processStatement(statement, paramNamespace, constNamespace, perr)
-}
-
-// processStatement processes a statement and all its clauses
-func processStatement(statement cmn.StatementNode, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) {
 	for _, clause := range statement.Clauses() {
-		processClause(clause, paramNs, constNs, perr)
+		tokens := clause.RawTokens()
+		processTokens(tokens, paramNamespace, constNamespace, perr)
 	}
-}
-
-// processClause processes a single clause and its tokens
-func processClause(clause cmn.ClauseNode, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) {
-	tokens := clause.RawTokens()
-	processTokens(tokens, paramNs, constNs, perr)
 }
 
 // processTokens processes a sequence of tokens for directive validation
@@ -93,10 +83,6 @@ func validateConstDirective(token tokenizer.Token, constNs *cmn.Namespace, perr 
 
 // validateIfDirective validates an if directive
 func validateIfDirective(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) {
-	if token.Directive == nil || token.Directive.Type != "if" {
-		return
-	}
-
 	condition := token.Directive.Condition
 	if condition == "" {
 		perr.Add(fmt.Errorf("%w at %s: if directive missing condition", cmn.ErrInvalidForSnapSQL, token.Position.String()))
@@ -106,20 +92,12 @@ func validateIfDirective(token tokenizer.Token, paramNs *cmn.Namespace, constNs 
 	// Try to evaluate with parameter namespace first
 	_, _, err := paramNs.Eval(condition)
 	if err != nil {
-		// If that fails, try with constant namespace
-		_, _, err = constNs.Eval(condition)
-		if err != nil {
-			perr.Add(fmt.Errorf("invalid condition in if directive '%s': %w at %s", condition, err, token.Position.String()))
-		}
+		perr.Add(fmt.Errorf("invalid condition in if directive '%s': %w at %s", condition, err, token.Position.String()))
 	}
 }
 
 // validateElseIfDirective validates an elseif directive
 func validateElseIfDirective(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) {
-	if token.Directive == nil || token.Directive.Type != "elseif" {
-		return
-	}
-
 	condition := token.Directive.Condition
 	if condition == "" {
 		perr.Add(fmt.Errorf("%w at %s: elseif directive missing condition", cmn.ErrInvalidForSnapSQL, token.Position.String()))
@@ -129,11 +107,7 @@ func validateElseIfDirective(token tokenizer.Token, paramNs *cmn.Namespace, cons
 	// Try to evaluate with parameter namespace first
 	_, _, err := paramNs.Eval(condition)
 	if err != nil {
-		// If that fails, try with constant namespace
-		_, _, err = constNs.Eval(condition)
-		if err != nil {
-			perr.Add(fmt.Errorf("invalid condition in elseif directive '%s': %w at %s", condition, err, token.Position.String()))
-		}
+		perr.Add(fmt.Errorf("invalid condition in elseif directive '%s': %w at %s", condition, err, token.Position.String()))
 	}
 }
 
@@ -159,19 +133,15 @@ func processForLoop(tokens []tokenizer.Token, startIndex int, paramNs *cmn.Names
 	// Find the matching end directive
 	endIndex := findMatchingEndDirective(tokens, startIndex)
 	if endIndex == -1 {
-		perr.Add(fmt.Errorf("%w at %s: missing end directive for for loop", cmn.ErrInvalidForSnapSQL, forToken.Position.String()))
+		perr.Add(fmt.Errorf("%w at %s: missing end directive for loop", cmn.ErrInvalidForSnapSQL, forToken.Position.String()))
 		return false, startIndex
 	}
 
 	// Try to evaluate the items expression with parameter namespace first
 	itemsValue, _, err := paramNs.Eval(itemsExpr)
 	if err != nil {
-		// If that fails, try with constant namespace
-		itemsValue, _, err = constNs.Eval(itemsExpr)
-		if err != nil {
-			perr.Add(fmt.Errorf("invalid items expression in for directive '%s': %w at %s", itemsExpr, err, forToken.Position.String()))
-			return false, startIndex
-		}
+		perr.Add(fmt.Errorf("invalid items expression in for directive '%s': %w at %s", itemsExpr, err, forToken.Position.String()))
+		return false, startIndex
 	}
 
 	// Enter the loop with the first item (if available)

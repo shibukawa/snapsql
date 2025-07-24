@@ -202,7 +202,7 @@ func TestNamespace_ConstantMode(t *testing.T) {
 	val, tp, err = ns.Eval("constant_list")
 	assert.NoError(t, err)
 	assert.Equal(t, any([]any{"a", "b", "c"}), val)
-	assert.Equal(t, "list", tp)
+	assert.Equal(t, "string[]", tp)
 
 	val, tp, err = ns.Eval("constant_map")
 	assert.NoError(t, err)

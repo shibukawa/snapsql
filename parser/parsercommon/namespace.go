@@ -3,6 +3,7 @@ package parsercommon
 import (
 	"fmt"
 	"maps"
+	"strings"
 	"time"
 
 	"github.com/google/cel-go/cel"
@@ -14,17 +15,15 @@ import (
 )
 
 type frame struct {
-	variable cel.EnvOption
-	values   map[string]any
-	env      *cel.Env
+	values map[string]any
+	env    *cel.Env
 }
 
 type Namespace struct {
-	fd               *FunctionDefinition
-	frames           []frame
-	currentEnv       *cel.Env
-	currentValues    map[string]any
-	currentVariables cel.EnvOption
+	fd            *FunctionDefinition
+	frames        []frame
+	currentEnv    *cel.Env
+	currentValues map[string]any
 }
 
 func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
@@ -44,10 +43,9 @@ func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 		return nil, err
 	}
 	result := &Namespace{
-		fd:               fd,
-		currentVariables: root,
-		currentEnv:       current,
-		currentValues:    fd.DummyData().(map[string]any),
+		fd:            fd,
+		currentEnv:    current,
+		currentValues: fd.DummyData().(map[string]any),
 	}
 
 	return result, nil
@@ -69,18 +67,10 @@ func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 		return nil, err
 	}
 	result := &Namespace{
-		currentVariables: root,
-		currentEnv:       current,
-		currentValues:    constants,
+		currentEnv:    current,
+		currentValues: constants,
 	}
 	return result, nil
-}
-
-func (ns *Namespace) RootVariables() cel.EnvOption {
-	if len(ns.frames) > 0 {
-		return ns.frames[0].variable
-	}
-	return ns.currentVariables
 }
 
 func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
@@ -150,38 +140,26 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 		return fmt.Errorf("%w: empty array for loop variable %s", ErrInvalidForSnapSQL, variableName)
 	}
 
-	// Save the current frame
-	ns.frames = append(ns.frames, frame{
-		variable: ns.currentVariables,
-		values:   ns.currentValues,
-		env:      ns.currentEnv,
-	})
-
 	// Create a new frame with the loop variable
 	newValues := maps.Clone(ns.currentValues)
 	newValues[variableName] = a[0]
 
 	// Create a new environment with the loop variable
-	newVars := []*decls.VariableDecl{
-		decls.NewVariable(variableName, snapSqlToCel(inferTypeStringFromActualValues(a[0], nil))),
-	}
-	newVariables := cel.VariableDecls(newVars...)
-
-	// Create a new environment with the loop variable
-	newEnv, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		ns.currentVariables,
-		newVariables,
+	newEnv, err := ns.currentEnv.Extend(
+		cel.Variable(variableName, snapSqlToCel(inferTypeStringFromActualValues(a[0], nil))),
 	)
+
 	if err != nil {
 		return fmt.Errorf("%w: error creating new environment for loop variable %s: %v", ErrInvalidForSnapSQL, variableName, err)
 	}
 
-	// Update the current frame
+	// Save and update the current frame
+	ns.frames = append(ns.frames, frame{
+		values: ns.currentValues,
+		env:    ns.currentEnv,
+	})
+
 	ns.currentValues = newValues
-	ns.currentVariables = newVariables
 	ns.currentEnv = newEnv
 
 	return nil
@@ -197,7 +175,6 @@ func (ns *Namespace) ExitLoop() error {
 	frame := ns.frames[len(ns.frames)-1]
 	ns.frames = ns.frames[:len(ns.frames)-1]
 
-	ns.currentVariables = frame.variable
 	ns.currentValues = frame.values
 	ns.currentEnv = frame.env
 	return nil
@@ -242,16 +219,18 @@ func snapSqlTypeToCel(val any) *cel.Type {
 		return cel.StringType
 	case "json":
 		return cel.MapType(cel.StringType, cel.DynType)
-	case "list":
-		return cel.ListType(cel.DynType)
 	case "any", "map":
 		return cel.DynType
 	default:
-		switch val.(type) {
+		switch v := val.(type) {
 		case []any:
 			return cel.ListType(cel.DynType)
 		case map[string]any:
 			return cel.DynType
+		case string:
+			if strings.HasSuffix(v, "[]") {
+				return cel.ListType(snapSqlToCel(strings.TrimSuffix(v, "[]")))
+			}
 		}
 	}
 	panic(fmt.Sprintf("Unsupported type for CEL conversion: %T of %v", val, val))
@@ -277,7 +256,7 @@ func inferTypeStringFromActualValues(v any, rt ref.Type) string {
 		}
 		return "string"
 	case []any:
-		return "list"
+		return inferTypeStringFromActualValues(v2[0], nil) + "[]"
 	case map[string]any:
 		return "map"
 	case time.Time:
