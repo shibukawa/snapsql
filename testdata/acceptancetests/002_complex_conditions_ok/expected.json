@@ -61,6 +61,30 @@
     },
     {
       "op": "END", "pos": "24:1"
+    },
+    {
+      "op": "IF_SYSTEM_LIMIT", "pos": "0:0"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "
+    },
+    {
+      "op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"
+    },
+    {
+      "op": "END", "pos": "0:0"
+    },
+    {
+      "op": "IF_SYSTEM_OFFSET", "pos": "0:0"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "
+    },
+    {
+      "op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"
+    },
+    {
+      "op": "END", "pos": "0:0"
     }
   ],
   "name": "getFilteredData",

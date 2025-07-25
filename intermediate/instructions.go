@@ -8,9 +8,114 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+// LimitOffsetClauseInfo holds information about LIMIT and OFFSET clause processing
+type LimitOffsetClauseInfo struct {
+	// LIMIT clause info
+	HasLimit             bool // Whether LIMIT clause exists
+	HasLimitCondition    bool // Whether LIMIT clause is wrapped in condition
+	LimitTokenIndex      int  // Index of LIMIT token
+	LimitValueTokenIndex int  // Index of value token after LIMIT
+	LimitConditionStart  int  // Start index of LIMIT condition tokens
+	LimitConditionEnd    int  // End index of LIMIT condition tokens
+
+	// OFFSET clause info
+	HasOffset             bool // Whether OFFSET clause exists
+	HasOffsetCondition    bool // Whether OFFSET clause is wrapped in condition
+	OffsetTokenIndex      int  // Index of OFFSET token
+	OffsetValueTokenIndex int  // Index of value token after OFFSET
+	OffsetConditionStart  int  // Start index of OFFSET condition tokens
+	OffsetConditionEnd    int  // End index of OFFSET condition tokens
+}
+
+// isSelectStatement checks if the tokens represent a SELECT statement
+func isSelectStatement(tokens []tokenizer.Token) bool {
+	for _, token := range tokens {
+		if token.Type == tokenizer.SELECT {
+			return true
+		}
+		// Stop at the first significant keyword
+		if token.Type == tokenizer.INSERT ||
+			token.Type == tokenizer.UPDATE ||
+			token.Type == tokenizer.DELETE {
+			return false
+		}
+	}
+	return false
+}
+
+// detectLimitOffsetClause analyzes tokens to detect LIMIT and OFFSET clause patterns
+func detectLimitOffsetClause(tokens []tokenizer.Token) *LimitOffsetClauseInfo {
+	info := &LimitOffsetClauseInfo{}
+
+	for i, token := range tokens {
+		// Look for LIMIT keyword
+		if token.Type == tokenizer.LIMIT {
+			info.HasLimit = true
+			info.LimitTokenIndex = i
+
+			// Look for the value token after LIMIT
+			for j := i + 1; j < len(tokens); j++ {
+				if tokens[j].Type == tokenizer.NUMBER ||
+					(tokens[j].Directive != nil && tokens[j].Directive.Type == "variable") {
+					info.LimitValueTokenIndex = j
+					break
+				}
+			}
+
+			// Check if LIMIT clause is wrapped in a condition
+			info.HasLimitCondition = checkForCondition(tokens, i, info.LimitValueTokenIndex, &info.LimitConditionStart, &info.LimitConditionEnd)
+		}
+
+		// Look for OFFSET keyword
+		if token.Type == tokenizer.OFFSET {
+			info.HasOffset = true
+			info.OffsetTokenIndex = i
+
+			// Look for the value token after OFFSET
+			for j := i + 1; j < len(tokens); j++ {
+				if tokens[j].Type == tokenizer.NUMBER ||
+					(tokens[j].Directive != nil && tokens[j].Directive.Type == "variable") {
+					info.OffsetValueTokenIndex = j
+					break
+				}
+			}
+
+			// Check if OFFSET clause is wrapped in a condition
+			info.HasOffsetCondition = checkForCondition(tokens, i, info.OffsetValueTokenIndex, &info.OffsetConditionStart, &info.OffsetConditionEnd)
+		}
+	}
+
+	return info
+}
+
+// checkForCondition checks if a clause is wrapped in a condition
+func checkForCondition(tokens []tokenizer.Token, keywordIndex, valueIndex int, conditionStart, conditionEnd *int) bool {
+	// Look backwards for IF directive
+	for j := keywordIndex - 1; j >= 0; j-- {
+		if tokens[j].Directive != nil && tokens[j].Directive.Type == "if" {
+			// Check if there's a matching END after the value
+			endIndex := valueIndex
+			if endIndex == 0 {
+				endIndex = keywordIndex + 1
+			}
+			for k := endIndex + 1; k < len(tokens); k++ {
+				if tokens[k].Directive != nil && tokens[k].Directive.Type == "end" {
+					*conditionStart = j
+					*conditionEnd = k
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // GenerateInstructions generates instructions from tokens with expression index references
 func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Instruction {
 	instructions := []Instruction{}
+
+	// Detect LIMIT and OFFSET clause patterns
+	limitOffsetInfo := detectLimitOffsetClause(tokens)
 
 	// Buffer for static content
 	var staticBuffer strings.Builder
@@ -92,48 +197,187 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			currentInstructionPos = getPos(token)
 		}
 
-		// Check for LIMIT and OFFSET keywords
-		if token.Type == tokenizer.LIMIT {
+		// Check for LIMIT clause processing
+		if limitOffsetInfo.HasLimit && i == limitOffsetInfo.LimitTokenIndex {
 			// Flush any pending content
 			flushStaticBuffer()
 
-			// Add EMIT_SYSTEM_LIMIT instruction
-			instructions = append(instructions, Instruction{
-				Op:           OpEmitSystemLimit,
-				Pos:          getPos(token),
-				DefaultValue: "10", // Default limit value
-			})
+			// Handle different LIMIT clause patterns
+			if limitOffsetInfo.HasLimitCondition {
+				// Case 3: LIMIT clause with condition
+				// IF_SYSTEM_LIMIT, EMIT_STATIC(LIMIT ), ELSE, 今の出力, END
+				instructions = append(instructions, Instruction{
+					Op:  OpIfSystemLimit,
+					Pos: getPos(token),
+				})
 
-			// Skip the LIMIT keyword and the following number
-			// Find the next number token and skip it
-			for j := i + 1; j < len(tokens); j++ {
-				if tokens[j].Type == tokenizer.NUMBER {
-					i = j // Skip to this token (the loop will increment i)
-					break
+				instructions = append(instructions, Instruction{
+					Op:    OpEmitStatic,
+					Value: "LIMIT ",
+					Pos:   getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpEmitSystemLimit,
+					Pos: getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpElse,
+					Pos: getPos(token),
+				})
+
+				// Skip to the condition start and let normal processing handle the condition
+				i = limitOffsetInfo.LimitConditionStart - 1 // -1 because loop will increment
+				continue
+
+			} else {
+				// Case 1: LIMIT already exists without condition
+				// EMIT_STATIC(LIMIT ), IF_SYSTEM_LIMIT, EMIT_SYSTEM_LIMIT, ELSE, EMIT_STATIC(value), END
+				instructions = append(instructions, Instruction{
+					Op:    OpEmitStatic,
+					Value: "LIMIT ",
+					Pos:   getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpIfSystemLimit,
+					Pos: getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpEmitSystemLimit,
+					Pos: getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpElse,
+					Pos: getPos(token),
+				})
+
+				// Find and emit the original value
+				if limitOffsetInfo.LimitValueTokenIndex > 0 && limitOffsetInfo.LimitValueTokenIndex < len(tokens) {
+					valueToken := tokens[limitOffsetInfo.LimitValueTokenIndex]
+					if valueToken.Directive != nil && valueToken.Directive.Type == "variable" {
+						// Handle variable substitution
+						exprIndex := findExpressionIndex(valueToken.Directive.Condition)
+						instructions = append(instructions, Instruction{
+							Op:        OpEmitEval,
+							ExprIndex: &exprIndex,
+							Pos:       getPos(valueToken),
+						})
+					} else {
+						// Handle literal value
+						instructions = append(instructions, Instruction{
+							Op:    OpEmitStatic,
+							Value: strings.TrimSpace(valueToken.Value),
+							Pos:   getPos(valueToken),
+						})
+					}
+				}
+
+				instructions = append(instructions, Instruction{
+					Op:  OpEnd,
+					Pos: getPos(token),
+				})
+
+				// Skip to after the value token
+				if limitOffsetInfo.LimitValueTokenIndex > 0 {
+					i = limitOffsetInfo.LimitValueTokenIndex
 				}
 			}
-
 			continue
-		} else if token.Type == tokenizer.OFFSET {
+		}
+
+		// Check for OFFSET clause processing
+		if limitOffsetInfo.HasOffset && i == limitOffsetInfo.OffsetTokenIndex {
 			// Flush any pending content
 			flushStaticBuffer()
 
-			// Add EMIT_SYSTEM_OFFSET instruction
-			instructions = append(instructions, Instruction{
-				Op:           OpEmitSystemOffset,
-				Pos:          getPos(token),
-				DefaultValue: "0", // Default offset value
-			})
+			// Handle different OFFSET clause patterns
+			if limitOffsetInfo.HasOffsetCondition {
+				// Case 3: OFFSET clause with condition
+				// IF_SYSTEM_OFFSET, EMIT_STATIC(OFFSET ), ELSE, 今の出力, END
+				instructions = append(instructions, Instruction{
+					Op:  OpIfSystemOffset,
+					Pos: getPos(token),
+				})
 
-			// Skip the OFFSET keyword and the following number
-			// Find the next number token and skip it
-			for j := i + 1; j < len(tokens); j++ {
-				if tokens[j].Type == tokenizer.NUMBER {
-					i = j // Skip to this token (the loop will increment i)
-					break
+				instructions = append(instructions, Instruction{
+					Op:    OpEmitStatic,
+					Value: "OFFSET ",
+					Pos:   getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpEmitSystemOffset,
+					Pos: getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpElse,
+					Pos: getPos(token),
+				})
+
+				// Skip to the condition start and let normal processing handle the condition
+				i = limitOffsetInfo.OffsetConditionStart - 1 // -1 because loop will increment
+				continue
+
+			} else {
+				// Case 1: OFFSET already exists without condition
+				// EMIT_STATIC(OFFSET ), IF_SYSTEM_OFFSET, EMIT_SYSTEM_OFFSET, ELSE, EMIT_STATIC(value), END
+				instructions = append(instructions, Instruction{
+					Op:    OpEmitStatic,
+					Value: "OFFSET ",
+					Pos:   getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpIfSystemOffset,
+					Pos: getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpEmitSystemOffset,
+					Pos: getPos(token),
+				})
+
+				instructions = append(instructions, Instruction{
+					Op:  OpElse,
+					Pos: getPos(token),
+				})
+
+				// Find and emit the original value
+				if limitOffsetInfo.OffsetValueTokenIndex > 0 && limitOffsetInfo.OffsetValueTokenIndex < len(tokens) {
+					valueToken := tokens[limitOffsetInfo.OffsetValueTokenIndex]
+					if valueToken.Directive != nil && valueToken.Directive.Type == "variable" {
+						// Handle variable substitution
+						exprIndex := findExpressionIndex(valueToken.Directive.Condition)
+						instructions = append(instructions, Instruction{
+							Op:        OpEmitEval,
+							ExprIndex: &exprIndex,
+							Pos:       getPos(valueToken),
+						})
+					} else {
+						// Handle literal value
+						instructions = append(instructions, Instruction{
+							Op:    OpEmitStatic,
+							Value: strings.TrimSpace(valueToken.Value),
+							Pos:   getPos(valueToken),
+						})
+					}
+				}
+
+				instructions = append(instructions, Instruction{
+					Op:  OpEnd,
+					Pos: getPos(token),
+				})
+
+				// Skip to after the value token
+				if limitOffsetInfo.OffsetValueTokenIndex > 0 {
+					i = limitOffsetInfo.OffsetValueTokenIndex
 				}
 			}
-
 			continue
 		}
 
@@ -332,6 +576,56 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 		if i == len(tokens)-1 {
 			flushStaticBuffer()
 		}
+	}
+
+	// Handle case 2: No LIMIT clause exists (only for SELECT statements)
+	if !limitOffsetInfo.HasLimit && isSelectStatement(tokens) {
+		// IF_SYSTEM_LIMIT, EMIT_STATIC(LIMIT ), EMIT_SYSTEM_LIMIT, END
+		instructions = append(instructions, Instruction{
+			Op:  OpIfSystemLimit,
+			Pos: "0:0", // No specific position since LIMIT doesn't exist
+		})
+
+		instructions = append(instructions, Instruction{
+			Op:    OpEmitStatic,
+			Value: " LIMIT ",
+			Pos:   "0:0",
+		})
+
+		instructions = append(instructions, Instruction{
+			Op:  OpEmitSystemLimit,
+			Pos: "0:0",
+		})
+
+		instructions = append(instructions, Instruction{
+			Op:  OpEnd,
+			Pos: "0:0",
+		})
+	}
+
+	// Handle case 2: No OFFSET clause exists (only for SELECT statements)
+	if !limitOffsetInfo.HasOffset && isSelectStatement(tokens) {
+		// IF_SYSTEM_OFFSET, EMIT_STATIC(OFFSET ), EMIT_SYSTEM_OFFSET, END
+		instructions = append(instructions, Instruction{
+			Op:  OpIfSystemOffset,
+			Pos: "0:0", // No specific position since OFFSET doesn't exist
+		})
+
+		instructions = append(instructions, Instruction{
+			Op:    OpEmitStatic,
+			Value: " OFFSET ",
+			Pos:   "0:0",
+		})
+
+		instructions = append(instructions, Instruction{
+			Op:  OpEmitSystemOffset,
+			Pos: "0:0",
+		})
+
+		instructions = append(instructions, Instruction{
+			Op:  OpEnd,
+			Pos: "0:0",
+		})
 	}
 
 	return instructions

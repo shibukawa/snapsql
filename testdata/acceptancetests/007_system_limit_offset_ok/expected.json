@@ -19,10 +19,40 @@
       "op": "EMIT_EVAL", "pos": "15:16", "expr_index": 1
     },
     {
-      "op": "EMIT_SYSTEM_LIMIT", "pos": "16:1", "default_value": "10"
+      "op": "EMIT_STATIC", "pos": "16:1", "value": "LIMIT "
     },
     {
-      "op": "EMIT_SYSTEM_OFFSET", "pos": "17:1", "default_value": "0"
+      "op": "IF_SYSTEM_LIMIT", "pos": "16:1"
+    },
+    {
+      "op": "EMIT_SYSTEM_LIMIT", "pos": "16:1"
+    },
+    {
+      "op": "ELSE", "pos": "16:1"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "16:7", "value": "10"
+    },
+    {
+      "op": "END", "pos": "16:1"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "17:1", "value": "OFFSET "
+    },
+    {
+      "op": "IF_SYSTEM_OFFSET", "pos": "17:1"
+    },
+    {
+      "op": "EMIT_SYSTEM_OFFSET", "pos": "17:1"
+    },
+    {
+      "op": "ELSE", "pos": "17:1"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "17:8", "value": "20"
+    },
+    {
+      "op": "END", "pos": "17:1"
     }
   ],
   "name": "get_users_with_limit_offset",

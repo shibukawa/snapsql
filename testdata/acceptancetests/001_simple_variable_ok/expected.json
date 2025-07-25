@@ -10,6 +10,30 @@
     },
     {
       "op": "EMIT_EVAL", "pos": "8:12", "expr_index": 0
+    },
+    {
+      "op": "IF_SYSTEM_LIMIT", "pos": "0:0"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "
+    },
+    {
+      "op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"
+    },
+    {
+      "op": "END", "pos": "0:0"
+    },
+    {
+      "op": "IF_SYSTEM_OFFSET", "pos": "0:0"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "
+    },
+    {
+      "op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"
+    },
+    {
+      "op": "END", "pos": "0:0"
     }
   ],
   "name": "get_user_by_id",

@@ -54,13 +54,40 @@
       "op": "EMIT_EVAL", "pos": "25:10", "expr_index": 4
     },
     {
-      "op": "EMIT_SYSTEM_LIMIT", "pos": "27:1", "default_value": "10"
+      "op": "EMIT_STATIC", "pos": "27:1", "value": "LIMIT "
     },
     {
-      "op": "EMIT_SYSTEM_OFFSET", "pos": "28:1", "default_value": "0"
+      "op": "IF_SYSTEM_LIMIT", "pos": "27:1"
     },
     {
-      "op": "EMIT_EVAL", "pos": "28:8", "expr_index": 6
+      "op": "EMIT_SYSTEM_LIMIT", "pos": "27:1"
+    },
+    {
+      "op": "ELSE", "pos": "27:1"
+    },
+    {
+      "op": "EMIT_EVAL", "pos": "27:7", "expr_index": -1
+    },
+    {
+      "op": "END", "pos": "27:1"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "28:1", "value": "OFFSET "
+    },
+    {
+      "op": "IF_SYSTEM_OFFSET", "pos": "28:1"
+    },
+    {
+      "op": "EMIT_SYSTEM_OFFSET", "pos": "28:1"
+    },
+    {
+      "op": "ELSE", "pos": "28:1"
+    },
+    {
+      "op": "EMIT_EVAL", "pos": "28:8", "expr_index": -1
+    },
+    {
+      "op": "END", "pos": "28:1"
     },
     {
       "op": "END", "pos": "0:0"
