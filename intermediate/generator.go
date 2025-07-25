@@ -44,11 +44,11 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 		FormatVersion: "1",
 	}
 
-	// Extract tokens from the statement
-	tokens := extractTokensFromStatement(stmt)
+	// Extract CEL expressions and environment variables
+	expressions, envs := ExtractFromStatement(stmt)
 
-	// Extract CEL expressions
-	expressions, envs := extractCELFromTokens(tokens)
+	// Extract tokens for instruction generation
+	tokens := extractTokensFromStatement(stmt)
 
 	// Check for invalid CEL expressions
 	for _, expr := range expressions {
@@ -59,6 +59,9 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 
 	// Generate instructions
 	instructions := GenerateInstructions(tokens, expressions)
+
+	// Set env_index in loop instructions based on envs
+	setEnvIndexInInstructions(envs, instructions)
 
 	// Add clause-level IF conditions
 	instructions = addClauseIfConditions(stmt, instructions)
@@ -245,4 +248,72 @@ func ValidateCELExpressions(expressions []string) error {
 	}
 
 	return nil
+}
+
+// setEnvIndexInInstructions sets env_index in loop instructions based on envs data
+func setEnvIndexInInstructions(envs [][]EnvVar, instructions []Instruction) {
+	// Stack to track environment indices for nested loops
+	var loopStack []int
+
+	for i := range instructions {
+		instruction := &instructions[i]
+
+		switch instruction.Op {
+		case OpLoopStart:
+			if instruction.Variable != "" {
+				// Find the environment index where this variable is introduced
+				envIndex := findVariableEnvironmentIndex(envs, instruction.Variable)
+				if envIndex > 0 {
+					instruction.EnvIndex = &envIndex
+					loopStack = append(loopStack, envIndex)
+				}
+			}
+
+		case OpLoopEnd:
+			if len(loopStack) > 0 {
+				// Pop the current loop environment
+				loopStack = loopStack[:len(loopStack)-1]
+
+				// Set env_index to the environment we return to after this loop ends
+				var envIndex int
+				if len(loopStack) > 0 {
+					// Still inside nested loops, use the parent loop's environment
+					envIndex = loopStack[len(loopStack)-1]
+				} else {
+					// Exiting the outermost loop, return to base environment (index 0)
+					envIndex = 0
+				}
+				instruction.EnvIndex = &envIndex
+			}
+		}
+	}
+}
+
+// findVariableEnvironmentIndex finds the environment index where the variable is first introduced
+func findVariableEnvironmentIndex(envs [][]EnvVar, variable string) int {
+	for i := 0; i < len(envs); i++ {
+		// Check if this variable is in this environment level
+		for _, envVar := range envs[i] {
+			if envVar.Name == variable {
+				// Check if it was also in the previous environment level
+				if i > 0 {
+					found := false
+					for _, prevEnvVar := range envs[i-1] {
+						if prevEnvVar.Name == variable {
+							found = true
+							break
+						}
+					}
+					if !found {
+						// This is where the variable was introduced
+						return i + 1 // Convert to 1-based index
+					}
+				} else {
+					// First environment level, this is where it was introduced
+					return i + 1 // Convert to 1-based index
+				}
+			}
+		}
+	}
+	return 0 // Default to base environment
 }

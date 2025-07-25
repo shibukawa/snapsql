@@ -4,6 +4,8 @@
         "name": "dept",   "type": "any"
       }],
     [{
+        "name": "dept",   "type": "any"
+      }, {
         "name": "sub",   "type": "any"
       }]
   ],
@@ -24,10 +26,10 @@
       "op": "EMIT_STATIC", "pos": "14:1", "value": "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"
     },
     {
-      "op": "LOOP_START", "pos": "16:1", "variable": "dept", "collection_expr_index": 0
+      "op": "LOOP_START", "pos": "16:1", "variable": "dept", "collection_expr_index": 0, "env_index": 1
     },
     {
-      "op": "LOOP_START", "pos": "17:5", "variable": "sub", "collection_expr_index": 2
+      "op": "LOOP_START", "pos": "17:5", "variable": "sub", "collection_expr_index": 2, "env_index": 2
     },
     {
       "op": "EMIT_STATIC", "pos": "18:5", "value": "("
@@ -57,10 +59,10 @@
       "op": "EMIT_STATIC", "pos": "18:166", "value": ")"
     },
     {
-      "op": "LOOP_END", "pos": "19:5"
+      "op": "LOOP_END", "pos": "19:5", "env_index": 1
     },
     {
-      "op": "LOOP_END", "pos": "20:1"
+      "op": "LOOP_END", "pos": "20:1", "env_index": 0
     }
   ],
   "name": "insert_all_sub_departments",

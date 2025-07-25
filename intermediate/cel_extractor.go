@@ -61,11 +61,26 @@ func ExtractFromStatement(stmt parsercommon.StatementNode) (expressions []string
 							envs = append(envs, make([]EnvVar, 0))
 						}
 
-						// Add loop variable to the environment
-						envs[envLevel-1] = append(envs[envLevel-1], EnvVar{
+						// Add all variables from the current loop stack to this environment level
+						// This includes variables from outer loops plus the current loop variable
+						currentEnv := make([]EnvVar, len(forLoopStack)+1)
+
+						// Copy all existing loop variables from the stack
+						for i, stackVar := range forLoopStack {
+							currentEnv[i] = EnvVar{
+								Name: stackVar,
+								Type: "any",
+							}
+						}
+
+						// Add the current loop variable
+						currentEnv[len(forLoopStack)] = EnvVar{
 							Name: variable,
 							Type: "any", // Default type, can be refined later
-						})
+						}
+
+						// Set the environment for this level
+						envs[envLevel-1] = currentEnv
 
 						// Push loop variable to stack
 						forLoopStack = append(forLoopStack, variable)

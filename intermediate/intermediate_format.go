@@ -23,13 +23,12 @@ const (
 	OpLoopEnd   = "LOOP_END"   // End of for loop block
 
 	// System directive instructions
-	OpEmitSystemExplain = "EMIT_SYSTEM_EXPLAIN" // Output EXPLAIN clause
-	OpIfSystemLimit     = "IF_SYSTEM_LIMIT"     // Conditional based on system limit
-	OpIfSystemOffset    = "IF_SYSTEM_OFFSET"    // Conditional based on system offset
-	OpEmitSystemLimit   = "EMIT_SYSTEM_LIMIT"   // Output system limit value
-	OpEmitSystemOffset  = "EMIT_SYSTEM_OFFSET"  // Output system offset value
-	OpEmitSystemFields  = "EMIT_SYSTEM_FIELDS"  // Output system fields
-	OpEmitSystemValues  = "EMIT_SYSTEM_VALUES"  // Output system values
+	OpIfSystemLimit    = "IF_SYSTEM_LIMIT"    // Conditional based on system limit
+	OpIfSystemOffset   = "IF_SYSTEM_OFFSET"   // Conditional based on system offset
+	OpEmitSystemLimit  = "EMIT_SYSTEM_LIMIT"  // Output system limit value
+	OpEmitSystemOffset = "EMIT_SYSTEM_OFFSET" // Output system offset value
+	OpEmitSystemFields = "EMIT_SYSTEM_FIELDS" // Output system fields
+	OpEmitSystemValues = "EMIT_SYSTEM_VALUES" // Output system values
 )
 
 // Instruction represents a single instruction in the instruction set
@@ -43,6 +42,7 @@ type Instruction struct {
 	Variable            string   `json:"variable,omitempty"`              // For FOR
 	Collection          string   `json:"collection,omitempty"`            // For FOR (deprecated, use CollectionExprIndex)
 	CollectionExprIndex *int     `json:"collection_expr_index,omitempty"` // Index into expressions array for collection
+	EnvIndex            *int     `json:"env_index,omitempty"`             // Environment index for LOOP_START/LOOP_END
 	DefaultValue        string   `json:"default_value,omitempty"`         // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
 	Fields              []string `json:"fields,omitempty"`                // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
 }
