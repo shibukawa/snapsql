@@ -1,7 +1,6 @@
 package parsercommon
 
 import (
-	"log"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,7 +113,6 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
-				log.Println("🐙", def.OriginalParameters)
 				// Check that User[] is expanded as array
 				users, ok := def.Parameters["users"].([]any)
 				assert.True(t, ok, "users parameter should be an array")

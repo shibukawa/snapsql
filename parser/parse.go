@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 
 	"github.com/shibukawa/snapsql/markdownparser"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -275,7 +274,6 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Println("☀️ ", functionDef.Parameters)
 
 	stmt, err := RawParse(tokens, functionDef, constants)
 	return stmt, functionDef, err

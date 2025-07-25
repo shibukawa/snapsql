@@ -118,7 +118,9 @@ parameters:
 	assert.NoError(t, err)
 
 	// enter Loop
-	err = ns.EnterLoop("item", "items")
+	target, _, err := ns.Eval("items")
+	assert.NoError(t, err)
+	err = ns.EnterLoop("item", target)
 	assert.NoError(t, err)
 
 	// it access via loop variable
@@ -134,7 +136,9 @@ parameters:
 	assert.Equal(t, true, v)
 
 	// it enter nested loop
-	err = ns.EnterLoop("hobby", "item.hobbies")
+	target2, _, err := ns.Eval("item.hobbies")
+	assert.NoError(t, err)
+	err = ns.EnterLoop("hobby", target2)
 	assert.NoError(t, err)
 
 	// it access via nested loop variable
