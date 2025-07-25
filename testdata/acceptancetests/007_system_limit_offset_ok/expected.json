@@ -10,13 +10,13 @@
       "op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT id, name, age FROM users WHERE age \u003e="
     },
     {
-      "op": "EMIT_PARAM", "pos": "14:12", "param": "min_age"
+      "op": "EMIT_EVAL", "pos": "14:12", "param": "min_age"
     },
     {
       "op": "EMIT_STATIC", "pos": "14:26", "value": "18 AND age \u003c="
     },
     {
-      "op": "EMIT_PARAM", "pos": "15:16", "param": "max_age"
+      "op": "EMIT_EVAL", "pos": "15:16", "param": "max_age"
     },
     {
       "op": "EMIT_STATIC", "pos": "15:30", "value": "65"

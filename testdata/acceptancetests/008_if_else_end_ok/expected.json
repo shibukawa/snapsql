@@ -8,16 +8,34 @@
   "function_name": "get_users_with_conditions",
   "instructions": [
     {
-      "op": "EMIT_STATIC", "pos": "8:1", "value": "SELECT id, name, email, 'N/A' as email, age FROM users WHERE age \u003e="
+      "op": "EMIT_STATIC", "pos": "8:1", "value": "SELECT id, name,"
     },
     {
-      "op": "EMIT_PARAM", "pos": "20:12", "param": "min_age"
+      "op": "IF", "pos": "11:5", "condition": "include_email"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "12:5", "value": "email,"
+    },
+    {
+      "op": "ELSE", "pos": "13:5"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "14:5", "value": "'N/A' as email,"
+    },
+    {
+      "op": "END", "pos": "15:5"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "16:5", "value": "age FROM users WHERE age \u003e="
+    },
+    {
+      "op": "EMIT_EVAL", "pos": "20:12", "param": "min_age"
     },
     {
       "op": "EMIT_STATIC", "pos": "20:26", "value": "18 AND age \u003c="
     },
     {
-      "op": "EMIT_PARAM", "pos": "21:16", "param": "max_age"
+      "op": "EMIT_EVAL", "pos": "21:16", "param": "max_age"
     },
     {
       "op": "EMIT_STATIC", "pos": "21:30", "value": "65"

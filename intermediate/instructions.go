@@ -11,19 +11,22 @@ import (
 // GenerateInstructions generates instructions from tokens
 func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 	instructions := []Instruction{}
-	
+
 	// Buffer for static content
 	var staticBuffer strings.Builder
-	
+
 	// Track if we need to add a space before the next token
 	needSpace := false
-	
+
 	// Track the position of the first significant token for the current instruction
 	var currentInstructionPos string
-	
+
 	// Track if we're inside a dummy literal block
 	inDummyBlock := false
 	
+	// Directive stack to track nested structures
+	var directiveStack []string
+
 	// Helper function to add a static instruction if the buffer is not empty
 	flushStaticBuffer := func() {
 		if staticBuffer.Len() > 0 {
@@ -41,21 +44,21 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 			currentInstructionPos = "" // Reset position for next instruction
 		}
 	}
-	
+
 	// Helper function to get position string
 	getPos := func(token tokenizer.Token) string {
 		return fmt.Sprintf("%d:%d", token.Position.Line, token.Position.Column)
 	}
-	
+
 	// Process tokens
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
-		
+
 		// Skip header comments
 		if token.Type == tokenizer.BLOCK_COMMENT && isHeaderComment(token.Value) {
 			continue
 		}
-		
+
 		// Check for DUMMY_START and DUMMY_END tokens
 		if token.Type == tokenizer.DUMMY_START {
 			inDummyBlock = true
@@ -65,32 +68,32 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 			inDummyBlock = false
 			continue
 		}
-		
+
 		// Skip tokens inside dummy blocks
 		if inDummyBlock {
 			continue
 		}
-		
+
 		// Update current instruction position if this is a significant token and we don't have one yet
-		if currentInstructionPos == "" && 
-		   token.Type != tokenizer.WHITESPACE && 
-		   token.Type != tokenizer.LINE_COMMENT && 
-		   token.Type != tokenizer.BLOCK_COMMENT {
+		if currentInstructionPos == "" &&
+			token.Type != tokenizer.WHITESPACE &&
+			token.Type != tokenizer.LINE_COMMENT &&
+			token.Type != tokenizer.BLOCK_COMMENT {
 			currentInstructionPos = getPos(token)
 		}
-		
+
 		// Check for LIMIT and OFFSET keywords
 		if token.Type == tokenizer.LIMIT {
 			// Flush any pending content
 			flushStaticBuffer()
-			
+
 			// Add EMIT_SYSTEM_LIMIT instruction
 			instructions = append(instructions, Instruction{
 				Op:           OpEmitSystemLimit,
 				Pos:          getPos(token),
 				DefaultValue: "10", // Default limit value
 			})
-			
+
 			// Skip the LIMIT keyword and the following number
 			// Find the next number token and skip it
 			for j := i + 1; j < len(tokens); j++ {
@@ -99,19 +102,19 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 					break
 				}
 			}
-			
+
 			continue
 		} else if token.Type == tokenizer.OFFSET {
 			// Flush any pending content
 			flushStaticBuffer()
-			
+
 			// Add EMIT_SYSTEM_OFFSET instruction
 			instructions = append(instructions, Instruction{
 				Op:           OpEmitSystemOffset,
 				Pos:          getPos(token),
 				DefaultValue: "0", // Default offset value
 			})
-			
+
 			// Skip the OFFSET keyword and the following number
 			// Find the next number token and skip it
 			for j := i + 1; j < len(tokens); j++ {
@@ -120,10 +123,10 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 					break
 				}
 			}
-			
+
 			continue
 		}
-		
+
 		// Process token based on type
 		switch token.Type {
 		case tokenizer.WHITESPACE:
@@ -133,16 +136,16 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 				needSpace = true
 			}
 			// Don't add whitespace directly to the buffer
-			
+
 		case tokenizer.BLOCK_COMMENT:
 			// Check if this is a directive
 			if token.Directive != nil {
 				// Flush static buffer before processing directive
 				flushStaticBuffer()
-				
+
 				// Get position for this instruction
 				pos := getPos(token)
-				
+
 				// Process directive based on type
 				switch token.Directive.Type {
 				case "if":
@@ -153,6 +156,9 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 						Condition: token.Directive.Condition,
 					})
 					
+					// Push to stack
+					directiveStack = append(directiveStack, "if")
+
 				case "elseif":
 					// Add ELSE_IF instruction
 					instructions = append(instructions, Instruction{
@@ -161,6 +167,11 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 						Condition: token.Directive.Condition,
 					})
 					
+					// Update stack top to elseif
+					if len(directiveStack) > 0 {
+						directiveStack[len(directiveStack)-1] = "elseif"
+					}
+
 				case "else":
 					// Add ELSE instruction
 					instructions = append(instructions, Instruction{
@@ -168,40 +179,63 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 						Pos: pos,
 					})
 					
+					// Update stack top to else
+					if len(directiveStack) > 0 {
+						directiveStack[len(directiveStack)-1] = "else"
+					}
+
 				case "end":
-					// Add END instruction
-					instructions = append(instructions, Instruction{
-						Op:  OpEnd,
-						Pos: pos,
-					})
-					
+					// Check if this is ending a for loop by looking at the directive stack
+					if len(directiveStack) > 0 && directiveStack[len(directiveStack)-1] == "for" {
+						// This is ending a for loop - add LOOP_END instruction
+						instructions = append(instructions, Instruction{
+							Op:  OpLoopEnd,
+							Pos: pos,
+						})
+						// Pop from stack
+						directiveStack = directiveStack[:len(directiveStack)-1]
+					} else {
+						// This is ending an if block - add END instruction
+						instructions = append(instructions, Instruction{
+							Op:  OpEnd,
+							Pos: pos,
+						})
+						// Pop from stack if it's an if-related directive
+						if len(directiveStack) > 0 && (directiveStack[len(directiveStack)-1] == "if" || directiveStack[len(directiveStack)-1] == "elseif" || directiveStack[len(directiveStack)-1] == "else") {
+							directiveStack = directiveStack[:len(directiveStack)-1]
+						}
+					}
+
 				case "for":
-					// Add FOR instruction
+					// Add LOOP_START instruction
 					parts := strings.Split(token.Directive.Condition, ":")
 					if len(parts) == 2 {
 						variable := strings.TrimSpace(parts[0])
 						collection := strings.TrimSpace(parts[1])
-						
+
 						instructions = append(instructions, Instruction{
-							Op:         OpFor,
+							Op:         OpLoopStart,
 							Pos:        pos,
 							Variable:   variable,
 							Collection: collection,
 						})
+						
+						// Push to stack
+						directiveStack = append(directiveStack, "for")
 					}
-					
+
 				case "variable":
 					// Extract variable name from /*= variable_name */
 					varName := extractVariableName(token.Value)
-					
-					// Add EMIT_PARAM instruction
+
+					// Add EMIT_EVAL instruction
 					instructions = append(instructions, Instruction{
-						Op:    OpEmitParam,
+						Op:    OpEmitEval,
 						Pos:   pos,
 						Param: varName,
 					})
 				}
-				
+
 				// Reset position for next instruction
 				currentInstructionPos = ""
 			} else if !isHeaderComment(token.Value) {
@@ -213,7 +247,7 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 				// Append comment to buffer
 				staticBuffer.WriteString(token.Value)
 			}
-			
+
 		case tokenizer.LINE_COMMENT:
 			// Add a space if needed
 			if needSpace {
@@ -222,11 +256,11 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 			}
 			// Append comment to buffer
 			staticBuffer.WriteString(token.Value)
-			
+
 		case tokenizer.DUMMY_LITERAL:
 			// Skip dummy literals - they should not appear in the output
 			continue
-			
+
 		default:
 			// Add a space if needed
 			if needSpace {
@@ -236,13 +270,13 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 			// Append token value to buffer
 			staticBuffer.WriteString(token.Value)
 		}
-		
+
 		// If this is the last token, flush the buffer
 		if i == len(tokens)-1 {
 			flushStaticBuffer()
 		}
 	}
-	
+
 	return instructions
 }
 
@@ -252,18 +286,18 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 // - Preserves newlines but removes extra spaces around them
 func normalizeWhitespace(s string) string {
 	var result strings.Builder
-	
+
 	// Remove leading whitespace
 	s = strings.TrimLeftFunc(s, unicode.IsSpace)
-	
+
 	// Process the rest of the string
 	prevIsSpace := false
 	prevIsNewline := false
-	
+
 	for _, r := range s {
 		isSpace := unicode.IsSpace(r) && r != '\n'
 		isNewline := r == '\n'
-		
+
 		if isNewline {
 			// Always keep newlines
 			result.WriteRune(r)
@@ -283,28 +317,46 @@ func normalizeWhitespace(s string) string {
 			prevIsNewline = false
 		}
 	}
-	
+
 	return result.String()
 }
 
-// isHeaderComment checks if a comment is a header comment (/*# ... */)
+// isHeaderComment checks if a comment is a header comment (function definition)
 func isHeaderComment(comment string) bool {
-	return strings.HasPrefix(comment, "/*#") && strings.HasSuffix(comment, "*/")
+	if !strings.HasPrefix(comment, "/*#") || !strings.HasSuffix(comment, "*/") {
+		return false
+	}
+	
+	// Extract content between /*# and */
+	content := strings.TrimSpace(comment[3 : len(comment)-2])
+	
+	// Check if it's a directive (if, elseif, else, for, end)
+	if strings.HasPrefix(content, "if ") || content == "if" ||
+		strings.HasPrefix(content, "elseif ") || content == "elseif" ||
+		content == "else" ||
+		strings.HasPrefix(content, "for ") || content == "for" ||
+		content == "end" {
+		return false // This is a directive, not a header comment
+	}
+	
+	// If it contains function_name or parameters, it's a header comment
+	return strings.Contains(content, "function_name:") || strings.Contains(content, "parameters:")
 }
+
 
 // extractVariableName extracts the variable name from a variable token
 // Format: /*= variable_name */placeholder
 func extractVariableName(value string) string {
 	// Remove /*= and */
 	value = strings.TrimPrefix(value, "/*=")
-	
+
 	// Split by */
 	parts := strings.Split(value, "*/")
 	if len(parts) > 0 {
 		// Return trimmed variable name
 		return strings.TrimSpace(parts[0])
 	}
-	
+
 	return ""
 }
 
@@ -317,6 +369,6 @@ func extractPlaceholder(value string) string {
 		// Return trimmed placeholder
 		return strings.TrimSpace(parts[1])
 	}
-	
+
 	return ""
 }

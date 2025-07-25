@@ -10,7 +10,6 @@ import (
 const (
 	// Basic output instructions
 	OpEmitStatic = "EMIT_STATIC" // Output static text
-	OpEmitParam  = "EMIT_PARAM"  // Output parameter value
 	OpEmitEval   = "EMIT_EVAL"   // Output evaluated expression
 
 	// Control flow instructions
@@ -20,7 +19,8 @@ const (
 	OpEnd     = "END"      // End of control block (if, for)
 
 	// Loop instructions
-	OpFor     = "FOR"      // Start of for loop block
+	OpLoopStart = "LOOP_START" // Start of for loop block
+	OpLoopEnd   = "LOOP_END"   // End of for loop block
 
 	// System directive instructions
 	OpEmitSystemExplain = "EMIT_SYSTEM_EXPLAIN" // Output EXPLAIN clause

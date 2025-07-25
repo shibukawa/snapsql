@@ -1,8 +1,8 @@
 # SnapSQL 中間形式仕様
 
-**ドキュメントバージョン:** 1.3  
-**日付:** 2025-07-23  
-**ステータス:** 実装フェーズ
+**ドキュメントバージョン:** 2.0  
+**日付:** 2025-07-25  
+**ステータス:** 実装済み
 
 ## 概要
 
@@ -37,17 +37,13 @@
 
 ```json
 {
-  "format_version": 1,
+  "format_version": "1",
+  "name": "get_user_by_id",
   "function_name": "get_user_by_id",
-  "description": "Get user by ID",
-  "parameters": [ /* パラメータ定義 */ ],
-  "generators": { /* ジェネレータ設定 */ },
-  "responses": { /* レスポンス型定義 */ },
-  "response_affinity": "one",
-  "instructions": [ /* 命令列 */ ],
-  "expressions": [ /* CEL式リスト */ ],
-  "environments": [ /* 環境変数の階層構造 */ ],
-  "cache_keys": [ /* キャッシュキーのインデックス */ ]
+  "parameters": [/* パラメータ定義 */],
+  "instructions": [/* 命令列 */],
+  "expressions": [/* CEL式リスト */],
+  "envs": [/* 環境変数の階層構造 */]
 }
 ```
 
@@ -72,11 +68,11 @@ AND age >= /*= min_age */18
 
 -- ループ式
 /*# for dept : departments */
-SELECT /*= dept.name */
+SELECT /*= dept.name */'Engineering'
 /*# end */
 
 -- 複雑な式
-ORDER BY /*= sort_field + " " + (sort_direction || "ASC") */
+ORDER BY /*= sort_field + " " + (sort_direction != "" ? sort_direction : "ASC") */name
 ```
 
 ### 中間形式での表現
@@ -90,23 +86,15 @@ ORDER BY /*= sort_field + " " + (sort_direction || "ASC") */
     "departments",
     "dept",
     "dept.name",
-    "sort_field + \" \" + (sort_direction || \"ASC\")"
+    "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")"
   ],
-  "environments": [
-    [
-      {
-        "name": "dept",
-        "type": "any"
-      }
-    ]
-  ],
-  "cache_keys": [1, 3]
+  "envs": [
+    [{"name": "dept", "type": "any"}]
+  ]
 }
 ```
 
-`environments` セクションには、ループ変数の階層構造が含まれます。各レベルは、そのレベルで定義されたループ変数のリストを含みます。
-
-`cache_keys` セクションには、if/for文で使用されるCEL式のインデックス値の配列が含まれます。これらの式は頻繁に評価される可能性があるため、キャッシュの対象となります。上記の例では、`min_age > 0`（インデックス1）と`departments`（インデックス3）がキャッシュキーとして指定されています。
+`envs` セクションには、ループ変数の階層構造が含まれます。各レベルは、そのレベルで定義されたループ変数のリストを含みます。
 
 ## 関数定義セクション
 
@@ -114,374 +102,83 @@ ORDER BY /*= sort_field + " " + (sort_direction || "ASC") */
 
 ```json
 {
+  "name": "get_user_by_id",
   "function_name": "get_user_by_id",
-  "description": "Get user by ID",
   "parameters": [
-    {
-      "name": "user_id",
-      "type": "int",
-      "optional": false
-    },
-    {
-      "name": "include_details",
-      "type": "bool",
-      "optional": true
-    }
-  ],
-  "generators": {
-    "go": {
-      "package": "queries",
-      "imports": ["context", "database/sql"]
-    },
-    "typescript": {
-      "module": "esm",
-      "types": true
-    }
-  }
+    {"name": "user_id", "type": "int"},
+    {"name": "include_details", "type": "bool"}
+  ]
 }
 ```
 
 ### パラメータ定義
 
-パラメータ定義は、テンプレートのヘッダーコメントから抽出されます。
+パラメータ定義は、テンプレートのヘッダーコメントまたはMarkdownのParametersセクションから抽出されます。
 
 ```yaml
+# SQLファイルのヘッダーコメント
 /*#
-name: get_user_by_id
 function_name: get_user_by_id
-description: Get user by ID
 parameters:
   user_id: int
   include_details: bool
-generators:
-  go:
-    package: queries
-    imports:
-      - context
-      - database/sql
-  typescript:
-    module: esm
-    types: true
 */
 ```
 
-## レスポンス型セクション
+```markdown
+# Markdownファイルのパラメータセクション
+## Parameters
 
-レスポンス型は、クエリの結果の型情報を示します。
-
-```json
-{
-  "responses": {
-    "name": "User",
-    "fields": [
-      {
-        "name": "id",
-        "type": "int",
-        "database_tag": "id"
-      },
-      {
-        "name": "name",
-        "type": "string",
-        "database_tag": "name"
-      },
-      {
-        "name": "email",
-        "type": "string",
-        "database_tag": "email"
-      }
-    ]
-  },
-  "response_affinity": "one"  // "one", "many", "none"のいずれか
-}
+```yaml
+user_id: int
+include_details: bool
+```
 ```
 
 ## 命令セット
 
-命令セットは、SQLテンプレートの実行可能な表現です。命令セットは、テンプレートの実行フローを制御し、動的なSQL生成を可能にします。
+命令セットは、SQLテンプレートの実行可能な表現です。現在の実装では、以下の命令タイプがサポートされています。
 
 ### 命令タイプ
 
 #### 基本出力命令
 - **EMIT_STATIC**: 静的なSQLテキストを出力
-  ```json
-  {
-    "op": "EMIT_STATIC",
-    "value": "SELECT id, name FROM users WHERE ",
-    "pos": "1:1"
-  }
-  ```
-
-- **EMIT_EVAL**: CEL式を評価して結果を出力
-  ```json
-  {
-    "op": "EMIT_EVAL",
-    "exp_index": 0,
-    "placeholder": "123",
-    "pos": "1:43"
-  }
-  ```
+- **EMIT_EVAL**: CEL式を評価してパラメータを出力
 
 #### 制御フロー命令
-- **JUMP**: 無条件ジャンプ
-  ```json
-  {
-    "op": "JUMP",
-    "target": 5,
-    "pos": "5:1"
-  }
-  ```
-
-- **JUMP_IF**: CEL式の評価結果に基づくジャンプ
-  ```json
-  {
-    "op": "JUMP_IF",
-    "exp_index": 1,
-    "target": 3,
-    "pos": "3:1"
-  }
-  ```
-
-- **LABEL**: ジャンプ先ラベル
-  ```json
-  {
-    "op": "LABEL",
-    "name": "end_if_1",
-    "pos": "6:1"
-  }
-  ```
+- **IF**: 条件分岐の開始
+- **ELSE_IF**: else if条件
+- **ELSE**: else分岐
+- **END**: 制御ブロックの終了
 
 #### ループ命令
-- **LOOP_START**: CEL式で取得したコレクションに対するループ開始
-  ```json
-  {
-    "op": "LOOP_START",
-    "variable": "dept",
-    "exp_index": 3,
-    "env_level": 0,
-    "end_label": "loop_end_1",
-    "pos": "2:3"
-  }
-  ```
-
-- **LOOP_END**: ループ終了
-  ```json
-  {
-    "op": "LOOP_END",
-    "start_label": "loop_start_1",
-    "pos": "17:3"
-  }
-  ```
+- **LOOP_START**: forループの開始
+- **LOOP_END**: forループの終了
 
 #### システム命令
-- **SYSTEM_EXPLAIN**: 実行オプションでEXPLAIN句が挿入される場所
-  ```json
-  {
-    "op": "SYSTEM_EXPLAIN"
-  }
-  ```
+- **EMIT_SYSTEM_LIMIT**: システムLIMIT句の出力
+- **EMIT_SYSTEM_OFFSET**: システムOFFSET句の出力
 
-- **SYSTEM_JUMP_IF_LIMIT**: 実行時オプションでLIMITが設定された場合にジャンプ
-  ```json
-  {
-    "op": "SYSTEM_JUMP_IF_LIMIT",
-    "target": 10
-  }
-  ```
-
-- **SYSTEM_JUMP_IF_OFFSET**: 実行時オプションでOFFSETが設定された場合にジャンプ
-  ```json
-  {
-    "op": "SYSTEM_JUMP_IF_OFFSET",
-    "target": 12
-  }
-  ```
-
-### 命令列の例
+### 命令の例
 
 ```json
-{
-  "instructions": [
-    {
-      "op": "SYSTEM_EXPLAIN"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "SELECT id, name FROM users WHERE active = ",
-      "pos": "1:1"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 0,
-      "placeholder": "true",
-      "pos": "1:43"
-    },
-    {
-      "op": "JUMP_IF",
-      "exp_index": 1,
-      "target": 6,
-      "pos": "2:1"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": " AND age >= ",
-      "pos": "3:1"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 2,
-      "placeholder": "18",
-      "pos": "3:12"
-    },
-    {
-      "op": "LABEL",
-      "name": "end_if_1",
-      "pos": "4:1"
-    },
-    {
-      "op": "SYSTEM_JUMP_IF_LIMIT",
-      "target": 10
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": " LIMIT 100",
-      "pos": "5:1"
-    },
-    {
-      "op": "JUMP",
-      "target": 11,
-      "pos": "5:12"
-    },
-    {
-      "op": "LABEL",
-      "name": "end_limit",
-      "pos": "6:1"
-    }
-  ]
-}
+{"op": "EMIT_STATIC", "value": "SELECT id, name FROM users WHERE ", "pos": "1:1"}
+{"op": "EMIT_EVAL", "param": "user_id", "pos": "1:43"}
+{"op": "IF", "condition": "min_age > 0", "pos": "2:1"}
+{"op": "EMIT_STATIC", "value": " AND age >= ", "pos": "3:1"}
+{"op": "EMIT_EVAL", "param": "min_age", "pos": "3:12"}
+{"op": "ELSE_IF", "condition": "max_age > 0", "pos": "4:1"}
+{"op": "EMIT_STATIC", "value": " AND age <= ", "pos": "5:1"}
+{"op": "EMIT_EVAL", "param": "max_age", "pos": "5:12"}
+{"op": "ELSE", "pos": "6:1"}
+{"op": "EMIT_STATIC", "value": " -- No age filter", "pos": "7:1"}
+{"op": "END", "pos": "8:1"}
+{"op": "LOOP_START", "variable": "dept", "collection": "departments", "pos": "9:1"}
+{"op": "EMIT_EVAL", "param": "dept.name", "pos": "10:5"}
+{"op": "LOOP_END", "pos": "11:1"}
+{"op": "EMIT_SYSTEM_LIMIT", "default_value": "100", "pos": "12:1"}
+{"op": "EMIT_SYSTEM_OFFSET", "default_value": "0", "pos": "13:1"}
 ```
-
-## レスポンスaffinityの決定
-
-レスポンスaffinity（カーディナリティ）は、クエリの結果が何行返されるかを示します。以下の3つの値があります：
-
-- **one**: クエリが単一行を返す場合
-- **many**: クエリが複数行を返す場合
-- **none**: クエリが行を返さない場合（例：INSERT, UPDATE, DELETE）
-
-### レスポンスaffinityの決定ルール
-
-レスポンスaffinityは、以下のルールに基づいて決定されます：
-
-#### SELECT文
-
-1. **LIMIT 1が指定されている場合**: `one`
-   ```sql
-   SELECT * FROM users LIMIT 1
-   ```
-
-2. **WHERE句に一意キー条件がある場合**: `one`
-   ```sql
-   SELECT * FROM users WHERE id = 1
-   ```
-
-3. **上記以外の場合**: `many`
-   ```sql
-   SELECT * FROM users WHERE department = 'Engineering'
-   ```
-
-#### INSERT文
-
-1. **RETURNINGがあり、バルクインサートの場合**: `many`
-   ```sql
-   INSERT INTO users (name, email) VALUES ('John', 'john@example.com'), ('Jane', 'jane@example.com') RETURNING id
-   ```
-
-2. **RETURNINGがあり、単一行インサートの場合**: `one`
-   ```sql
-   INSERT INTO users (name, email) VALUES ('John', 'john@example.com') RETURNING id
-   ```
-
-3. **RETURNINGがない場合**: `none`
-   ```sql
-   INSERT INTO users (name, email) VALUES ('John', 'john@example.com')
-   ```
-
-#### UPDATE文
-
-1. **RETURNINGがある場合**: `many`
-   ```sql
-   UPDATE users SET name = 'John' WHERE department = 'Engineering' RETURNING id, name
-   ```
-
-2. **RETURNINGがない場合**: `none`
-   ```sql
-   UPDATE users SET name = 'John' WHERE department = 'Engineering'
-   ```
-
-#### DELETE文
-
-1. **RETURNINGがある場合**: `many`
-   ```sql
-   DELETE FROM users WHERE department = 'Engineering' RETURNING id, name
-   ```
-
-2. **RETURNINGがない場合**: `none`
-   ```sql
-   DELETE FROM users WHERE department = 'Engineering'
-   ```
-
-## レスポンスタイプの型推論
-
-レスポンスタイプは、クエリの結果の型情報を示します。型推論は、以下のルールに基づいて行われます：
-
-### フィールドの型推論ルール
-
-1. **明示的な型指定がある場合**: 指定された型を使用
-   ```sql
-   SELECT CAST(id AS INT8) AS id
-   ```
-
-2. **テーブル情報が利用可能な場合**: テーブル情報から型を取得
-   ```sql
-   SELECT users.id, users.name FROM users
-   ```
-
-3. **フィールドの種類に基づく推論**:
-   - **単純フィールド**: デフォルトで `string` 型
-   - **テーブルフィールド**: デフォルトで `string` 型
-   - **関数フィールド**: 関数名に基づいて型を推論
-   - **リテラルフィールド**: リテラル値に基づいて型を推論
-   - **複雑なフィールド**: デフォルトで `any` 型
-
-### 関数の戻り値型推論
-
-関数の戻り値型は、関数名に基づいて推論されます：
-
-| 関数パターン | 推論される型 |
-|------------|------------|
-| `count(*)` | `int` |
-| `sum(...)` | `number` |
-| `avg(...)` | `number` |
-| `min(...)`, `max(...)` | `any` |
-| `json_...` | `any` |
-| `to_char(...)`, `to_text(...)` | `string` |
-| `to_number(...)`, `to_decimal(...)` | `number` |
-| `to_date(...)`, `to_timestamp(...)` | `datetime` |
-| `coalesce(...)` | `any` |
-| その他 | `any` |
-
-### リテラル値の型推論
-
-リテラル値の型は、値の形式に基づいて推論されます：
-
-| リテラルパターン | 推論される型 |
-|--------------|------------|
-| `'...'` | `string` |
-| 整数 | `int` |
-| 小数 | `number` |
-| `true`, `false` | `bool` |
-| `NULL` | `null` |
-| その他 | `any` |
 
 ## 実装例
 
@@ -495,29 +192,14 @@ SELECT id, name, email FROM users WHERE id = /*= user_id */123
 
 ```json
 {
-  "format_version": 1,
+  "format_version": "1",
+  "name": "get_user_by_id",
   "function_name": "get_user_by_id",
-  "parameters": [
-    {
-      "name": "user_id",
-      "type": "int"
-    }
-  ],
-  "expressions": [
-    "user_id"
-  ],
+  "parameters": [{"name": "user_id", "type": "int"}],
+  "expressions": ["user_id"],
   "instructions": [
-    {
-      "op": "EMIT_STATIC",
-      "value": "SELECT id, name, email FROM users WHERE id = ",
-      "pos": "1:1"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 0,
-      "placeholder": "123",
-      "pos": "1:43"
-    }
+    {"op": "EMIT_STATIC", "value": "SELECT id, name, email FROM users WHERE id = ", "pos": "1:1"},
+    {"op": "EMIT_EVAL", "param": "user_id", "pos": "1:43"}
   ]
 }
 ```
@@ -540,85 +222,69 @@ AND age <= /*= max_age */65
 
 ```json
 {
-  "format_version": 1,
+  "format_version": "1",
+  "name": "get_filtered_users",
   "function_name": "get_filtered_users",
   "parameters": [
-    {
-      "name": "min_age",
-      "type": "int"
-    },
-    {
-      "name": "max_age",
-      "type": "int"
-    }
+    {"name": "min_age", "type": "int"},
+    {"name": "max_age", "type": "int"}
   ],
-  "expressions": [
-    "min_age > 0",
-    "min_age",
-    "max_age > 0",
-    "max_age"
-  ],
-  "cache_keys": [0, 2],
+  "expressions": ["min_age > 0", "min_age", "max_age > 0", "max_age"],
   "instructions": [
-    {
-      "op": "EMIT_STATIC",
-      "value": "SELECT id, name, age, department \nFROM users\nWHERE 1=1",
-      "pos": "1:1"
-    },
-    {
-      "op": "JUMP_IF",
-      "exp_index": 0,
-      "target": 5,
-      "pos": "4:1"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\nAND age >= ",
-      "pos": "5:1"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 1,
-      "placeholder": "18",
-      "pos": "5:11"
-    },
-    {
-      "op": "JUMP",
-      "target": 5,
-      "pos": "6:1"
-    },
-    {
-      "op": "LABEL",
-      "name": "end_if_1",
-      "pos": "6:1"
-    },
-    {
-      "op": "JUMP_IF",
-      "exp_index": 2,
-      "target": 10,
-      "pos": "7:1"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\nAND age <= ",
-      "pos": "8:1"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 3,
-      "placeholder": "65",
-      "pos": "8:11"
-    },
-    {
-      "op": "JUMP",
-      "target": 10,
-      "pos": "9:1"
-    },
-    {
-      "op": "LABEL",
-      "name": "end_if_2",
-      "pos": "9:1"
-    }
+    {"op": "EMIT_STATIC", "value": "SELECT id, name, age, department \nFROM users\nWHERE 1=1", "pos": "1:1"},
+    {"op": "IF", "condition": "min_age > 0", "pos": "4:1"},
+    {"op": "EMIT_STATIC", "value": "\nAND age >= ", "pos": "5:1"},
+    {"op": "EMIT_EVAL", "param": "min_age", "pos": "5:11"},
+    {"op": "END", "pos": "6:1"},
+    {"op": "IF", "condition": "max_age > 0", "pos": "7:1"},
+    {"op": "EMIT_STATIC", "value": "\nAND age <= ", "pos": "8:1"},
+    {"op": "EMIT_EVAL", "param": "max_age", "pos": "8:11"},
+    {"op": "END", "pos": "9:1"}
+  ]
+}
+```
+
+### IF-ELSE_IF-ELSE構造
+
+```sql
+SELECT 
+    id,
+    name,
+    /*# if user_type == "admin" */
+    'Administrator' as role
+    /*# elseif user_type == "manager" */
+    'Manager' as role
+    /*# else */
+    'User' as role
+    /*# end */
+FROM users
+WHERE age >= /*= age */18
+```
+
+中間形式：
+
+```json
+{
+  "format_version": "1",
+  "name": "get_user_with_role",
+  "function_name": "get_user_with_role",
+  "parameters": [
+    {"name": "user_type", "type": "string"},
+    {"name": "age", "type": "int"}
+  ],
+  "expressions": ["user_type == \"admin\"", "user_type == \"manager\"", "age"],
+  "instructions": [
+    {"op": "EMIT_STATIC", "value": "SELECT id, name,", "pos": "1:1"},
+    {"op": "IF", "condition": "user_type == \"admin\"", "pos": "4:5"},
+    {"op": "EMIT_STATIC", "value": "'Administrator' as role", "pos": "5:5"},
+    {"op": "ELSE_IF", "condition": "user_type == \"manager\"", "pos": "6:5"},
+    {"op": "EMIT_STATIC", "value": "'Manager' as role", "pos": "7:5"},
+    {"op": "ELSE", "pos": "8:5"},
+    {"op": "EMIT_STATIC", "value": "'User' as role", "pos": "9:5"},
+    {"op": "END", "pos": "10:5"},
+    {"op": "EMIT_STATIC", "value": "FROM users WHERE age >= ", "pos": "11:1"},
+    {"op": "EMIT_EVAL", "param": "age", "pos": "12:14"},
+    {"op": "EMIT_STATIC", "value": "18", "pos": "12:24"}
   ]
 }
 ```
@@ -626,195 +292,110 @@ AND age <= /*= max_age */65
 ### ネストされたループ
 
 ```sql
-SELECT id, name FROM (
-  /*# for dept : departments */
-  SELECT 
-    /*= dept.id */ as dept_id,
-    /*= dept.name */ as dept_name,
-    (
-      /*# for emp : dept.employees */
-      SELECT /*= emp.id */, /*= emp.name */
-      /*# if !for.last */
-      UNION ALL
-      /*# end */
-      /*# end */
-    ) as employees
-  /*# if !for.last */
-  UNION ALL
-  /*# end */
-  /*# end */
-)
+INSERT INTO sub_departments (id, name, department_code, department_name)
+VALUES
+/*# for dept : departments */
+    /*# for sub : dept.sub_departments */
+    (/*= dept.department_code + "-" + sub.id */'1-101', /*= sub.name */'Engineering Team A', /*= dept.department_code */'1', /*= dept.department_name */'Engineering')
+    /*# end */
+/*# end */;
 ```
 
 中間形式：
 
 ```json
 {
-  "format_version": 1,
-  "function_name": "get_nested_data",
+  "format_version": "1",
+  "name": "insert_all_sub_departments",
+  "function_name": "insert_all_sub_departments",
+  "parameters": [{"name": "departments", "type": "any"}],
+  "expressions": [
+    "departments", "dept", "dept.sub_departments", "sub",
+    "dept.department_code + \"-\" + sub.id", "sub.name",
+    "dept.department_code", "dept.department_name"
+  ],
+  "envs": [
+    [{"name": "dept", "type": "any"}],
+    [{"name": "sub", "type": "any"}]
+  ],
+  "instructions": [
+    {"op": "EMIT_STATIC", "value": "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES (", "pos": "1:1"},
+    {"op": "EMIT_EVAL", "param": "dept.department_code + \"-\" + sub.id", "pos": "5:6"},
+    {"op": "EMIT_STATIC", "value": "'1-101',", "pos": "5:48"},
+    {"op": "EMIT_EVAL", "param": "sub.name", "pos": "5:57"},
+    {"op": "EMIT_STATIC", "value": "'Engineering Team A',", "pos": "5:72"},
+    {"op": "EMIT_EVAL", "param": "dept.department_code", "pos": "5:94"},
+    {"op": "EMIT_STATIC", "value": "'1',", "pos": "5:121"},
+    {"op": "EMIT_EVAL", "param": "dept.department_name", "pos": "5:126"},
+    {"op": "EMIT_STATIC", "value": "'Engineering') ;", "pos": "5:153"}
+  ]
+}
+```
+
+### 複雑な式とシステム命令
+
+```sql
+SELECT 
+  id, 
+  name,
+  /*= display_name ? username : "Anonymous" */'Anonymous'
+FROM users
+WHERE 
+  /*# if start_date != "" && end_date != "" */
+  created_at BETWEEN /*= start_date */'2023-01-01' AND /*= end_date */'2023-12-31'
+  /*# end */
+  /*# if sort_field != "" */
+ORDER BY /*= sort_field + " " + (sort_direction != "" ? sort_direction : "ASC") */name
+  /*# end */
+LIMIT /*= page_size != 0 ? page_size : 10 */10
+OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
+```
+
+中間形式：
+
+```json
+{
+  "format_version": "1",
+  "name": "getComplexData",
+  "function_name": "getComplexData",
   "parameters": [
-    {
-      "name": "departments",
-      "type": "string[]"
-    }
+    {"name": "user_id", "type": "int"},
+    {"name": "username", "type": "string"},
+    {"name": "display_name", "type": "bool"},
+    {"name": "start_date", "type": "string"},
+    {"name": "end_date", "type": "string"},
+    {"name": "sort_field", "type": "string"},
+    {"name": "sort_direction", "type": "string"},
+    {"name": "page_size", "type": "int"},
+    {"name": "page", "type": "int"}
   ],
   "expressions": [
-    "departments",
-    "dept.id",
-    "dept.name",
-    "dept.employees",
-    "emp.id",
-    "emp.name",
-    "!for.last"
+    "display_name ? username : \"Anonymous\"",
+    "start_date != \"\" && end_date != \"\"",
+    "start_date", "end_date",
+    "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")",
+    "page_size != 0 ? page_size : 10",
+    "page > 0 ? (page - 1) * page_size : 0"
   ],
-  "environments": [
-    [
-      {
-        "name": "dept",
-        "type": "any"
-      }
-    ],
-    [
-      {
-        "name": "emp",
-        "type": "any"
-      }
-    ]
-  ],
-  "cache_keys": [0, 3, 6],
   "instructions": [
-    {
-      "op": "EMIT_STATIC",
-      "value": "SELECT id, name FROM (",
-      "pos": "1:1"
-    },
-    {
-      "op": "LOOP_START",
-      "variable": "dept",
-      "exp_index": 0,
-      "env_level": 0,
-      "end_label": "loop_end_1",
-      "pos": "2:3"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\n  SELECT \n    ",
-      "pos": "3:3"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 1,
-      "placeholder": "1",
-      "pos": "4:5"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": " as dept_id,\n    ",
-      "pos": "4:19"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 2,
-      "placeholder": "'Engineering'",
-      "pos": "5:5"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": " as dept_name,\n    (",
-      "pos": "5:21"
-    },
-    {
-      "op": "LOOP_START",
-      "variable": "emp",
-      "exp_index": 3,
-      "env_level": 1,
-      "end_label": "loop_end_2",
-      "pos": "7:7"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\n      SELECT ",
-      "pos": "8:7"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 4,
-      "placeholder": "1",
-      "pos": "8:14"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": ", ",
-      "pos": "8:24"
-    },
-    {
-      "op": "EMIT_EVAL",
-      "exp_index": 5,
-      "placeholder": "'John'",
-      "pos": "8:29"
-    },
-    {
-      "op": "JUMP_IF",
-      "exp_index": 6,
-      "target": 15,
-      "pos": "9:7"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\n      UNION ALL",
-      "pos": "10:7"
-    },
-    {
-      "op": "JUMP",
-      "target": 16,
-      "pos": "11:7"
-    },
-    {
-      "op": "LABEL",
-      "name": "end_if_1",
-      "pos": "11:7"
-    },
-    {
-      "op": "LOOP_END",
-      "start_label": "loop_start_2",
-      "pos": "12:7"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\n    ) as employees",
-      "pos": "13:5"
-    },
-    {
-      "op": "JUMP_IF",
-      "exp_index": 6,
-      "target": 21,
-      "pos": "14:3"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\n  UNION ALL",
-      "pos": "15:3"
-    },
-    {
-      "op": "JUMP",
-      "target": 22,
-      "pos": "16:3"
-    },
-    {
-      "op": "LABEL",
-      "name": "end_if_2",
-      "pos": "16:3"
-    },
-    {
-      "op": "LOOP_END",
-      "start_label": "loop_start_1",
-      "pos": "17:3"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "value": "\n)",
-      "pos": "18:1"
-    }
+    {"op": "IF", "condition": "page > 0 ? (page - 1) * page_size : 0 != null", "pos": "0:0"},
+    {"op": "IF", "condition": "page_size != 0 ? page_size : 10 != null", "pos": "0:0"},
+    {"op": "IF", "condition": "sort_field != \"\"", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "value": "SELECT id, name,", "pos": "1:1"},
+    {"op": "EMIT_EVAL", "param": "display_name ? username : \"Anonymous\"", "pos": "4:3"},
+    {"op": "EMIT_STATIC", "value": "FROM users WHERE created_at BETWEEN", "pos": "4:3"},
+    {"op": "EMIT_EVAL", "param": "start_date", "pos": "8:22"},
+    {"op": "EMIT_STATIC", "value": "'2023-01-01' AND", "pos": "8:39"},
+    {"op": "EMIT_EVAL", "param": "end_date", "pos": "8:56"},
+    {"op": "EMIT_STATIC", "value": "'2023-12-31' ORDER BY", "pos": "8:71"},
+    {"op": "EMIT_EVAL", "param": "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")", "pos": "11:10"},
+    {"op": "EMIT_STATIC", "value": "name", "pos": "11:83"},
+    {"op": "EMIT_SYSTEM_LIMIT", "default_value": "10", "pos": "13:1"},
+    {"op": "EMIT_STATIC", "value": "10", "pos": "13:45"},
+    {"op": "EMIT_SYSTEM_OFFSET", "default_value": "0", "pos": "14:1"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
   ]
 }
 ```
@@ -831,117 +412,72 @@ SELECT id, name FROM (
   "description": "SnapSQLテンプレートの中間JSON形式",
   "type": "object",
   "properties": {
-    "format_version": {
-      "type": "integer",
-      "enum": [1]
-    },
-    "function_name": {
-      "type": "string"
-    },
-    "description": {
-      "type": "string"
-    },
+    "format_version": {"type": "string", "enum": ["1"]},
+    "name": {"type": "string"},
+    "function_name": {"type": "string"},
     "parameters": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" },
-          "type": { "type": "string" },
-          "optional": { "type": "boolean" }
+          "name": {"type": "string"},
+          "type": {"type": "string"}
         },
         "required": ["name", "type"]
       }
-    },
-    "generators": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object"
-      }
-    },
-    "responses": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "fields": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "type": { "type": "string" },
-              "database_tag": { "type": "string" }
-            },
-            "required": ["name", "type"]
-          }
-        }
-      }
-    },
-    "response_affinity": {
-      "type": "string",
-      "enum": ["one", "many", "none"]
     },
     "instructions": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "op": { 
+          "op": {
             "type": "string",
-            "enum": [
-              "EMIT_STATIC", 
-              "EMIT_EVAL", 
-              "JUMP", 
-              "JUMP_IF", 
-              "LABEL", 
-              "LOOP_START", 
-              "LOOP_END",
-              "SYSTEM_EXPLAIN",
-              "SYSTEM_JUMP_IF_LIMIT",
-              "SYSTEM_JUMP_IF_OFFSET"
-            ]
+            "enum": ["EMIT_STATIC", "EMIT_EVAL", "IF", "ELSE_IF", "ELSE", "END", "LOOP_START", "LOOP_END", "EMIT_SYSTEM_LIMIT", "EMIT_SYSTEM_OFFSET"]
           },
-          "value": { "type": "string" },
-          "exp_index": { "type": "integer" },
-          "placeholder": { "type": "string" },
-          "target": { "type": "integer" },
-          "name": { "type": "string" },
-          "variable": { "type": "string" },
-          "env_level": { "type": "integer" },
-          "end_label": { "type": "string" },
-          "start_label": { "type": "string" },
-          "analyze": { "type": "boolean" },
-          "pos": { "type": "string" }
+          "value": {"type": "string"},
+          "param": {"type": "string"},
+          "condition": {"type": "string"},
+          "variable": {"type": "string"},
+          "collection": {"type": "string"},
+          "default_value": {"type": "string"},
+          "pos": {"type": "string"}
         },
         "required": ["op"]
       }
     },
     "expressions": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {"type": "string"}
     },
-    "environments": {
+    "envs": {
       "type": "array",
       "items": {
         "type": "array",
         "items": {
           "type": "object",
           "properties": {
-            "name": { "type": "string" },
-            "type": { "type": "string" }
+            "name": {"type": "string"},
+            "type": {"type": "string"}
           },
           "required": ["name", "type"]
         }
       }
-    },
-    "cache_keys": {
-      "type": "array",
-      "items": { "type": "integer" }
     }
   },
   "required": ["format_version", "instructions"]
 }
 ```
+
+## 位置情報（pos）
+
+各命令には位置情報（`pos`）が含まれ、元のSQLテンプレート内での行と列を示します。形式は `"行:列"` です。
+
+- `"1:1"`: 1行目1列目
+- `"5:43"`: 5行目43列目
+- `"0:0"`: システム生成命令（位置情報なし）
+
+この情報は、デバッグやエラーレポートで使用されます。
 
 ## 今後の拡張
 
@@ -949,7 +485,7 @@ SELECT id, name FROM (
 
 1. **命令セットの最適化**: 命令列の最適化による実行効率の向上
 2. **型推論の強化**: より正確な型情報の提供
-3. **最適化情報**: クエリの最適化に関する情報
+3. **レスポンス型定義**: クエリ結果の型情報
 4. **テーブルスキーマ統合**: データベーススキーマ情報との統合
 
 これらの拡張により、より強力なコード生成と実行時の最適化が可能になります。

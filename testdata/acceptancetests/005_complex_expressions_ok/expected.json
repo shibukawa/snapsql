@@ -4,52 +4,78 @@
     "start_date != \"\" \u0026\u0026 end_date != \"\"",
     "start_date",
     "end_date",
-    "sort_field != \"\"",
-    "sort_field + \" \" + (sort_direction || \"ASC\")",
-    "page_size || 10",
-    "(page - 1) * page_size || 0"
+    "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")",
+    "page_size != 0 ? page_size : 10",
+    "page \u003e 0 ? (page - 1) * page_size : 0"
   ],
   "format_version": "1",
   "function_name": "getComplexData",
   "instructions": [
     {
+      "op": "IF", "pos": "0:0", "condition": "page \u003e 0 ? (page - 1) * page_size : 0 != null"
+    },
+    {
+      "op": "IF", "pos": "0:0", "condition": "page_size != 0 ? page_size : 10 != null"
+    },
+    {
+      "op": "IF", "pos": "0:0", "condition": "sort_field != \"\""
+    },
+    {
       "op": "EMIT_STATIC", "pos": "15:1", "value": "SELECT id, name,"
     },
     {
-      "op": "EMIT_PARAM", "pos": "18:3", "param": "display_name ? username : \"Anonymous\""
+      "op": "EMIT_EVAL", "pos": "18:3", "param": "display_name ? username : \"Anonymous\""
     },
     {
-      "op": "EMIT_STATIC", "pos": "19:1", "value": "FROM users WHERE created_at BETWEEN"
+      "op": "EMIT_STATIC", "pos": "18:3", "value": "FROM users WHERE"
     },
     {
-      "op": "EMIT_PARAM", "pos": "22:22", "param": "start_date"
+      "op": "IF", "pos": "21:3", "condition": "start_date != \"\" \u0026\u0026 end_date != \"\""
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "22:3", "value": "created_at BETWEEN"
+    },
+    {
+      "op": "EMIT_EVAL", "pos": "22:22", "param": "start_date"
     },
     {
       "op": "EMIT_STATIC", "pos": "22:39", "value": "'2023-01-01' AND"
     },
     {
-      "op": "EMIT_PARAM", "pos": "22:56", "param": "end_date"
+      "op": "EMIT_EVAL", "pos": "22:56", "param": "end_date"
     },
     {
-      "op": "EMIT_STATIC", "pos": "22:71", "value": "'2023-12-31' ORDER BY"
+      "op": "EMIT_STATIC", "pos": "22:71", "value": "'2023-12-31'"
     },
     {
-      "op": "EMIT_PARAM", "pos": "25:10", "param": "sort_field + \" \" + (sort_direction || \"ASC\")"
+      "op": "END", "pos": "23:3"
     },
     {
-      "op": "EMIT_STATIC", "pos": "27:1", "value": "LIMIT"
+      "op": "EMIT_STATIC", "pos": "25:1", "value": "ORDER BY"
     },
     {
-      "op": "EMIT_PARAM", "pos": "27:7", "param": "page_size || 10"
+      "op": "EMIT_EVAL", "pos": "25:10", "param": "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")"
     },
     {
-      "op": "EMIT_STATIC", "pos": "27:29", "value": "10 OFFSET"
+      "op": "EMIT_STATIC", "pos": "25:83", "value": "name"
     },
     {
-      "op": "EMIT_PARAM", "pos": "28:8", "param": "(page - 1) * page_size || 0"
+      "op": "EMIT_SYSTEM_LIMIT", "pos": "27:1", "default_value": "10"
     },
     {
-      "op": "EMIT_STATIC", "pos": "28:42", "value": "0 "
+      "op": "EMIT_STATIC", "pos": "27:45", "value": "10"
+    },
+    {
+      "op": "EMIT_SYSTEM_OFFSET", "pos": "28:1", "default_value": "0"
+    },
+    {
+      "op": "END", "pos": "0:0"
+    },
+    {
+      "op": "END", "pos": "0:0"
+    },
+    {
+      "op": "END", "pos": "0:0"
     }
   ],
   "name": "getComplexData",
@@ -61,7 +87,7 @@
       "name": "username", "type": "string"
     },
     {
-      "name": "display_name", "type": "string"
+      "name": "display_name", "type": "bool"
     },
     {
       "name": "start_date", "type": "string"

@@ -12,25 +12,61 @@
   "function_name": "getFilteredData",
   "instructions": [
     {
-      "op": "EMIT_STATIC", "pos": "10:1", "value": "SELECT id, name, age, department FROM users WHERE 1=1 AND age \u003e="
+      "op": "EMIT_STATIC", "pos": "10:1", "value": "SELECT id, name, age, department FROM users WHERE 1=1"
     },
     {
-      "op": "EMIT_PARAM", "pos": "14:12", "param": "min_age"
+      "op": "IF", "pos": "13:1", "condition": "min_age \u003e 0"
     },
     {
-      "op": "EMIT_STATIC", "pos": "14:26", "value": "18 AND age \u003c="
+      "op": "EMIT_STATIC", "pos": "14:1", "value": "AND age \u003e="
     },
     {
-      "op": "EMIT_PARAM", "pos": "17:12", "param": "max_age"
+      "op": "EMIT_EVAL", "pos": "14:12", "param": "min_age"
     },
     {
-      "op": "EMIT_STATIC", "pos": "17:26", "value": "65 AND department IN ("
+      "op": "EMIT_STATIC", "pos": "14:26", "value": "18"
     },
     {
-      "op": "EMIT_PARAM", "pos": "20:20", "param": "departments"
+      "op": "END", "pos": "15:1"
     },
     {
-      "op": "EMIT_STATIC", "pos": "20:20", "value": "('HR', 'Engineering')) AND status = 'active'"
+      "op": "IF", "pos": "16:1", "condition": "max_age \u003e 0"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "17:1", "value": "AND age \u003c="
+    },
+    {
+      "op": "EMIT_EVAL", "pos": "17:12", "param": "max_age"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "17:26", "value": "65"
+    },
+    {
+      "op": "END", "pos": "18:1"
+    },
+    {
+      "op": "IF", "pos": "19:1", "condition": "departments.size() \u003e 0"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "20:1", "value": "AND department IN ("
+    },
+    {
+      "op": "EMIT_EVAL", "pos": "20:20", "param": "departments"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "20:20", "value": "('HR', 'Engineering'))"
+    },
+    {
+      "op": "END", "pos": "21:1"
+    },
+    {
+      "op": "IF", "pos": "22:1", "condition": "active"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "23:1", "value": "AND status = 'active'"
+    },
+    {
+      "op": "END", "pos": "24:1"
     }
   ],
   "name": "getFilteredData",
