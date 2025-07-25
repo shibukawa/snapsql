@@ -58,7 +58,7 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 	}
 
 	// Generate instructions
-	instructions := GenerateInstructions(tokens)
+	instructions := GenerateInstructions(tokens, expressions)
 
 	// Add clause-level IF conditions
 	instructions = addClauseIfConditions(stmt, instructions)

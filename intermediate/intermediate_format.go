@@ -34,15 +34,17 @@ const (
 
 // Instruction represents a single instruction in the instruction set
 type Instruction struct {
-	Op           string   `json:"op"`
-	Pos          string   `json:"pos,omitempty"`           // Position "line:column" from original template
-	Value        string   `json:"value,omitempty"`         // For EMIT_STATIC
-	Param        string   `json:"param,omitempty"`         // For EMIT_PARAM
-	Condition    string   `json:"condition,omitempty"`     // For IF, ELSE_IF
-	Variable     string   `json:"variable,omitempty"`      // For FOR
-	Collection   string   `json:"collection,omitempty"`    // For FOR
-	DefaultValue string   `json:"default_value,omitempty"` // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
-	Fields       []string `json:"fields,omitempty"`        // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
+	Op                  string   `json:"op"`
+	Pos                 string   `json:"pos,omitempty"`                   // Position "line:column" from original template
+	Value               string   `json:"value,omitempty"`                 // For EMIT_STATIC
+	Param               string   `json:"param,omitempty"`                 // For EMIT_PARAM (deprecated, use ExprIndex)
+	ExprIndex           *int     `json:"expr_index,omitempty"`            // Index into expressions array
+	Condition           string   `json:"condition,omitempty"`             // For IF, ELSE_IF (deprecated, use ExprIndex)
+	Variable            string   `json:"variable,omitempty"`              // For FOR
+	Collection          string   `json:"collection,omitempty"`            // For FOR (deprecated, use CollectionExprIndex)
+	CollectionExprIndex *int     `json:"collection_expr_index,omitempty"` // Index into expressions array for collection
+	DefaultValue        string   `json:"default_value,omitempty"`         // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
+	Fields              []string `json:"fields,omitempty"`                // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
 }
 
 // Parameter represents a function parameter

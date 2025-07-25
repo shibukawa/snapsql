@@ -107,7 +107,7 @@ func TestUpdateWithDummyTokensFromSource(t *testing.T) {
 				}
 				assert.Equal(t, 0, len(perr.Errors))
 				assert.Equal(t, tt.wantTable, updateStmt.Update.Table)
-				
+
 				// SET句のフィールド名を検証
 				fieldNames := make([]string, 0, len(updateStmt.Set.Assigns))
 				for _, assign := range updateStmt.Set.Assigns {

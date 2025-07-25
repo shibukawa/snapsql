@@ -17,7 +17,7 @@ var (
 // finalizeDeleteFromClause validates DeleteFromClause
 func finalizeDeleteFromClause(clause *cmn.DeleteFromClause, perr *cmn.ParseError) {
 	tokens := clause.ContentTokens()
-	
+
 	// Check if the WHERE clause is incomplete
 	if len(tokens) > 0 {
 		lastToken := tokens[len(tokens)-1]
@@ -36,9 +36,9 @@ func finalizeDeleteFromClause(clause *cmn.DeleteFromClause, perr *cmn.ParseError
 	clause.Table = tableName
 	// ダミートークンを許容するために、余分なトークンのチェックを無効化
 	/*
-	if consume != len(pTokens) {
-		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
-	}
+		if consume != len(pTokens) {
+			perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
+		}
 	*/
 }
 
@@ -55,9 +55,9 @@ func finalizeUpdateClause(clause *cmn.UpdateClause, perr *cmn.ParseError) {
 	clause.Table = tableName
 	// ダミートークンを許容するために、余分なトークンのチェックを無効化
 	/*
-	if consume != len(pTokens) {
-		perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
-	}
+		if consume != len(pTokens) {
+			perr.Add(fmt.Errorf("%w: at %s: there are extra token exists", cmn.ErrInvalidSQL, tokens[consume].Position.String()))
+		}
 	*/
 }
 
@@ -103,7 +103,7 @@ func finalizeReturningClause(clause *cmn.ReturningClause, perr *cmn.ParseError) 
 		perr.Add(fmt.Errorf("%w: RETURNING clause is nil", cmn.ErrInvalidSQL))
 		return
 	}
-	
+
 	tokens := clause.ContentTokens()
 	if len(tokens) == 0 {
 		perr.Add(fmt.Errorf("%w: RETURNING clause must not be empty", cmn.ErrInvalidSQL))

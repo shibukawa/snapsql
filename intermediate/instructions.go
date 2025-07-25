@@ -8,8 +8,8 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-// GenerateInstructions generates instructions from tokens
-func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
+// GenerateInstructions generates instructions from tokens with expression index references
+func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Instruction {
 	instructions := []Instruction{}
 
 	// Buffer for static content
@@ -26,6 +26,16 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 
 	// Directive stack to track nested structures
 	var directiveStack []string
+
+	// Helper function to find expression index
+	findExpressionIndex := func(expr string) int {
+		for i, e := range expressions {
+			if e == expr {
+				return i
+			}
+		}
+		return -1 // Should not happen if expressions are properly extracted
+	}
 
 	// Helper function to add a static instruction if the buffer is not empty
 	flushStaticBuffer := func() {
@@ -149,23 +159,45 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 				// Process directive based on type
 				switch token.Directive.Type {
 				case "if":
-					// Add IF instruction
-					instructions = append(instructions, Instruction{
-						Op:        OpIf,
-						Pos:       pos,
-						Condition: token.Directive.Condition,
-					})
+					// Find expression index for condition
+					exprIndex := findExpressionIndex(token.Directive.Condition)
+					if exprIndex == -1 {
+						// Fallback to condition for backward compatibility
+						instructions = append(instructions, Instruction{
+							Op:        OpIf,
+							Pos:       pos,
+							Condition: token.Directive.Condition,
+						})
+					} else {
+						// Use expression index
+						instructions = append(instructions, Instruction{
+							Op:        OpIf,
+							Pos:       pos,
+							ExprIndex: &exprIndex,
+						})
+					}
 
 					// Push to stack
 					directiveStack = append(directiveStack, "if")
 
 				case "elseif":
-					// Add ELSE_IF instruction
-					instructions = append(instructions, Instruction{
-						Op:        OpElseIf,
-						Pos:       pos,
-						Condition: token.Directive.Condition,
-					})
+					// Find expression index for condition
+					exprIndex := findExpressionIndex(token.Directive.Condition)
+					if exprIndex == -1 {
+						// Fallback to condition for backward compatibility
+						instructions = append(instructions, Instruction{
+							Op:        OpElseIf,
+							Pos:       pos,
+							Condition: token.Directive.Condition,
+						})
+					} else {
+						// Use expression index
+						instructions = append(instructions, Instruction{
+							Op:        OpElseIf,
+							Pos:       pos,
+							ExprIndex: &exprIndex,
+						})
+					}
 
 					// Update stack top to elseif
 					if len(directiveStack) > 0 {
@@ -213,12 +245,26 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 						variable := strings.TrimSpace(parts[0])
 						collection := strings.TrimSpace(parts[1])
 
-						instructions = append(instructions, Instruction{
-							Op:         OpLoopStart,
-							Pos:        pos,
-							Variable:   variable,
-							Collection: collection,
-						})
+						// Find expression index for collection
+						collectionExprIndex := findExpressionIndex(collection)
+
+						if collectionExprIndex == -1 {
+							// Fallback to collection string for backward compatibility
+							instructions = append(instructions, Instruction{
+								Op:         OpLoopStart,
+								Pos:        pos,
+								Variable:   variable,
+								Collection: collection,
+							})
+						} else {
+							// Use expression index for collection
+							instructions = append(instructions, Instruction{
+								Op:                  OpLoopStart,
+								Pos:                 pos,
+								Variable:            variable,
+								CollectionExprIndex: &collectionExprIndex,
+							})
+						}
 
 						// Push to stack
 						directiveStack = append(directiveStack, "for")
@@ -228,12 +274,23 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 					// Extract variable name from /*= variable_name */
 					varName := extractVariableName(token.Value)
 
-					// Add EMIT_EVAL instruction
-					instructions = append(instructions, Instruction{
-						Op:    OpEmitEval,
-						Pos:   pos,
-						Param: varName,
-					})
+					// Find expression index
+					exprIndex := findExpressionIndex(varName)
+					if exprIndex == -1 {
+						// Fallback to param for backward compatibility
+						instructions = append(instructions, Instruction{
+							Op:    OpEmitEval,
+							Pos:   pos,
+							Param: varName,
+						})
+					} else {
+						// Use expression index
+						instructions = append(instructions, Instruction{
+							Op:        OpEmitEval,
+							Pos:       pos,
+							ExprIndex: &exprIndex,
+						})
+					}
 				}
 
 				// Reset position for next instruction

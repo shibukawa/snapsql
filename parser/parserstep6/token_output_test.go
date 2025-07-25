@@ -159,7 +159,7 @@ SELECT /*= user_id */123, name FROM users WHERE status = /*= status */'active'`,
 			// 各句の詳細分析
 			for clauseIdx, clause := range clauses {
 				tokens := clause.RawTokens()
-				
+
 				// 句の種類を推定
 				clauseType := "UNKNOWN"
 				if len(tokens) > 0 {
@@ -193,10 +193,10 @@ SELECT /*= user_id */123, name FROM users WHERE status = /*= status */'active'`,
 
 				// 重複問題の検証
 				duplicationsFound := analyzeDuplicationInClause(t, clauseType, tokens)
-				
+
 				// ディレクティブの動作検証
 				analyzeDirectiveBehavior(t, clauseType, tokens)
-				
+
 				if duplicationsFound {
 					t.Logf("✓ Duplication bug confirmed in %s clause", clauseType)
 				}
@@ -209,20 +209,20 @@ SELECT /*= user_id */123, name FROM users WHERE status = /*= status */'active'`,
 func analyzeDuplicationInClause(t *testing.T, clauseType string, tokens []tokenizer.Token) bool {
 	valueCount := make(map[string]int)
 	duplicationsFound := false
-	
+
 	for _, token := range tokens {
 		if token.Type == tokenizer.NUMBER || token.Type == tokenizer.STRING || token.Type == tokenizer.IDENTIFIER {
 			valueCount[token.Value]++
 		}
 	}
-	
+
 	for value, count := range valueCount {
 		if count > 1 {
 			t.Logf("  DUPLICATE in %s: '%s' appears %d times", clauseType, value, count)
 			duplicationsFound = true
 		}
 	}
-	
+
 	return duplicationsFound
 }
 
@@ -232,7 +232,7 @@ func analyzeDirectiveBehavior(t *testing.T, clauseType string, tokens []tokenize
 	dummyStartCount := 0
 	dummyEndCount := 0
 	dummyLiteralCount := 0
-	
+
 	for _, token := range tokens {
 		if token.Directive != nil {
 			directiveCount++
@@ -248,16 +248,16 @@ func analyzeDirectiveBehavior(t *testing.T, clauseType string, tokens []tokenize
 			dummyLiteralCount++
 		}
 	}
-	
+
 	if directiveCount > 0 {
-		t.Logf("  ANALYSIS in %s: %d directive(s), %d DUMMY_START, %d DUMMY_END, %d DUMMY_LITERAL", 
+		t.Logf("  ANALYSIS in %s: %d directive(s), %d DUMMY_START, %d DUMMY_END, %d DUMMY_LITERAL",
 			clauseType, directiveCount, dummyStartCount, dummyEndCount, dummyLiteralCount)
-			
+
 		// Variable directive の問題パターン
 		if dummyStartCount > 0 && dummyEndCount > 0 {
 			t.Logf("  ISSUE in %s: Variable directive creates DUMMY_START/DUMMY_END instead of replacing", clauseType)
 		}
-		
+
 		// Const directive の問題パターン
 		if directiveCount > 0 && dummyStartCount == 0 && dummyEndCount == 0 {
 			// Const directive の場合、挿入されるが置換されない可能性
@@ -267,14 +267,14 @@ func analyzeDirectiveBehavior(t *testing.T, clauseType string, tokens []tokenize
 					valueCount[token.Value]++
 				}
 			}
-			
+
 			duplicateValues := 0
 			for _, count := range valueCount {
 				if count > 1 {
 					duplicateValues++
 				}
 			}
-			
+
 			if duplicateValues > 0 {
 				t.Logf("  ISSUE in %s: Const directive inserts but doesn't replace dummy literals", clauseType)
 			}
@@ -291,10 +291,10 @@ parameters:
   status: string
 */
 SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status = /*= status */'active'`
-	
+
 	constants := map[string]any{
 		"user_id":      456,
-		"status":       "inactive", 
+		"status":       "inactive",
 		"table_suffix": "prod",
 	}
 
@@ -302,12 +302,12 @@ SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status =
 	assert.NoError(t, err)
 
 	clauses := stmt.Clauses()
-	
+
 	t.Log("Clause-by-clause duplication analysis:")
-	
+
 	for i, clause := range clauses {
 		tokens := clause.RawTokens()
-		
+
 		// 句の種類を推定
 		clauseType := "UNKNOWN"
 		if len(tokens) > 0 {
@@ -320,14 +320,14 @@ SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status =
 				clauseType = "WHERE"
 			}
 		}
-		
+
 		t.Logf("\nClause %d (%s):", i, clauseType)
-		
+
 		// 重複分析
 		valueCount := make(map[string]int)
 		directiveCount := 0
 		dummyTokenCount := 0
-		
+
 		for _, token := range tokens {
 			if token.Type == tokenizer.NUMBER || token.Type == tokenizer.STRING || token.Type == tokenizer.IDENTIFIER {
 				valueCount[token.Value]++
@@ -339,10 +339,10 @@ SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status =
 				dummyTokenCount++
 			}
 		}
-		
+
 		t.Logf("  Directives: %d", directiveCount)
 		t.Logf("  Dummy tokens: %d", dummyTokenCount)
-		
+
 		duplicatesFound := false
 		for value, count := range valueCount {
 			if count > 1 {
@@ -350,16 +350,16 @@ SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status =
 				duplicatesFound = true
 			}
 		}
-		
+
 		if !duplicatesFound && directiveCount > 0 && dummyTokenCount > 0 {
 			t.Logf("  POTENTIAL ISSUE: %d directive(s) with %d dummy token(s) - check for insertion vs replacement", directiveCount, dummyTokenCount)
 		}
-		
+
 		if !duplicatesFound && directiveCount == 0 {
 			t.Logf("  OK: No directives, no duplication issues")
 		}
 	}
-	
+
 	t.Log("\nSummary of identified issues:")
 	t.Log("1. Variable directives create DUMMY_START/DUMMY_END tokens instead of replacing dummy literals")
 	t.Log("2. Const directives insert values but don't replace existing dummy literals")

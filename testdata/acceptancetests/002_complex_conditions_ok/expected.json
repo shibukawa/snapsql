@@ -15,37 +15,37 @@
       "op": "EMIT_STATIC", "pos": "10:1", "value": "SELECT id, name, age, department FROM users WHERE 1=1"
     },
     {
-      "op": "IF", "pos": "13:1", "condition": "min_age \u003e 0"
+      "op": "IF", "pos": "13:1", "expr_index": 0
     },
     {
       "op": "EMIT_STATIC", "pos": "14:1", "value": "AND age \u003e="
     },
     {
-      "op": "EMIT_EVAL", "pos": "14:12", "param": "min_age"
+      "op": "EMIT_EVAL", "pos": "14:12", "expr_index": 1
     },
     {
       "op": "END", "pos": "15:1"
     },
     {
-      "op": "IF", "pos": "16:1", "condition": "max_age \u003e 0"
+      "op": "IF", "pos": "16:1", "expr_index": 2
     },
     {
       "op": "EMIT_STATIC", "pos": "17:1", "value": "AND age \u003c="
     },
     {
-      "op": "EMIT_EVAL", "pos": "17:12", "param": "max_age"
+      "op": "EMIT_EVAL", "pos": "17:12", "expr_index": 3
     },
     {
       "op": "END", "pos": "18:1"
     },
     {
-      "op": "IF", "pos": "19:1", "condition": "departments.size() \u003e 0"
+      "op": "IF", "pos": "19:1", "expr_index": 4
     },
     {
       "op": "EMIT_STATIC", "pos": "20:1", "value": "AND department IN ("
     },
     {
-      "op": "EMIT_EVAL", "pos": "20:20", "param": "departments"
+      "op": "EMIT_EVAL", "pos": "20:20", "expr_index": 5
     },
     {
       "op": "EMIT_STATIC", "pos": "20:38", "value": "('HR', 'Engineering'))"
@@ -54,7 +54,7 @@
       "op": "END", "pos": "21:1"
     },
     {
-      "op": "IF", "pos": "22:1", "condition": "active"
+      "op": "IF", "pos": "22:1", "expr_index": 6
     },
     {
       "op": "EMIT_STATIC", "pos": "23:1", "value": "AND status = 'active'"
