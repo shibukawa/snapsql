@@ -240,12 +240,14 @@ SELECT * FROM users WHERE id = /*= user_id */1
 	assert.NoError(t, err)
 	assert.True(t, doc != nil)
 
-	// Check parameter block
+	// Check parameter block (should contain only the YAML content, not the ``` markers)
 	assert.True(t, doc.ParameterBlock != "")
 	assert.Contains(t, doc.ParameterBlock, "user_id: int")
 	assert.Contains(t, doc.ParameterBlock, "include_email: bool")
 	assert.Contains(t, doc.ParameterBlock, "status: string")
-	assert.Contains(t, doc.ParameterBlock, "```yaml")
+	// Should NOT contain the ``` markers
+	assert.NotContains(t, doc.ParameterBlock, "```yaml")
+	assert.NotContains(t, doc.ParameterBlock, "```")
 }
 
 func TestParseYAMLMockData(t *testing.T) {

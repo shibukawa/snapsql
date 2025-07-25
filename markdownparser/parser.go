@@ -1318,18 +1318,12 @@ func extractParameterBlock(nodes []ast.Node, content []byte) string {
 	for _, node := range nodes {
 		switch n := node.(type) {
 		case *ast.FencedCodeBlock:
-			// Extract code block content (YAML, JSON, etc.)
+			// Extract only the code block content (without ``` markers)
 			codeContent := extractCodeBlockContent(n, content)
-			info := getCodeBlockInfo(n, content)
-			
-			// Add info line if present
-			if info != "" {
-				parameterContent.WriteString("```" + info + "\n")
-			} else {
-				parameterContent.WriteString("```\n")
+			if codeContent != "" {
+				parameterContent.WriteString(codeContent)
+				parameterContent.WriteString("\n")
 			}
-			parameterContent.WriteString(codeContent)
-			parameterContent.WriteString("\n```\n")
 			
 		case *ast.Paragraph:
 			// Extract paragraph text
