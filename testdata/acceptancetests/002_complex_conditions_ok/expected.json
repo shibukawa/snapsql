@@ -77,5 +77,20 @@
     {
       "name": "active", "type": "bool"
     }
+  ],
+  "response_affinity": "many",
+  "responses": [
+    {
+      "name": "id", "type": "int", "database_tag": "id"
+    },
+    {
+      "name": "name", "type": "string", "database_tag": "name"
+    },
+    {
+      "name": "age", "type": "int", "database_tag": "age"
+    },
+    {
+      "name": "department", "type": "string", "database_tag": "department"
+    }
   ]
 }

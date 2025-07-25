@@ -8,12 +8,9 @@ import (
 )
 
 // DetermineResponseType analyzes the statement and determines the response type
-func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[string]string) *Response {
-	// Default response type
-	response := &Response{
-		Name:   "Result",
-		Fields: []Field{},
-	}
+func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[string]string) []Response {
+	// Default empty response
+	var fields []Response
 
 	// Determine response type based on statement type
 	switch stmt.Type() {
@@ -21,51 +18,52 @@ func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[s
 		// For SELECT statements, extract fields from the SELECT clause
 		selectStmt, ok := stmt.(*parsercommon.SelectStatement)
 		if ok && selectStmt.Select != nil {
-			response = extractFieldsFromSelectClause(selectStmt.Select, tableInfo)
+			fields = extractFieldsFromSelectClause(selectStmt.Select, tableInfo)
 		}
 
 	case parsercommon.INSERT_INTO_STATEMENT:
 		// For INSERT statements, check if it has a RETURNING clause
 		insertStmt, ok := stmt.(*parsercommon.InsertIntoStatement)
 		if ok && insertStmt.Returning != nil {
-			response = extractFieldsFromReturningClause(insertStmt.Returning, tableInfo)
+			fields = extractFieldsFromReturningClause(insertStmt.Returning, tableInfo)
 		}
 
 	case parsercommon.UPDATE_STATEMENT:
 		// For UPDATE statements, check if it has a RETURNING clause
 		updateStmt, ok := stmt.(*parsercommon.UpdateStatement)
 		if ok && updateStmt.Returning != nil {
-			response = extractFieldsFromReturningClause(updateStmt.Returning, tableInfo)
+			fields = extractFieldsFromReturningClause(updateStmt.Returning, tableInfo)
 		}
 
 	case parsercommon.DELETE_FROM_STATEMENT:
 		// For DELETE statements, check if it has a RETURNING clause
 		deleteStmt, ok := stmt.(*parsercommon.DeleteFromStatement)
 		if ok && deleteStmt.Returning != nil {
-			response = extractFieldsFromReturningClause(deleteStmt.Returning, tableInfo)
+			fields = extractFieldsFromReturningClause(deleteStmt.Returning, tableInfo)
 		}
 	}
 
-	return response
+	return fields
 }
 
 // extractFieldsFromSelectClause extracts fields from a SELECT clause
-func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tableInfo map[string]map[string]string) *Response {
-	response := &Response{
-		Name:   "Result",
-		Fields: []Field{},
-	}
+func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tableInfo map[string]map[string]string) []Response {
+	var fields []Response
 
-	// If the SELECT clause is nil, return empty response type
+	// If the SELECT clause is nil, return empty fields
 	if selectClause == nil {
-		return response
+		return fields
 	}
 
 	// Extract fields from the SELECT clause
 	for _, item := range selectClause.Fields {
-		field := Field{
+		field := Response{
 			Name: item.FieldName,
 		}
+
+		// Debug: Print field information
+		// fmt.Printf("DEBUG: Field - FieldName: %s, OriginalField: %s, TableName: %s, FieldKind: %v\n", 
+		//	item.FieldName, item.OriginalField, item.TableName, item.FieldKind)
 
 		// If the field has an explicit name, use it
 		if item.ExplicitName {
@@ -86,27 +84,24 @@ func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tabl
 		}
 
 		// Add the field to the response type
-		response.Fields = append(response.Fields, field)
+		fields = append(fields, field)
 	}
 
-	return response
+	return fields
 }
 
 // extractFieldsFromReturningClause extracts fields from a RETURNING clause
-func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningClause, tableInfo map[string]map[string]string) *Response {
-	response := &Response{
-		Name:   "Result",
-		Fields: []Field{},
-	}
+func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningClause, tableInfo map[string]map[string]string) []Response {
+	var fields []Response
 
-	// If the RETURNING clause is nil, return empty response type
+	// If the RETURNING clause is nil, return empty fields
 	if returningClause == nil {
-		return response
+		return fields
 	}
 
 	// Extract fields from the RETURNING clause
 	for _, item := range returningClause.Fields {
-		field := Field{
+		field := Response{
 			Name: item.FieldName,
 		}
 
@@ -129,10 +124,10 @@ func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningCla
 		}
 
 		// Add the field to the response type
-		response.Fields = append(response.Fields, field)
+		fields = append(fields, field)
 	}
 
-	return response
+	return fields
 }
 
 // inferTypeFromSelectField infers the type of a SELECT field
@@ -146,6 +141,17 @@ func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[stri
 	if field.TableName != "" && field.OriginalField != "" {
 		if tableFields, ok := tableInfo[field.TableName]; ok {
 			if fieldType, ok := tableFields[field.OriginalField]; ok {
+				return fieldType
+			}
+		}
+	}
+
+	// If no table name is specified, try to find the field in any table
+	// This handles cases like "SELECT id, name FROM users" where table name is not prefixed
+	if field.TableName == "" && field.OriginalField != "" {
+		for _, tableFields := range tableInfo {
+			if fieldType, ok := tableFields[field.OriginalField]; ok {
+				// Found the field in this table, use its type
 				return fieldType
 			}
 		}

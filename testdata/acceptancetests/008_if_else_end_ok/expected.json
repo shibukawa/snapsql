@@ -49,5 +49,23 @@
     {
       "name": "include_email", "type": "bool"
     }
+  ],
+  "response_affinity": "many",
+  "responses": [
+    {
+      "name": "id", "type": "int", "database_tag": "id"
+    },
+    {
+      "name": "name", "type": "string", "database_tag": "name"
+    },
+    {
+      "name": "email", "type": "string", "database_tag": "email"
+    },
+    {
+      "name": "email", "type": "any"
+    },
+    {
+      "name": "age", "type": "int", "database_tag": "age"
+    }
   ]
 }

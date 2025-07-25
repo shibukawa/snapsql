@@ -71,5 +71,6 @@
     {
       "name": "departments", "type": "any"
     }
-  ]
+  ],
+  "response_affinity": "none"
 }

@@ -14,7 +14,7 @@ import (
 )
 
 // GenerateFromSQL generates the intermediate format for a SQL template
-func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string) (*IntermediateFormat, error) {
+func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]map[string]string) (*IntermediateFormat, error) {
 	// Parse the SQL
 	stmt, funcDef, err := parser.ParseSQLFile(reader, constants, basePath, projectRootPath)
 	if err != nil {
@@ -22,11 +22,11 @@ func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string
 	}
 
 	// Generate intermediate format
-	return generateIntermediateFormat(stmt, funcDef, basePath)
+	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo)
 }
 
 // GenerateFromMarkdown generates the intermediate format for a Markdown file containing SQL
-func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any) (*IntermediateFormat, error) {
+func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, tableInfo map[string]map[string]string) (*IntermediateFormat, error) {
 	// Parse the Markdown
 	stmt, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants)
 	if err != nil {
@@ -34,11 +34,11 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 	}
 
 	// Generate intermediate format
-	return generateIntermediateFormat(stmt, funcDef, basePath)
+	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo)
 }
 
 // generateIntermediateFormat is the common implementation for both SQL and Markdown
-func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string) (*IntermediateFormat, error) {
+func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]map[string]string) (*IntermediateFormat, error) {
 	// Create the intermediate format
 	result := &IntermediateFormat{
 		FormatVersion: "1",
@@ -62,6 +62,12 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 
 	// Add clause-level IF conditions
 	instructions = addClauseIfConditions(stmt, instructions)
+
+	// Determine response affinity
+	responseAffinity := DetermineResponseAffinity(stmt)
+
+	// Determine response type using provided table info
+	responses := DetermineResponseType(stmt, tableInfo)
 
 	// Extract function information from the function definition
 	var functionName string
@@ -90,6 +96,8 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 	result.Name = functionName // Use function name as name for now
 	result.FunctionName = functionName
 	result.Parameters = parameters
+	result.Responses = responses
+	result.ResponseAffinity = string(responseAffinity)
 	result.Expressions = expressions
 	result.Envs = envs
 	result.Instructions = instructions

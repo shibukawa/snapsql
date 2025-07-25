@@ -1,0 +1,28 @@
+tables:
+  sub_departments:
+    columns:
+      id:
+        type: string
+        primary_key: true
+        nullable: false
+        max_length: 50
+      name:
+        type: string
+        nullable: false
+        max_length: 255
+      department_code:
+        type: string
+        nullable: false
+        max_length: 10
+      department_name:
+        type: string
+        nullable: false
+        max_length: 255
+      created_at:
+        type: timestamp
+        nullable: false
+        default: "CURRENT_TIMESTAMP"
+      updated_at:
+        type: timestamp
+        nullable: false
+        default: "CURRENT_TIMESTAMP"

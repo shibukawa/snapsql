@@ -55,8 +55,8 @@ type Parameter struct {
 	Description string `json:"description,omitempty"`
 }
 
-// Field represents a result field
-type Field struct {
+// Response represents a result field
+type Response struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`
 	DatabaseTag string `json:"database_tag,omitempty"`
@@ -65,12 +65,6 @@ type Field struct {
 	MaxLength   *int   `json:"max_length,omitempty"`
 	Precision   *int   `json:"precision,omitempty"`
 	Scale       *int   `json:"scale,omitempty"`
-}
-
-// Response represents the expected result structure
-type Response struct {
-	Name   string  `json:"name"`
-	Fields []Field `json:"fields"`
 }
 
 // IntermediateFormat represents the enhanced intermediate file format
@@ -87,7 +81,7 @@ type IntermediateFormat struct {
 	// Parameters for the query
 	Parameters []Parameter `json:"parameters,omitempty"`
 
-	// Response definitions
+	// Response fields (simplified structure)
 	Responses []Response `json:"responses,omitempty"`
 
 	// Response affinity (database type mapping)

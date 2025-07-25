@@ -8,7 +8,62 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/goccy/go-yaml"
 )
+
+// TableInfo represents table schema information
+type TableInfo struct {
+	Tables map[string]TableSchema `yaml:"tables"`
+}
+
+// TableSchema represents a table's schema
+type TableSchema struct {
+	Columns map[string]ColumnInfo `yaml:"columns"`
+}
+
+// ColumnInfo represents column information
+type ColumnInfo struct {
+	Type       string `yaml:"type"`
+	PrimaryKey bool   `yaml:"primary_key,omitempty"`
+	Nullable   bool   `yaml:"nullable,omitempty"`
+	MaxLength  int    `yaml:"max_length,omitempty"`
+	Unique     bool   `yaml:"unique,omitempty"`
+	Default    string `yaml:"default,omitempty"`
+}
+
+// loadTableInfo loads table information from YAML file
+func loadTableInfo(testDir string) (map[string]map[string]string, error) {
+	tablesPath := filepath.Join(testDir, "tables.yaml")
+	
+	// Check if tables.yaml exists
+	if _, err := os.Stat(tablesPath); os.IsNotExist(err) {
+		// Return empty table info if file doesn't exist
+		return make(map[string]map[string]string), nil
+	}
+
+	// Read YAML file
+	yamlContent, err := os.ReadFile(tablesPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse YAML
+	var tableInfo TableInfo
+	if err := yaml.Unmarshal(yamlContent, &tableInfo); err != nil {
+		return nil, err
+	}
+
+	// Convert to the format expected by DetermineResponseType
+	result := make(map[string]map[string]string)
+	for tableName, tableSchema := range tableInfo.Tables {
+		result[tableName] = make(map[string]string)
+		for columnName, columnInfo := range tableSchema.Columns {
+			result[tableName][columnName] = columnInfo.Type
+		}
+	}
+
+	return result, nil
+}
 
 func TestAcceptance(t *testing.T) {
 	// Get test data directory
@@ -37,9 +92,15 @@ func TestAcceptance(t *testing.T) {
 				t.Fatalf("Failed to read input SQL file: %v", err)
 			}
 
+			// Load table information
+			tableInfo, err := loadTableInfo(testDir)
+			if err != nil {
+				t.Fatalf("Failed to load table info: %v", err)
+			}
+
 			// Generate intermediate format using the new function
 			reader := strings.NewReader(string(sqlContent))
-			format, err := GenerateFromSQL(reader, nil, sqlPath, "")
+			format, err := GenerateFromSQL(reader, nil, sqlPath, "", tableInfo)
 
 			// Check if this is an error test
 			isErrorTest := strings.HasSuffix(testName, "_err")

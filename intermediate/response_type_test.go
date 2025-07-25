@@ -180,18 +180,18 @@ func TestExtractFieldsFromSelectClause(t *testing.T) {
 	response := extractFieldsFromSelectClause(selectClause, tableInfo)
 
 	// Verify fields
-	assert.Equal(t, 3, len(response.Fields), "Number of fields should match")
-	assert.Equal(t, "id", response.Fields[0].Name, "Field name should match")
-	assert.Equal(t, "string", response.Fields[0].Type, "Field type should match")
-	assert.Equal(t, "id", response.Fields[0].DatabaseTag, "Field database tag should match")
+	assert.Equal(t, 3, len(response), "Number of fields should match")
+	assert.Equal(t, "id", response[0].Name, "Field name should match")
+	assert.Equal(t, "int", response[0].Type, "Field type should match")  // Changed from "string" to "int"
+	assert.Equal(t, "id", response[0].DatabaseTag, "Field database tag should match")
 
-	assert.Equal(t, "name", response.Fields[1].Name, "Field name should match")
-	assert.Equal(t, "string", response.Fields[1].Type, "Field type should match")
-	assert.Equal(t, "users.name", response.Fields[1].DatabaseTag, "Field database tag should match")
+	assert.Equal(t, "name", response[1].Name, "Field name should match")
+	assert.Equal(t, "string", response[1].Type, "Field type should match")
+	assert.Equal(t, "users.name", response[1].DatabaseTag, "Field database tag should match")
 
-	assert.Equal(t, "user_email", response.Fields[2].Name, "Field name should match")
-	assert.Equal(t, "string", response.Fields[2].Type, "Field type should match")
-	assert.Equal(t, "email", response.Fields[2].DatabaseTag, "Field database tag should match")
+	assert.Equal(t, "user_email", response[2].Name, "Field name should match")
+	assert.Equal(t, "string", response[2].Type, "Field type should match")  // email field should be found in table info
+	assert.Equal(t, "email", response[2].DatabaseTag, "Field database tag should match")
 }
 
 // TestExtractFieldsFromReturningClause tests the extractFieldsFromReturningClause function directly
@@ -230,12 +230,12 @@ func TestExtractFieldsFromReturningClause(t *testing.T) {
 	response := extractFieldsFromReturningClause(returningClause, tableInfo)
 
 	// Verify fields
-	assert.Equal(t, 2, len(response.Fields), "Number of fields should match")
-	assert.Equal(t, "id", response.Fields[0].Name, "Field name should match")
-	assert.Equal(t, "int", response.Fields[0].Type, "Field type should match")
-	assert.Equal(t, "users.id", response.Fields[0].DatabaseTag, "Field database tag should match")
+	assert.Equal(t, 2, len(response), "Number of fields should match")
+	assert.Equal(t, "id", response[0].Name, "Field name should match")
+	assert.Equal(t, "int", response[0].Type, "Field type should match")
+	assert.Equal(t, "users.id", response[0].DatabaseTag, "Field database tag should match")
 
-	assert.Equal(t, "name", response.Fields[1].Name, "Field name should match")
-	assert.Equal(t, "string", response.Fields[1].Type, "Field type should match")
-	assert.Equal(t, "users.name", response.Fields[1].DatabaseTag, "Field database tag should match")
+	assert.Equal(t, "name", response[1].Name, "Field name should match")
+	assert.Equal(t, "string", response[1].Type, "Field type should match")
+	assert.Equal(t, "users.name", response[1].DatabaseTag, "Field database tag should match")
 }

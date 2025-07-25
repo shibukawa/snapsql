@@ -101,5 +101,17 @@
     {
       "name": "page", "type": "int"
     }
+  ],
+  "response_affinity": "many",
+  "responses": [
+    {
+      "name": "id", "type": "int", "database_tag": "id"
+    },
+    {
+      "name": "name", "type": "string", "database_tag": "name"
+    },
+    {
+      "name": "", "type": "any"
+    }
   ]
 }
