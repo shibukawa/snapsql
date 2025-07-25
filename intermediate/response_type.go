@@ -62,7 +62,7 @@ func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tabl
 		}
 
 		// Debug: Print field information
-		// fmt.Printf("DEBUG: Field - FieldName: %s, OriginalField: %s, TableName: %s, FieldKind: %v\n", 
+		// fmt.Printf("DEBUG: Field - FieldName: %s, OriginalField: %s, TableName: %s, FieldKind: %v\n",
 		//	item.FieldName, item.OriginalField, item.TableName, item.FieldKind)
 
 		// If the field has an explicit name, use it

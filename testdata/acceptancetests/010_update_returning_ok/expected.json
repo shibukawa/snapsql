@@ -19,7 +19,7 @@
       "op": "EMIT_EVAL", "pos": "9:12", "expr_index": 1
     },
     {
-      "op": "EMIT_STATIC", "pos": "10:1", "value": "RETURNING id, name, email, updated_at;"
+      "op": "EMIT_STATIC", "pos": "10:1", "value": "RETURNING id, name, email, updated_at"
     }
   ],
   "name": "update_user_with_returning",
@@ -43,7 +43,7 @@
       "name": "email", "type": "string", "database_tag": "email"
     },
     {
-      "name": "", "type": "any"
+      "name": "updated_at", "type": "timestamp", "database_tag": "updated_at"
     }
   ]
 }

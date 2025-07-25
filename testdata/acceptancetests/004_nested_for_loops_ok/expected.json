@@ -61,9 +61,6 @@
     },
     {
       "op": "LOOP_END", "pos": "20:1"
-    },
-    {
-      "op": "EMIT_STATIC", "pos": "20:11", "value": ";"
     }
   ],
   "name": "insert_all_sub_departments",

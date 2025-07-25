@@ -34,7 +34,7 @@ type ColumnInfo struct {
 // loadTableInfo loads table information from YAML file
 func loadTableInfo(testDir string) (map[string]map[string]string, error) {
 	tablesPath := filepath.Join(testDir, "tables.yaml")
-	
+
 	// Check if tables.yaml exists
 	if _, err := os.Stat(tablesPath); os.IsNotExist(err) {
 		// Return empty table info if file doesn't exist
