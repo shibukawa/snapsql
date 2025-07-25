@@ -1,0 +1,24 @@
+{
+  "expressions": [
+    "user_id"
+  ],
+  "format_version": "1",
+  "function_name": "find_user",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name, age FROM users WHERE id ="
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "13:10", "param": "user_id"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "13:24", "value": "1"
+    }
+  ],
+  "name": "find_user",
+  "parameters": [
+    {
+      "name": "user_id", "type": "int"
+    }
+  ]
+}

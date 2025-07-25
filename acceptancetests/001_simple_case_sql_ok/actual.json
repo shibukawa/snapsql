@@ -1,0 +1,14 @@
+{
+  "format_version": "1",
+  "function_name": "find_user",
+  "parameters": [
+    {
+      "name": "user_id",
+      "type": "int"
+    }
+  ],
+  "instructions": [],
+  "expressions": [
+    "user_id"
+  ]
+}

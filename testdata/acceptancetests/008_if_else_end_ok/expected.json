@@ -1,0 +1,38 @@
+{
+  "expressions": [
+    "include_email",
+    "min_age",
+    "max_age"
+  ],
+  "format_version": "1",
+  "function_name": "get_users_with_conditions",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC", "pos": "8:1", "value": "SELECT id, name, email, 'N/A' as email, age FROM users WHERE age \u003e="
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "20:12", "param": "min_age"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "20:26", "value": "18 AND age \u003c="
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "21:16", "param": "max_age"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "21:30", "value": "65"
+    }
+  ],
+  "name": "get_users_with_conditions",
+  "parameters": [
+    {
+      "name": "min_age", "type": "int"
+    },
+    {
+      "name": "max_age", "type": "int"
+    },
+    {
+      "name": "include_email", "type": "bool"
+    }
+  ]
+}

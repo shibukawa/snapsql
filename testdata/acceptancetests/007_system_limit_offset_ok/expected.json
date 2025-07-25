@@ -1,0 +1,40 @@
+{
+  "expressions": [
+    "min_age",
+    "max_age"
+  ],
+  "format_version": "1",
+  "function_name": "get_users_with_limit_offset",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT id, name, age FROM users WHERE age \u003e="
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "14:12", "param": "min_age"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "14:26", "value": "18 AND age \u003c="
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "15:16", "param": "max_age"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "15:30", "value": "65"
+    },
+    {
+      "op": "EMIT_SYSTEM_LIMIT", "pos": "16:1", "default_value": "10"
+    },
+    {
+      "op": "EMIT_SYSTEM_OFFSET", "pos": "17:1", "default_value": "0"
+    }
+  ],
+  "name": "get_users_with_limit_offset",
+  "parameters": [
+    {
+      "name": "min_age", "type": "int"
+    },
+    {
+      "name": "max_age", "type": "int"
+    }
+  ]
+}

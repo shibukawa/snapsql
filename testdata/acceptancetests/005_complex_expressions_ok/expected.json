@@ -1,0 +1,85 @@
+{
+  "expressions": [
+    "display_name ? username : \"Anonymous\"",
+    "start_date != \"\" \u0026\u0026 end_date != \"\"",
+    "start_date",
+    "end_date",
+    "sort_field != \"\"",
+    "sort_field + \" \" + (sort_direction || \"ASC\")",
+    "page_size || 10",
+    "(page - 1) * page_size || 0"
+  ],
+  "format_version": "1",
+  "function_name": "getComplexData",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC", "pos": "15:1", "value": "SELECT id, name,"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "18:3", "param": "display_name ? username : \"Anonymous\""
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "19:1", "value": "FROM users WHERE created_at BETWEEN"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "22:22", "param": "start_date"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "22:39", "value": "'2023-01-01' AND"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "22:56", "param": "end_date"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "22:71", "value": "'2023-12-31' ORDER BY"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "25:10", "param": "sort_field + \" \" + (sort_direction || \"ASC\")"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "27:1", "value": "LIMIT"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "27:7", "param": "page_size || 10"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "27:29", "value": "10 OFFSET"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "28:8", "param": "(page - 1) * page_size || 0"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "28:42", "value": "0 "
+    }
+  ],
+  "name": "getComplexData",
+  "parameters": [
+    {
+      "name": "user_id", "type": "int"
+    },
+    {
+      "name": "username", "type": "string"
+    },
+    {
+      "name": "display_name", "type": "string"
+    },
+    {
+      "name": "start_date", "type": "string"
+    },
+    {
+      "name": "end_date", "type": "string"
+    },
+    {
+      "name": "sort_field", "type": "string"
+    },
+    {
+      "name": "sort_direction", "type": "string"
+    },
+    {
+      "name": "page_size", "type": "int"
+    },
+    {
+      "name": "page", "type": "int"
+    }
+  ]
+}

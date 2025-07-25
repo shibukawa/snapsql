@@ -1,0 +1,58 @@
+{
+  "envs": [
+    [{
+        "name": "dept",   "type": "any"
+      }],
+    [{
+        "name": "emp",   "type": "any"
+      }]
+  ],
+  "expressions": [
+    "departments",
+    "dept",
+    "dept.id",
+    "dept.name",
+    "dept.employees",
+    "emp",
+    "emp.id",
+    "emp.name",
+    "!for.last"
+  ],
+  "format_version": "1",
+  "function_name": "getNestedData",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT id, name FROM ( SELECT"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "10:5", "param": "dept.id"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "10:20", "value": "as dept_id,"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "11:5", "param": "dept.name"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "11:22", "value": "as dept_name, ( SELECT"
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "14:14", "param": "emp.id"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "14:27", "value": ","
+    },
+    {
+      "op": "EMIT_PARAM", "pos": "14:29", "param": "emp.name"
+    },
+    {
+      "op": "EMIT_STATIC", "pos": "16:7", "value": "UNION ALL ) as employees UNION ALL ) "
+    }
+  ],
+  "name": "getNestedData",
+  "parameters": [
+    {
+      "name": "departments", "type": "string[]"
+    }
+  ]
+}
