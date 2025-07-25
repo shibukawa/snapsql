@@ -9,13 +9,18 @@ SnapSQLはMarkdownベースのクエリー定義ファイル（`.snap.md`）を�
 ### 基本構造
 
 ```markdown
+---
+function_name: "getUserData"
+description: "Get user data"
+---
+
 # Query Name (任意の言語でタイトル)
 
-## Overview (概要)
+## Description (概要)
 クエリーの目的と説明
 
-## Parameters (パラメータ)
-YAML形式での入力パラメータ定義
+## Parameters (パラメータ) [オプション]
+YAML/JSON/テキスト形式での入力パラメータ定義
 
 ## SQL (SQL)
 SnapSQL形式のSQLテンプレート
@@ -40,47 +45,230 @@ SnapSQL形式のSQLテンプレート
 バージョン履歴と変更内容
 ```
 
-## 国際化対応
+## セクション仕様
 
-### 見出し形式
+### 必須セクション
 
-すべてのセクション見出しは英語キーワードの後にオプションのローカライズされたタイトルを使用します：
+| セクション | 代替名 | 目的 | 必須 |
+|------------|--------|------|------|
+| `Description` | `Overview` | クエリーの説明と目的 | はい |
+| `SQL` | - | SQLテンプレート | はい |
 
-```markdown
-## English Keyword (ローカライズされたタイトル)
+### オプションセクション
+
+| セクション | 代替名 | 目的 | 形式 |
+|------------|--------|------|------|
+| `Parameters` | `Params`, `Parameter` | 入力パラメータ定義 | YAML/JSON/テキスト |
+| `Test Cases` | `Tests`, `TestCases` | テストシナリオ | YAML/JSON/CSV/XML/リスト |
+| `Mock Data` | `Mocks`, `TestData`, `MockData` | テスト用モックデータ | YAML/JSON/CSV/XML/Markdownテーブル |
+
+## フロントマター
+
+### 基本フィールド
+
+```yaml
+---
+function_name: "getUserData"  # 生成される関数名
+description: "Get user data"  # クエリーの説明
+---
 ```
 
-例：
-- `## Overview (概要)` - 日本語
-- `## Parameters (Parámetros)` - スペイン語  
-- `## SQL (SQL)` - 共通
-- `## Test Cases (Cas de Test)` - フランス語
-- `## Mock Data (Dados Simulados)` - ポルトガル語
+### フィールド説明
 
-### サポートされる見出し
+- `function_name`: 生成されるコードの関数名（キャメルケース推奨）
+- `description`: クエリーの簡潔な説明
+- その他のカスタムフィールドも追加可能
 
-| 英語キーワード | 目的 | 必須 |
-|----------------|------|------|
-| `Overview` | クエリーの説明と目的 | はい |
-| `Parameters` | 入力パラメータ定義 | はい |
-| `SQL` | SQLテンプレート | はい |
-| `Test Cases` | テストシナリオ | はい |
-| `Mock Data` | テスト用モックデータ | いいえ |
-| `Performance` | パフォーマンス情報 | いいえ |
-| `Security` | セキュリティ考慮事項 | いいえ |
-| `Change Log` | バージョン履歴 | いいえ |
+### 例
+
+```yaml
+---
+function_name: "getUserById"
+description: "Retrieve user information by ID"
+version: "1.0.0"
+author: "Development Team"
+---
+```
+
+## パラメータセクション
+
+### YAML形式
+
+```yaml
+user_id: int
+include_email: bool
+filters:
+  active: bool
+  departments: [str]
+pagination:
+  limit: int
+  offset: int
+```
+
+### JSON形式
+
+```json
+{
+  "user_id": "int",
+  "include_email": "bool",
+  "filters": {
+    "active": "bool",
+    "departments": ["string"]
+  },
+  "pagination": {
+    "limit": "int",
+    "offset": "int"
+  }
+}
+```
+
+### テキスト形式
+
+```markdown
+- user_id (int): The ID of the user to query
+- include_email (bool): Whether to include email in results
+- status (string): Filter by user status (active, inactive, pending)
+- limit (int): Maximum number of results to return
+- offset (int): Number of results to skip
+
+Additional notes:
+- All parameters are optional except user_id
+- Default limit is 10 if not specified
+```
+
+### 混合形式
+
+```markdown
+This query accepts the following parameters:
+
+```yaml
+user_id: int
+include_email: bool
+```
+
+Additional parameter notes:
+- user_id is required
+- include_email defaults to false
+
+```json
+{
+  "filters": {
+    "status": "string",
+    "department": "string"
+  }
+}
+```
+```
+
+## テストケースセクション
+
+### YAML形式
+
+```yaml
+parameters:
+  user_id: 123
+  include_email: true
+expected:
+  status: "success"
+  count: 1
+```
+
+### CSV形式
+
+```csv
+user_id,active,expected
+123,true,"user found"
+456,false,"user inactive"
+999,true,"user not found"
+```
+
+### リスト形式
+
+```markdown
+### Test Case 1: Basic Query
+- Input: user_id = 123, include_email = true
+- Expected: Returns user data with email
+
+### Test Case 2: User Not Found
+- Parameters: user_id = 999, active = true
+- Expected: No results returned
+```
+
+### XML形式（DBUnit互換）
+
+```xml
+<dataset>
+  <test_case>
+    <parameters user_id="123" include_email="true"/>
+    <expected status="success" count="1"/>
+  </test_case>
+</dataset>
+```
+
+## モックデータセクション
+
+### YAML形式
+
+```yaml
+users:
+  - id: 1
+    name: "John Doe"
+    email: "john@example.com"
+    active: true
+  - id: 2
+    name: "Jane Smith"
+    email: "jane@example.com"
+    active: false
+orders:
+  - id: 101
+    user_id: 1
+    total: 99.99
+    status: "completed"
+```
+
+### CSV形式
+
+```csv
+# users
+id,name,email,active
+1,"John Doe","john@example.com",true
+2,"Jane Smith","jane@example.com",false
+3,"Bob Wilson","bob@example.com",true
+```
+
+### XML形式（DBUnit互換）
+
+```xml
+<dataset>
+  <users id="1" name="John Doe" email="john@example.com" active="true"/>
+  <users id="2" name="Jane Smith" email="jane@example.com" active="false"/>
+  <orders id="101" user_id="1" total="99.99" status="completed"/>
+  <orders id="102" user_id="2" total="149.50" status="pending"/>
+</dataset>
+```
+
+### Markdownテーブル形式
+
+```markdown
+| id | name | email | active |
+|----|------|-------|--------|
+| 1  | John Doe | john@example.com | true |
+| 2  | Jane Smith | jane@example.com | false |
+| 3  | Bob Wilson | bob@example.com | true |
+```
 
 ## 完全な例
 
 ```markdown
 ---
-version: v1.0
-function_name: "user-search"
+function_name: "searchUsers"
+description: "Search for active users with filtering and pagination"
+version: "1.2.0"
 ---
 
 # User Search Query (ユーザー検索クエリー)
 
-## Overview (概要)
+## Description (概要)
 
 Searches for active users based on various criteria with pagination support.
 Supports department filtering and sorting functionality.
@@ -132,11 +320,44 @@ OFFSET /*= pagination.offset */0;
 
 ## Test Cases (テストケース)
 
-テストケースは[dbtestify](https://github.com/shibukawa/dbtestify)形式を使用し、YAMLベースのフィクスチャ、パラメータ、期待結果を含みます。
+### Test Case 1: Basic Search (基本検索)
 
-### Case 1: Basic Search (基本検索)
+```yaml
+parameters:
+  user_id: 123
+  filters:
+    active: true
+    departments: ["engineering", "design"]
+    name_pattern: null
+  pagination:
+    limit: 20
+    offset: 0
+  sort_by: "name"
+  include_email: false
+  table_suffix: "test"
+expected:
+  count: 2
+  status: "success"
+```
 
-**Fixture (初期データ):**
+### Test Case 2: CSV Format Test
+
+```csv
+user_id,active,include_email,expected
+123,true,false,"user found"
+456,false,true,"user inactive"
+999,true,false,"user not found"
+```
+
+### Test Case 3: List Format Test
+
+- Input: user_id = 789, include_email = true, active = true
+- Expected: Returns user data with email included
+
+## Mock Data (モックデータ)
+
+### YAML Format
+
 ```yaml
 users:
   - id: 1
@@ -159,137 +380,23 @@ users:
     created_at: "2024-03-10T09:15:00Z"
 ```
 
-**Parameters (パラメータ):**
-```yaml
-user_id: 123
-filters:
-  active: true
-  departments: ["engineering", "design"]
-  name_pattern: null
-pagination:
-  limit: 20
-  offset: 0
-sort_by: "name"
-include_email: false
-table_suffix: "test"
+### CSV Format
+
+```csv
+# users
+id,name,email,department,active,created_at
+1,"John Doe","john@example.com","engineering",true,"2024-01-15T10:30:00Z"
+2,"Jane Smith","jane@example.com","design",true,"2024-02-20T14:45:00Z"
+3,"Bob Wilson","bob@example.com","marketing",false,"2024-03-10T09:15:00Z"
 ```
 
-**Expected Result (期待結果):**
-```yaml
-- id: 1
-  name: "John Doe"
-  department: "engineering"
-  created_at: "2024-01-15T10:30:00Z"
-- id: 2
-  name: "Jane Smith"
-  department: "design"
-  created_at: "2024-02-20T14:45:00Z"
-```
+### Markdown Table Format
 
-### Case 2: Full Options with Email (全オプション有効)
-
-**Fixture (初期データ):**
-```yaml
-users:
-  - id: 4
-    name: "Alice Smith"
-    email: "alice@example.com"
-    department: "marketing"
-    active: true
-    created_at: "2024-01-10T08:00:00Z"
-  - id: 5
-    name: "Charlie Smith"
-    email: "charlie@example.com"
-    department: "marketing"
-    active: true
-    created_at: "2024-01-20T09:00:00Z"
-```
-
-**Parameters (パラメータ):**
-```yaml
-user_id: 456
-filters:
-  active: true
-  departments: ["marketing"]
-  name_pattern: "%smith%"
-pagination:
-  limit: 5
-  offset: 0
-sort_by: "created_at DESC"
-include_email: true
-table_suffix: "test"
-```
-
-**Expected Result (期待結果):**
-```yaml
-- id: 5
-  name: "Charlie Smith"
-  email: "charlie@example.com"
-  department: "marketing"
-  created_at: "2024-01-20T09:00:00Z"
-- id: 4
-  name: "Alice Smith"
-  email: "alice@example.com"
-  department: "marketing"
-  created_at: "2024-01-10T08:00:00Z"
-```
-
-### Case 3: Empty Result (空の結果)
-
-**Fixture (初期データ):**
-```yaml
-users:
-  - id: 6
-    name: "David Wilson"
-    email: "david@example.com"
-    department: "hr"
-    active: false
-    created_at: "2024-01-05T10:00:00Z"
-```
-
-**Parameters (パラメータ):**
-```yaml
-user_id: 789
-filters:
-  active: true
-  departments: ["engineering"]
-  name_pattern: null
-pagination:
-  limit: 10
-  offset: 0
-sort_by: null
-include_email: false
-table_suffix: "test"
-```
-
-**Expected Result (期待結果):**
-```yaml
-[]
-```
-
-## Mock Response
-
-```yaml
-default:
-  - id: 1
-    name: "John Doe"
-    email: "john@example.com"
-    department: "engineering"
-    active: true
-    created_at: "2024-01-15T10:30:00Z"
-  - id: 2
-    name: "Jane Smith"
-    email: "jane@example.com"
-    department: "design"
-    active: true
-    created_at: "2024-02-20T14:45:00Z"
-  - id: 3
-    name: "Bob Wilson"
-    email: "bob@example.com"
-    department: "marketing"
-    active: false
-    created_at: "2024-03-10T09:15:00Z"
-```
+| id | name | email | department | active | created_at |
+|----|------|-------|------------|--------|------------|
+| 1  | John Doe | john@example.com | engineering | true | 2024-01-15T10:30:00Z |
+| 2  | Jane Smith | jane@example.com | design | true | 2024-02-20T14:45:00Z |
+| 3  | Bob Wilson | bob@example.com | marketing | false | 2024-03-10T09:15:00Z |
 
 ## Performance (パフォーマンス)
 
@@ -334,6 +441,33 @@ default:
 - 初期バージョン
 ```
 
+## 実装詳細
+
+### AST活用型解析
+
+パーサーはgoldmarkのASTを直接活用して以下を実現：
+
+1. **堅牢な解析**: コードブロック内のMarkdown構文に影響されない
+2. **正確な行番号**: SQLコードブロックの正確な行番号情報を取得
+3. **構造化データ**: ASTノードから直接データを抽出
+
+### 多形式対応
+
+各セクションで複数の形式をサポート：
+
+- **YAML**: 構造化データに最適
+- **JSON**: API仕様との互換性
+- **CSV**: 表形式データに最適
+- **XML**: DBUnit互換形式
+- **Markdownテーブル**: 視覚的に分かりやすい
+- **テキスト**: 自由形式の説明
+
+### エラーハンドリング
+
+- 必須セクション（Description/Overview、SQL）の検証
+- 不正なfront matterの検出
+- 構文エラーの詳細なレポート
+
 ## ファイル構成
 
 ### ディレクトリ構造
@@ -341,85 +475,46 @@ default:
 ```
 queries/
 ├── users/
-│   ├── search.md          # ユーザー検索
-│   ├── create.md          # ユーザー作成
-│   └── update.md          # ユーザー更新
+│   ├── search.snap.md          # ユーザー検索
+│   ├── create.snap.md          # ユーザー作成
+│   └── update.snap.md          # ユーザー更新
 ├── posts/
-│   ├── list.md            # 投稿一覧
-│   ├── detail.md          # 投稿詳細
-│   └── search.md          # 投稿検索
+│   ├── list.snap.md            # 投稿一覧
+│   ├── detail.snap.md          # 投稿詳細
+│   └── search.snap.md          # 投稿検索
 └── analytics/
-    ├── user-stats.md      # ユーザー統計
-    └── daily-report.md    # 日次レポート
+    ├── user-stats.snap.md      # ユーザー統計
+    └── daily-report.snap.md    # 日次レポート
 ```
 
 ### 命名規則
 
 - ファイル名にはケバブケースを使用
+- 拡張子は`.snap.md`
 - 関連するクエリーをサブディレクトリにグループ化
 - クエリーの目的を反映する説明的な名前を使用
 
-## フロントマター
-
-### 必須フィールド
-
-```yaml
----
-name: "user search"
-dialect: "postgres"
----
-```
-
-### フィールド説明
-
-- `name`: 生成されるコードの関数名（スペース区切りの単語、各言語の適切な命名規則に変換される）
-- `dialect`: SQLダイアレクト（`postgres`, `mysql`, `sqlite`）
-
-### 例
-
-```yaml
----
-name: "get user by id"
-dialect: "postgres"
----
-```
-
-```yaml
----
-name: "list active posts"
-dialect: "mysql"
----
-```
-
-```yaml
----
-name: "analytics daily report"
-dialect: "sqlite"
----
-```
-
 ## 処理ルール
 
-### 見出し認識
+### セクション認識
 
 1. パーサーは見出し内の英語キーワードを探す
-2. 括弧内のローカライズされたタイトルは処理中に無視される
-3. 各見出し下のコンテンツはその種類に応じて処理される
+2. 大文字小文字を区別しない
+3. 複数の代替名をサポート（例：`Parameters`, `Params`, `Parameter`）
 
 ### コンテンツ処理
 
-- **Parameters**: YAMLとして解析
-- **SQL**: SnapSQLテンプレートとして処理
-- **Test Cases**: YAMLフィクスチャ、パラメータ、期待結果を含むdbtestify形式として解析
-- **Mock Data**: 開発とテスト用のYAMLとして解析
+- **Parameters**: YAML/JSON/テキスト形式として解析し、`ParameterBlock`フィールドに格納
+- **SQL**: SnapSQLテンプレートとして処理し、行番号情報も取得
+- **Test Cases**: 複数形式（YAML/JSON/CSV/XML/リスト）をサポート
+- **Mock Data**: 複数形式（YAML/JSON/CSV/XML/Markdownテーブル）をサポート
 
 ### 検証ルール
 
-1. 必須セクションが存在する必要がある
-2. Parametersセクションは有効なYAMLである必要がある
+1. 必須セクション（Description/Overview、SQL）が存在する必要がある
+2. Front matterは有効なYAMLである必要がある
 3. SQLセクションは有効なSnapSQL構文である必要がある
-4. テストケースは有効なYAMLフィクスチャ、パラメータ、期待結果を含むdbtestify形式に従う必要がある
-5. テストケースのパラメータはParametersセクションの構造と一致する必要がある
+4. 各形式のデータは適切な構文に従う必要がある
 
 ## SnapSQL CLIとの統合
 
@@ -430,7 +525,7 @@ dialect: "sqlite"
 snapsql generate -i ./queries
 
 # 特定のファイルを処理
-snapsql generate queries/users/search.md
+snapsql generate queries/users/search.snap.md
 ```
 
 ### 出力生成
@@ -438,13 +533,13 @@ snapsql generate queries/users/search.md
 各`.snap.md`ファイルは以下を生成します：
 - 解析されたコンテンツを含む中間JSON
 - 言語固有のコード（要求された場合）
-- フィクスチャと期待結果を含むdbtestify互換のテストファイル
+- テストケースとモックデータを含むテストファイル
 
 ### 検証
 
 ```bash
 # markdownクエリーファイルを検証
-snapsql validate queries/users/search.md
+snapsql validate queries/users/search.snap.md
 
 # すべてのmarkdownファイルを検証
 snapsql validate -i ./queries --format json
@@ -453,9 +548,11 @@ snapsql validate -i ./queries --format json
 ## 利点
 
 1. **リテラルプログラミング**: コードとドキュメントの統合
-2. **国際化対応**: 複数言語のサポート
-3. **テスト可能性**: データベーステスト用のdbtestify形式による統合テストケース
-4. **保守性**: バージョン履歴と変更追跡
-5. **IDE サポート**: Markdown構文ハイライトとプレビュー
-6. **コラボレーション**: レビューとコメントが容易
-7. **データベーステスト**: フィクスチャと期待結果による完全なデータベース統合テスト
+2. **多形式対応**: YAML、JSON、CSV、XML、Markdownテーブルなど複数形式をサポート
+3. **AST活用**: goldmarkのASTを直接活用した堅牢な解析
+4. **テスト可能性**: 包括的なテストケースとモックデータのサポート
+5. **保守性**: バージョン履歴と変更追跡
+6. **IDE サポート**: Markdown構文ハイライトとプレビュー
+7. **コラボレーション**: レビューとコメントが容易
+8. **型安全性**: 構造化されたパラメータ定義
+9. **国際化対応**: 複数言語でのドキュメント作成をサポート
