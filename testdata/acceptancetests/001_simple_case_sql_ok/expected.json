@@ -5,53 +5,25 @@
   "format_version": "1",
   "function_name": "find_user",
   "instructions": [
-    {
-      "op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name, age FROM users WHERE id ="
-    },
-    {
-      "op": "EMIT_EVAL", "pos": "13:10", "expr_index": 0
-    },
-    {
-      "op": "IF_SYSTEM_LIMIT", "pos": "0:0"
-    },
-    {
-      "op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "
-    },
-    {
-      "op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"
-    },
-    {
-      "op": "END", "pos": "0:0"
-    },
-    {
-      "op": "IF_SYSTEM_OFFSET", "pos": "0:0"
-    },
-    {
-      "op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "
-    },
-    {
-      "op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"
-    },
-    {
-      "op": "END", "pos": "0:0"
-    }
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name, age FROM users WHERE id ="},
+    {"op": "EMIT_EVAL", "pos": "13:10", "expr_index": 0},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
   ],
   "name": "find_user",
   "parameters": [
-    {
-      "name": "user_id", "type": "int"
-    }
+    {"name": "user_id", "type": "int"}
   ],
   "response_affinity": "many",
   "responses": [
-    {
-      "name": "id", "type": "int", "database_tag": "id"
-    },
-    {
-      "name": "name", "type": "string", "database_tag": "name"
-    },
-    {
-      "name": "age", "type": "int", "database_tag": "age"
-    }
+    {"name": "id", "type": "int", "database_tag": "id"},
+    {"name": "name", "type": "string", "database_tag": "name"},
+    {"name": "age", "type": "int", "database_tag": "age"}
   ]
 }

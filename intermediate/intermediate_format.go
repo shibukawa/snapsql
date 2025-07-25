@@ -1,9 +1,9 @@
 package intermediate
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Instruction operation types
@@ -185,15 +185,73 @@ func (f *IntermediateFormat) ToJSON() ([]byte, error) {
 
 // compactArrays makes arrays more compact in the JSON output
 func compactArrays(data []byte) []byte {
-	// This is a simplified implementation
-	// In a real implementation, we would use a more sophisticated approach
-
-	// Replace arrays of simple values with compact format
-	data = bytes.ReplaceAll(data, []byte("[\n      "), []byte("["))
-	data = bytes.ReplaceAll(data, []byte(",\n      "), []byte(", "))
-	data = bytes.ReplaceAll(data, []byte("\n    ]"), []byte("]"))
-
-	return data
+	str := string(data)
+	
+	// Make simple objects in arrays more compact
+	// Replace multi-line objects with single-line versions
+	lines := strings.Split(str, "\n")
+	var result []string
+	
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		
+		// Check if this line starts an object in an array
+		if strings.Contains(line, "{") && !strings.Contains(line, "}") {
+			// Look for the closing brace
+			objectLines := []string{line}
+			j := i + 1
+			for j < len(lines) && !strings.Contains(lines[j], "}") {
+				objectLines = append(objectLines, lines[j])
+				j++
+			}
+			if j < len(lines) {
+				objectLines = append(objectLines, lines[j])
+			}
+			
+			// Check if this is a simple object (no nested objects/arrays)
+			isSimple := true
+			for _, objLine := range objectLines[1 : len(objectLines)-1] {
+				if strings.Contains(objLine, "{") || strings.Contains(objLine, "[") {
+					isSimple = false
+					break
+				}
+			}
+			
+			if isSimple && len(objectLines) <= 6 { // Only compact small objects
+				// Combine into single line
+				var parts []string
+				for _, objLine := range objectLines {
+					trimmed := strings.TrimSpace(objLine)
+					if trimmed != "" {
+						parts = append(parts, trimmed)
+					}
+				}
+				compactLine := strings.Join(parts, " ")
+				compactLine = strings.ReplaceAll(compactLine, "{ ", "{")
+				compactLine = strings.ReplaceAll(compactLine, " }", "}")
+				
+				// Get the indentation from the original first line
+				indent := ""
+				for _, char := range line {
+					if char == ' ' || char == '\t' {
+						indent += string(char)
+					} else {
+						break
+					}
+				}
+				
+				result = append(result, indent+compactLine)
+				i = j // Skip the processed lines
+			} else {
+				// Keep original formatting for complex objects
+				result = append(result, line)
+			}
+		} else {
+			result = append(result, line)
+		}
+	}
+	
+	return []byte(strings.Join(result, "\n"))
 }
 
 // FromJSON deserializes the intermediate format from JSON
