@@ -2,6 +2,7 @@ package parserstep6
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -9,75 +10,123 @@ import (
 )
 
 // validateVariables validates template variables and directives in a parsed statement
-func validateVariables(statement cmn.StatementNode, paramNamespace *cmn.Namespace, constNamespace *cmn.Namespace, perr *cmn.ParseError) {
+func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) {
 	// Process all clauses in the statement
 	for _, clause := range statement.Clauses() {
 		tokens := clause.RawTokens()
-		processTokens(tokens, paramNamespace, constNamespace, perr)
-	}
-}
+		// true is for, false is if
+		var nest []bool
 
-// processTokens processes a sequence of tokens for directive validation
-func processTokens(tokens []tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) {
-	i := 0
+		// replace dummy literal tokens with actual values
+		var insertions []tokenInsertion
+		var replacements []tokenReplacement
 
-	for i < len(tokens) {
-		token := tokens[i]
-		if token.Directive != nil {
-			switch token.Directive.Type {
-			case "variable":
-				validateVariableDirective(token, paramNs, perr)
-			case "const":
-				validateConstDirective(token, constNs, perr)
-			case "if":
-				validateIfDirective(token, paramNs, constNs, perr)
-			case "for":
-				// Handle for loop - process the loop body with extended namespace
-				ok, endIndex := processForLoop(tokens, i, paramNs, constNs, perr)
-				if ok {
-					// Process tokens inside the loop with the extended namespace
-					loopTokens := tokens[i+1 : endIndex]
-					processTokens(loopTokens, paramNs, constNs, perr)
-					i = endIndex // Skip to after the end directive
-					paramNs.ExitLoop()
-					continue
+		for i, token := range tokens {
+			if token.Directive != nil {
+				switch token.Directive.Type {
+				case "variable":
+					value, valueType, ok := validateVariableDirective(token, paramNs, perr)
+					if ok {
+						// Create literal tokens with DUMMY_START and DUMMY_END
+						literalTokens := createLiteralTokens(value, valueType, token.Position)
+						if len(literalTokens) == 0 {
+							perr.Add(fmt.Errorf("%w at %s: failed to create literal tokens for type '%s'", cmn.ErrInvalidForSnapSQL, token.Position.String(), valueType))
+							continue
+						}
+						insertions = append(insertions, tokenInsertion{
+							index:  i,
+							tokens: literalTokens,
+						})
+					}
+				case "const":
+					value, valueType, ok := validateConstDirective(token, constNs, perr)
+					if ok {
+						valueToken := createValueToken(value, valueType, token.Position)
+						if valueToken.Type == tokenizer.EOF {
+							perr.Add(fmt.Errorf("%w at %s: failed to create value token for type '%s'", cmn.ErrInvalidForSnapSQL, token.Position.String(), valueType))
+							continue
+						}
+						// Remove existing DUMMY_LITERAL token if it exists
+						if i+1 < len(tokens) && tokens[i+1].Type == tokenizer.DUMMY_LITERAL {
+							// Replace dummy literal
+							replacements = append(replacements, tokenReplacement{
+								startIndex: i + 1,
+								endIndex:   i + 2, // Dummy literal is a single token
+								token:      valueToken,
+							})
+						} else {
+							// Insert value after comment
+							insertions = append(insertions, tokenInsertion{
+								index:  i,
+								tokens: []tokenizer.Token{valueToken},
+							})
+						}
+					}
+				case "if":
+					validateIfDirective(token, paramNs, constNs, perr)
+					nest = append(nest, false)
+				case "for":
+					// Handle for loop - process the loop body with extended namespace
+					processForLoop(token, paramNs, constNs, perr)
+					nest = append(nest, true)
+				case "elseif":
+					validateElseIfDirective(token, paramNs, constNs, perr)
+				case "else":
+					// No specific validation needed for else
+				case "end":
+					if nest[len(nest)-1] {
+						paramNs.ExitLoop()
+					}
+					nest = nest[:len(nest)-1]
 				}
-			case "elseif":
-				validateElseIfDirective(token, paramNs, constNs, perr)
-			case "else":
-				// No specific validation needed for else
-			case "end":
-				// No specific validation needed for end
 			}
 		}
-		i++
+
+		// Perform replacements (execute from the back to prevent index shifting)
+		for i := len(replacements) - 1; i >= 0; i-- {
+			replacement := replacements[i]
+			replaceTokens(clause, replacement.startIndex, replacement.endIndex, replacement.token)
+		}
+
+		// Perform insertions (execute from the back to prevent index shifting)
+		for i := len(insertions) - 1; i >= 0; i-- {
+			insertion := insertions[i]
+			// Use ClauseNode's InsertTokensAfterIndex method to insert tokens
+			clause.InsertTokensAfterIndex(insertion.index, insertion.tokens)
+		}
 	}
 }
 
 // validateVariableDirective validates a variable directive
-func validateVariableDirective(token tokenizer.Token, paramNs *cmn.Namespace, perr *cmn.ParseError) {
+func validateVariableDirective(token tokenizer.Token, paramNs *cmn.Namespace, perr *cmn.ParseError) (any, string, bool) {
 	expression := extractExpressionFromDirective(token.Value, "/*=", "*/")
 	if expression == "" {
 		perr.Add(fmt.Errorf("%w at %s: invalid variable directive format", cmn.ErrInvalidForSnapSQL, token.Position.String()))
-		return
+		return nil, "", false
 	}
 
 	// Validate the expression using parameter CEL
-	if _, _, err := paramNs.Eval(expression); err != nil {
+	if value, valueType, err := paramNs.Eval(expression); err != nil {
 		perr.Add(fmt.Errorf("undefined variable in expression '%s': %w at %s", expression, err, token.Position.String()))
+		return nil, "", false
+	} else {
+		return value, valueType, true
 	}
 }
 
 // validateConstDirective validates a const directive
-func validateConstDirective(token tokenizer.Token, constNs *cmn.Namespace, perr *cmn.ParseError) {
+func validateConstDirective(token tokenizer.Token, constNs *cmn.Namespace, perr *cmn.ParseError) (any, string, bool) {
 	expression := extractExpressionFromDirective(token.Value, "/*$", "*/")
 	if expression == "" {
 		perr.Add(fmt.Errorf("%w at %s: invalid const directive format", cmn.ErrInvalidForSnapSQL, token.Position.String()))
-		return
+		return nil, "", false
 	}
 	// Validate as environment expression
-	if _, _, err := constNs.Eval(expression); err != nil {
+	if value, valueType, err := constNs.Eval(expression); err != nil {
 		perr.Add(fmt.Errorf("undefined variable in environment expression '%s': %w at %s", expression, err, token.Position.String()))
+		return nil, "", false
+	} else {
+		return value, valueType, true
 	}
 }
 
@@ -112,79 +161,44 @@ func validateElseIfDirective(token tokenizer.Token, paramNs *cmn.Namespace, cons
 }
 
 // processForLoop processes a for loop directive and returns the end index
-func processForLoop(tokens []tokenizer.Token, startIndex int, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) (bool, int) {
-	if startIndex >= len(tokens) || tokens[startIndex].Directive == nil || tokens[startIndex].Directive.Type != "for" {
-		return false, startIndex
-	}
-
-	forToken := tokens[startIndex]
-	forDirective := forToken.Directive
+func processForLoop(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) bool {
+	forDirective := token.Directive
 
 	// Parse the for directive: "for item : items"
 	parts := strings.Split(forDirective.Condition, ":")
 	if len(parts) != 2 {
-		perr.Add(fmt.Errorf("%w at %s: invalid for directive format, expected 'for item : items'", cmn.ErrInvalidForSnapSQL, forToken.Position.String()))
-		return false, startIndex
+		perr.Add(fmt.Errorf("%w at %s: invalid for directive format, expected 'for item : items'", cmn.ErrInvalidForSnapSQL, token.Position.String()))
+		return false
 	}
 
 	itemName := strings.TrimSpace(parts[0])
 	itemsExpr := strings.TrimSpace(parts[1])
 
-	// Find the matching end directive
-	endIndex := findMatchingEndDirective(tokens, startIndex)
-	if endIndex == -1 {
-		perr.Add(fmt.Errorf("%w at %s: missing end directive for loop", cmn.ErrInvalidForSnapSQL, forToken.Position.String()))
-		return false, startIndex
-	}
-
 	// Try to evaluate the items expression with parameter namespace first
 	itemsValue, _, err := paramNs.Eval(itemsExpr)
 	if err != nil {
-		perr.Add(fmt.Errorf("invalid items expression in for directive '%s': %w at %s", itemsExpr, err, forToken.Position.String()))
-		return false, startIndex
+		perr.Add(fmt.Errorf("%w at %s: invalid items expression in for directive '%s'", cmn.ErrInvalidForSnapSQL, token.Position.String(), itemsExpr))
+		return false
 	}
 
 	// Enter the loop with the first item (if available)
 	items, ok := itemsValue.([]any)
 	if !ok {
-		perr.Add(fmt.Errorf("%w at %s: items expression '%s' must evaluate to a list", cmn.ErrInvalidForSnapSQL, forToken.Position.String(), itemsExpr))
-		return false, startIndex
+		perr.Add(fmt.Errorf("%w at %s: items expression '%s' must evaluate to a list", cmn.ErrInvalidForSnapSQL, token.Position.String(), itemsExpr))
+		return false
 	}
 
 	if len(items) == 0 {
-		perr.Add(fmt.Errorf("%w at %s: items expression '%s' evaluates to an empty list", cmn.ErrInvalidForSnapSQL, forToken.Position.String(), itemsExpr))
-		return false, startIndex
+		perr.Add(fmt.Errorf("%w at %s: items expression '%s' evaluates to an empty list", cmn.ErrInvalidForSnapSQL, token.Position.String(), itemsExpr))
+		return false
 	}
 
 	// Enter the loop with the first item
 	if err := paramNs.EnterLoop(itemName, items); err != nil {
-		perr.Add(fmt.Errorf("error entering loop: %w at %s", err, forToken.Position.String()))
-		return false, startIndex
+		perr.Add(fmt.Errorf("error entering loop: %w at %s", err, token.Position.String()))
+		return false
 	}
-
-	return true, endIndex
-}
-
-// findMatchingEndDirective finds the matching end directive for a control structure
-func findMatchingEndDirective(tokens []tokenizer.Token, startIndex int) int {
-	depth := 0
-	for i := startIndex + 1; i < len(tokens); i++ {
-		token := tokens[i]
-		if token.Directive == nil {
-			continue
-		}
-
-		switch token.Directive.Type {
-		case "if", "for":
-			depth++
-		case "end":
-			if depth == 0 {
-				return i
-			}
-			depth--
-		}
-	}
-	return -1
+	return true
 }
 
 // extractExpressionFromDirective extracts the expression from a directive comment
@@ -193,4 +207,101 @@ func extractExpressionFromDirective(value string, prefix string, suffix string) 
 		return ""
 	}
 	return strings.TrimSpace(value[len(prefix) : len(value)-len(suffix)])
+}
+
+// tokenInsertion はトークンの挿入情報を表します
+type tokenInsertion struct {
+	index  int               // 挿入位置
+	tokens []tokenizer.Token // 挿入するトークン
+}
+
+// tokenReplacement はトークンの置換情報を表します
+type tokenReplacement struct {
+	startIndex int             // 置換開始位置
+	endIndex   int             // 置換終了位置
+	token      tokenizer.Token // 置換するトークン
+}
+
+// replaceTokens は指定された範囲のトークンを新しいトークンに置き換えます
+func replaceTokens(clause cmn.ClauseNode, startIndex, endIndex int, newToken tokenizer.Token) {
+	// ClauseNodeのReplaceTokensメソッドを使用してトークンを置換
+	clause.ReplaceTokens(startIndex, endIndex, newToken)
+}
+
+// createLiteralTokens は値と型に基づいてダミーリテラルトークンを作成します
+func createLiteralTokens(value any, valueType string, pos tokenizer.Position) []tokenizer.Token {
+	// DUMMY_STARTトークン
+	startToken := tokenizer.Token{
+		Type:     tokenizer.DUMMY_START,
+		Value:    "DUMMY_START",
+		Position: pos,
+	}
+
+	// DUMMY_ENDトークン
+	endToken := tokenizer.Token{
+		Type:     tokenizer.DUMMY_END,
+		Value:    "DUMMY_END",
+		Position: pos,
+	}
+
+	// 値のトークン
+	valueToken := createValueToken(value, valueType, pos)
+
+	return []tokenizer.Token{startToken, valueToken, endToken}
+}
+
+// createValueToken は値と型に基づいて値のトークンを作成します
+func createValueToken(value any, valueType string, pos tokenizer.Position) tokenizer.Token {
+	var valueToken tokenizer.Token
+
+	switch valueType {
+	case "int":
+		// 整数リテラル
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.NUMBER,
+			Value:    fmt.Sprintf("%d", value),
+			Position: pos,
+		}
+	case "float":
+		// 浮動小数点リテラル
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.NUMBER,
+			Value:    strconv.FormatFloat(value.(float64), 'f', -1, 64),
+			Position: pos,
+		}
+	case "string":
+		// 文字列リテラル（シングルクォートで囲む）
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.STRING,
+			Value:    fmt.Sprintf("'%s'", escapeString(value.(string))),
+			Position: pos,
+		}
+	case "bool":
+		// 真偽値リテラル
+		var boolStr string
+		if value.(bool) {
+			boolStr = "TRUE"
+		} else {
+			boolStr = "FALSE"
+		}
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.BOOLEAN,
+			Value:    boolStr,
+			Position: pos,
+		}
+	default:
+		// その他の型は文字列として扱う
+		valueToken = tokenizer.Token{
+			Type:     tokenizer.STRING,
+			Value:    fmt.Sprintf("'%s'", escapeString(fmt.Sprintf("%v", value))),
+			Position: pos,
+		}
+	}
+
+	return valueToken
+}
+
+// escapeString は文字列内のシングルクォートをエスケープします
+func escapeString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }

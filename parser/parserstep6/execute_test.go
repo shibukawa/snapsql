@@ -22,60 +22,58 @@ func TestExecute(t *testing.T) {
 	tests := []struct {
 		name           string
 		sql            string
-		schema         *cmn.FunctionDefinition
 		environment    map[string]any
 		expectedErrors int // Number of expected errors
 	}{
 		{
 			name: "Valid template with simple variable",
-			sql:  "SELECT /*= user.name */default FROM users",
-			schema: &cmn.FunctionDefinition{
-				FunctionName: "get_user_data",
-				Parameters: map[string]any{
-					"user": map[string]any{
-						"name": "str",
-						"id":   "int",
-					},
-				},
-			},
+			sql: `
+/*#
+function_name: get_user_data
+parameters:
+  user:
+    name: str
+    id: int
+*/
+SELECT /*= user.name */default FROM users`,
 			environment:    map[string]any{},
-			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
+			expectedErrors: 0,
 		},
 		{
 			name: "Invalid template with undefined variable",
-			sql:  "SELECT /*= undefined_var */default FROM users",
-			schema: &cmn.FunctionDefinition{
-				FunctionName: "get_user_data",
-				Parameters:   map[string]any{},
-			},
+			sql: `
+/*#
+function_name: get_user_data
+parameters: {}
+*/
+SELECT /*= undefined_var */default FROM users`,
 			environment:    map[string]any{},
-			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
+			expectedErrors: 1,
 		},
 		{
 			name: "Template with environment variable",
-			sql:  "SELECT name FROM /*$ table_name */default_table",
-			schema: &cmn.FunctionDefinition{
-				FunctionName: "get_table_data",
-				Parameters:   map[string]any{},
-			},
+			sql: `
+/*#
+function_name: get_table_data
+parameters: {}
+*/
+SELECT name FROM /*$ table_name */default_table`,
 			environment: map[string]any{
 				"table_name": "users",
 			},
-			expectedErrors: 1, // 変数が見つからない場合はエラーが発生することを期待
+			expectedErrors: 0,
 		},
 		{
 			name: "Template with LIMIT implicit condition",
-			sql:  "SELECT name FROM users LIMIT /*= limit */10",
-			schema: &cmn.FunctionDefinition{
-				FunctionName: "get_users_with_limit",
-				Parameters: map[string]any{
-					"limit": map[string]any{
-						"type": "int",
-					},
-				},
-			},
+			sql: `
+/*#
+function_name: get_users_with_limit
+parameters:
+  limit: int
+*/
+SELECT name FROM users LIMIT /*= limit */10`,
 			environment:    map[string]any{},
-			expectedErrors: 2, // 変数が見つからない場合はエラーが発生することを期待
+			expectedErrors: 0,
 		},
 	}
 
@@ -93,15 +91,14 @@ func TestExecute(t *testing.T) {
 			err = parserstep5.Execute(statement)
 			assert.NoError(t, err)
 
+			fd, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, ".", ".")
+			assert.NoError(t, err)
+
 			// Create namespaces
-			paramNs, err := cmn.NewNamespaceFromDefinition(tt.schema)
-			if err != nil {
-				t.Fatalf("Failed to create namespace from schema: %v", err)
-			}
+			paramNs, err := cmn.NewNamespaceFromDefinition(fd)
+			assert.NoError(t, err)
 			constNs, err := cmn.NewNamespaceFromConstants(tt.environment)
-			if err != nil {
-				t.Fatalf("Failed to create namespace from environment: %v", err)
-			}
+			assert.NoError(t, err)
 
 			// Execute parserstep6 (which includes parserstep5 processing)
 			parseErr := Execute(statement, paramNs, constNs)

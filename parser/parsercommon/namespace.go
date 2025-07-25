@@ -74,15 +74,11 @@ func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 }
 
 func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
-	ast, issues := ns.currentEnv.Parse(exp)
+	ast, issues := ns.currentEnv.Compile(exp)
 	if issues != nil && issues.Err() != nil {
-		return nil, "", fmt.Errorf("%w: CEL expression parse error: %v", ErrInvalidForSnapSQL, issues.Err())
+		return nil, "", fmt.Errorf("%w: CEL expression compile error: %v", ErrInvalidForSnapSQL, issues.Err())
 	}
-	checked, issues := ns.currentEnv.Check(ast)
-	if issues != nil && issues.Err() != nil {
-		return nil, "", fmt.Errorf("%w: CEL expression check error: %v", ErrInvalidForSnapSQL, issues.Err())
-	}
-	prg, err := ns.currentEnv.Program(checked)
+	prg, err := ns.currentEnv.Program(ast)
 	if err != nil {
 		return nil, "", fmt.Errorf("%w: CEL program creation error: %v", ErrInvalidForSnapSQL, err)
 	}
@@ -115,19 +111,6 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 
 	// Handle different types of loop targets
 	switch v := loopTarget.(type) {
-	case string:
-		// If the loop target is a string, evaluate it as an expression
-		val, _, err := ns.Eval(v)
-		if err != nil {
-			return err
-		}
-
-		// Check if the result is a slice
-		var ok bool
-		a, ok = val.([]any)
-		if !ok {
-			return fmt.Errorf("%w: expected array for loop variable %s, got %T", ErrInvalidForSnapSQL, variableName, val)
-		}
 	case []any:
 		// If the loop target is already a slice, use it directly
 		a = v
@@ -146,7 +129,7 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 
 	// Create a new environment with the loop variable
 	newEnv, err := ns.currentEnv.Extend(
-		cel.Variable(variableName, snapSqlToCel(inferTypeStringFromActualValues(a[0], nil))),
+		cel.Variable(variableName, snapSqlToCel(InferTypeStringFromDummyValue(a[0]))),
 	)
 
 	if err != nil {
