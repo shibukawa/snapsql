@@ -23,7 +23,7 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 
 	// Track if we're inside a dummy literal block
 	inDummyBlock := false
-	
+
 	// Directive stack to track nested structures
 	var directiveStack []string
 
@@ -155,7 +155,7 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 						Pos:       pos,
 						Condition: token.Directive.Condition,
 					})
-					
+
 					// Push to stack
 					directiveStack = append(directiveStack, "if")
 
@@ -166,7 +166,7 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 						Pos:       pos,
 						Condition: token.Directive.Condition,
 					})
-					
+
 					// Update stack top to elseif
 					if len(directiveStack) > 0 {
 						directiveStack[len(directiveStack)-1] = "elseif"
@@ -178,7 +178,7 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 						Op:  OpElse,
 						Pos: pos,
 					})
-					
+
 					// Update stack top to else
 					if len(directiveStack) > 0 {
 						directiveStack[len(directiveStack)-1] = "else"
@@ -219,7 +219,7 @@ func GenerateInstructions(tokens []tokenizer.Token) []Instruction {
 							Variable:   variable,
 							Collection: collection,
 						})
-						
+
 						// Push to stack
 						directiveStack = append(directiveStack, "for")
 					}
@@ -326,10 +326,10 @@ func isHeaderComment(comment string) bool {
 	if !strings.HasPrefix(comment, "/*#") || !strings.HasSuffix(comment, "*/") {
 		return false
 	}
-	
+
 	// Extract content between /*# and */
 	content := strings.TrimSpace(comment[3 : len(comment)-2])
-	
+
 	// Check if it's a directive (if, elseif, else, for, end)
 	if strings.HasPrefix(content, "if ") || content == "if" ||
 		strings.HasPrefix(content, "elseif ") || content == "elseif" ||
@@ -338,11 +338,10 @@ func isHeaderComment(comment string) bool {
 		content == "end" {
 		return false // This is a directive, not a header comment
 	}
-	
+
 	// If it contains function_name or parameters, it's a header comment
 	return strings.Contains(content, "function_name:") || strings.Contains(content, "parameters:")
 }
-
 
 // extractVariableName extracts the variable name from a variable token
 // Format: /*= variable_name */placeholder

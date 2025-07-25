@@ -13,10 +13,10 @@ const (
 	OpEmitEval   = "EMIT_EVAL"   // Output evaluated expression
 
 	// Control flow instructions
-	OpIf      = "IF"       // Start of if block
-	OpElseIf  = "ELSE_IF"  // Else if condition
-	OpElse    = "ELSE"     // Else block
-	OpEnd     = "END"      // End of control block (if, for)
+	OpIf     = "IF"      // Start of if block
+	OpElseIf = "ELSE_IF" // Else if condition
+	OpElse   = "ELSE"    // Else block
+	OpEnd    = "END"     // End of control block (if, for)
 
 	// Loop instructions
 	OpLoopStart = "LOOP_START" // Start of for loop block
@@ -34,15 +34,15 @@ const (
 
 // Instruction represents a single instruction in the instruction set
 type Instruction struct {
-	Op                 string   `json:"op"`
-	Pos                string   `json:"pos,omitempty"`                  // Position "line:column" from original template
-	Value              string   `json:"value,omitempty"`                // For EMIT_STATIC
-	Param              string   `json:"param,omitempty"`                // For EMIT_PARAM
-	Condition          string   `json:"condition,omitempty"`            // For IF, ELSE_IF
-	Variable           string   `json:"variable,omitempty"`             // For FOR
-	Collection         string   `json:"collection,omitempty"`           // For FOR
-	DefaultValue       string   `json:"default_value,omitempty"`        // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
-	Fields             []string `json:"fields,omitempty"`               // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
+	Op           string   `json:"op"`
+	Pos          string   `json:"pos,omitempty"`           // Position "line:column" from original template
+	Value        string   `json:"value,omitempty"`         // For EMIT_STATIC
+	Param        string   `json:"param,omitempty"`         // For EMIT_PARAM
+	Condition    string   `json:"condition,omitempty"`     // For IF, ELSE_IF
+	Variable     string   `json:"variable,omitempty"`      // For FOR
+	Collection   string   `json:"collection,omitempty"`    // For FOR
+	DefaultValue string   `json:"default_value,omitempty"` // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
+	Fields       []string `json:"fields,omitempty"`        // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
 }
 
 // Parameter represents a function parameter
@@ -108,19 +108,19 @@ type IntermediateFormat struct {
 func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 	// Create a custom struct for marshaling
 	type Alias IntermediateFormat
-	
+
 	// Marshal the base fields
 	baseJSON, err := json.Marshal((*Alias)(f))
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Unmarshal into a map for manipulation
 	var result map[string]json.RawMessage
 	if err := json.Unmarshal(baseJSON, &result); err != nil {
 		return nil, err
 	}
-	
+
 	// Custom marshal for Parameters
 	if len(f.Parameters) > 0 {
 		params, err := marshalCompact(f.Parameters)
@@ -129,7 +129,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 		result["parameters"] = params
 	}
-	
+
 	// Custom marshal for Instructions
 	if len(f.Instructions) > 0 {
 		instructions, err := marshalCompact(f.Instructions)
@@ -138,7 +138,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 		result["instructions"] = instructions
 	}
-	
+
 	// Custom marshal for Responses
 	if len(f.Responses) > 0 {
 		responses, err := marshalCompact(f.Responses)
@@ -147,7 +147,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 		result["responses"] = responses
 	}
-	
+
 	// Custom marshal for Envs
 	if len(f.Envs) > 0 {
 		envs, err := marshalCompact(f.Envs)
@@ -156,7 +156,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 		result["envs"] = envs
 	}
-	
+
 	// Marshal the modified map back to JSON
 	return json.Marshal(result)
 }
@@ -167,7 +167,7 @@ func marshalCompact(v interface{}) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// For testing purposes, we'll keep the indentation for now
 	// In a real implementation, we would use a more compact format
 	return data, nil
@@ -180,10 +180,10 @@ func (f *IntermediateFormat) ToJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Make arrays more compact
 	data = compactArrays(data)
-	
+
 	return data, nil
 }
 
@@ -191,12 +191,12 @@ func (f *IntermediateFormat) ToJSON() ([]byte, error) {
 func compactArrays(data []byte) []byte {
 	// This is a simplified implementation
 	// In a real implementation, we would use a more sophisticated approach
-	
+
 	// Replace arrays of simple values with compact format
 	data = bytes.ReplaceAll(data, []byte("[\n      "), []byte("["))
 	data = bytes.ReplaceAll(data, []byte(",\n      "), []byte(", "))
 	data = bytes.ReplaceAll(data, []byte("\n    ]"), []byte("]"))
-	
+
 	return data
 }
 

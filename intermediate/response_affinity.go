@@ -11,10 +11,10 @@ type ResponseAffinity string
 const (
 	// ResponseAffinityOne indicates the query returns a single row
 	ResponseAffinityOne ResponseAffinity = "one"
-	
+
 	// ResponseAffinityMany indicates the query returns multiple rows
 	ResponseAffinityMany ResponseAffinity = "many"
-	
+
 	// ResponseAffinityNone indicates the query doesn't return any rows (e.g., INSERT, UPDATE, DELETE)
 	ResponseAffinityNone ResponseAffinity = "none"
 )
@@ -23,7 +23,7 @@ const (
 func DetermineResponseAffinity(stmt parser.StatementNode) ResponseAffinity {
 	// Default affinity is "many" for SELECT statements
 	affinity := ResponseAffinityMany
-	
+
 	// Determine affinity based on statement type
 	switch stmt.Type() {
 	case parsercommon.SELECT_STATEMENT:
@@ -40,7 +40,7 @@ func DetermineResponseAffinity(stmt parser.StatementNode) ResponseAffinity {
 				affinity = ResponseAffinityMany
 			}
 		}
-		
+
 	case parsercommon.INSERT_INTO_STATEMENT:
 		// For INSERT statements, check if it has a RETURNING clause
 		insertStmt, ok := stmt.(*parsercommon.InsertIntoStatement)
@@ -55,7 +55,7 @@ func DetermineResponseAffinity(stmt parser.StatementNode) ResponseAffinity {
 			// INSERT without RETURNING doesn't return rows
 			affinity = ResponseAffinityNone
 		}
-		
+
 	case parsercommon.UPDATE_STATEMENT:
 		// For UPDATE statements, check if it has a RETURNING clause
 		updateStmt, ok := stmt.(*parsercommon.UpdateStatement)
@@ -66,7 +66,7 @@ func DetermineResponseAffinity(stmt parser.StatementNode) ResponseAffinity {
 			// UPDATE without RETURNING doesn't return rows
 			affinity = ResponseAffinityNone
 		}
-		
+
 	case parsercommon.DELETE_FROM_STATEMENT:
 		// For DELETE statements, check if it has a RETURNING clause
 		deleteStmt, ok := stmt.(*parsercommon.DeleteFromStatement)
@@ -77,12 +77,12 @@ func DetermineResponseAffinity(stmt parser.StatementNode) ResponseAffinity {
 			// DELETE without RETURNING doesn't return rows
 			affinity = ResponseAffinityNone
 		}
-		
+
 	default:
 		// For other statement types, default to "none"
 		affinity = ResponseAffinityNone
 	}
-	
+
 	return affinity
 }
 
@@ -99,7 +99,7 @@ func hasLimit1(stmt *parsercommon.SelectStatement) bool {
 	if stmt.Limit == nil {
 		return false
 	}
-	
+
 	// Check if the LIMIT value is 1
 	// This is a placeholder implementation
 	// In a real implementation, we would analyze the LIMIT clause to check if it's 1

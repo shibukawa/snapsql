@@ -11,13 +11,13 @@ type ResultCardinality string
 const (
 	// CardinalityNone means the query doesn't return any rows (e.g., INSERT without RETURNING)
 	CardinalityNone ResultCardinality = "none"
-	
+
 	// CardinalityOne means the query returns exactly one row (e.g., SELECT with LIMIT 1)
 	CardinalityOne ResultCardinality = "one"
-	
+
 	// CardinalityOptional means the query returns zero or one row (e.g., SELECT with unique key)
 	CardinalityOptional ResultCardinality = "optional"
-	
+
 	// CardinalityMany means the query returns multiple rows
 	CardinalityMany ResultCardinality = "many"
 )
@@ -26,7 +26,7 @@ const (
 func DetermineResultCardinality(stmt parser.StatementNode) ResultCardinality {
 	// For now, we'll use a simple approach - assume all queries return multiple rows
 	// In a real implementation, we would analyze the statement structure
-	
+
 	// Check for LIMIT 1 in clauses
 	for _, clause := range stmt.Clauses() {
 		if limitClause, ok := clause.(*parser.LimitClause); ok {
@@ -36,7 +36,7 @@ func DetermineResultCardinality(stmt parser.StatementNode) ResultCardinality {
 			}
 		}
 	}
-	
+
 	// Default to many
 	return CardinalityMany
 }
@@ -45,7 +45,7 @@ func DetermineResultCardinality(stmt parser.StatementNode) ResultCardinality {
 func hasLimitOne(limitClause *parser.LimitClause) bool {
 	// Get content tokens
 	tokens := limitClause.ContentTokens()
-	
+
 	// Look for a NUMBER token with value "1"
 	for i, token := range tokens {
 		if token.Type == tokenizer.NUMBER && token.Value == "1" {
@@ -57,7 +57,7 @@ func hasLimitOne(limitClause *parser.LimitClause) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -66,21 +66,21 @@ func isPrecedingDirectiveComment(tokens []tokenizer.Token, index int) bool {
 	// Check for /*= */ pattern before the current token
 	for i := index - 1; i >= 0; i-- {
 		token := tokens[i]
-		
+
 		// Skip whitespace
 		if token.Type == tokenizer.WHITESPACE {
 			continue
 		}
-		
+
 		// Check for directive comment
 		if (token.Type == tokenizer.BLOCK_COMMENT || token.Type == tokenizer.LINE_COMMENT) && isDirectiveComment(token.Value) {
 			return true
 		}
-		
+
 		// Any other token means no directive comment
 		return false
 	}
-	
+
 	return false
 }
 

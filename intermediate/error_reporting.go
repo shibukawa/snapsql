@@ -130,7 +130,7 @@ func ValidateInstructionPositions(instructions []Instruction, sourceContent stri
 
 		lineNum, err1 := strconv.Atoi(parts[0])
 		colNum, err2 := strconv.Atoi(parts[1])
-		
+
 		if err1 != nil || err2 != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%w: invalid format '%s' for instruction %d (%s)", ErrInvalidPositionFormat, inst.Pos, i, inst.Op))
 			continue

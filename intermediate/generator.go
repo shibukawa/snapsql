@@ -43,10 +43,10 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 	result := &IntermediateFormat{
 		FormatVersion: "1",
 	}
-	
+
 	// Extract tokens from the statement
 	tokens := extractTokensFromStatement(stmt)
-	
+
 	// Extract CEL expressions
 	expressions, envs := extractCELFromTokens(tokens)
 
@@ -56,28 +56,28 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 			return nil, fmt.Errorf("invalid CEL expression: %s", expr)
 		}
 	}
-	
+
 	// Generate instructions
 	instructions := GenerateInstructions(tokens)
-	
+
 	// Add clause-level IF conditions
 	instructions = addClauseIfConditions(stmt, instructions)
-	
+
 	// Extract function information from the function definition
 	var functionName string
 	var parameters []Parameter
-	
+
 	if funcDef != nil {
 		functionName = funcDef.FunctionName
-		
+
 		// Convert function parameters to intermediate format parameters
 		parameters = make([]Parameter, 0, len(funcDef.ParameterOrder))
 		for _, paramName := range funcDef.ParameterOrder {
 			paramValue := funcDef.Parameters[paramName]
-			
+
 			// Extract type information from the parameter value
 			paramType := extractParameterType(paramValue)
-			
+
 			// Add the parameter
 			parameters = append(parameters, Parameter{
 				Name: paramName,
@@ -85,7 +85,7 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 			})
 		}
 	}
-	
+
 	// Populate the intermediate format
 	result.Name = functionName // Use function name as name for now
 	result.FunctionName = functionName
@@ -93,7 +93,7 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 	result.Expressions = expressions
 	result.Envs = envs
 	result.Instructions = instructions
-	
+
 	return result, nil
 }
 
@@ -122,17 +122,17 @@ func extractParameterType(paramValue any) string {
 // extractTokensFromStatement extracts all tokens from a statement
 func extractTokensFromStatement(stmt parsercommon.StatementNode) []tokenizer.Token {
 	tokens := []tokenizer.Token{}
-	
+
 	// Process tokens from each clause
 	for _, clause := range stmt.Clauses() {
 		tokens = append(tokens, clause.RawTokens()...)
 	}
-	
+
 	// Process CTE tokens if available
 	if cte := stmt.CTE(); cte != nil {
 		tokens = append(tokens, cte.RawTokens()...)
 	}
-	
+
 	return tokens
 }
 
@@ -145,31 +145,31 @@ func addClauseIfConditions(stmt parsercommon.StatementNode, instructions []Instr
 			// Find the position to insert the IF instruction
 			// This is a simplified approach - in a real implementation, we would need to find the exact position
 			// based on the clause's position in the SQL
-			
+
 			// For now, we'll just add the IF instruction at the beginning of the instructions
 			// and the END instruction at the end
-			
+
 			// Create IF instruction
 			ifInstruction := Instruction{
 				Op:        OpIf,
 				Pos:       "0:0", // Placeholder position
 				Condition: condition,
 			}
-			
+
 			// Create END instruction
 			endInstruction := Instruction{
 				Op:  OpEnd,
 				Pos: "0:0", // Placeholder position
 			}
-			
+
 			// Insert IF instruction at the beginning
 			instructions = append([]Instruction{ifInstruction}, instructions...)
-			
+
 			// Append END instruction at the end
 			instructions = append(instructions, endInstruction)
 		}
 	}
-	
+
 	return instructions
 }
 
@@ -191,12 +191,12 @@ func ValidateCELExpressions(expressions []string) error {
 			decls.NewVar("min_age", decls.Int),
 			decls.NewVar("max_age", decls.Int),
 			decls.NewVar("active", decls.Bool),
-			
+
 			// Complex types
 			decls.NewVar("departments", decls.NewListType(decls.String)),
 			decls.NewVar("dept", decls.NewMapType(decls.String, decls.Dyn)),
 			decls.NewVar("emp", decls.NewMapType(decls.String, decls.Dyn)),
-			
+
 			// Special variables
 			decls.NewVar("for", decls.NewMapType(decls.String, decls.Bool)),
 		),
@@ -211,7 +211,7 @@ func ValidateCELExpressions(expressions []string) error {
 		if !strings.Contains(expr, " ") && !strings.Contains(expr, ".") && !strings.Contains(expr, "(") {
 			continue
 		}
-		
+
 		// Skip expressions with special syntax that CEL can't validate
 		if strings.Contains(expr, "!for.last") {
 			continue

@@ -32,13 +32,10 @@
       "op": "EMIT_EVAL", "pos": "20:12", "param": "min_age"
     },
     {
-      "op": "EMIT_STATIC", "pos": "20:26", "value": "18 AND age \u003c="
+      "op": "EMIT_STATIC", "pos": "21:5", "value": "AND age \u003c="
     },
     {
       "op": "EMIT_EVAL", "pos": "21:16", "param": "max_age"
-    },
-    {
-      "op": "EMIT_STATIC", "pos": "21:30", "value": "65"
     }
   ],
   "name": "get_users_with_conditions",

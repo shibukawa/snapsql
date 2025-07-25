@@ -14,7 +14,7 @@ func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[s
 		Name:   "Result",
 		Fields: []Field{},
 	}
-	
+
 	// Determine response type based on statement type
 	switch stmt.Type() {
 	case parsercommon.SELECT_STATEMENT:
@@ -23,21 +23,21 @@ func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[s
 		if ok && selectStmt.Select != nil {
 			response = extractFieldsFromSelectClause(selectStmt.Select, tableInfo)
 		}
-		
+
 	case parsercommon.INSERT_INTO_STATEMENT:
 		// For INSERT statements, check if it has a RETURNING clause
 		insertStmt, ok := stmt.(*parsercommon.InsertIntoStatement)
 		if ok && insertStmt.Returning != nil {
 			response = extractFieldsFromReturningClause(insertStmt.Returning, tableInfo)
 		}
-		
+
 	case parsercommon.UPDATE_STATEMENT:
 		// For UPDATE statements, check if it has a RETURNING clause
 		updateStmt, ok := stmt.(*parsercommon.UpdateStatement)
 		if ok && updateStmt.Returning != nil {
 			response = extractFieldsFromReturningClause(updateStmt.Returning, tableInfo)
 		}
-		
+
 	case parsercommon.DELETE_FROM_STATEMENT:
 		// For DELETE statements, check if it has a RETURNING clause
 		deleteStmt, ok := stmt.(*parsercommon.DeleteFromStatement)
@@ -45,7 +45,7 @@ func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[s
 			response = extractFieldsFromReturningClause(deleteStmt.Returning, tableInfo)
 		}
 	}
-	
+
 	return response
 }
 
@@ -55,18 +55,18 @@ func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tabl
 		Name:   "Result",
 		Fields: []Field{},
 	}
-	
+
 	// If the SELECT clause is nil, return empty response type
 	if selectClause == nil {
 		return response
 	}
-	
+
 	// Extract fields from the SELECT clause
 	for _, item := range selectClause.Fields {
 		field := Field{
 			Name: item.FieldName,
 		}
-		
+
 		// If the field has an explicit name, use it
 		if item.ExplicitName {
 			field.Name = item.FieldName
@@ -74,21 +74,21 @@ func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tabl
 			// Otherwise, use the original field name
 			field.Name = item.OriginalField
 		}
-		
+
 		// Determine the field type
 		field.Type = inferTypeFromSelectField(item, tableInfo)
-		
+
 		// Set database tag if available
 		if item.TableName != "" {
 			field.DatabaseTag = item.TableName + "." + item.OriginalField
 		} else {
 			field.DatabaseTag = item.OriginalField
 		}
-		
+
 		// Add the field to the response type
 		response.Fields = append(response.Fields, field)
 	}
-	
+
 	return response
 }
 
@@ -98,18 +98,18 @@ func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningCla
 		Name:   "Result",
 		Fields: []Field{},
 	}
-	
+
 	// If the RETURNING clause is nil, return empty response type
 	if returningClause == nil {
 		return response
 	}
-	
+
 	// Extract fields from the RETURNING clause
 	for _, item := range returningClause.Fields {
 		field := Field{
 			Name: item.FieldName,
 		}
-		
+
 		// If the field has an explicit name, use it
 		if item.ExplicitName {
 			field.Name = item.FieldName
@@ -117,21 +117,21 @@ func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningCla
 			// Otherwise, use the original field name
 			field.Name = item.OriginalField
 		}
-		
+
 		// Determine the field type
 		field.Type = inferTypeFromSelectField(item, tableInfo)
-		
+
 		// Set database tag if available
 		if item.TableName != "" {
 			field.DatabaseTag = item.TableName + "." + item.OriginalField
 		} else {
 			field.DatabaseTag = item.OriginalField
 		}
-		
+
 		// Add the field to the response type
 		response.Fields = append(response.Fields, field)
 	}
-	
+
 	return response
 }
 
@@ -141,7 +141,7 @@ func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[stri
 	if field.ExplicitType {
 		return field.TypeName
 	}
-	
+
 	// Check if it's a table field and we have type information
 	if field.TableName != "" && field.OriginalField != "" {
 		if tableFields, ok := tableInfo[field.TableName]; ok {
@@ -150,29 +150,29 @@ func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[stri
 			}
 		}
 	}
-	
+
 	// Otherwise, infer the type based on the field kind
 	switch field.FieldKind {
 	case parsercommon.SingleField:
 		// For single fields without table info, default to "string"
 		return "string"
-		
+
 	case parsercommon.TableField:
 		// For table fields without type info, default to "string"
 		return "string"
-		
+
 	case parsercommon.FunctionField:
 		// For function fields, infer the type based on the function name
 		return inferTypeFromFunction(field.OriginalField)
-		
+
 	case parsercommon.LiteralField:
 		// For literal fields, infer the type from the literal value
 		return inferTypeFromLiteral(field.OriginalField)
-		
+
 	case parsercommon.ComplexField:
 		// For complex fields (e.g., JSON paths), default to "any"
 		return "any"
-		
+
 	default:
 		// For unknown field kinds, default to "any"
 		return "any"
@@ -183,7 +183,7 @@ func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[stri
 func inferTypeFromFunction(functionName string) string {
 	// Extract the function name from the expression
 	funcName := strings.ToLower(functionName)
-	
+
 	// Check for common aggregate functions
 	if strings.HasPrefix(funcName, "count(") {
 		return "int"
@@ -207,7 +207,7 @@ func inferTypeFromFunction(functionName string) string {
 		// For coalesce, we can't determine the type without knowing the column types
 		return "any"
 	}
-	
+
 	// Default to "any" for unknown functions
 	return "any"
 }
@@ -218,7 +218,7 @@ func inferTypeFromLiteral(literal string) string {
 	if strings.HasPrefix(literal, "'") && strings.HasSuffix(literal, "'") {
 		return "string"
 	}
-	
+
 	// Check if it's a number literal
 	if strings.ContainsAny(literal, "0123456789") {
 		if strings.Contains(literal, ".") {
@@ -226,17 +226,17 @@ func inferTypeFromLiteral(literal string) string {
 		}
 		return "int"
 	}
-	
+
 	// Check if it's a boolean literal
 	if literal == "true" || literal == "false" {
 		return "bool"
 	}
-	
+
 	// Check if it's a NULL literal
 	if strings.ToUpper(literal) == "NULL" {
 		return "null"
 	}
-	
+
 	// Default to "any" for unknown literals
 	return "any"
 }

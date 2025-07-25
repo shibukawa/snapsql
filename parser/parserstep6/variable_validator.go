@@ -9,6 +9,24 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+// isDummyLiteral checks if a token is a dummy literal that should be replaced
+func isDummyLiteral(token tokenizer.Token) bool {
+	// DUMMY_LITERALトークン（parserstep1で挿入されたもの）
+	if token.Type == tokenizer.DUMMY_LITERAL {
+		return true
+	}
+
+	// 実際のダミーリテラル（開発者が書いたもの）
+	// ディレクティブ直後にある通常のリテラルはダミーとして扱う
+	if token.Type == tokenizer.NUMBER ||
+		token.Type == tokenizer.STRING ||
+		token.Type == tokenizer.IDENTIFIER {
+		return true
+	}
+
+	return false
+}
+
 // validateVariables validates template variables and directives in a parsed statement
 func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) {
 	// Process all clauses in the statement
@@ -24,41 +42,36 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 		for i, token := range tokens {
 			if token.Directive != nil {
 				switch token.Directive.Type {
-				case "variable":
-					value, valueType, ok := validateVariableDirective(token, paramNs, perr)
-					if ok {
-						// Create literal tokens with DUMMY_START and DUMMY_END
-						literalTokens := createLiteralTokens(value, valueType, token.Position)
-						if len(literalTokens) == 0 {
-							perr.Add(fmt.Errorf("%w at %s: failed to create literal tokens for type '%s'", cmn.ErrInvalidForSnapSQL, token.Position.String(), valueType))
-							continue
-						}
-						insertions = append(insertions, tokenInsertion{
-							index:  i,
-							tokens: literalTokens,
-						})
+				case "variable", "const":
+					var value any
+					var valueType string
+					var ok bool
+
+					// 値の取得（ソースが異なるだけ）
+					if token.Directive.Type == "variable" {
+						value, valueType, ok = validateVariableDirective(token, paramNs, perr)
+					} else {
+						value, valueType, ok = validateConstDirective(token, constNs, perr)
 					}
-				case "const":
-					value, valueType, ok := validateConstDirective(token, constNs, perr)
+
 					if ok {
-						valueToken := createValueToken(value, valueType, token.Position)
-						if valueToken.Type == tokenizer.EOF {
-							perr.Add(fmt.Errorf("%w at %s: failed to create value token for type '%s'", cmn.ErrInvalidForSnapSQL, token.Position.String(), valueType))
-							continue
-						}
-						// Remove existing DUMMY_LITERAL token if it exists
-						if i+1 < len(tokens) && tokens[i+1].Type == tokenizer.DUMMY_LITERAL {
-							// Replace dummy literal
+						// 直後のトークンがダミーリテラル、リテラル、または識別子の場合
+						if i+1 < len(tokens) && isDummyLiteral(tokens[i+1]) {
+							// DUMMY_START/DUMMY_ENDでラップして、ダミーリテラルを実際の値に置換
+							literalTokens := createLiteralTokens(value, valueType, token.Position)
+
+							// 元のダミーリテラルを置換
 							replacements = append(replacements, tokenReplacement{
 								startIndex: i + 1,
-								endIndex:   i + 2, // Dummy literal is a single token
-								token:      valueToken,
+								endIndex:   i + 2,
+								tokens:     literalTokens, // DUMMY_START + 実際の値 + DUMMY_END
 							})
 						} else {
-							// Insert value after comment
+							// ダミーリテラルがない場合は、DUMMY_START/DUMMY_ENDでラップして挿入
+							literalTokens := createLiteralTokens(value, valueType, token.Position)
 							insertions = append(insertions, tokenInsertion{
 								index:  i,
-								tokens: []tokenizer.Token{valueToken},
+								tokens: literalTokens,
 							})
 						}
 					}
@@ -85,7 +98,7 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 		// Perform replacements (execute from the back to prevent index shifting)
 		for i := len(replacements) - 1; i >= 0; i-- {
 			replacement := replacements[i]
-			replaceTokens(clause, replacement.startIndex, replacement.endIndex, replacement.token)
+			replaceTokens(clause, replacement.startIndex, replacement.endIndex, replacement.tokens)
 		}
 
 		// Perform insertions (execute from the back to prevent index shifting)
@@ -217,18 +230,25 @@ type tokenInsertion struct {
 
 // tokenReplacement はトークンの置換情報を表します
 type tokenReplacement struct {
-	startIndex int             // 置換開始位置
-	endIndex   int             // 置換終了位置
-	token      tokenizer.Token // 置換するトークン
+	startIndex int               // 置換開始位置
+	endIndex   int               // 置換終了位置
+	tokens     []tokenizer.Token // 置換するトークン群（複数可）
 }
 
-// replaceTokens は指定された範囲のトークンを新しいトークンに置き換えます
-func replaceTokens(clause cmn.ClauseNode, startIndex, endIndex int, newToken tokenizer.Token) {
+// replaceTokens は指定された範囲のトークンを新しいトークン群に置き換えます
+func replaceTokens(clause cmn.ClauseNode, startIndex, endIndex int, newTokens []tokenizer.Token) {
 	// ClauseNodeのReplaceTokensメソッドを使用してトークンを置換
-	clause.ReplaceTokens(startIndex, endIndex, newToken)
+	// 複数トークンの場合は、最初のトークンで置換し、残りを挿入
+	if len(newTokens) > 0 {
+		clause.ReplaceTokens(startIndex, endIndex, newTokens[0])
+		// 残りのトークンを挿入
+		if len(newTokens) > 1 {
+			clause.InsertTokensAfterIndex(startIndex, newTokens[1:])
+		}
+	}
 }
 
-// createLiteralTokens は値と型に基づいてダミーリテラルトークンを作成します
+// createLiteralTokens は値と型に基づいてDUMMY_START/DUMMY_ENDでラップされたトークンを作成します
 func createLiteralTokens(value any, valueType string, pos tokenizer.Position) []tokenizer.Token {
 	// DUMMY_STARTトークン
 	startToken := tokenizer.Token{

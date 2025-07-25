@@ -1,17 +1,11 @@
 {
   "envs": [
-    [
-      {
-        "name": "dept",
-        "type": "any"
-      }
-    ],
-    [
-      {
-        "name": "sub",
-        "type": "any"
-      }
-    ]
+    [{
+        "name": "dept",   "type": "any"
+      }],
+    [{
+        "name": "sub",   "type": "any"
+      }]
   ],
   "expressions": [
     "departments",
@@ -27,86 +21,55 @@
   "function_name": "insert_all_sub_departments",
   "instructions": [
     {
-      "op": "EMIT_STATIC",
-      "pos": "14:1",
-      "value": "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"
+      "op": "EMIT_STATIC", "pos": "14:1", "value": "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"
     },
     {
-      "op": "LOOP_START",
-      "pos": "16:1",
-      "variable": "dept",
-      "collection": "departments"
+      "op": "LOOP_START", "pos": "16:1", "variable": "dept", "collection": "departments"
     },
     {
-      "op": "LOOP_START",
-      "pos": "17:5",
-      "variable": "sub",
-      "collection": "dept.sub_departments"
+      "op": "LOOP_START", "pos": "17:5", "variable": "sub", "collection": "dept.sub_departments"
     },
     {
-      "op": "EMIT_STATIC",
-      "pos": "18:5",
-      "value": "("
+      "op": "EMIT_STATIC", "pos": "18:5", "value": "("
     },
     {
-      "op": "EMIT_EVAL",
-      "pos": "18:6",
-      "param": "dept.department_code + \"-\" + sub.id"
+      "op": "EMIT_EVAL", "pos": "18:6", "param": "dept.department_code + \"-\" + sub.id"
     },
     {
-      "op": "EMIT_STATIC",
-      "pos": "18:48",
-      "value": "'1-101',"
+      "op": "EMIT_STATIC", "pos": "18:55", "value": ","
     },
     {
-      "op": "EMIT_EVAL",
-      "pos": "18:57",
-      "param": "sub.name"
+      "op": "EMIT_EVAL", "pos": "18:57", "param": "sub.name"
     },
     {
-      "op": "EMIT_STATIC",
-      "pos": "18:72",
-      "value": "'Engineering Team A',"
+      "op": "EMIT_STATIC", "pos": "18:92", "value": ","
     },
     {
-      "op": "EMIT_EVAL",
-      "pos": "18:94",
-      "param": "dept.department_code"
+      "op": "EMIT_EVAL", "pos": "18:94", "param": "dept.department_code"
     },
     {
-      "op": "EMIT_STATIC",
-      "pos": "18:121",
-      "value": "'1',"
+      "op": "EMIT_STATIC", "pos": "18:124", "value": ","
     },
     {
-      "op": "EMIT_EVAL",
-      "pos": "18:126",
-      "param": "dept.department_name"
+      "op": "EMIT_EVAL", "pos": "18:126", "param": "dept.department_name"
     },
     {
-      "op": "EMIT_STATIC",
-      "pos": "18:153",
-      "value": "'Engineering')"
+      "op": "EMIT_STATIC", "pos": "18:166", "value": ")"
     },
     {
-      "op": "LOOP_END",
-      "pos": "19:5"
+      "op": "LOOP_END", "pos": "19:5"
     },
     {
-      "op": "LOOP_END",
-      "pos": "20:1"
+      "op": "LOOP_END", "pos": "20:1"
     },
     {
-      "op": "EMIT_STATIC",
-      "pos": "20:11",
-      "value": ";"
+      "op": "EMIT_STATIC", "pos": "20:11", "value": ";"
     }
   ],
   "name": "insert_all_sub_departments",
   "parameters": [
     {
-      "name": "departments",
-      "type": "any"
+      "name": "departments", "type": "any"
     }
   ]
 }

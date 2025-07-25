@@ -39,7 +39,7 @@ func extractCELFromTokens(tokens []tokenizer.Token) ([]string, [][]EnvVar) {
 
 					// Extract collection expression
 					addExpression(collection)
-					
+
 					// Also add the loop variable as an expression
 					addExpression(variable)
 
@@ -78,7 +78,7 @@ func extractCELFromTokens(tokens []tokenizer.Token) ([]string, [][]EnvVar) {
 				if token.Value != "" && strings.HasPrefix(token.Value, "/*=") && strings.HasSuffix(token.Value, "*/") {
 					// Extract variable expression between /*= and */
 					varExpr := strings.TrimSpace(token.Value[3 : len(token.Value)-2])
-					
+
 					// Add the full expression, not just simple variables
 					addExpression(varExpr)
 				}
@@ -92,26 +92,26 @@ func extractCELFromTokens(tokens []tokenizer.Token) ([]string, [][]EnvVar) {
 // extractDirectives extracts directives from tokens
 func extractDirectives(tokens []tokenizer.Token) []map[string]interface{} {
 	directives := []map[string]interface{}{}
-	
+
 	for _, token := range tokens {
 		if token.Directive != nil {
 			directive := map[string]interface{}{
-				"type":      token.Directive.Type,
-				"position":  map[string]interface{}{
+				"type": token.Directive.Type,
+				"position": map[string]interface{}{
 					"line":   token.Position.Line,
 					"column": token.Position.Column,
 					"offset": token.Position.Offset,
 				},
 			}
-			
+
 			if token.Directive.Condition != "" {
 				directive["condition"] = token.Directive.Condition
 			}
-			
+
 			directives = append(directives, directive)
 		}
 	}
-	
+
 	return directives
 }
 

@@ -49,7 +49,7 @@ func ExtractFromStatement(stmt parsercommon.StatementNode) (expressions []string
 
 						// Extract collection expression
 						addExpression(collection)
-						
+
 						// Also add the loop variable as an expression
 						addExpression(variable)
 
@@ -88,7 +88,7 @@ func ExtractFromStatement(stmt parsercommon.StatementNode) (expressions []string
 					if token.Value != "" && strings.HasPrefix(token.Value, "/*=") && strings.HasSuffix(token.Value, "*/") {
 						// Extract variable expression between /*= and */
 						varExpr := strings.TrimSpace(token.Value[3 : len(token.Value)-2])
-						
+
 						// Add the full expression, not just simple variables
 						addExpression(varExpr)
 					}
