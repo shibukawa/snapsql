@@ -1,0 +1,17 @@
+tables:
+  users:
+    columns:
+      id:
+        type: int
+        primary_key: true
+        auto_increment: true
+      name:
+        type: string
+        max_length: 255
+      email:
+        type: string
+        max_length: 255
+      created_at:
+        type: timestamp
+      updated_at:
+        type: timestamp
