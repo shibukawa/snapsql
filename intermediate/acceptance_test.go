@@ -9,36 +9,33 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/goccy/go-yaml"
+	. "github.com/shibukawa/snapsql"
 )
 
-// TableInfo represents table schema information
-type TableInfo struct {
-	Tables map[string]TableSchema `yaml:"tables"`
+// YAMLTableInfo represents the YAML structure for table information
+type YAMLTableInfo struct {
+	Tables map[string]YAMLTableSchema `yaml:"tables"`
 }
 
-// TableSchema represents a table's schema
-type TableSchema struct {
-	Columns map[string]ColumnInfo `yaml:"columns"`
+type YAMLTableSchema struct {
+	Columns map[string]YAMLColumnInfo `yaml:"columns"`
 }
 
-// ColumnInfo represents column information
-type ColumnInfo struct {
+type YAMLColumnInfo struct {
 	Type       string `yaml:"type"`
-	PrimaryKey bool   `yaml:"primary_key,omitempty"`
-	Nullable   bool   `yaml:"nullable,omitempty"`
-	MaxLength  int    `yaml:"max_length,omitempty"`
-	Unique     bool   `yaml:"unique,omitempty"`
-	Default    string `yaml:"default,omitempty"`
+	Nullable   bool   `yaml:"nullable"`
+	PrimaryKey bool   `yaml:"primary_key"`
+	MaxLength  *int   `yaml:"max_length"`
 }
 
 // loadTableInfo loads table information from YAML file
-func loadTableInfo(testDir string) (map[string]map[string]string, error) {
+func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
 	tablesPath := filepath.Join(testDir, "tables.yaml")
 
 	// Check if tables.yaml exists
 	if _, err := os.Stat(tablesPath); os.IsNotExist(err) {
 		// Return empty table info if file doesn't exist
-		return make(map[string]map[string]string), nil
+		return make(map[string]*TableInfo), nil
 	}
 
 	// Read YAML file
@@ -48,18 +45,30 @@ func loadTableInfo(testDir string) (map[string]map[string]string, error) {
 	}
 
 	// Parse YAML
-	var tableInfo TableInfo
-	if err := yaml.Unmarshal(yamlContent, &tableInfo); err != nil {
+	var yamlTableInfo YAMLTableInfo
+	if err := yaml.Unmarshal(yamlContent, &yamlTableInfo); err != nil {
 		return nil, err
 	}
 
 	// Convert to the format expected by DetermineResponseType
-	result := make(map[string]map[string]string)
-	for tableName, tableSchema := range tableInfo.Tables {
-		result[tableName] = make(map[string]string)
-		for columnName, columnInfo := range tableSchema.Columns {
-			result[tableName][columnName] = columnInfo.Type
+	result := make(map[string]*TableInfo)
+	for tableName, tableSchema := range yamlTableInfo.Tables {
+		tableInfo := &TableInfo{
+			Name:    tableName,
+			Columns: make(map[string]*ColumnInfo),
 		}
+
+		for columnName, columnInfo := range tableSchema.Columns {
+			tableInfo.Columns[columnName] = &ColumnInfo{
+				Name:         columnName,
+				DataType:     columnInfo.Type,
+				Nullable:     columnInfo.Nullable,
+				IsPrimaryKey: columnInfo.PrimaryKey,
+				MaxLength:    columnInfo.MaxLength,
+			}
+		}
+
+		result[tableName] = tableInfo
 	}
 
 	return result, nil

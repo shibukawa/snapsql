@@ -138,19 +138,6 @@ func TestInferTypeFromLiteral(t *testing.T) {
 
 // TestExtractFieldsFromSelectClause tests the extractFieldsFromSelectClause function directly
 func TestExtractFieldsFromSelectClause(t *testing.T) {
-	// Mock table information for type inference
-	tableInfo := map[string]map[string]string{
-		"users": {
-			"id":         "int",
-			"name":       "string",
-			"email":      "string",
-			"created_at": "datetime",
-			"active":     "bool",
-			"data":       "json",
-			"score":      "number",
-		},
-	}
-
 	// Create a mock SELECT clause
 	selectClause := &parsercommon.SelectClause{
 		Fields: []parsercommon.SelectField{
@@ -177,7 +164,7 @@ func TestExtractFieldsFromSelectClause(t *testing.T) {
 	}
 
 	// Extract fields from the SELECT clause
-	response := extractFieldsFromSelectClause(selectClause, tableInfo)
+	response := extractFieldsFromSelectClause(selectClause, nil)
 
 	// Verify fields
 	assert.Equal(t, 3, len(response), "Number of fields should match")
@@ -196,16 +183,6 @@ func TestExtractFieldsFromSelectClause(t *testing.T) {
 
 // TestExtractFieldsFromReturningClause tests the extractFieldsFromReturningClause function directly
 func TestExtractFieldsFromReturningClause(t *testing.T) {
-	// Mock table information for type inference
-	tableInfo := map[string]map[string]string{
-		"users": {
-			"id":         "int",
-			"name":       "string",
-			"email":      "string",
-			"created_at": "datetime",
-		},
-	}
-
 	// Create a mock RETURNING clause
 	returningClause := &parsercommon.ReturningClause{
 		Fields: []parsercommon.SelectField{
@@ -227,7 +204,7 @@ func TestExtractFieldsFromReturningClause(t *testing.T) {
 	}
 
 	// Extract fields from the RETURNING clause
-	response := extractFieldsFromReturningClause(returningClause, tableInfo)
+	response := extractFieldsFromReturningClause(returningClause, nil)
 
 	// Verify fields
 	assert.Equal(t, 2, len(response), "Number of fields should match")

@@ -186,15 +186,15 @@ func (f *IntermediateFormat) ToJSON() ([]byte, error) {
 // compactArrays makes arrays more compact in the JSON output
 func compactArrays(data []byte) []byte {
 	str := string(data)
-	
+
 	// Make simple objects in arrays more compact
 	// Replace multi-line objects with single-line versions
 	lines := strings.Split(str, "\n")
 	var result []string
-	
+
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
-		
+
 		// Check if this line starts an object in an array
 		if strings.Contains(line, "{") && !strings.Contains(line, "}") {
 			// Look for the closing brace
@@ -207,7 +207,7 @@ func compactArrays(data []byte) []byte {
 			if j < len(lines) {
 				objectLines = append(objectLines, lines[j])
 			}
-			
+
 			// Check if this is a simple object (no nested objects/arrays)
 			isSimple := true
 			for _, objLine := range objectLines[1 : len(objectLines)-1] {
@@ -216,7 +216,7 @@ func compactArrays(data []byte) []byte {
 					break
 				}
 			}
-			
+
 			if isSimple && len(objectLines) <= 6 { // Only compact small objects
 				// Combine into single line
 				var parts []string
@@ -229,7 +229,7 @@ func compactArrays(data []byte) []byte {
 				compactLine := strings.Join(parts, " ")
 				compactLine = strings.ReplaceAll(compactLine, "{ ", "{")
 				compactLine = strings.ReplaceAll(compactLine, " }", "}")
-				
+
 				// Get the indentation from the original first line
 				indent := ""
 				for _, char := range line {
@@ -239,7 +239,7 @@ func compactArrays(data []byte) []byte {
 						break
 					}
 				}
-				
+
 				result = append(result, indent+compactLine)
 				i = j // Skip the processed lines
 			} else {
@@ -250,7 +250,7 @@ func compactArrays(data []byte) []byte {
 			result = append(result, line)
 		}
 	}
-	
+
 	return []byte(strings.Join(result, "\n"))
 }
 

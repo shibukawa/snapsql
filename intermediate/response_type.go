@@ -3,12 +3,13 @@ package intermediate
 import (
 	"strings"
 
+	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // DetermineResponseType analyzes the statement and determines the response type
-func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[string]string) []Response {
+func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]*TableInfo) []Response {
 	// Default empty response
 	var fields []Response
 
@@ -47,7 +48,7 @@ func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]map[s
 }
 
 // extractFieldsFromSelectClause extracts fields from a SELECT clause
-func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tableInfo map[string]map[string]string) []Response {
+func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tableInfo map[string]*TableInfo) []Response {
 	var fields []Response
 
 	// If the SELECT clause is nil, return empty fields
@@ -91,7 +92,7 @@ func extractFieldsFromSelectClause(selectClause *parsercommon.SelectClause, tabl
 }
 
 // extractFieldsFromReturningClause extracts fields from a RETURNING clause
-func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningClause, tableInfo map[string]map[string]string) []Response {
+func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningClause, tableInfo map[string]*TableInfo) []Response {
 	var fields []Response
 
 	// If the RETURNING clause is nil, return empty fields
@@ -131,7 +132,7 @@ func extractFieldsFromReturningClause(returningClause *parsercommon.ReturningCla
 }
 
 // inferTypeFromSelectField infers the type of a SELECT field
-func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[string]map[string]string) string {
+func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[string]*TableInfo) string {
 	// If the field has an explicit type, use it
 	if field.ExplicitType {
 		return field.TypeName
@@ -139,9 +140,9 @@ func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[stri
 
 	// Check if it's a table field and we have type information
 	if field.TableName != "" && field.OriginalField != "" {
-		if tableFields, ok := tableInfo[field.TableName]; ok {
-			if fieldType, ok := tableFields[field.OriginalField]; ok {
-				return fieldType
+		if table, ok := tableInfo[field.TableName]; ok {
+			if column, ok := table.Columns[field.OriginalField]; ok {
+				return column.DataType
 			}
 		}
 	}
@@ -149,10 +150,10 @@ func inferTypeFromSelectField(field parsercommon.SelectField, tableInfo map[stri
 	// If no table name is specified, try to find the field in any table
 	// This handles cases like "SELECT id, name FROM users" where table name is not prefixed
 	if field.TableName == "" && field.OriginalField != "" {
-		for _, tableFields := range tableInfo {
-			if fieldType, ok := tableFields[field.OriginalField]; ok {
+		for _, table := range tableInfo {
+			if column, ok := table.Columns[field.OriginalField]; ok {
 				// Found the field in this table, use its type
-				return fieldType
+				return column.DataType
 			}
 		}
 	}

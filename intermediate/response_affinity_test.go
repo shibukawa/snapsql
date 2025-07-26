@@ -77,7 +77,7 @@ func TestDetermineResponseAffinity(t *testing.T) {
 			}
 
 			// Determine response affinity
-			affinity := DetermineResponseAffinity(stmt)
+			affinity := DetermineResponseAffinity(stmt, nil)
 
 			// Verify affinity
 			assert.Equal(t, tt.expectedAffinity, affinity, "Response affinity should match")

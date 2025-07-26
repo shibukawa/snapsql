@@ -20,7 +20,7 @@
   "parameters": [
     {"name": "user_id", "type": "int"}
   ],
-  "response_affinity": "many",
+  "response_affinity": "one",
   "responses": [
     {"name": "id", "type": "int", "database_tag": "id"},
     {"name": "name", "type": "string", "database_tag": "name"},
