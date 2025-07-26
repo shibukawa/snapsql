@@ -41,6 +41,7 @@
   "name": "get_user_by_id",
   "function_name": "get_user_by_id",
   "parameters": [/* パラメータ定義 */],
+  "implicit_parameters": [/* 暗黙的パラメータ定義 */],
   "instructions": [/* 命令列 */],
   "expressions": [/* CEL式リスト */],
   "envs": [/* 環境変数の階層構造 */]
@@ -433,7 +434,7 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["EMIT_STATIC", "EMIT_EVAL", "IF", "ELSE_IF", "ELSE", "END", "LOOP_START", "LOOP_END", "EMIT_SYSTEM_LIMIT", "EMIT_SYSTEM_OFFSET"]
+            "enum": ["EMIT_STATIC", "EMIT_EVAL", "IF", "ELSE_IF", "ELSE", "END", "LOOP_START", "LOOP_END", "EMIT_SYSTEM_LIMIT", "EMIT_SYSTEM_OFFSET", "EMIT_SYSTEM_VALUE"]
           },
           "value": {"type": "string"},
           "param": {"type": "string"},
@@ -449,6 +450,18 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
     "expressions": {
       "type": "array",
       "items": {"type": "string"}
+    },
+    "implicit_parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "type": {"type": "string"},
+          "default": {"type": ["string", "number", "boolean", "null"]}
+        },
+        "required": ["name", "type"]
+      }
     },
     "envs": {
       "type": "array",
@@ -489,3 +502,142 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
 4. **テーブルスキーマ統合**: データベーススキーマ情報との統合
 
 これらの拡張により、より強力なコード生成と実行時の最適化が可能になります。
+
+## システムフィールド機能
+
+### 概要
+
+システムフィールド機能は、データベースの監査ログやバージョン管理に必要な共通フィールド（`created_at`, `updated_at`, `created_by`, `updated_by`, `lock_no`など）を自動的に管理する機能です。
+
+### 設定
+
+システムフィールドは設定ファイル（`snapsql.yaml`）で定義されます：
+
+```yaml
+system:
+  fields:
+    - name: created_at
+      type: timestamp
+      on_insert:
+        default: "NOW()"
+      on_update:
+        parameter: error
+    - name: updated_at
+      type: timestamp
+      on_insert:
+        default: "NOW()"
+      on_update:
+        default: "NOW()"
+    - name: created_by
+      type: string
+      on_insert:
+        parameter: implicit
+      on_update:
+        parameter: error
+    - name: updated_by
+      type: string
+      on_insert:
+        parameter: implicit
+      on_update:
+        parameter: implicit
+    - name: lock_no
+      type: int
+      on_insert:
+        default: 1
+      on_update:
+        parameter: explicit
+```
+
+### パラメータ設定
+
+各システムフィールドには、INSERT文とUPDATE文での動作を個別に設定できます：
+
+- **`explicit`**: 明示的にパラメータを提供する必要がある
+- **`implicit`**: ランタイムが自動的に値を提供する（例：ユーザーID、セッション情報）
+- **`error`**: パラメータが提供された場合はエラーとする
+- **`default`**: デフォルト値を使用する
+
+### 中間形式への影響
+
+#### 暗黙的パラメータ
+
+システムフィールドの設定に基づいて、中間形式に暗黙的パラメータが追加されます：
+
+```json
+{
+  "format_version": "1",
+  "name": "update_user",
+  "function_name": "update_user",
+  "parameters": [
+    {"name": "name", "type": "string"},
+    {"name": "email", "type": "string"},
+    {"name": "lock_no", "type": "int"}
+  ],
+  "implicit_parameters": [
+    {"name": "updated_at", "type": "timestamp", "default": "NOW()"},
+    {"name": "updated_by", "type": "string"}
+  ],
+  "instructions": [
+    {"op": "EMIT_STATIC", "value": "UPDATE users SET name = ", "pos": "1:1"},
+    {"op": "EMIT_EVAL", "param": "name", "pos": "1:25"},
+    {"op": "EMIT_STATIC", "value": ", email = ", "pos": "1:30"},
+    {"op": "EMIT_EVAL", "param": "email", "pos": "1:40"},
+    {"op": "EMIT_STATIC", "value": ", EMIT_SYSTEM_VALUE(updated_at), EMIT_SYSTEM_VALUE(updated_by) WHERE id = ", "pos": "1:46"},
+    {"op": "EMIT_EVAL", "param": "user_id", "pos": "1:100"}
+  ]
+}
+```
+
+#### UPDATE文の自動修正
+
+UPDATE文の場合、暗黙的パラメータに対応するシステムフィールドが自動的にSET句に追加されます：
+
+**元のSQL:**
+```sql
+UPDATE users SET name = 'John', email = 'john@example.com' WHERE id = 1
+```
+
+**システムフィールド追加後:**
+```sql
+UPDATE users SET 
+  name = 'John', 
+  email = 'john@example.com',
+  EMIT_SYSTEM_VALUE(updated_at),
+  EMIT_SYSTEM_VALUE(updated_by)
+WHERE id = 1
+```
+
+### バリデーション
+
+システムフィールドの設定に基づいて、以下のバリデーションが実行されます：
+
+1. **明示的パラメータの存在確認**: `explicit`設定のフィールドに対応するパラメータが提供されているかチェック
+2. **エラーパラメータの検出**: `error`設定のフィールドに対応するパラメータが提供されていないかチェック
+3. **型整合性の確認**: パラメータの型がシステムフィールドの定義と一致するかチェック
+
+### 実行時の動作
+
+#### 暗黙的パラメータの解決
+
+ランタイムライブラリは、暗黙的パラメータを以下のソースから自動的に解決します：
+
+- **ユーザーコンテキスト**: 認証されたユーザーID（`created_by`, `updated_by`）
+- **システム時刻**: 現在時刻（`created_at`, `updated_at`のデフォルト値）
+- **セッション情報**: リクエストメタデータ
+- **設定値**: 設定ファイルで定義されたデフォルト値
+
+#### 楽観的ロック
+
+`lock_no`フィールドを使用した楽観的ロックをサポート：
+
+1. **SELECT時**: 現在の`lock_no`を取得
+2. **UPDATE時**: `lock_no`を明示的パラメータとして提供
+3. **実行時**: `lock_no`が一致しない場合は楽観的ロック例外を発生
+
+### 利点
+
+1. **一貫性**: すべてのテーブルで統一されたシステムフィールドの管理
+2. **自動化**: 手動でのシステムフィールド設定が不要
+3. **セキュリティ**: 改ざん防止（`created_at`, `created_by`の更新禁止）
+4. **監査**: 完全な変更履歴の自動記録
+5. **並行制御**: 楽観的ロックによるデータ整合性の保証

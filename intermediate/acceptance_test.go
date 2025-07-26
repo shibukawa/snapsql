@@ -28,7 +28,30 @@ type YAMLColumnInfo struct {
 	MaxLength  *int   `yaml:"max_length"`
 }
 
-// loadTableInfo loads table information from YAML file
+// loadConfig loads configuration from snapsql.yaml file
+func loadConfig(testDir string) (*Config, error) {
+	configPath := filepath.Join(testDir, "snapsql.yaml")
+
+	// Check if snapsql.yaml exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		// Return nil if file doesn't exist
+		return nil, nil
+	}
+
+	// Read YAML file
+	yamlContent, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse YAML
+	var config Config
+	if err := yaml.Unmarshal(yamlContent, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
 func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
 	tablesPath := filepath.Join(testDir, "tables.yaml")
 
@@ -107,9 +130,15 @@ func TestAcceptance(t *testing.T) {
 				t.Fatalf("Failed to load table info: %v", err)
 			}
 
+			// Load configuration
+			config, err := loadConfig(testDir)
+			if err != nil {
+				t.Fatalf("Failed to load config: %v", err)
+			}
+
 			// Generate intermediate format using the new function
 			reader := strings.NewReader(string(sqlContent))
-			format, err := GenerateFromSQL(reader, nil, sqlPath, "", tableInfo)
+			format, err := GenerateFromSQL(reader, nil, sqlPath, "", tableInfo, config)
 
 			// Check if this is an error test
 			isErrorTest := strings.HasSuffix(testName, "_err")

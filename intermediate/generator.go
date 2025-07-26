@@ -15,7 +15,7 @@ import (
 )
 
 // GenerateFromSQL generates the intermediate format for a SQL template
-func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]*TableInfo) (*IntermediateFormat, error) {
+func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
 	// Parse the SQL
 	stmt, funcDef, err := parser.ParseSQLFile(reader, constants, basePath, projectRootPath)
 	if err != nil {
@@ -23,11 +23,11 @@ func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string
 	}
 
 	// Generate intermediate format
-	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo)
+	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo, config)
 }
 
 // GenerateFromMarkdown generates the intermediate format for a Markdown file containing SQL
-func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, tableInfo map[string]*TableInfo) (*IntermediateFormat, error) {
+func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
 	// Parse the Markdown
 	stmt, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants)
 	if err != nil {
@@ -35,11 +35,11 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 	}
 
 	// Generate intermediate format
-	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo)
+	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo, config)
 }
 
 // generateIntermediateFormat is the common implementation for both SQL and Markdown
-func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]*TableInfo) (*IntermediateFormat, error) {
+func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
 	// Create the intermediate format
 	result := &IntermediateFormat{
 		FormatVersion: "1",
@@ -106,6 +106,26 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 	result.Envs = envs
 	result.Instructions = instructions
 
+	// Add system fields information from config
+	if config != nil {
+		result.SystemFields = extractSystemFieldsInfo(config, stmt)
+		
+		// Perform system field validation and get implicit parameters
+		implicitParams, err := CheckSystemFields(stmt, config, parameters)
+		if err != nil {
+			return nil, err
+		}
+		result.ImplicitParameters = implicitParams
+		
+		// For UPDATE statements, add system fields to SET clause
+		if len(implicitParams) > 0 {
+			err = AddSystemFieldsToUpdate(stmt, implicitParams)
+			if err != nil {
+				return nil, fmt.Errorf("failed to add system fields to UPDATE statement: %w", err)
+			}
+		}
+	}
+
 	return result, nil
 }
 
@@ -146,6 +166,39 @@ func extractTokensFromStatement(stmt parsercommon.StatementNode) []tokenizer.Tok
 	}
 
 	return tokens
+}
+
+// extractSystemFieldsInfo extracts system fields information from config
+func extractSystemFieldsInfo(config *Config, stmt parsercommon.StatementNode) []SystemFieldInfo {
+	var systemFields []SystemFieldInfo
+
+	// Get all system fields from config
+	for _, field := range config.System.Fields {
+		systemFieldInfo := SystemFieldInfo{
+			Name:              field.Name,
+			ExcludeFromSelect: field.ExcludeFromSelect,
+		}
+
+		// Convert OnInsert configuration
+		if field.OnInsert.Default != nil || field.OnInsert.Parameter != "" {
+			systemFieldInfo.OnInsert = &SystemFieldOperationInfo{
+				Default:   field.OnInsert.Default,
+				Parameter: string(field.OnInsert.Parameter),
+			}
+		}
+
+		// Convert OnUpdate configuration
+		if field.OnUpdate.Default != nil || field.OnUpdate.Parameter != "" {
+			systemFieldInfo.OnUpdate = &SystemFieldOperationInfo{
+				Default:   field.OnUpdate.Default,
+				Parameter: string(field.OnUpdate.Parameter),
+			}
+		}
+
+		systemFields = append(systemFields, systemFieldInfo)
+	}
+
+	return systemFields
 }
 
 // addClauseIfConditions adds IF instructions for clause-level conditions

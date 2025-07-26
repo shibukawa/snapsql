@@ -67,6 +67,39 @@ type Response struct {
 	Scale       *int   `json:"scale,omitempty"`
 }
 
+// ImplicitParameter represents a parameter that should be obtained from context/TLS
+type ImplicitParameter struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Default any    `json:"default,omitempty"`
+}
+
+// SystemFieldInfo represents system field configuration in intermediate format
+type SystemFieldInfo struct {
+	// Field name
+	Name string `json:"name"`
+	
+	// Whether to exclude this field from SELECT statements by default
+	ExcludeFromSelect bool `json:"exclude_from_select,omitempty"`
+	
+	// Configuration for INSERT operations
+	OnInsert *SystemFieldOperationInfo `json:"on_insert,omitempty"`
+	
+	// Configuration for UPDATE operations
+	OnUpdate *SystemFieldOperationInfo `json:"on_update,omitempty"`
+}
+
+// SystemFieldOperationInfo represents the configuration for a system field in a specific operation
+type SystemFieldOperationInfo struct {
+	// Default value (if specified, this field gets this default value)
+	// Can be any type: string, int, bool, nil for SQL NULL, etc.
+	Default any `json:"default,omitempty"`
+	
+	// Parameter configuration (how this field should be handled as a parameter)
+	// Values: "explicit", "implicit", "error", ""
+	Parameter string `json:"parameter,omitempty"`
+}
+
 // IntermediateFormat represents the enhanced intermediate file format
 type IntermediateFormat struct {
 	// Format version
@@ -98,6 +131,12 @@ type IntermediateFormat struct {
 
 	// Cache keys for frequently evaluated expressions
 	CacheKeys []string `json:"cache_keys,omitempty"`
+
+	// System fields configuration
+	SystemFields []SystemFieldInfo `json:"system_fields,omitempty"`
+
+	// Implicit parameters that should be obtained from context/TLS
+	ImplicitParameters []ImplicitParameter `json:"implicit_parameters,omitempty"`
 }
 
 // MarshalJSON implements custom JSON marshaling for IntermediateFormat
