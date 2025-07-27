@@ -109,14 +109,14 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 	// Add system fields information from config
 	if config != nil {
 		result.SystemFields = extractSystemFieldsInfo(config, stmt)
-		
+
 		// Perform system field validation and get implicit parameters
 		implicitParams, err := CheckSystemFields(stmt, config, parameters)
 		if err != nil {
 			return nil, err
 		}
 		result.ImplicitParameters = implicitParams
-		
+
 		// For UPDATE statements, add system fields to SET clause
 		if len(implicitParams) > 0 {
 			err = AddSystemFieldsToUpdate(stmt, implicitParams)

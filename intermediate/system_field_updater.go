@@ -83,7 +83,7 @@ func GetSystemFieldsSQL(implicitParams []ImplicitParameter) string {
 // This can be used to append to existing SET clause assignments
 func GetSystemFieldAssignments(implicitParams []ImplicitParameter) []parsercommon.SetAssign {
 	var assignments []parsercommon.SetAssign
-	
+
 	for _, param := range implicitParams {
 		// Create tokens for EMIT_SYSTEM_VALUE(column_name)
 		valueTokens := []tokenizer.Token{
@@ -97,9 +97,9 @@ func GetSystemFieldAssignments(implicitParams []ImplicitParameter) []parsercommo
 			FieldName: param.Name,
 			Value:     valueTokens,
 		}
-		
+
 		assignments = append(assignments, assignment)
 	}
-	
+
 	return assignments
 }

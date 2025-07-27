@@ -117,6 +117,9 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 	// Detect LIMIT and OFFSET clause patterns
 	limitOffsetInfo := detectLimitOffsetClause(tokens)
 
+	// Detect conditional boundaries
+	boundaries := findConditionalBoundaries(tokens)
+
 	// Buffer for static content
 	var staticBuffer strings.Builder
 
@@ -195,6 +198,20 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			token.Type != tokenizer.LINE_COMMENT &&
 			token.Type != tokenizer.BLOCK_COMMENT {
 			currentInstructionPos = getPos(token)
+		}
+
+		// Check for boundary instructions
+		if boundaryType, exists := boundaries[i]; exists {
+			if boundaryType == "BOUNDARY" {
+				// Flush any pending content before placing boundary
+				flushStaticBuffer()
+
+				// Add BOUNDARY instruction
+				instructions = append(instructions, Instruction{
+					Op:  OpBoundary,
+					Pos: getPos(token),
+				})
+			}
 		}
 
 		// Check for LIMIT clause processing
@@ -563,13 +580,27 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			continue
 
 		default:
-			// Add a space if needed
-			if needSpace {
-				staticBuffer.WriteString(" ")
-				needSpace = false
+			// Check if this token should use EMIT_UNLESS_BOUNDARY
+			if boundaryType, exists := boundaries[i]; exists && boundaryType == "EMIT_UNLESS_BOUNDARY" {
+				// Flush any pending content before EMIT_UNLESS_BOUNDARY
+				flushStaticBuffer()
+
+				// Add EMIT_UNLESS_BOUNDARY instruction
+				instructions = append(instructions, Instruction{
+					Op:    OpEmitUnlessBoundary,
+					Value: token.Value,
+					Pos:   getPos(token),
+				})
+			} else {
+				// Normal static content processing
+				// Add a space if needed
+				if needSpace {
+					staticBuffer.WriteString(" ")
+					needSpace = false
+				}
+				// Append token value to buffer
+				staticBuffer.WriteString(token.Value)
 			}
-			// Append token value to buffer
-			staticBuffer.WriteString(token.Value)
 		}
 
 		// If this is the last token, flush the buffer

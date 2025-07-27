@@ -145,22 +145,65 @@ SELECT id, name, /*# if include_email */email,/*# end */ /*# for field : additio
 
 ### Template Writing Guidelines
 
-1. **Place commas after elements**: Write `field,` not `,field` for easier template authoring
+1. **Use trailing delimiters**: Write `field,` not `,field` for better readability and JSON-like syntax
 2. **Include dummy literals**: Ensure SQL remains valid when comments are removed
 3. **Use consistent endings**: Always use `/*# end */` for all control structures
 4. **Leverage automatic adjustments**: Don't worry about trailing commas or empty clauses
 5. **Omit obvious conditions**: Skip `/*# if */` blocks for automatic clause removal (WHERE, ORDER BY, LIMIT, OFFSET)
+
+### Template Formatting Guidelines
+
+1. **Trailing Delimiters**: Use trailing commas, AND, OR for better readability (JSON-like syntax)
+2. **Indentation in Control Blocks**: Content inside `/*# if */` and `/*# for */` blocks should be indented one level
+3. **Line Breaks for Readability**: Start `/*# for */` blocks on new lines for better visibility
+4. **Consistent Structure**: Maintain consistent indentation to improve template readability
+
+```sql
+-- Good formatting with trailing delimiters (JSON-like, familiar to modern developers)
+SELECT 
+    id,
+    name,
+    /*# if include_email */
+    email,
+    /*# end */
+    /*# for field : additional_fields */
+    /*= field */,
+    /*# end */
+    created_at
+FROM users
+WHERE active = true
+    /*# if filters.departments */
+    AND department IN (/*= filters.departments */'sales', 'marketing')
+    /*# end */
+ORDER BY 
+    /*# for sort : sort_fields */
+    /*= sort.field */ /*= sort.direction */,
+    /*# end */
+    name ASC;
+
+-- Avoid: Leading delimiters (SQL traditional but less familiar to JSON/programming users)
+SELECT 
+    id
+    , name
+    /*# if include_email */
+    , email
+    /*# end */
+FROM users;
+```
 
 ### Automatic Clause Removal Examples
 
 ```sql
 -- You can write simply:
 WHERE active = /*= filters.active */true
+    /*# if filters.departments */
     AND department IN (/*= filters.departments */'sales', 'marketing')
+    /*# end */
 ORDER BY 
     /*# for sort : sort_fields */
-        /*= sort.field */ /*= sort.direction */
-    /*# end */name ASC
+    /*= sort.field */ /*= sort.direction */,
+    /*# end */
+    name ASC
 LIMIT /*= pagination.limit */10
 OFFSET /*= pagination.offset */5
 
@@ -172,7 +215,10 @@ WHERE active = /*= filters.active */
     /*# end */
 /*# end */
 /*# if sort_fields */
-ORDER BY /*# for sort : sort_fields *//*= sort.field */ /*= sort.direction *//*# end */
+ORDER BY 
+    /*# for sort : sort_fields */
+    /*= sort.field */ /*= sort.direction */,
+    /*# end */
 /*# end */
 /*# if pagination.limit > 0 */
 LIMIT /*= pagination.limit */
@@ -186,22 +232,26 @@ SELECT
     id,
     name,
     /*# if include_email */
-        email,
+    email,
     /*# end */
     /*# if include_profile */
-        profile_image,
-        bio
+    profile_image,
+    bio,
     /*# end */
     /*# for field : additional_fields */
-        /*= field */
+    /*= field */,
     /*# end */
+    created_at
 FROM users_/*= table_suffix */test
 WHERE active = /*= filters.active */true
+    /*# if filters.departments */
     AND department IN (/*= filters.departments */'sales', 'marketing')
+    /*# end */
 ORDER BY 
     /*# for sort : sort_fields */
-        /*= sort.field */ /*= sort.direction */
-    /*# end */name ASC
+    /*= sort.field */ /*= sort.direction */,
+    /*# end */
+    name ASC
 LIMIT /*= pagination.limit */10
 OFFSET /*= pagination.offset */5;
 ```

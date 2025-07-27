@@ -44,13 +44,13 @@ parameters:
 */
 UPDATE users SET name = 'Updated Name', email = 'updated@example.com' WHERE id = 1`
 	reader := strings.NewReader(sql)
-	
+
 	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "")
 	if err != nil {
 		t.Skipf("Parser not fully implemented yet: %v", err)
 		return
 	}
-	
+
 	// Cast to UpdateStatement
 	updateStmt, ok := stmt.(*parsercommon.UpdateStatement)
 	assert.True(t, ok)
@@ -124,7 +124,7 @@ parameters:
 */
 INSERT INTO users (name, email) VALUES ('John', 'john@example.com')`
 	reader := strings.NewReader(sql)
-	
+
 	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "")
 	if err != nil {
 		t.Skipf("Parser not fully implemented yet: %v", err)

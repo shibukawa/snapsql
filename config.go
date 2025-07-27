@@ -74,15 +74,15 @@ type ValidationConfig struct {
 
 // QueryConfig represents query execution settings
 type QueryConfig struct {
-	DefaultFormat        string `yaml:"default_format"`
-	DefaultEnvironment   string `yaml:"default_environment"`
-	Timeout              int    `yaml:"timeout"`
-	MaxRows              int    `yaml:"max_rows"`
-	Explain              bool   `yaml:"explain"`
-	ExplainAnalyze       bool   `yaml:"explain_analyze"`
-	Limit                int    `yaml:"limit"`
-	Offset               int    `yaml:"offset"`
-	ExecuteDangerousQuery bool  `yaml:"execute_dangerous_query"`
+	DefaultFormat         string `yaml:"default_format"`
+	DefaultEnvironment    string `yaml:"default_environment"`
+	Timeout               int    `yaml:"timeout"`
+	MaxRows               int    `yaml:"max_rows"`
+	Explain               bool   `yaml:"explain"`
+	ExplainAnalyze        bool   `yaml:"explain_analyze"`
+	Limit                 int    `yaml:"limit"`
+	Offset                int    `yaml:"offset"`
+	ExecuteDangerousQuery bool   `yaml:"execute_dangerous_query"`
 }
 
 // SystemConfig represents system-level configuration
@@ -95,16 +95,16 @@ type SystemConfig struct {
 type SystemField struct {
 	// Field name
 	Name string `yaml:"name"`
-	
+
 	// Field type (for implicit parameters)
 	Type string `yaml:"type"`
-	
+
 	// Whether to exclude this field from SELECT statements by default
 	ExcludeFromSelect bool `yaml:"exclude_from_select"`
-	
+
 	// Configuration for INSERT operations
 	OnInsert SystemFieldOperation `yaml:"on_insert"`
-	
+
 	// Configuration for UPDATE operations
 	OnUpdate SystemFieldOperation `yaml:"on_update"`
 }
@@ -114,7 +114,7 @@ type SystemFieldOperation struct {
 	// Default value (if specified, this field gets this default value)
 	// Can be any type: string, int, bool, nil for SQL NULL, etc.
 	Default any `yaml:"default,omitempty"`
-	
+
 	// Parameter configuration (how this field should be handled as a parameter)
 	Parameter SystemFieldParameter `yaml:"parameter,omitempty"`
 }
@@ -125,13 +125,13 @@ type SystemFieldParameter string
 const (
 	// ParameterExplicit means the parameter must be explicitly provided by the user
 	ParameterExplicit SystemFieldParameter = "explicit"
-	
+
 	// ParameterImplicit means the parameter is obtained from context/thread-local storage
 	ParameterImplicit SystemFieldParameter = "implicit"
-	
+
 	// ParameterError means providing this parameter should result in an error
 	ParameterError SystemFieldParameter = "error"
-	
+
 	// ParameterNone means no parameter handling (used when only default is specified)
 	ParameterNone SystemFieldParameter = ""
 )
@@ -222,14 +222,14 @@ func getDefaultConfig() *Config {
 			},
 		},
 		Query: QueryConfig{
-			DefaultFormat:        "table",
-			DefaultEnvironment:   "development",
-			Timeout:              30,
-			MaxRows:              1000,
-			Explain:              false,
-			ExplainAnalyze:       false,
-			Limit:                0,
-			Offset:               0,
+			DefaultFormat:         "table",
+			DefaultEnvironment:    "development",
+			Timeout:               30,
+			MaxRows:               1000,
+			Explain:               false,
+			ExplainAnalyze:        false,
+			Limit:                 0,
+			Offset:                0,
 			ExecuteDangerousQuery: false,
 		},
 		System: SystemConfig{
@@ -320,16 +320,16 @@ func applyDefaults(config *Config) {
 	if len(config.Schema.TablePatterns.Exclude) == 0 {
 		config.Schema.TablePatterns.Exclude = []string{"pg_*", "information_schema*", "sys_*"}
 	}
-	
+
 	// Apply default query settings
 	if config.Query.DefaultFormat == "" {
 		config.Query.DefaultFormat = "table"
 	}
-	
+
 	if config.Query.Timeout == 0 {
 		config.Query.Timeout = 30
 	}
-	
+
 	if config.Query.MaxRows == 0 {
 		config.Query.MaxRows = 1000
 	}
@@ -584,5 +584,3 @@ func (c *Config) GetDefaultValueForUpdate(fieldName string) (any, bool) {
 	}
 	return field.OnUpdate.Default, true
 }
-
-

@@ -12,6 +12,10 @@ const (
 	OpEmitStatic = "EMIT_STATIC" // Output static text
 	OpEmitEval   = "EMIT_EVAL"   // Output evaluated expression
 
+	// Boundary instructions for conditional delimiter handling
+	OpEmitUnlessBoundary = "EMIT_UNLESS_BOUNDARY" // Output text unless followed by boundary
+	OpBoundary           = "BOUNDARY"             // Mark boundary for delimiter removal
+
 	// Control flow instructions
 	OpIf     = "IF"      // Start of if block
 	OpElseIf = "ELSE_IF" // Else if condition
@@ -78,13 +82,13 @@ type ImplicitParameter struct {
 type SystemFieldInfo struct {
 	// Field name
 	Name string `json:"name"`
-	
+
 	// Whether to exclude this field from SELECT statements by default
 	ExcludeFromSelect bool `json:"exclude_from_select,omitempty"`
-	
+
 	// Configuration for INSERT operations
 	OnInsert *SystemFieldOperationInfo `json:"on_insert,omitempty"`
-	
+
 	// Configuration for UPDATE operations
 	OnUpdate *SystemFieldOperationInfo `json:"on_update,omitempty"`
 }
@@ -94,7 +98,7 @@ type SystemFieldOperationInfo struct {
 	// Default value (if specified, this field gets this default value)
 	// Can be any type: string, int, bool, nil for SQL NULL, etc.
 	Default any `json:"default,omitempty"`
-	
+
 	// Parameter configuration (how this field should be handled as a parameter)
 	// Values: "explicit", "implicit", "error", ""
 	Parameter string `json:"parameter,omitempty"`

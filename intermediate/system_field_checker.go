@@ -28,7 +28,7 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 
 	// Determine statement type
 	stmtType := getStatementType(stmt)
-	
+
 	var implicitParams []ImplicitParameter
 	var errors []string
 
@@ -69,7 +69,7 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 
 	// Return error if validation failed
 	if len(errors) > 0 {
-		return nil, fmt.Errorf("System field validation errors:\n- %s", 
+		return nil, fmt.Errorf("System field validation errors:\n- %s",
 			strings.Join(errors, "\n- "))
 	}
 
@@ -87,21 +87,21 @@ func checkSystemField(field SystemField, operation *SystemFieldOperation, operat
 		}
 		// Explicit parameter provided, no implicit parameter needed
 		return nil, nil
-		
+
 	case ParameterImplicit:
 		// Add to implicit parameters list
 		implicitParam := &ImplicitParameter{
 			Name: field.Name,
 			Type: field.Type,
 		}
-		
+
 		// Add default value if specified
 		if operation.Default != nil {
 			implicitParam.Default = operation.Default
 		}
-		
+
 		return implicitParam, nil
-		
+
 	case ParameterError:
 		// Check if parameter is provided (should cause error)
 		if paramMap[field.Name] {
@@ -109,7 +109,7 @@ func checkSystemField(field SystemField, operation *SystemFieldOperation, operat
 		}
 		// No parameter provided, no implicit parameter needed
 		return nil, nil
-		
+
 	default:
 		// For fields without explicit parameter configuration,
 		// if there's a default value and the parameter is not provided,
