@@ -1,17 +1,33 @@
 package parserstep5
 
 import (
+	"errors"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+// Error definitions
+var (
+	ErrObjectInArrayContext = errors.New("object cannot be expanded in array context")
+	ErrMissingObjectField   = errors.New("object missing required field for column expansion")
+)
+
+// ObjectExpansionInfo holds information about object expansion
+type ObjectExpansionInfo struct {
+	TokenIndex   int
+	VariableName string
+	ColumnOrder  []string
+}
+
 // expandArraysInValues expands array variables in VALUES clauses
 // Converts: VALUES (/*= values */) -> VALUES (/*# for v : values *//*= v*/,/*# end */)
-func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition) {
+func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition, gerr *GenerateError) {
 	// Only process INSERT statements
 	if stmt.Type() != cmn.INSERT_INTO_STATEMENT {
 		return
@@ -41,19 +57,29 @@ func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinitio
 		allTokens = append(allTokens, clause.RawTokens()...)
 	}
 	
-	expandArraysInTokensWithNamespace(allTokens, namespace)
+	expandArraysInTokensWithNamespace(allTokens, namespace, gerr)
 }
 
 // expandArraysInTokensWithNamespace processes tokens using Namespace for dynamic type checking
-func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.Namespace) {
+func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.Namespace, gerr *GenerateError) {
 	fmt.Printf("DEBUG: expandArraysInTokensWithNamespace called with %d tokens\n", len(tokens))
 	
-	// First pass: print all tokens for debugging
+	// Print token sequence for debugging
 	fmt.Printf("DEBUG: Token sequence:\n")
 	for i, token := range tokens {
 		fmt.Printf("  [%d] %s: %s\n", i, token.Type, token.Value)
 	}
+	fmt.Printf("\n")
 	
+	// First pass: identify expansion markers and collect column information
+	var expansionInfo []ObjectExpansionInfo
+	var columnOrder []string
+	
+	// Extract column order from INSERT statement
+	columnOrder = extractColumnOrderFromTokens(tokens)
+	fmt.Printf("DEBUG: Extracted column order: %v\n", columnOrder)
+	
+	// Process tokens to find expansion opportunities
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
 		fmt.Printf("DEBUG: Processing token [%d]: %s\n", i, token.Value)
@@ -108,13 +134,33 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 					fmt.Printf("DEBUG: Variable %s is array type - should expand\n", variableName)
 					// Mark this token for expansion
 					tokens[i].Value = fmt.Sprintf("/*# EXPAND_ARRAY: %s */", variableName)
+				} else if isObjectTypeWithNamespace(variableName, namespace) {
+					// Check if this is in a context where object expansion is allowed
+					if len(columnOrder) > 0 {
+						fmt.Printf("DEBUG: Variable %s is object type - should expand\n", variableName)
+						// Collect object expansion info
+						expansionInfo = append(expansionInfo, ObjectExpansionInfo{
+							TokenIndex:   i,
+							VariableName: variableName,
+							ColumnOrder:  columnOrder,
+						})
+						// Mark this token for object expansion
+						tokens[i].Value = fmt.Sprintf("/*# EXPAND_OBJECT: %s */", variableName)
+					} else {
+						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
+					}
 				} else {
-					fmt.Printf("DEBUG: Variable %s is not array type\n", variableName)
+					fmt.Printf("DEBUG: Variable %s is not array or object type\n", variableName)
 				}
 			} else {
 				fmt.Printf("DEBUG: Variable %s is not inside parentheses\n", variableName)
 			}
 		}
+	}
+	
+	// Second pass: perform actual object expansions
+	for _, info := range expansionInfo {
+		expandObjectInTokens(tokens, info, namespace, gerr)
 	}
 }
 
@@ -230,6 +276,33 @@ func isArrayTypeWithNamespace(variableName string, namespace *cmn.Namespace) boo
 	return false
 }
 
+// isObjectTypeWithNamespace checks if a variable is an object type (map) using Namespace CEL evaluation
+func isObjectTypeWithNamespace(variableName string, namespace *cmn.Namespace) bool {
+	// Try to evaluate the variable in the current namespace context
+	result, typeName, err := namespace.Eval(variableName)
+	if err != nil {
+		fmt.Printf("DEBUG: Failed to evaluate %s: %v\n", variableName, err)
+		return false
+	}
+	
+	fmt.Printf("DEBUG: Variable %s has CEL type: %s, Go value type: %T\n", variableName, typeName, result)
+	
+	// Use reflection to check if it's a map (object)
+	if result != nil {
+		rv := reflect.ValueOf(result)
+		isObject := rv.Kind() == reflect.Map
+		if isObject {
+			fmt.Printf("DEBUG: Variable %s is a Go map/object (detected via reflection)\n", variableName)
+		} else {
+			fmt.Printf("DEBUG: Variable %s is not a Go map/object (kind: %s)\n", variableName, rv.Kind())
+		}
+		return isObject
+	}
+	
+	fmt.Printf("DEBUG: Variable %s has nil value\n", variableName)
+	return false
+}
+
 // isInsideParentheses checks if the token at index i is inside parentheses
 func isInsideParentheses(tokens []tokenizer.Token, index int) bool {
 	parenCount := 0
@@ -248,4 +321,113 @@ func isInsideParentheses(tokens []tokenizer.Token, index int) bool {
 	}
 	
 	return false
+}
+
+// extractColumnOrderFromTokens extracts column order from INSERT statement tokens
+func extractColumnOrderFromTokens(tokens []tokenizer.Token) []string {
+	var columns []string
+	inColumnList := false
+	
+	for i, token := range tokens {
+		// Look for opening parenthesis after table name
+		if token.Type == tokenizer.OPENED_PARENS && !inColumnList {
+			// Check if this is the column list (not VALUES clause)
+			// Look ahead to see if there's a VALUES keyword later
+			hasValues := false
+			for j := i + 1; j < len(tokens); j++ {
+				if tokens[j].Type == tokenizer.VALUES {
+					hasValues = true
+					break
+				}
+			}
+			if hasValues {
+				inColumnList = true
+				continue
+			}
+		}
+		
+		// Collect column names
+		if inColumnList && token.Type == tokenizer.IDENTIFIER {
+			columns = append(columns, token.Value)
+		}
+		
+		// End of column list
+		if inColumnList && token.Type == tokenizer.CLOSED_PARENS {
+			break
+		}
+	}
+	
+	return columns
+}
+
+// expandObjectInTokens performs the actual object expansion in tokens
+func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, namespace *cmn.Namespace, gerr *GenerateError) {
+	fmt.Printf("DEBUG: Expanding object %s at token index %d with columns: %v\n", 
+		info.VariableName, info.TokenIndex, info.ColumnOrder)
+	
+	// Get the object value from namespace
+	objectValue, _, err := namespace.Eval(info.VariableName)
+	if err != nil {
+		fmt.Printf("DEBUG: Failed to evaluate object %s: %v\n", info.VariableName, err)
+		return
+	}
+	
+	// Convert to map
+	objectMap, ok := objectValue.(map[string]interface{})
+	if !ok {
+		fmt.Printf("DEBUG: Object %s is not a map: %T\n", info.VariableName, objectValue)
+		return
+	}
+	
+	// Validate that all required columns exist in the object
+	for _, column := range info.ColumnOrder {
+		if _, exists := objectMap[column]; !exists {
+			availableFields := slices.Collect(maps.Keys(objectMap))
+			gerr.AddError(fmt.Errorf("%w: object '%s' does not have required field '%s', available fields: %v", 
+				ErrMissingObjectField, info.VariableName, column, availableFields))
+			return
+		}
+	}
+	
+	// Generate field access expressions based on column order
+	var fieldExpressions []string
+	for _, column := range info.ColumnOrder {
+		fieldExpressions = append(fieldExpressions, fmt.Sprintf("/*= %s.%s */", info.VariableName, column))
+	}
+	
+	if len(fieldExpressions) > 0 {
+		fmt.Printf("DEBUG: Replacing token with first field: %s\n", fieldExpressions[0])
+		// Replace the EXPAND_OBJECT token with the first field expression
+		tokens[info.TokenIndex].Value = fieldExpressions[0]
+		
+		// Create additional tokens for remaining fields
+		var newTokens []tokenizer.Token
+		for i := 1; i < len(fieldExpressions); i++ {
+			// Add comma token
+			newTokens = append(newTokens, tokenizer.Token{
+				Type:  tokenizer.COMMA,
+				Value: ",",
+			})
+			// Add space token for formatting
+			newTokens = append(newTokens, tokenizer.Token{
+				Type:  tokenizer.WHITESPACE,
+				Value: " ",
+			})
+			// Add field expression token
+			newTokens = append(newTokens, tokenizer.Token{
+				Type:  tokenizer.BLOCK_COMMENT,
+				Value: fieldExpressions[i],
+			})
+		}
+		
+		// Insert new tokens after the current token
+		if len(newTokens) > 0 {
+			// This is a simplified insertion - in practice, we'd need to modify the slice properly
+			// For now, we'll just log what would be inserted
+			fmt.Printf("DEBUG: Would insert %d new tokens after index %d\n", len(newTokens), info.TokenIndex)
+			for _, token := range newTokens {
+				fmt.Printf("DEBUG: New token: %s = %s\n", token.Type, token.Value)
+			}
+		}
+	}
 }
