@@ -5,8 +5,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
@@ -236,72 +234,6 @@ func addClauseIfConditions(stmt parsercommon.StatementNode, instructions []Instr
 	}
 
 	return instructions
-}
-
-// ValidateCELExpressions validates CEL expressions
-func ValidateCELExpressions(expressions []string) error {
-	// Create a CEL environment with standard declarations
-	env, err := cel.NewEnv(
-		cel.Declarations(
-			// Basic types
-			decls.NewVar("user_id", decls.Int),
-			decls.NewVar("username", decls.String),
-			decls.NewVar("display_name", decls.String),
-			decls.NewVar("start_date", decls.String),
-			decls.NewVar("end_date", decls.String),
-			decls.NewVar("sort_field", decls.String),
-			decls.NewVar("sort_direction", decls.String),
-			decls.NewVar("page_size", decls.Int),
-			decls.NewVar("page", decls.Int),
-			decls.NewVar("min_age", decls.Int),
-			decls.NewVar("max_age", decls.Int),
-			decls.NewVar("active", decls.Bool),
-
-			// Complex types
-			decls.NewVar("departments", decls.NewListType(decls.String)),
-			decls.NewVar("dept", decls.NewMapType(decls.String, decls.Dyn)),
-			decls.NewVar("emp", decls.NewMapType(decls.String, decls.Dyn)),
-
-			// Special variables
-			decls.NewVar("for", decls.NewMapType(decls.String, decls.Bool)),
-		),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create CEL environment: %v", err)
-	}
-
-	// Validate each expression
-	for _, expr := range expressions {
-		// Skip simple variable references and special cases
-		if !strings.Contains(expr, " ") && !strings.Contains(expr, ".") && !strings.Contains(expr, "(") {
-			continue
-		}
-
-		// Skip expressions with special syntax that CEL can't validate
-		if strings.Contains(expr, "!for.last") {
-			continue
-		}
-
-		// Skip expressions with ternary operators for now
-		if strings.Contains(expr, "?") && strings.Contains(expr, ":") {
-			continue
-		}
-
-		// Check for syntax errors in the expression
-		ast, issues := env.Parse(expr)
-		if issues != nil && issues.Err() != nil {
-			return fmt.Errorf("failed to parse CEL expression '%s': %v", expr, issues.Err())
-		}
-
-		// Check for type errors in the expression
-		_, issues = env.Check(ast)
-		if issues != nil && issues.Err() != nil {
-			// Skip type checking errors for now
-			continue
-		}
-	}
-
-	return nil
 }
 
 // setEnvIndexInInstructions sets env_index in loop instructions based on envs data
