@@ -20,11 +20,12 @@
     {"op": "IF", "pos": "21:3", "expr_index": 1},
     {"op": "EMIT_STATIC", "pos": "22:3", "value": "created_at BETWEEN"},
     {"op": "EMIT_EVAL", "pos": "22:22", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "22:52", "value": "AND"},
+    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "22:52", "value": "AND"},
     {"op": "EMIT_EVAL", "pos": "22:56", "expr_index": 3},
     {"op": "END", "pos": "23:3"},
     {"op": "EMIT_STATIC", "pos": "25:1", "value": "ORDER BY"},
     {"op": "EMIT_EVAL", "pos": "25:10", "expr_index": 4},
+    {"op": "BOUNDARY", "pos": "27:1"},
     {"op": "EMIT_STATIC", "pos": "27:1", "value": "LIMIT "},
     {"op": "IF_SYSTEM_LIMIT", "pos": "27:1"},
     {"op": "EMIT_SYSTEM_LIMIT", "pos": "27:1"},
@@ -55,8 +56,8 @@
   ],
   "response_affinity": "many",
   "responses": [
-    {"name": "id", "type": "int", "database_tag": "id"},
-    {"name": "name", "type": "string", "database_tag": "name"},
-    {"name": "", "type": "any"}
+    {"name": "id", "type": "int"},
+    {"name": "name", "type": "string"},
+    {"name": "field", "type": "any"}
   ]
 }

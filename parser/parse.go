@@ -198,7 +198,7 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	}
 
 	// Step 5: Run parserstep5 - Directive structure validation
-	if err := parserstep5.Execute(stmt); err != nil {
+	if err := parserstep5.Execute(stmt, functionDef); err != nil {
 		return nil, fmt.Errorf("parserstep5 failed: %w", err)
 	}
 

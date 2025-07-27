@@ -17,11 +17,5 @@
     {"name": "user_id", "type": "int"},
     {"name": "new_name", "type": "string"}
   ],
-  "response_affinity": "many",
-  "responses": [
-    {"name": "id", "type": "int", "database_tag": "id"},
-    {"name": "name", "type": "string", "database_tag": "name"},
-    {"name": "email", "type": "string", "database_tag": "email"},
-    {"name": "updated_at", "type": "timestamp", "database_tag": "updated_at"}
-  ]
+  "response_affinity": "many"
 }

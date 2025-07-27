@@ -81,10 +81,18 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 		// Convert function parameters to intermediate format parameters
 		parameters = make([]Parameter, 0, len(funcDef.ParameterOrder))
 		for _, paramName := range funcDef.ParameterOrder {
-			paramValue := funcDef.Parameters[paramName]
+			// Use OriginalParameters for parameter type names (preserves common type names)
+			originalParamValue := funcDef.OriginalParameters[paramName]
 
-			// Extract type information from the parameter value
-			paramType := extractParameterType(paramValue)
+			var paramType string
+			if originalParamValue != nil {
+				// For common types, use the original type name (e.g., "User", "Department[]")
+				paramType = extractParameterTypeFromOriginal(originalParamValue)
+			} else {
+				// Fallback to normalized type if original is not available
+				paramValue := funcDef.Parameters[paramName]
+				paramType = extractParameterType(paramValue)
+			}
 
 			// Add the parameter
 			parameters = append(parameters, Parameter{
@@ -234,6 +242,17 @@ func addClauseIfConditions(stmt parsercommon.StatementNode, instructions []Instr
 	}
 
 	return instructions
+}
+
+// extractParameterTypeFromOriginal extracts type string from original parameter value (for common types)
+func extractParameterTypeFromOriginal(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v // Common type names like "User", "Department[]", "api/users/User"
+	default:
+		// Fallback to regular extraction
+		return extractParameterType(value)
+	}
 }
 
 // setEnvIndexInInstructions sets env_index in loop instructions based on envs data

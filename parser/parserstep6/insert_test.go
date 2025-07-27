@@ -56,7 +56,7 @@ func parseUpToStep5ForInsert(sql string) (cmn.StatementNode, error) {
 	}
 
 	// Step 5: Run parserstep5 - Directive structure validation
-	if err := parserstep5.Execute(stmt); err != nil {
+	if err := parserstep5.Execute(stmt, nil); err != nil {
 		return nil, err
 	}
 

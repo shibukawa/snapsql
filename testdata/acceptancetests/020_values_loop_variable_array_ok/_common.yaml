@@ -1,0 +1,4 @@
+User:
+  id: int
+  name: string
+  tags: string[]

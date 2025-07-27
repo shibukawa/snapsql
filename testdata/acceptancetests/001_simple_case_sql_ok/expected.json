@@ -22,8 +22,8 @@
   ],
   "response_affinity": "one",
   "responses": [
-    {"name": "id", "type": "int", "database_tag": "id"},
-    {"name": "name", "type": "string", "database_tag": "name"},
-    {"name": "age", "type": "int", "database_tag": "age"}
+    {"name": "id", "type": "int"},
+    {"name": "name", "type": "string"},
+    {"name": "age", "type": "int"}
   ]
 }

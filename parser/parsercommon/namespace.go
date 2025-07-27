@@ -214,6 +214,11 @@ func snapSqlTypeToCel(val any) *cel.Type {
 			if strings.HasSuffix(v, "[]") {
 				return cel.ListType(snapSqlToCel(strings.TrimSuffix(v, "[]")))
 			}
+			// Handle Common Type references (e.g., "./User", "./User[]")
+			if strings.HasPrefix(v, "./") {
+				// Common Types are treated as dynamic objects
+				return cel.DynType
+			}
 		}
 	}
 	panic(fmt.Sprintf("Unsupported type for CEL conversion: %T of %v", val, val))

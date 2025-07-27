@@ -13,10 +13,5 @@
   "parameters": [
     {"name": "user_id", "type": "int"}
   ],
-  "response_affinity": "many",
-  "responses": [
-    {"name": "id", "type": "int", "database_tag": "id"},
-    {"name": "name", "type": "string", "database_tag": "name"},
-    {"name": "email", "type": "string", "database_tag": "email"}
-  ]
+  "response_affinity": "many"
 }

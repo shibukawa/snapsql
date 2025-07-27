@@ -273,7 +273,14 @@ func generateDummyData(params map[string]any) (map[string]any, error) {
 			if len(val) == 1 {
 				switch elem := val[0].(type) {
 				case string:
-					result[k] = []any{generateDummyValueFromString(elem)}
+					// Check if it's a common type reference that should be kept as string
+					if strings.HasPrefix(elem, "./") {
+						// For common types, keep the reference as is for now
+						// The actual object structure should be resolved at the parameter resolution stage
+						result[k] = []any{elem}
+					} else {
+						result[k] = []any{generateDummyValueFromString(elem)}
+					}
 				case map[string]any:
 					d, err := generateDummyData(elem)
 					if err != nil {
@@ -337,6 +344,12 @@ func generateDummyValueFromString(typeStr string) any {
 		base := t[:len(t)-2]
 		return []any{generateDummyValueFromString(base)}
 	}
+	// Common Type reference: ./User, ./Product etc.
+	if strings.HasPrefix(t, "./") {
+		// For Common Types, return a placeholder string that represents the type
+		// This will be handled by the type system later
+		return t
+	}
 	return ""
 }
 
@@ -391,6 +404,10 @@ func InferTypeStringFromDummyValue(val any) string {
 		case "00000000-0000-0000-0000-000000000000":
 			return "uuid"
 		default:
+			// Check if it's a Common Type reference
+			if strings.HasPrefix(v, "./") {
+				return v
+			}
 			return "string"
 		}
 	case map[string]any:
@@ -562,8 +579,15 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) 
 
 	var targetPath string
 	var absTargetPath string
+	
+	// If basePath is a file path, get its directory
+	baseDir := f.basePath
+	if filepath.Ext(baseDir) != "" {
+		baseDir = filepath.Dir(baseDir)
+	}
+	
 	if strings.HasPrefix(path, ".") {
-		absTargetPath = filepath.Clean(filepath.Join(f.basePath, path))
+		absTargetPath = filepath.Clean(filepath.Join(baseDir, path))
 		targetPath, _ = filepath.Rel(f.projectRootPath, absTargetPath)
 	} else if strings.HasPrefix(path, "/") {
 		targetPath = strings.TrimPrefix(path, "/")

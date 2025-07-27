@@ -52,5 +52,8 @@
   "parameters": [
     {"name": "departments", "type": "any"}
   ],
-  "response_affinity": "none"
+  "response_affinity": "none",
+  "responses": [
+    {"name": "affected_rows", "type": "int"}
+  ]
 }

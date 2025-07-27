@@ -1,0 +1,10 @@
+User:
+  id: int
+  name: string
+  email: string
+  department: ./Department
+
+Department:
+  id: int
+  name: string
+  budget: decimal

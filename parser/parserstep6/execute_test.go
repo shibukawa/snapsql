@@ -88,7 +88,7 @@ SELECT name FROM users LIMIT /*= limit */10`,
 			assert.NoError(t, err)
 			err = parserstep4.Execute(statement)
 			assert.NoError(t, err)
-			err = parserstep5.Execute(statement)
+			err = parserstep5.Execute(statement, nil)
 			assert.NoError(t, err)
 
 			fd, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, ".", ".")
@@ -183,7 +183,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 				t.Fatalf("parserstep4 failed: %v", parseErr)
 			}
 
-			parseErr = parserstep5.Execute(stmt)
+			parseErr = parserstep5.Execute(stmt, nil)
 			if parseErr != nil {
 				t.Fatalf("parserstep5 failed: %v", parseErr)
 			}

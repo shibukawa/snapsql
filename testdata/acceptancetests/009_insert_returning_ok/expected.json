@@ -17,11 +17,5 @@
     {"name": "user_name", "type": "string"},
     {"name": "user_email", "type": "string"}
   ],
-  "response_affinity": "one",
-  "responses": [
-    {"name": "id", "type": "int", "database_tag": "id"},
-    {"name": "name", "type": "string", "database_tag": "name"},
-    {"name": "email", "type": "string", "database_tag": "email"},
-    {"name": "created_at", "type": "timestamp", "database_tag": "created_at"}
-  ]
+  "response_affinity": "one"
 }

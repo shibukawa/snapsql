@@ -50,7 +50,7 @@ func parseSQL(sql string, constants map[string]any) (cmn.StatementNode, *cmn.Fun
 	}
 
 	// Step 5: Run parserstep5 - Directive structure validation
-	if err := parserstep5.Execute(stmt); err != nil {
+	if err := parserstep5.Execute(stmt, nil); err != nil {
 		return nil, nil, err
 	}
 

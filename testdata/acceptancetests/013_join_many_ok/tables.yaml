@@ -1,0 +1,41 @@
+users:
+  columns:
+    id:
+      data_type: int
+      is_primary_key: true
+    name:
+      data_type: string
+      is_primary_key: false
+    email:
+      data_type: string
+      is_primary_key: false
+    department:
+      data_type: string
+      is_primary_key: false
+    created_at:
+      data_type: timestamp
+      is_primary_key: false
+    updated_at:
+      data_type: timestamp
+      is_primary_key: false
+
+jobs:
+  columns:
+    id:
+      data_type: int
+      is_primary_key: true
+    user_id:
+      data_type: int
+      is_primary_key: false
+    title:
+      data_type: string
+      is_primary_key: false
+    company:
+      data_type: string
+      is_primary_key: false
+    created_at:
+      data_type: timestamp
+      is_primary_key: false
+    updated_at:
+      data_type: timestamp
+      is_primary_key: false

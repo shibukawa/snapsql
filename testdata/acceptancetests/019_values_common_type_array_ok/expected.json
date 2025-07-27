@@ -1,0 +1,20 @@
+{
+  "expressions": [
+    "users"
+  ],
+  "format_version": "1",
+  "function_name": "insertUsers",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "INSERT INTO users (id, name) VALUES ("},
+    {"op": "EMIT_EVAL", "pos": "6:38", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "6:50", "value": ")"}
+  ],
+  "name": "insertUsers",
+  "parameters": [
+    {
+      "name": "users",
+      "type": "../testdata/acceptancetests/019_values_common_type_array_ok/User[]"
+    }
+  ],
+  "response_affinity": "none"
+}

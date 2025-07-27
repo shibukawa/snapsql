@@ -22,11 +22,11 @@
   ],
   "response_affinity": "one",
   "responses": [
-    {"name": "u.id", "type": "string", "database_tag": "u.u.id"},
-    {"name": "u.name", "type": "string", "database_tag": "u.u.name"},
-    {"name": "u.email", "type": "string", "database_tag": "u.u.email"},
-    {"name": "jobs__id", "type": "string", "database_tag": "j.j.id"},
-    {"name": "jobs__title", "type": "string", "database_tag": "j.j.title"},
-    {"name": "jobs__company", "type": "string", "database_tag": "j.j.company"}
+    {"name": "u.id", "type": "int"},
+    {"name": "u.name", "type": "string"},
+    {"name": "u.email", "type": "string"},
+    {"name": "jobs__id", "type": "int"},
+    {"name": "jobs__title", "type": "string"},
+    {"name": "jobs__company", "type": "string"}
   ]
 }
