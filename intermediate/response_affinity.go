@@ -318,53 +318,6 @@ func isFieldFromDrivingTableWithAlias(field parsercommon.SelectField, drivingTab
 	return field.TableName == ""
 }
 
-// isFieldFromDrivingTable checks if a field belongs to the driving table
-func isFieldFromDrivingTable(field parsercommon.SelectField, drivingTable string) bool {
-	// If field has explicit table name, check if it matches driving table or its alias
-	if field.TableName != "" {
-		// Check if it's the table name itself
-		if field.TableName == drivingTable {
-			return true
-		}
-
-		// For now, assume single-character aliases like 'u' for 'users'
-		// This is a heuristic - in practice, you might want to track aliases properly
-		if len(field.TableName) == 1 && strings.HasPrefix(drivingTable, field.TableName) {
-			return true
-		}
-	}
-
-	// If no explicit table name, assume it's from driving table for simple fields
-	// This is a heuristic - in practice, you might want more sophisticated logic
-	return field.TableName == ""
-}
-
-// isDrivingTablePrimaryKeySpecified checks if driving table's primary key is in WHERE clause
-func isDrivingTablePrimaryKeySpecified(whereClause *parsercommon.WhereClause, drivingTable string, tableInfo map[string]*TableInfo) bool {
-	if whereClause == nil {
-		return false
-	}
-
-	// Get table information for driving table
-	table, exists := tableInfo[drivingTable]
-	if !exists {
-		return false
-	}
-
-	// Get primary key columns for driving table
-	primaryKeys := getPrimaryKeyColumns(table)
-	if len(primaryKeys) == 0 {
-		return false
-	}
-
-	// Get WHERE clause text
-	whereText := getWhereClauseText(whereClause)
-
-	// Check if all primary keys of driving table are specified with equality
-	// For JOIN queries, we need to check for table-qualified field names
-	return areAllPrimaryKeysInWhereForTable(primaryKeys, whereText, drivingTable)
-}
-
 // getMainTableName extracts the main table name from FROM clause
 func getMainTableName(fromClause *parsercommon.FromClause) string {
 	if fromClause == nil || len(fromClause.Tables) == 0 {
@@ -408,26 +361,6 @@ func areAllPrimaryKeysInWhere(primaryKeys []string, whereText string) bool {
 	return true
 }
 
-// areAllPrimaryKeysInWhereForTable checks if all primary keys are specified with equality for a specific table
-func areAllPrimaryKeysInWhereForTable(primaryKeys []string, whereText string, tableName string) bool {
-	lowerText := strings.ToLower(whereText)
-	lowerTableName := strings.ToLower(tableName)
-
-	for _, key := range primaryKeys {
-		lowerKey := strings.ToLower(key)
-
-		// Check for both table-qualified and unqualified field names
-		// e.g., "u.id = " or "id = "
-		qualifiedPattern := lowerTableName + "." + lowerKey + " ="
-		unqualifiedPattern := lowerKey + " ="
-
-		if !strings.Contains(lowerText, qualifiedPattern) && !strings.Contains(lowerText, unqualifiedPattern) {
-			return false
-		}
-	}
-	return true
-}
-
 // getWhereClauseText extracts the text content of WHERE clause
 func getWhereClauseText(whereClause *parsercommon.WhereClause) string {
 	if whereClause == nil {
@@ -456,22 +389,6 @@ func getWhereClauseText(whereClause *parsercommon.WhereClause) string {
 	}
 
 	return sourceText
-}
-
-// containsSimpleEqualityCondition checks for simple equality conditions
-func containsSimpleEqualityCondition(whereText string) bool {
-	// Simple pattern matching for common primary key patterns
-	// Look for patterns like "id = " (common primary key pattern)
-
-	// Convert to lowercase for case-insensitive matching
-	lowerText := strings.ToLower(whereText)
-
-	// Check for "id = " pattern (most common primary key)
-	if strings.Contains(lowerText, "id =") || strings.Contains(lowerText, "id=") {
-		return true
-	}
-
-	return false
 }
 
 // hasLimit1 checks if a SELECT statement has LIMIT 1

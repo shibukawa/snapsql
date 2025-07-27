@@ -61,14 +61,13 @@ type Parameter struct {
 
 // Response represents a result field
 type Response struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	DatabaseTag string `json:"database_tag,omitempty"`
-	BaseType    string `json:"base_type,omitempty"`
-	IsNullable  bool   `json:"is_nullable,omitempty"`
-	MaxLength   *int   `json:"max_length,omitempty"`
-	Precision   *int   `json:"precision,omitempty"`
-	Scale       *int   `json:"scale,omitempty"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	BaseType   string `json:"base_type,omitempty"`
+	IsNullable bool   `json:"is_nullable,omitempty"`
+	MaxLength  *int   `json:"max_length,omitempty"`
+	Precision  *int   `json:"precision,omitempty"`
+	Scale      *int   `json:"scale,omitempty"`
 }
 
 // ImplicitParameter represents a parameter that should be obtained from context/TLS

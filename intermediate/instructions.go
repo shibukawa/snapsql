@@ -740,16 +740,3 @@ func extractVariableName(value string) string {
 
 	return ""
 }
-
-// extractPlaceholder extracts the placeholder from a variable token
-// Format: /*= variable_name */placeholder
-func extractPlaceholder(value string) string {
-	// Split by */
-	parts := strings.Split(value, "*/")
-	if len(parts) > 1 {
-		// Return trimmed placeholder
-		return strings.TrimSpace(parts[1])
-	}
-
-	return ""
-}
