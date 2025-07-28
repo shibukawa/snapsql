@@ -45,6 +45,7 @@ const (
 	MINUS    // -
 	MULTIPLY // *
 	DIVIDE   // /
+	MODULO   // %
 
 	// --- Comparison operators ---
 	EQUAL         // =
@@ -231,6 +232,8 @@ func (t TokenType) String() string {
 		return "MULTIPLY"
 	case DIVIDE:
 		return "DIVIDE"
+	case MODULO:
+		return "MODULO"
 	case OVER:
 		return "OVER"
 	case PARTITION:
@@ -434,8 +437,9 @@ func (t Token) String() string {
 
 // SnapSQL directive structure
 type Directive struct {
-	Type       string // "if", "elseif", "else", "for", "end", "const", "variable"
-	NextIndex  int    // Index of next directive token in block chain (if->elseif->else->end, for->end)
-	DummyRange []int
-	Condition  string // Condition expression for if/elseif directives
+	Type        string // "if", "elseif", "else", "for", "end", "const", "variable", "system_value"
+	NextIndex   int    // Index of next directive token in block chain (if->elseif->else->end, for->end)
+	DummyRange  []int
+	Condition   string // Condition expression for if/elseif directives
+	SystemField string // System field name for "system_value" type
 }

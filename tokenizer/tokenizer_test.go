@@ -685,3 +685,21 @@ func TestTokenizeWithLineOffset(t *testing.T) {
 	
 	assert.Equal(t, 12, fromTokenWithOffset.Position.Line) // Should be on line 12 (2 + 10)
 }
+
+func TestModuloToken(t *testing.T) {
+	sql := "SELECT id % 10 FROM users"
+	tokens, err := Tokenize(sql)
+	assert.NoError(t, err)
+
+	// Find the MODULO token
+	var moduloToken Token
+	for _, token := range tokens {
+		if token.Type == MODULO {
+			moduloToken = token
+			break
+		}
+	}
+
+	assert.Equal(t, MODULO, moduloToken.Type)
+	assert.Equal(t, "%", moduloToken.Value)
+}

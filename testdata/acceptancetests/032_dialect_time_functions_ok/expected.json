@@ -48,6 +48,5 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "name": "get_current_time",
   "response_affinity": "many"
 }

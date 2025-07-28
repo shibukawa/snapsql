@@ -65,7 +65,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 		}
 
 		// Check for CAST syntax: CAST(expr AS type)
-		if strings.ToUpper(strings.TrimSpace(token.Value)) == "CAST" && i+6 < len(tokens) {
+		if token.Type == tok.CAST && i+6 < len(tokens) {
 			if conversion := detectCastSyntax(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
@@ -74,7 +74,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 		}
 
 		// Check for PostgreSQL cast syntax: expr::type
-		if token.Value == "::" && i > 0 && i+1 < len(tokens) {
+		if token.Type == tok.DOUBLE_COLON && i > 0 && i+1 < len(tokens) {
 			if conversion := detectPostgreSQLCast(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
@@ -112,8 +112,8 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 		}
 
 		// Check for TRUE/FALSE literals
-		upperValue := strings.ToUpper(strings.TrimSpace(token.Value))
-		if upperValue == "TRUE" || upperValue == "FALSE" {
+		if token.Type == tok.BOOLEAN {
+			upperValue := strings.ToUpper(strings.TrimSpace(token.Value))
 			boolValue := "1"
 			if upperValue == "FALSE" {
 				boolValue = "0"
@@ -187,15 +187,15 @@ func detectCastSyntax(tokens []tok.Token, startIndex int) *DialectConversion {
 
 	for i := startIndex + 2; i < len(tokens) && parenCount > 0; i++ {
 		token := tokens[i]
-		if token.Value == "(" {
+		if token.Type == tok.OPENED_PARENS {
 			parenCount++
-		} else if token.Value == ")" {
+		} else if token.Type == tok.CLOSED_PARENS {
 			parenCount--
 			if parenCount == 0 {
 				closeParenIndex = i
 				break
 			}
-		} else if parenCount == 1 && strings.ToUpper(strings.TrimSpace(token.Value)) == "AS" {
+		} else if parenCount == 1 && token.Type == tok.AS {
 			asIndex = i
 		}
 	}
@@ -253,9 +253,9 @@ func detectPostgreSQLCast(tokens []tok.Token, colonIndex int) *DialectConversion
 		parenCount := 1
 		for i := colonIndex - 2; i >= 0 && parenCount > 0; i-- {
 			token := tokens[i]
-			if token.Value == ")" {
+			if token.Type == tok.CLOSED_PARENS {
 				parenCount++
-			} else if token.Value == "(" {
+			} else if token.Type == tok.OPENED_PARENS {
 				parenCount--
 				if parenCount == 0 {
 					exprStartIndex = i
@@ -268,10 +268,9 @@ func detectPostgreSQLCast(tokens []tok.Token, colonIndex int) *DialectConversion
 		// Go back to find the start of the identifier/expression
 		for i := colonIndex - 1; i >= 0; i-- {
 			token := tokens[i]
-			tokenValue := strings.TrimSpace(token.Value)
 
 			// Stop at keywords, operators, or punctuation that would end an expression
-			if isExpressionBoundary(tokenValue) {
+			if isExpressionBoundary(token) {
 				exprStartIndex = i + 1
 				break
 			}
@@ -288,13 +287,13 @@ func detectPostgreSQLCast(tokens []tok.Token, colonIndex int) *DialectConversion
 	typeEndIndex := colonIndex + 1
 
 	// If the type has parentheses, find the matching closing parenthesis
-	if colonIndex+2 < len(tokens) && strings.TrimSpace(tokens[colonIndex+2].Value) == "(" {
+	if colonIndex+2 < len(tokens) && tokens[colonIndex+2].Type == tok.OPENED_PARENS {
 		parenCount := 1
 		for i := colonIndex + 3; i < len(tokens) && parenCount > 0; i++ {
 			token := tokens[i]
-			if token.Value == "(" {
+			if token.Type == tok.OPENED_PARENS {
 				parenCount++
-			} else if token.Value == ")" {
+			} else if token.Type == tok.CLOSED_PARENS {
 				parenCount--
 				if parenCount == 0 {
 					typeEndIndex = i
@@ -306,10 +305,9 @@ func detectPostgreSQLCast(tokens []tok.Token, colonIndex int) *DialectConversion
 		// For simple types, look for word boundaries
 		for i := colonIndex + 1; i < len(tokens); i++ {
 			token := tokens[i]
-			tokenValue := strings.TrimSpace(token.Value)
 
 			// Stop at keywords, operators, or punctuation that would end a type
-			if isTypeBoundary(tokenValue) {
+			if isTypeBoundary(token) {
 				typeEndIndex = i - 1
 				break
 			}
@@ -402,9 +400,9 @@ func detectConcatFunction(tokens []tok.Token, startIndex int) *DialectConversion
 
 	for i := startIndex + 2; i < len(tokens) && parenCount > 0; i++ {
 		token := tokens[i]
-		if token.Value == "(" {
+		if token.Type == tok.OPENED_PARENS {
 			parenCount++
-		} else if token.Value == ")" {
+		} else if token.Type == tok.CLOSED_PARENS {
 			parenCount--
 			if parenCount == 0 {
 				closeParenIndex = i
@@ -559,28 +557,29 @@ func createSplitConcatInstructions(variant DialectVariant, pos string) []Instruc
 }
 
 // isExpressionBoundary checks if a token marks the boundary of an expression
-func isExpressionBoundary(token string) bool {
-	upperToken := strings.ToUpper(token)
-
-	// SQL keywords that would end an expression
-	keywords := []string{
-		"SELECT", "FROM", "WHERE", "AND", "OR", "ORDER", "GROUP", "HAVING",
-		"INSERT", "UPDATE", "DELETE", "SET", "VALUES", "INTO", "AS",
-		"JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON", "UNION", "EXCEPT",
-		"INTERSECT", "LIMIT", "OFFSET", "DISTINCT", "ALL", "CASE", "WHEN",
-		"THEN", "ELSE", "END", "IF", "ELSEIF", "FOR", "WHILE", "RETURN",
+func isExpressionBoundary(token tok.Token) bool {
+	// Check token types first (most efficient)
+	switch token.Type {
+	case tok.SELECT, tok.FROM, tok.WHERE, tok.AND, tok.OR, tok.ORDER, tok.GROUP, tok.HAVING,
+		 tok.INSERT, tok.UPDATE, tok.DELETE, tok.SET, tok.VALUES, tok.INTO, tok.AS,
+		 tok.JOIN, tok.LEFT, tok.RIGHT, tok.INNER, tok.OUTER, tok.ON, tok.UNION,
+		 tok.LIMIT, tok.OFFSET, tok.DISTINCT, tok.ALL, tok.CASE, tok.WHEN,
+		 tok.THEN, tok.ELSE, tok.END:
+		return true
+	case tok.COMMA, tok.SEMICOLON, tok.EQUAL, tok.NOT_EQUAL, tok.LESS_THAN, tok.GREATER_THAN,
+		 tok.LESS_EQUAL, tok.GREATER_EQUAL, tok.PLUS, tok.MINUS,
+		 tok.MULTIPLY, tok.DIVIDE, tok.MODULO:
+		return true
 	}
 
-	for _, keyword := range keywords {
+	// Check for keywords that don't have dedicated token types
+	upperToken := strings.ToUpper(strings.TrimSpace(token.Value))
+	stringOnlyKeywords := []string{
+		"EXCEPT", "INTERSECT", "IF", "ELSEIF", "FOR", "WHILE", "RETURN",
+	}
+
+	for _, keyword := range stringOnlyKeywords {
 		if upperToken == keyword {
-			return true
-		}
-	}
-
-	// Operators and punctuation that would end an expression
-	operators := []string{",", ";", "=", "<", ">", "<=", ">=", "!=", "<>", "+", "-", "*", "/", "%"}
-	for _, op := range operators {
-		if token == op {
 			return true
 		}
 	}
@@ -589,27 +588,28 @@ func isExpressionBoundary(token string) bool {
 }
 
 // isTypeBoundary checks if a token marks the boundary of a type specification
-func isTypeBoundary(token string) bool {
-	upperToken := strings.ToUpper(token)
-
-	// SQL keywords that would end a type specification
-	keywords := []string{
-		"AS", "FROM", "WHERE", "AND", "OR", "ORDER", "GROUP", "HAVING",
-		"JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "ON", "UNION", "EXCEPT",
-		"INTERSECT", "LIMIT", "OFFSET", "DISTINCT", "ALL", "CASE", "WHEN",
-		"THEN", "ELSE", "END", "IF", "ELSEIF", "FOR", "WHILE", "RETURN",
+func isTypeBoundary(token tok.Token) bool {
+	// Check token types first (most efficient)
+	switch token.Type {
+	case tok.AS, tok.FROM, tok.WHERE, tok.AND, tok.OR, tok.ORDER, tok.GROUP, tok.HAVING,
+		 tok.JOIN, tok.LEFT, tok.RIGHT, tok.INNER, tok.OUTER, tok.ON, tok.UNION,
+		 tok.LIMIT, tok.OFFSET, tok.DISTINCT, tok.ALL, tok.CASE, tok.WHEN,
+		 tok.THEN, tok.ELSE, tok.END:
+		return true
+	case tok.COMMA, tok.SEMICOLON, tok.EQUAL, tok.NOT_EQUAL, tok.LESS_THAN, tok.GREATER_THAN,
+		 tok.LESS_EQUAL, tok.GREATER_EQUAL, tok.PLUS, tok.MINUS,
+		 tok.MULTIPLY, tok.DIVIDE, tok.MODULO:
+		return true
 	}
 
-	for _, keyword := range keywords {
+	// Check for keywords that don't have dedicated token types
+	upperToken := strings.ToUpper(strings.TrimSpace(token.Value))
+	stringOnlyKeywords := []string{
+		"EXCEPT", "INTERSECT", "IF", "ELSEIF", "FOR", "WHILE", "RETURN",
+	}
+
+	for _, keyword := range stringOnlyKeywords {
 		if upperToken == keyword {
-			return true
-		}
-	}
-
-	// Operators and punctuation that would end a type specification
-	operators := []string{",", ";", "=", "<", ">", "<=", ">=", "!=", "<>", "+", "-", "*", "/", "%"}
-	for _, op := range operators {
-		if token == op {
 			return true
 		}
 	}

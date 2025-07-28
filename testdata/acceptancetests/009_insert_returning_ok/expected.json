@@ -30,7 +30,6 @@
     },
     {"op": "EMIT_STATIC", "pos": "8:79", "value": ") RETURNING id, name, email, created_at"}
   ],
-  "name": "insert_user_with_returning",
   "parameters": [
     {"name": "user_name", "type": "string"},
     {"name": "user_email", "type": "string"}

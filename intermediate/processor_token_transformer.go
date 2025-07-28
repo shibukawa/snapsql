@@ -95,6 +95,10 @@ func (t *TokenTransformer) addSystemFieldsToInsertTokens(tokens []tokenizer.Toke
 				Type:     tokenizer.BLOCK_COMMENT,
 				Value:    fmt.Sprintf("/*# EMIT_SYSTEM_VALUE: %s */", param.Name),
 				Position: tokens[valuesEnd].Position, // Use the same position as closing parenthesis
+				Directive: &tokenizer.Directive{
+					Type:        "system_value",
+					SystemField: param.Name,
+				},
 			})
 		}
 

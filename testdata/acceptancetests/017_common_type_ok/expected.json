@@ -16,7 +16,6 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "name": "getUser",
   "parameters": [
     {"name": "user_id", "type": "int"},
     {"name": "user", "type": "../testdata/acceptancetests/017_common_type_ok/User"}

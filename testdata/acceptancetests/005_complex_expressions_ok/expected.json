@@ -36,7 +36,6 @@
     {"op": "EMIT_EVAL", "pos": "28:8", "expr_index": -1},
     {"op": "END", "pos": "28:1"}
   ],
-  "name": "getComplexData",
   "parameters": [
     {"name": "user_id", "type": "int"},
     {"name": "username", "type": "string"},

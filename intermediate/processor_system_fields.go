@@ -2,8 +2,6 @@ package intermediate
 
 import (
 	"fmt"
-	"slices"
-	"strings"
 
 	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
@@ -52,12 +50,9 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 		paramMap[param.Name] = true
 	}
 
-	// Determine statement type
-	stmtType := getStatementType(stmt)
-
 	// For INSERT statements, extract existing column names for explicit field validation
 	var existingColumns map[string]bool
-	if stmtType == "INSERT" {
+	if stmt.Type() == parser.SELECT_STATEMENT {
 		if insertStmt, ok := stmt.(*parser.InsertIntoStatement); ok {
 			existingColumns = extractInsertColumnNames(insertStmt)
 		}
@@ -68,18 +63,15 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 	// Check each system field configured for the current operation
 	for _, field := range config.System.Fields {
 		var operation *SystemFieldOperation
-		var operationName string
 
-		switch stmtType {
-		case "INSERT":
+		switch stmt.Type() {
+		case parser.INSERT_INTO_STATEMENT:
 			if field.OnInsert.Default != nil || field.OnInsert.Parameter != "" {
 				operation = &field.OnInsert
-				operationName = "INSERT"
 			}
-		case "UPDATE":
+		case parser.UPDATE_STATEMENT:
 			if field.OnUpdate.Default != nil || field.OnUpdate.Parameter != "" {
 				operation = &field.OnUpdate
-				operationName = "UPDATE"
 			}
 		default:
 			// SELECT, DELETE, etc. don't need system field validation
@@ -91,7 +83,7 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 		}
 
 		// Perform validation logic with column existence check for INSERT
-		implicitParam := checkSystemFieldWithColumns(field, operation, operationName, paramMap, existingColumns, gerr)
+		implicitParam := checkSystemFieldWithColumns(field, operation, stmt.Type(), paramMap, existingColumns, gerr)
 		if implicitParam != nil {
 			implicitParams = append(implicitParams, *implicitParam)
 		}
@@ -101,20 +93,20 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 }
 
 // checkSystemFieldWithColumns performs validation for a single system field with column existence check
-func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperation, operationName string, paramMap map[string]bool, existingColumns map[string]bool, gerr *GenerateError) *ImplicitParameter {
+func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperation, nodeType parser.NodeType, paramMap map[string]bool, existingColumns map[string]bool, gerr *GenerateError) *ImplicitParameter {
 	// Handle parameter configuration
 	switch operation.Parameter {
 	case ParameterExplicit:
 		// Check if explicit parameter is provided
 		if !paramMap[field.Name] {
-			gerr.AddError(fmt.Errorf("%s statement requires explicit parameter '%s' but it was not provided", operationName, field.Name))
+			gerr.AddError(fmt.Errorf("%s statement requires explicit parameter '%s' but it was not provided", nodeType.String(), field.Name))
 			return nil
 		}
 
 		// For INSERT statements, also check if the field exists in column list
-		if operationName == "INSERT" && existingColumns != nil {
+		if nodeType == parser.INSERT_INTO_STATEMENT && existingColumns != nil {
 			if !existingColumns[field.Name] {
-				gerr.AddError(fmt.Errorf("%s statement requires explicit system field '%s' to be included in column list", operationName, field.Name))
+				gerr.AddError(fmt.Errorf("%s statement requires explicit system field '%s' to be included in column list", nodeType.String(), field.Name))
 				return nil
 			}
 		}
@@ -139,7 +131,7 @@ func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperat
 	case ParameterError:
 		// Check if parameter is provided (should cause error)
 		if paramMap[field.Name] {
-			gerr.AddError(fmt.Errorf("%s statement should not include parameter '%s' (configured as error)", operationName, field.Name))
+			gerr.AddError(fmt.Errorf("%s statement should not include parameter '%s' (configured as error)", nodeType.String(), field.Name))
 			return nil
 		}
 		// No parameter provided, no implicit parameter needed
@@ -187,10 +179,8 @@ func extractInsertColumnNames(stmt *parser.InsertIntoStatement) map[string]bool 
 						continue
 					}
 					if inParentheses && token.Type == tok.IDENTIFIER {
-						// Skip keywords
-						if !isKeywordOrTableName(token.Value) {
-							columns[token.Value] = true
-						}
+						// All IDENTIFIER tokens in column list are column names
+						columns[token.Value] = true
 					}
 				}
 			}
@@ -200,38 +190,9 @@ func extractInsertColumnNames(stmt *parser.InsertIntoStatement) map[string]bool 
 	return columns
 }
 
-// isKeywordOrTableName checks if a token value is a keyword or table name (not a column)
-func isKeywordOrTableName(value string) bool {
-	keywords := []string{"INSERT", "INTO", "VALUES", "SELECT", "FROM", "WHERE", "ORDER", "BY", "LIMIT", "OFFSET", "users"}
-	upperValue := strings.ToUpper(value)
-	return slices.Contains(keywords, upperValue)
-}
-
-// getStatementType determines the type of SQL statement
-func getStatementType(stmt StatementTypeProvider) string {
-	// Use the same approach as response_affinity.go
-	switch stmt.Type() {
-	case parser.SELECT_STATEMENT:
-		return "SELECT"
-	case parser.INSERT_INTO_STATEMENT:
-		return "INSERT"
-	case parser.UPDATE_STATEMENT:
-		return "UPDATE"
-	case parser.DELETE_FROM_STATEMENT:
-		return "DELETE"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 // AddSystemFieldsToInsert adds system fields to INSERT statement's column list and VALUES clause
 // for each implicit parameter
 func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []ImplicitParameter) error {
-	fmt.Printf("DEBUG: AddSystemFieldsToInsert called with %d implicit params\n", len(implicitParams))
-	for _, param := range implicitParams {
-		fmt.Printf("DEBUG: Implicit param: %s\n", param.Name)
-	}
-
 	if len(implicitParams) == 0 {
 		return nil
 	}
@@ -245,11 +206,6 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 	insertStmt, ok := stmt.(*parser.InsertIntoStatement)
 	if !ok {
 		return fmt.Errorf("failed to cast statement to InsertIntoStatement")
-	}
-
-	fmt.Printf("DEBUG: INSERT statement has %d existing columns\n", len(insertStmt.Columns))
-	for i, col := range insertStmt.Columns {
-		fmt.Printf("DEBUG: Existing column[%d]: %s\n", i, col.Name)
 	}
 
 	// Extract existing column names from Columns field
@@ -266,27 +222,17 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 		}
 	}
 
-	fmt.Printf("DEBUG: Columns to add: %v\n", columnsToAdd)
-
 	if len(columnsToAdd) == 0 {
-		fmt.Printf("DEBUG: No columns to add, returning\n")
 		return nil
 	}
 
 	// Add columns to Columns field
 	for _, columnName := range columnsToAdd {
-		fmt.Printf("DEBUG: Adding column: %s\n", columnName)
 		insertStmt.Columns = append(insertStmt.Columns, parser.FieldName{Name: columnName})
-	}
-
-	fmt.Printf("DEBUG: After adding columns, INSERT statement has %d columns\n", len(insertStmt.Columns))
-	for i, col := range insertStmt.Columns {
-		fmt.Printf("DEBUG: Final column[%d]: %s\n", i, col.Name)
 	}
 
 	// Update InsertIntoClause tokens to include new columns
 	if insertStmt.Into != nil {
-		fmt.Printf("DEBUG: Updating InsertIntoClause tokens\n")
 		if err := addSystemColumnsToInsertIntoClause(insertStmt.Into, columnsToAdd); err != nil {
 			return fmt.Errorf("failed to add system columns to InsertIntoClause: %w", err)
 		}
@@ -294,24 +240,12 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 
 	// Add EMIT_SYSTEM_VALUE tokens to VALUES clause
 	if insertStmt.ValuesList != nil {
-		fmt.Printf("DEBUG: Adding system values to VALUES clause\n")
 		if err := addSystemValuesToValuesClause(insertStmt.ValuesList, columnsToAdd); err != nil {
 			return fmt.Errorf("failed to add system values to VALUES clause: %w", err)
 		}
-	} else {
-		fmt.Printf("DEBUG: No VALUES clause found\n")
 	}
 
 	return nil
-}
-
-// getColumnNames extracts column names from FieldName slice for debugging
-func getColumnNames(columns []parser.FieldName) []string {
-	var names []string
-	for _, column := range columns {
-		names = append(names, column.Name)
-	}
-	return names
 }
 
 // addSystemValuesToValuesClause adds EMIT_SYSTEM_VALUE tokens to VALUES clause
@@ -347,6 +281,10 @@ func addSystemValuesToValuesClause(valuesClause *parser.ValuesClause, columnsToA
 		newTokens = append(newTokens, tok.Token{
 			Type:  tok.BLOCK_COMMENT,
 			Value: fmt.Sprintf("/*# EMIT_SYSTEM_VALUE: %s */", column),
+			Directive: &tok.Directive{
+				Type:        "system_value",
+				SystemField: column,
+			},
 		})
 	}
 
@@ -360,7 +298,6 @@ func addSystemValuesToValuesClause(valuesClause *parser.ValuesClause, columnsToA
 // addSystemColumnsToInsertIntoClause adds system columns to InsertIntoClause tokens
 func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClause, columnsToAdd []string) error {
 	tokens := insertIntoClause.RawTokens()
-	fmt.Printf("DEBUG: InsertIntoClause has %d tokens before update\n", len(tokens))
 
 	// Find the position to insert new columns (before the closing parenthesis)
 	var insertPosition int = -1
@@ -407,8 +344,6 @@ func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClaus
 	for _, column := range columnsToAdd {
 		insertIntoClause.Columns = append(insertIntoClause.Columns, column)
 	}
-
-	fmt.Printf("DEBUG: InsertIntoClause has %d tokens after update\n", len(updatedTokens))
 	return nil
 }
 
@@ -466,21 +401,6 @@ func addSystemValueToSetClause(setClause *parser.SetClause, columnName string) e
 	setClause.Assigns = append(setClause.Assigns, systemAssign)
 
 	return nil
-}
-
-// GetSystemFieldsSQL generates the SQL fragment for system fields
-// This is a helper function to generate the actual SQL text for manual SQL construction
-func GetSystemFieldsSQL(implicitParams []ImplicitParameter) string {
-	if len(implicitParams) == 0 {
-		return ""
-	}
-
-	var systemCalls []string
-	for _, param := range implicitParams {
-		systemCalls = append(systemCalls, fmt.Sprintf("EMIT_SYSTEM_VALUE(%s)", param.Name))
-	}
-
-	return ", " + strings.Join(systemCalls, ", ")
 }
 
 // GetSystemFieldAssignments returns the system field assignments as SetAssign slice

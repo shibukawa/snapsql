@@ -1,6 +1,7 @@
 package intermediate
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -10,6 +11,21 @@ import (
 	"github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
+// GetSystemFieldsSQL generates the SQL fragment for system fields
+// This is a helper function to generate the actual SQL text for manual SQL construction
+func GetSystemFieldsSQL(t *testing.T, implicitParams []ImplicitParameter) string {
+	t.Helper()
+	if len(implicitParams) == 0 {
+		return ""
+	}
+
+	var systemCalls []string
+	for _, param := range implicitParams {
+		systemCalls = append(systemCalls, fmt.Sprintf("EMIT_SYSTEM_VALUE(%s)", param.Name))
+	}
+
+	return ", " + strings.Join(systemCalls, ", ")
+}
 func TestSystemFieldIntegration_Simple(t *testing.T) {
 	// Real-world configuration
 	config := &Config{
@@ -189,7 +205,7 @@ func TestGetSystemFieldsSQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetSystemFieldsSQL(tt.implicitParams)
+			result := GetSystemFieldsSQL(t, tt.implicitParams)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

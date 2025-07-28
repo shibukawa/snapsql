@@ -29,7 +29,6 @@
     {"op": "EMIT_SYSTEM_VALUE", "pos": "7:94", "system_field": "lock_no"},
     {"op": "EMIT_STATIC", "pos": "7:94", "value": ")"}
   ],
-  "name": "insertUser",
   "parameters": [
     {"name": "name", "type": "string"},
     {"name": "email", "type": "string"}

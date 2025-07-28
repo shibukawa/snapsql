@@ -20,7 +20,6 @@
     {"op": "EMIT_SYSTEM_VALUE", "pos": "6:77", "system_field": "updated_at"},
     {"op": "EMIT_STATIC", "pos": "6:77", "value": ")"}
   ],
-  "name": "insertUser",
   "parameters": [
     {"name": "user", "type": "../testdata/acceptancetests/026_insert_system_fields_implicit_ok/User"}
   ],

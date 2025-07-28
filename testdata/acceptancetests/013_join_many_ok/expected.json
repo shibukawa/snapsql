@@ -16,7 +16,6 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "name": "get_users_with_jobs",
   "parameters": [
     {"name": "department", "type": "string"}
   ],

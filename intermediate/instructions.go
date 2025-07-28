@@ -8,6 +8,12 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
+// Boundary type constants
+const (
+	BoundaryTypeBoundary           = "BOUNDARY"
+	BoundaryTypeEmitUnlessBoundary = "EMIT_UNLESS_BOUNDARY"
+)
+
 // LimitOffsetClauseInfo holds information about LIMIT and OFFSET clause processing
 type LimitOffsetClauseInfo struct {
 	// LIMIT clause info
@@ -212,7 +218,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 
 		// Check for boundary instructions
 		if boundaryType, exists := boundaries[i]; exists {
-			if boundaryType == "BOUNDARY" {
+			if boundaryType == BoundaryTypeBoundary {
 				// Flush any pending content before placing boundary
 				flushStaticBuffer()
 
@@ -419,7 +425,21 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			// Don't add whitespace directly to the buffer
 
 		case tokenizer.BLOCK_COMMENT:
-			// Check for EMIT_SYSTEM_VALUE comment
+			// Check for system_value directive
+			if token.Directive != nil && token.Directive.Type == "system_value" {
+				// Flush static buffer before processing
+				flushStaticBuffer()
+
+				// Add EMIT_SYSTEM_VALUE instruction using directive field
+				instructions = append(instructions, Instruction{
+					Op:          OpEmitSystemValue,
+					Pos:         getPos(token),
+					SystemField: token.Directive.SystemField,
+				})
+				continue
+			}
+
+			// Check for EMIT_SYSTEM_VALUE comment (legacy support)
 			if strings.Contains(token.Value, "EMIT_SYSTEM_VALUE:") {
 				// Extract system field name from comment
 				// Format: /*# EMIT_SYSTEM_VALUE: field_name */
@@ -610,7 +630,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 
 		default:
 			// Check if this token should use EMIT_UNLESS_BOUNDARY
-			if boundaryType, exists := boundaries[i]; exists && boundaryType == "EMIT_UNLESS_BOUNDARY" {
+			if boundaryType, exists := boundaries[i]; exists && boundaryType == BoundaryTypeEmitUnlessBoundary {
 				// Flush any pending content before EMIT_UNLESS_BOUNDARY
 				flushStaticBuffer()
 

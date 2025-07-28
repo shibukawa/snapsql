@@ -123,14 +123,19 @@ func extractFromStatement(stmt parser.StatementNode) (expressions []string, envs
 					}
 
 				case "variable":
-					// Extract variable expression from the token value
-					// The format is /*= variable_name */
-					if token.Value != "" && strings.HasPrefix(token.Value, "/*=") && strings.HasSuffix(token.Value, "*/") {
-						// Extract variable expression between /*= and */
-						varExpr := strings.TrimSpace(token.Value[3 : len(token.Value)-2])
+					// Use directive field if available (more efficient)
+					if token.Directive != nil && token.Directive.Condition != "" {
+						addExpression(token.Directive.Condition)
+					} else {
+						// Fallback to parsing token value (legacy support)
+						// The format is /*= variable_name */
+						if token.Value != "" && strings.HasPrefix(token.Value, "/*=") && strings.HasSuffix(token.Value, "*/") {
+							// Extract variable expression between /*= and */
+							varExpr := strings.TrimSpace(token.Value[3 : len(token.Value)-2])
 
-						// Add the full expression, not just simple variables
-						addExpression(varExpr)
+							// Add the full expression, not just simple variables
+							addExpression(varExpr)
+						}
 					}
 				}
 			}

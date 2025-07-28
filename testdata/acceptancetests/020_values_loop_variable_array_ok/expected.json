@@ -29,7 +29,6 @@
     {"op": "EMIT_STATIC", "pos": "7:64", "value": ")"},
     {"op": "LOOP_END", "pos": "7:66", "env_index": 0}
   ],
-  "name": "insertUserTags",
   "parameters": [
     {
       "name": "users",

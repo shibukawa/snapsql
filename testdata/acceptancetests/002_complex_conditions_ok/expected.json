@@ -45,7 +45,6 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "name": "getFilteredData",
   "parameters": [
     {"name": "min_age", "type": "int"},
     {"name": "max_age", "type": "int"},

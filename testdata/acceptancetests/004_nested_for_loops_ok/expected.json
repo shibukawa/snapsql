@@ -54,7 +54,6 @@
     {"op": "LOOP_END", "pos": "19:5", "env_index": 2},
     {"op": "LOOP_END", "pos": "20:1", "env_index": 0}
   ],
-  "name": "insert_all_sub_departments",
   "parameters": [
     {"name": "departments", "type": "any"}
   ],

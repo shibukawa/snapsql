@@ -92,15 +92,19 @@ func TestSubqueryTypeInference(t *testing.T) {
 	}
 }
 
-// Helper function to parse SQL (using tokenizer)
+// Helper function to parse SQL (using RawParse with empty function definition)
 func parseSQLSimple(sql string) (parser.StatementNode, error) {
 	tokens, err := tokenizer.Tokenize(sql)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use basic parser without subquery analysis
-	stmt, err := parser.RawParse(tokens, nil, nil)
+	// Create empty function definition to avoid nil pointer
+	emptyFuncDef := &parser.FunctionDefinition{
+		Parameters: make(map[string]any),
+	}
+
+	stmt, err := parser.RawParse(tokens, emptyFuncDef, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -338,14 +342,17 @@ func parseWithSubqueryAnalysis(sqlText string) (stmt parser.StatementNode, err e
 		}
 	}()
 
-	// Parse the SQL text using the actual tokenizer and parser
-	tokens, tokenErr := tokenizer.Tokenize(sqlText)
-	if tokenErr != nil {
-		return nil, tokenErr
+	tokens, err := tokenizer.Tokenize(sqlText)
+	if err != nil {
+		return nil, err
 	}
 
-	// Use basic parser for now (subquery analysis integration would be added later)
-	stmt, err = parser.RawParse(tokens, nil, nil)
+	// Create empty function definition to avoid nil pointer
+	emptyFuncDef := &parser.FunctionDefinition{
+		Parameters: make(map[string]any),
+	}
+
+	stmt, err = parser.RawParse(tokens, emptyFuncDef, nil)
 	return stmt, err
 }
 
@@ -371,8 +378,12 @@ func createMockStatementWithSubqueryAnalysis(sqlText string) parser.StatementNod
 		return &parser.SelectStatement{}
 	}
 
-	// Parse using the basic parser
-	stmt, err := parser.RawParse(tokens, nil, nil)
+	// Create empty function definition to avoid nil pointer
+	emptyFuncDef := &parser.FunctionDefinition{
+		Parameters: make(map[string]any),
+	}
+
+	stmt, err := parser.RawParse(tokens, emptyFuncDef, nil)
 	if err != nil {
 		// If parsing fails, return minimal statement
 		return &parser.SelectStatement{}

@@ -51,16 +51,21 @@ func isClauseBoundary(token tokenizer.Token) bool {
 		return false
 	}
 
-	value := strings.TrimSpace(strings.ToUpper(token.Value))
-
-	// Check for SQL clause keywords
-	clauseKeywords := []string{
-		"FROM", "WHERE", "ORDER BY", "GROUP BY", "HAVING",
-		"LIMIT", "OFFSET", "UNION", "EXCEPT", "INTERSECT",
-		")", // Closing parenthesis can also be a boundary
+	// Check for SQL clause keywords using token types
+	switch token.Type {
+	case tokenizer.FROM, tokenizer.WHERE, tokenizer.GROUP, 
+		 tokenizer.HAVING, tokenizer.LIMIT, tokenizer.OFFSET, tokenizer.UNION,
+		 tokenizer.CLOSED_PARENS:
+		return true
 	}
 
-	for _, keyword := range clauseKeywords {
+	// Check for keywords that don't have dedicated token types or need special handling
+	value := strings.TrimSpace(strings.ToUpper(token.Value))
+	stringOnlyKeywords := []string{
+		"EXCEPT", "INTERSECT", "ORDER BY", "GROUP BY",
+	}
+
+	for _, keyword := range stringOnlyKeywords {
 		if strings.HasPrefix(value, keyword) || strings.Contains(value, keyword) {
 			return true
 		}

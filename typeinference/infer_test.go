@@ -27,7 +27,12 @@ func parseSQL(sql string) (parser.StatementNode, error) {
 		return nil, err
 	}
 
-	stmt, err := parser.RawParse(tokens, nil, nil)
+	// Create empty function definition to avoid nil pointer
+	emptyFuncDef := &parser.FunctionDefinition{
+		Parameters: make(map[string]any),
+	}
+
+	stmt, err := parser.RawParse(tokens, emptyFuncDef, nil)
 	if err != nil {
 		return nil, err
 	}

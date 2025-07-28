@@ -81,7 +81,6 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 	// Build the final intermediate format
 	result := &IntermediateFormat{
 		FormatVersion:      "1",
-		Name:               ctx.FunctionName,
 		FunctionName:       ctx.FunctionName,
 		Parameters:         ctx.Parameters,
 		Expressions:        ctx.Expressions,

@@ -9,7 +9,6 @@
     {"op": "EMIT_EVAL", "pos": "6:45", "expr_index": 0},
     {"op": "EMIT_STATIC", "pos": "6:57", "value": ")"}
   ],
-  "name": "insertUsers",
   "parameters": [
     {
       "name": "users",

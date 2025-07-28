@@ -230,6 +230,10 @@ func (t *tokenizer) nextToken() (Token, error) {
 			token := t.newToken(MULTIPLY, string(t.current))
 			t.readChar()
 			return token, nil
+		case '%':
+			token := t.newToken(MODULO, string(t.current))
+			t.readChar()
+			return token, nil
 		default:
 			if unicode.IsLetter(t.current) || t.current == '_' {
 				return t.readIdentifierOrKeyword()

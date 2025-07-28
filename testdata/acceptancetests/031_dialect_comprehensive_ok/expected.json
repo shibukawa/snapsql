@@ -344,7 +344,6 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "name": "get_comprehensive_dialect_test",
   "parameters": [
     {"name": "user_id", "type": "int"}
   ],

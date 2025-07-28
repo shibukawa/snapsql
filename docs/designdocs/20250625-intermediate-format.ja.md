@@ -1,7 +1,7 @@
 # SnapSQL 中間形式仕様
 
 **ドキュメントバージョン:** 2.0  
-**日付:** 2025-07-25  
+**日付:** 2025-07-28  
 **ステータス:** 実装済み
 
 ## 概要
@@ -15,18 +15,586 @@
 - 言語固有の構造や前提条件なし
 - SQL構造と言語固有メタデータの明確な分離
 
-## 設計目標
-
-### 1. 言語非依存
-- あらゆるプログラミング言語で利用可能なJSON形式
-- 言語固有の構造や前提条件なし
-- SQL構造と言語固有メタデータの明確な分離
-
 ### 2. 完全な情報保持
 - テンプレートメタデータと関数定義
 - CEL式の完全な抽出と型情報
 
+### 3. コード生成対応
+- テンプレートベースのコード生成に適した構造化データ
+- 強く型付けされた言語のための型情報
+- 関数シグネチャ情報
+- パラメータ順序の保持
+
+### 4. 拡張可能
+- 将来のSnapSQL機能のサポート
+- 後方互換性のためのバージョン管理形式
+- カスタムジェネレータ用のプラグインフレンドリー構造
+
+## 中間形式に含まれる項目
+
+### トップレベル構造
+
+```json
+{
+  "format_version": "1",
+  "description": "ユーザーIDによるユーザー情報取得",
+  "function_name": "get_user_by_id", 
+  "parameters": [/* パラメータ定義 */],
+  "implicit_parameters": [/* 暗黙的パラメータ定義 */],
+  "instructions": [/* 命令列 */],
+  "expressions": [/* CEL式リスト */],
+  "envs": [/* 環境変数の階層構造 */],
+  "responses": [/* レスポンス型定義 */],
+  "response_affinity": {/* レスポンス親和性情報 */}
+}
+```
+
+### 各項目の詳細
+
+#### 1. **format_version** (string)
+- **目的**: 中間形式のバージョン管理
+- **値**: 現在は `"1"`
+- **用途**: 後方互換性の保証、パーサーの対応バージョン確認
+
+#### 2. **description** (string)
+- **目的**: テンプレートの説明・概要
+- **抽出元**: 関数定義
+- **用途**: ドキュメント生成、コメント出力、開発者向け説明
+
+#### 3. **function_name** (string)
+- **目的**: 生成される関数の名前
+- **抽出元**: 関数定義
+- **用途**: コード生成時の関数名、snake_case形式
+
+#### 4. **parameters** (array)
+- **目的**: 明示的なテンプレートパラメータの定義
+- **構造**: `{"name": string, "type": string}`
+- **抽出元**: 関数定義
+- **用途**: 型安全な関数シグネチャ生成、バリデーション
+
+#### 5. **implicit_parameters** (array)
+- **目的**: システムが自動提供するパラメータ（システムフィールド等）
+- **構造**: `{"name": string, "type": string, "default": any}`
+- **抽出元**: システムフィールド設定、LIMIT/OFFSET句の解析
+- **用途**: ランタイムでの自動パラメータ注入
+
+#### 6. **instructions** (array)
+- **目的**: SQLテンプレートの実行可能表現
+- **構造**: 命令オブジェクトの配列
+- **抽出元**: トークン解析、制御フロー解析
+- **用途**: ランタイムでのSQL動的生成
+
+#### 7. **expressions** (array)
+- **目的**: テンプレート内のすべてのCEL式
+- **構造**: CEL式文字列の配列
+- **抽出元**: SQL中のディレクティブコメント
+- **用途**: CEL環境の構築、式の事前コンパイル
+
+#### 8. **envs** (array)
+- **目的**: ループ変数の階層構造
+- **構造**: `[[{"name": string, "type": string}]]`
+- **抽出元**: SQL中のディレクティブコメント
+- **用途**: ネストしたループでの変数スコープ管理
+
+#### 9. **responses** (array)
+- **目的**: クエリ結果の型定義
+- **構造**: レスポンス型オブジェクトの配列
+- **抽出元**: 型推論
+- **用途**: 結果型の生成、型安全なレスポンス処理
+
+#### 10. **response_affinity** (object)
+- **目的**: クエリ結果の構造情報
+- **構造**: テーブル、カラム、型情報
+- **抽出元**: 型推論
+- **用途**: 結果型の生成、ORM連携
+
+## 情報源マッピング表
+
+| 中間形式項目 | 主要情報源 |
+|-------------|-----------|
+| `format_version` | 固定値 |
+| `description` | 関数定義 |
+| `function_name` | 関数定義 |
+| `parameters` | 関数定義 |
+| `implicit_parameters` | システムフィールド設定 |
+| `instructions` | トークン列 |
+| `expressions` | SQL中のディレクティブコメント |
+| `envs` | SQL中のディレクティブコメント |
+| `responses` | 型推論 |
+| `response_affinity` | 型推論 |
+
+### 詳細な情報源
+
+#### 関数定義形式（SQLファイル）
+```sql
+/*#
+function_name: get_user_by_id
+description: ユーザーIDによるユーザー情報取得
+parameters:
+  user_id: int
+  include_details: bool
+*/
+```
+
+#### 関数定義形式（Markdownファイル）
+```markdown
+## Function Definition
+- **Name**: get_user_by_id
+- **Description**: ユーザーIDによるユーザー情報取得
+
+## Parameters
+```yaml
+user_id: int
+include_details: bool
+```
+```
+
+#### SQL中のディレクティブコメント
+```sql
+-- 変数置換
+/*= user_id */
+
+-- 条件分岐
+/*# if min_age > 0 */
+
+-- ループ
+/*# for dept : departments */
+```
+
+#### システムフィールド設定（snapsql.yaml）
+```yaml
+system:
+  fields:
+    - name: updated_at
+      type: timestamp
+      on_update:
+        parameter: implicit
+```
+
 ## 処理フロー
+
+### 1. パーサーフェーズ（parser パッケージ）
+
+#### parserstep2: 基本構造解析
+- SQL文字列をトークン化
+- StatementNode（AST）の基本構造を構築
+- WITH句、各種clause の識別
+
+#### parserstep3: 構文検証
+- 基本的な構文エラーの検出
+
+#### parserstep4: Clause詳細解析
+各clause別に詳細な解析と検証を実行：
+
+**SELECT文の処理順序:**
+1. `finalizeSelectClause()` - SELECT句の詳細解析
+2. `finalizeFromClause()` - FROM句の詳細解析  
+3. `emptyCheck(WHERE)` - WHERE句の空チェック
+4. `finalizeGroupByClause()` - GROUP BY句の詳細解析
+5. `finalizeHavingClause()` - HAVING句の詳細解析（GROUP BYとの関連チェック）
+6. `finalizeOrderByClause()` - ORDER BY句の詳細解析
+7. `finalizeLimitOffsetClause()` - LIMIT/OFFSET句の詳細解析
+8. `emptyCheck(FOR)` - FOR句の空チェック
+
+**INSERT文の処理順序:**
+1. `finalizeInsertIntoClause()` - INSERT INTO句の詳細解析（カラムリスト解析）
+2. `InsertIntoStatement.Columns`への反映
+3. `emptyCheck(WITH)` - WITH句の空チェック
+4. SELECT部分がある場合は上記SELECT文の処理を実行
+5. `finalizeReturningClause()` - RETURNING句の詳細解析
+
+**UPDATE文の処理順序:**
+1. `finalizeUpdateClause()` - UPDATE句の詳細解析
+2. `finalizeSetClause()` - SET句の詳細解析
+3. `emptyCheck(WHERE)` - WHERE句の空チェック
+4. `finalizeReturningClause()` - RETURNING句の詳細解析
+
+**DELETE文の処理順序:**
+1. `finalizeDeleteFromClause()` - DELETE FROM句の詳細解析
+2. `emptyCheck(WHERE)` - WHERE句の空チェック
+3. `finalizeReturningClause()` - RETURNING句の詳細解析
+
+#### parserstep5: 高度な処理
+1. `expandArraysInValues()` - VALUES句での配列展開
+2. `detectDummyRanges()` - ダミー値の検出
+3. `applyImplicitIfConditions()` - LIMIT/OFFSET句への暗黙的if条件適用
+4. `validateAndLinkDirectives()` - ディレクティブの検証とリンク
+
+### 2. 中間形式生成フェーズ（intermediate パッケージ）
+
+#### 前処理
+1. `ExtractFromStatement()` - CEL式と環境変数の抽出
+2. 関数定義からのパラメータ抽出
+3. `extractSystemFieldsInfo()` - システムフィールド情報の抽出
+
+#### システムフィールド処理
+1. `CheckSystemFields()` - システムフィールドの検証と暗黙パラメータ生成
+2. Statement別のシステムフィールド追加:
+   - UPDATE文: `AddSystemFieldsToUpdate()` - SET句への追加
+   - INSERT文: `AddSystemFieldsToInsert()` - カラムリストとVALUES句への追加
+
+#### 命令生成
+1. `extractTokensFromStatement()` - StatementNodeからトークン列抽出
+2. `detectDialectPatterns()` - 方言固有パターンの検出
+3. `generateInstructions()` - 実行命令の生成
+4. `detectResponseAffinity()` - レスポンス親和性の検出
+
+## Clause別処理詳細
+
+### INSERT INTO Clause
+- **処理内容**: カラムリストの解析、テーブル名の抽出
+- **出力**: `InsertIntoClause.Columns[]`, `InsertIntoClause.Table`
+- **後続処理**: `InsertIntoStatement.Columns`への反映
+
+### VALUES Clause  
+- **処理内容**: 値リストの解析、配列展開
+- **出力**: 値トークンの構造化
+- **後続処理**: システムフィールド値の追加
+
+### SELECT Clause
+- **処理内容**: 選択フィールドの解析、関数呼び出しの検証
+- **出力**: フィールドリストの構造化
+
+### FROM Clause
+- **処理内容**: テーブル参照、JOIN構文の解析
+- **出力**: テーブル参照の構造化
+
+### WHERE/HAVING Clause
+- **処理内容**: 条件式の検証（空チェックのみ）
+- **出力**: 構文エラーの検出
+
+### GROUP BY Clause
+- **処理内容**: グループ化フィールドの解析
+- **出力**: グループ化条件の構造化
+
+### ORDER BY Clause
+- **処理内容**: ソート条件の解析、ASC/DESC指定の検証
+- **出力**: ソート条件の構造化
+
+### LIMIT/OFFSET Clause
+- **処理内容**: 制限値の検証、暗黙的if条件の適用
+- **出力**: 制限条件の構造化
+
+### SET Clause (UPDATE)
+- **処理内容**: 更新フィールドと値の解析
+- **出力**: 更新条件の構造化
+- **後続処理**: システムフィールドの追加
+
+### RETURNING Clause
+- **処理内容**: 戻り値フィールドの解析
+- **出力**: 戻り値の構造化
+
+## 方言対応（Database Dialect Support）
+
+### 概要
+
+SnapSQLは複数のデータベース方言（PostgreSQL、MySQL、SQLite）をサポートし、方言固有の構文を自動的に変換します。中間形式では、方言固有の処理を命令として表現します。
+
+### 対応する方言固有構文
+
+#### 1. **PostgreSQL Cast演算子（`::`）**
+```sql
+-- PostgreSQL固有
+SELECT price::DECIMAL(10,2) FROM products
+
+-- 標準SQL変換
+SELECT CAST(price AS DECIMAL(10,2)) FROM products
+```
+
+#### 2. **MySQL LIMIT構文**
+```sql
+-- MySQL固有
+SELECT * FROM users LIMIT 10, 20
+
+-- 標準SQL変換  
+SELECT * FROM users LIMIT 20 OFFSET 10
+```
+
+#### 3. **SQLite型アフィニティ**
+```sql
+-- SQLite固有
+CREATE TABLE users (id INTEGER PRIMARY KEY)
+
+-- 他DB変換
+CREATE TABLE users (id SERIAL PRIMARY KEY)
+```
+
+### 中間形式での表現
+
+方言固有の処理は専用の命令として表現されます：
+
+```json
+{
+  "instructions": [
+    {"op": "EMIT_STATIC", "value": "SELECT ", "pos": "1:1"},
+    {"op": "EMIT_IF_DIALECT", "dialect": "postgresql", "sql_fragment": "price::DECIMAL(10,2)", "pos": "1:8"},
+    {"op": "EMIT_IF_DIALECT", "dialect": "mysql", "sql_fragment": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
+    {"op": "EMIT_IF_DIALECT", "dialect": "sqlite", "sql_fragment": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
+    {"op": "EMIT_STATIC", "value": " FROM products", "pos": "1:25"}
+  ]
+}
+```
+
+### 方言検出パターン
+
+#### PostgreSQL Cast検出
+```go
+// detectPostgreSQLCast関数
+// パターン: expression::type
+if token.Type == tok.DOUBLE_COLON {
+    // 前の式と後の型を解析
+    // CAST(expression AS type)に変換
+}
+```
+
+#### MySQL関数検出
+```go
+// detectMySQLFunctions関数  
+// NOW(), RAND()等のMySQL固有関数を検出
+// 他方言での等価関数に変換
+```
+
+### 実行時の方言選択
+
+ランタイムライブラリは、接続先データベースに応じて適切な方言の命令を実行：
+
+```go
+// 実行時の方言選択例
+switch currentDialect {
+case "postgresql":
+    executePostgreSQLInstructions()
+case "mysql": 
+    executeMySQLInstructions()
+case "sqlite":
+    executeSQLiteInstructions()
+}
+```
+
+## 末尾カンマ・AND・OR処理（Trailing Delimiter Handling）
+
+### 概要
+
+SnapSQLは、条件分岐によって動的に追加・削除される要素に対して、末尾の区切り文字（カンマ、AND、OR）を自動的に処理します。これにより、開発者は構文エラーを気にせずにテンプレートを記述できます。
+
+### 対象となる区切り文字
+
+#### 1. **カンマ（`,`）**
+- SELECT句のフィールドリスト
+- INSERT文のカラムリスト
+- VALUES句の値リスト
+
+#### 2. **AND演算子**
+- WHERE句の条件結合
+- HAVING句の条件結合
+
+#### 3. **OR演算子**
+- WHERE句の条件結合（選択的）
+
+### 処理例
+
+#### SELECT句での末尾カンマ処理
+
+**テンプレート:**
+```sql
+SELECT 
+    id,
+    name,
+    /*# if include_email */
+    email,
+    /*# end */
+    /*# if include_phone */
+    phone,
+    /*# end */
+    created_at
+FROM users
+```
+
+**条件による出力:**
+```sql
+-- include_email=true, include_phone=false の場合
+SELECT id, name, email, created_at FROM users
+
+-- include_email=false, include_phone=true の場合  
+SELECT id, name, phone, created_at FROM users
+
+-- 両方false の場合
+SELECT id, name, created_at FROM users
+```
+
+#### WHERE句でのAND処理
+
+**テンプレート:**
+```sql
+SELECT * FROM users 
+WHERE active = true
+    /*# if min_age > 0 */
+    AND age >= /*= min_age */18
+    /*# end */
+    /*# if department != "" */
+    AND department = /*= department */'Engineering'
+    /*# end */
+```
+
+**条件による出力:**
+```sql
+-- min_age=25, department="Sales" の場合
+SELECT * FROM users WHERE active = true AND age >= 25 AND department = 'Sales'
+
+-- min_age=0, department="" の場合
+SELECT * FROM users WHERE active = true
+
+-- min_age=25, department="" の場合
+SELECT * FROM users WHERE active = true AND age >= 25
+```
+
+### 中間形式での表現
+
+末尾区切り文字の処理は、境界検出（`BOUNDARY`）命令で表現されます：
+
+```json
+{
+  "instructions": [
+    {"op": "EMIT_STATIC", "value": "SELECT id, name", "pos": "1:1"},
+    {"op": "IF", "condition": "include_email", "pos": "4:5"},
+    {"op": "BOUNDARY", "pos": "4:5"},
+    {"op": "EMIT_STATIC", "value": ", email", "pos": "5:5"},
+    {"op": "END", "pos": "6:5"},
+    {"op": "IF", "condition": "include_phone", "pos": "7:5"},
+    {"op": "BOUNDARY", "pos": "7:5"},
+    {"op": "EMIT_STATIC", "value": ", phone", "pos": "8:5"},
+    {"op": "END", "pos": "9:5"},
+    {"op": "EMIT_STATIC", "value": ", created_at FROM users", "pos": "11:5"}
+  ]
+}
+```
+
+### 境界検出アルゴリズム
+
+#### 1. **境界トークンの識別**
+```go
+// 境界となるトークンタイプ
+switch token.Type {
+case tok.FROM, tok.WHERE, tok.ORDER, tok.GROUP, 
+     tok.HAVING, tok.LIMIT, tok.OFFSET, tok.UNION,
+     tok.CLOSED_PARENS:
+    return true
+}
+```
+
+#### 2. **区切り文字の種類判定**
+```go
+// 文脈に応じた区切り文字の決定
+func detectBoundaryDelimiter(context string) string {
+    switch context {
+    case "SELECT_FIELDS":
+        return ","
+    case "WHERE_CONDITIONS":
+        return "AND"
+    case "VALUES_LIST":
+        return ","
+    }
+}
+```
+
+#### 3. **実行時の区切り文字挿入**
+```go
+// ランタイムでの動的区切り文字処理
+if hasNextElement && !isLastElement {
+    output += delimiter // カンマまたはAND/ORを挿入
+}
+```
+
+### 特殊ケース
+
+#### 1. **LIMIT/OFFSET句の条件付き出力**
+```sql
+-- LIMIT/OFFSET句がない場合、システムが自動追加
+SELECT * FROM users
+
+-- 出力: システムLIMIT/OFFSETが利用可能な場合のみ追加
+SELECT * FROM users LIMIT 10 OFFSET 0
+```
+
+中間形式での表現：
+```json
+{
+  "instructions": [
+    {"op": "EMIT_STATIC", "value": "SELECT * FROM users", "pos": "1:1"},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "value": " LIMIT ", "pos": "0:0"},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "value": " OFFSET ", "pos": "0:0"},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
+  ]
+}
+```
+
+#### 2. **ネストした条件での処理**
+```sql
+SELECT *
+FROM users
+WHERE (
+    /*# if condition1 */
+    field1 = 'value1'
+    /*# end */
+    /*# if condition2 */
+    AND field2 = 'value2'  
+    /*# end */
+)
+```
+
+#### 3. **OR演算子の処理**
+```sql
+WHERE (
+    /*# if search_name */
+    name LIKE /*= search_name */'%John%'
+    /*# end */
+    /*# if search_email */
+    OR email LIKE /*= search_email */'%john%'
+    /*# end */
+)
+```
+
+### 利点
+
+1. **構文エラーの防止**: 手動での区切り文字管理が不要
+2. **可読性の向上**: テンプレートがより自然な形で記述可能
+3. **保守性**: 条件の追加・削除時の構文エラーリスクを削減
+4. **柔軟性**: 複雑な条件分岐でも正しいSQLを生成
+5. **システム統合**: LIMIT/OFFSET句の自動追加によるページネーション対応
+
+## 課題と改善案
+
+### 現在の問題点
+1. **StatementNode更新の複雑さ**: システムフィールド追加でStatementNodeを変更後、再度トークン抽出が必要
+2. **処理の分散**: clause別処理がparserstep4とintermediateに分散
+3. **トークンレベル操作の複雑さ**: InsertIntoClauseのトークン直接操作が必要
+
+### 改善案: パイプライン処理
+```
+SQL文字列
+↓
+tokenizer: SQL → Token列
+↓  
+parser: Token列 → StatementNode (構造解析のみ)
+↓
+システムフィールド解析: StatementNode → ImplicitParameter[]
+↓
+トークン処理パイプライン:
+  Token列 → clause別変換 → システムフィールド挿入 → 命令生成
+↓
+中間形式JSON
+```
+
+**利点:**
+- StatementNodeは構造解析にのみ使用
+- 各clause別にトークン変換ルールを定義
+- テストしやすい独立したパイプライン段階
+- トークンレベルでの柔軟な操作が可能
+- 制御フロー構造（if/forブロック）の命令表現
 
 ### 1. パーサーフェーズ（parser パッケージ）
 
@@ -252,7 +820,7 @@ ORDER BY /*= sort_field + " " + (sort_direction != "" ? sort_direction : "ASC") 
 
 ```json
 {
-  "name": "get_user_by_id",
+  "description": "ユーザーIDによるユーザー情報取得",
   "function_name": "get_user_by_id",
   "parameters": [
     {"name": "user_id", "type": "int"},
@@ -275,7 +843,7 @@ parameters:
 */
 ```
 
-```markdown
+````markdown
 # Markdownファイルのパラメータセクション
 ## Parameters
 
@@ -283,7 +851,7 @@ parameters:
 user_id: int
 include_details: bool
 ```
-```
+````
 
 ## 命令セット
 
@@ -308,6 +876,13 @@ include_details: bool
 #### システム命令
 - **EMIT_SYSTEM_LIMIT**: システムLIMIT句の出力
 - **EMIT_SYSTEM_OFFSET**: システムOFFSET句の出力
+- **EMIT_SYSTEM_VALUE**: システムフィールド値の出力
+
+#### 境界処理命令
+- **BOUNDARY**: 末尾区切り文字（カンマ、AND、OR）の処理
+
+#### 方言対応命令
+- **EMIT_IF_DIALECT**: データベース方言固有のSQL断片出力
 
 ### 命令の例
 
@@ -315,9 +890,11 @@ include_details: bool
 {"op": "EMIT_STATIC", "value": "SELECT id, name FROM users WHERE ", "pos": "1:1"}
 {"op": "EMIT_EVAL", "param": "user_id", "pos": "1:43"}
 {"op": "IF", "condition": "min_age > 0", "pos": "2:1"}
+{"op": "BOUNDARY", "pos": "2:1"}
 {"op": "EMIT_STATIC", "value": " AND age >= ", "pos": "3:1"}
 {"op": "EMIT_EVAL", "param": "min_age", "pos": "3:12"}
 {"op": "ELSE_IF", "condition": "max_age > 0", "pos": "4:1"}
+{"op": "BOUNDARY", "pos": "4:1"}
 {"op": "EMIT_STATIC", "value": " AND age <= ", "pos": "5:1"}
 {"op": "EMIT_EVAL", "param": "max_age", "pos": "5:12"}
 {"op": "ELSE", "pos": "6:1"}
@@ -328,6 +905,7 @@ include_details: bool
 {"op": "LOOP_END", "pos": "11:1"}
 {"op": "EMIT_SYSTEM_LIMIT", "default_value": "100", "pos": "12:1"}
 {"op": "EMIT_SYSTEM_OFFSET", "default_value": "0", "pos": "13:1"}
+{"op": "EMIT_IF_DIALECT", "dialect": "postgresql", "sql_fragment": "price::DECIMAL(10,2)", "pos": "14:1"}
 ```
 
 ## 実装例
@@ -343,7 +921,7 @@ SELECT id, name, email FROM users WHERE id = /*= user_id */123
 ```json
 {
   "format_version": "1",
-  "name": "get_user_by_id",
+  "description": "ユーザーIDによるユーザー取得",
   "function_name": "get_user_by_id",
   "parameters": [{"name": "user_id", "type": "int"}],
   "expressions": ["user_id"],
@@ -373,7 +951,7 @@ AND age <= /*= max_age */65
 ```json
 {
   "format_version": "1",
-  "name": "get_filtered_users",
+  "description": "年齢条件によるユーザー検索",
   "function_name": "get_filtered_users",
   "parameters": [
     {"name": "min_age", "type": "int"},
@@ -583,7 +1161,11 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["EMIT_STATIC", "EMIT_EVAL", "IF", "ELSE_IF", "ELSE", "END", "LOOP_START", "LOOP_END", "EMIT_SYSTEM_LIMIT", "EMIT_SYSTEM_OFFSET", "EMIT_SYSTEM_VALUE"]
+            "enum": [
+              "EMIT_STATIC", "EMIT_EVAL", "IF", "ELSE_IF", "ELSE", "END", 
+              "LOOP_START", "LOOP_END", "EMIT_SYSTEM_LIMIT", "EMIT_SYSTEM_OFFSET", 
+              "EMIT_SYSTEM_VALUE", "BOUNDARY", "EMIT_IF_DIALECT"
+            ]
           },
           "value": {"type": "string"},
           "param": {"type": "string"},
@@ -591,6 +1173,9 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
           "variable": {"type": "string"},
           "collection": {"type": "string"},
           "default_value": {"type": "string"},
+          "system_field": {"type": "string"},
+          "dialect": {"type": "string"},
+          "sql_fragment": {"type": "string"},
           "pos": {"type": "string"}
         },
         "required": ["op"]
@@ -625,6 +1210,39 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
           "required": ["name", "type"]
         }
       }
+    },
+    "responses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "type": {"type": "string"},
+          "nullable": {"type": "boolean"}
+        },
+        "required": ["name", "type"]
+      }
+    },
+    "response_affinity": {
+      "type": "object",
+      "properties": {
+        "tables": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "type": {"type": "string"},
+              "table": {"type": "string"}
+            },
+            "required": ["name"]
+          }
+        }
+      }
     }
   },
   "required": ["format_version", "instructions"]
@@ -641,16 +1259,313 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
 
 この情報は、デバッグやエラーレポートで使用されます。
 
-## 今後の拡張
+## レスポンス親和性（Response Affinity）
 
-現在の中間形式は、基本的なCEL式の抽出と命令セットの実装に焦点を当てています。将来的には、以下の機能が追加される予定です：
+### 概要
 
-1. **命令セットの最適化**: 命令列の最適化による実行効率の向上
-2. **型推論の強化**: より正確な型情報の提供
-3. **レスポンス型定義**: クエリ結果の型情報
-4. **テーブルスキーマ統合**: データベーススキーマ情報との統合
+レスポンス親和性は、SQLクエリの結果がどのような構造を持つかを解析し、型推論によって決定される情報です。この情報は、コード生成時の結果型定義やORM連携に使用されます。
 
-これらの拡張により、より強力なコード生成と実行時の最適化が可能になります。
+### 算出ロジック
+
+#### 1. **親和性タイプの決定**
+
+```go
+type ResponseAffinity string
+
+const (
+    ResponseAffinityOne  ResponseAffinity = "one"  // 単一レコード
+    ResponseAffinityMany ResponseAffinity = "many" // 複数レコード
+    ResponseAffinityNone ResponseAffinity = "none" // レコードなし
+)
+```
+
+#### 2. **判定アルゴリズム**
+
+**単一レコード（`one`）の条件:**
+- PRIMARY KEYによる完全一致検索
+- UNIQUE制約フィールドによる完全一致検索
+- `LIMIT 1`が明示的に指定されている
+- COUNT(), SUM(), AVG()等の集約関数（単一の値を返すため）
+
+**複数レコード（`many`）の条件:**
+- 上記以外のSELECT文
+- JOINを含むクエリ
+- GROUP BYを含むクエリ（複数行の集約結果）
+
+**レスポンスなし（`none`）の条件:**
+- INSERT文でRETURNING句がない
+- UPDATE文でRETURNING句がない  
+- DELETE文でRETURNING句がない
+
+#### 3. **実装例**
+
+```go
+func detectResponseAffinity(stmt parser.StatementNode, tableInfo *TableInfo) ResponseAffinity {
+    switch s := stmt.(type) {
+    case *parser.SelectStatement:
+        return detectSelectAffinity(s, tableInfo)
+    case *parser.InsertStatement:
+        if s.Returning != nil {
+            return detectReturningAffinity(s.Returning, tableInfo)
+        }
+        return ResponseAffinityNone
+    case *parser.UpdateStatement:
+        if s.Returning != nil {
+            return detectReturningAffinity(s.Returning, tableInfo)
+        }
+        return ResponseAffinityNone
+    case *parser.DeleteStatement:
+        if s.Returning != nil {
+            return detectReturningAffinity(s.Returning, tableInfo)
+        }
+        return ResponseAffinityNone
+    default:
+        return ResponseAffinityNone
+    }
+}
+
+func detectSelectAffinity(stmt *parser.SelectStatement, tableInfo *TableInfo) ResponseAffinity {
+    // LIMIT 1が明示されている場合
+    if hasExplicitLimitOne(stmt.Limit) {
+        return ResponseAffinityOne
+    }
+    
+    // PRIMARY KEYまたはUNIQUE制約による検索
+    if hasUniqueKeyCondition(stmt, tableInfo) {
+        return ResponseAffinityOne
+    }
+    
+    // GROUP BYがある場合は複数行の可能性
+    if stmt.GroupBy != nil {
+        return ResponseAffinityMany
+    }
+    
+    // デフォルトは複数レコード
+    return ResponseAffinityMany
+}
+
+func detectReturningAffinity(returning *parser.ReturningClause, tableInfo *TableInfo) ResponseAffinity {
+    // INSERT文のRETURNINGは挿入レコード数次第
+    if stmt, ok := returning.Parent.(*parser.InsertStatement); ok {
+        if isMultiRowInsert(stmt) {
+            return ResponseAffinityMany // 複数行INSERT
+        }
+        return ResponseAffinityOne // 単一行INSERT
+    }
+    
+    // UPDATE/DELETE文のRETURNINGは条件次第
+    if stmt, ok := returning.Parent.(*parser.UpdateStatement); ok {
+        if hasUniqueKeyCondition(stmt, tableInfo) {
+            return ResponseAffinityOne
+        }
+        return ResponseAffinityMany
+    }
+    
+    if stmt, ok := returning.Parent.(*parser.DeleteStatement); ok {
+        if hasUniqueKeyCondition(stmt, tableInfo) {
+            return ResponseAffinityOne
+        }
+        return ResponseAffinityMany
+    }
+    
+    return ResponseAffinityMany
+}
+
+func isMultiRowInsert(stmt *parser.InsertStatement) bool {
+    // VALUES句で複数行が指定されている場合
+    if stmt.ValuesList != nil && len(stmt.ValuesList.Values) > 1 {
+        return true
+    }
+    
+    // SELECT文からのINSERT（INSERT INTO ... SELECT）の場合
+    if stmt.SelectStatement != nil {
+        return true // SELECTの結果は複数行の可能性
+    }
+    
+    return false
+}
+```
+
+#### 4. **テーブル情報の活用**
+
+```go
+type TableInfo struct {
+    Name        string
+    PrimaryKeys []string
+    UniqueKeys  [][]string // 複合UNIQUE制約に対応
+    Columns     []ColumnInfo
+}
+
+type ColumnInfo struct {
+    Name     string
+    Type     string
+    Nullable bool
+}
+```
+
+#### 5. **WHERE句の解析**
+
+```go
+func hasUniqueKeyCondition(stmt *parser.SelectStatement, tableInfo *TableInfo) bool {
+    whereConditions := extractWhereConditions(stmt.Where)
+    
+    // PRIMARY KEY完全一致チェック
+    if matchesAllPrimaryKeys(whereConditions, tableInfo.PrimaryKeys) {
+        return true
+    }
+    
+    // UNIQUE制約完全一致チェック
+    for _, uniqueKey := range tableInfo.UniqueKeys {
+        if matchesAllUniqueKeys(whereConditions, uniqueKey) {
+            return true
+        }
+    }
+    
+    return false
+}
+```
+
+### 中間形式での表現
+
+```json
+{
+  "response_affinity": {
+    "type": "one",
+    "tables": ["users"],
+    "columns": [
+      {"name": "id", "type": "int", "table": "users"},
+      {"name": "name", "type": "string", "table": "users"},
+      {"name": "email", "type": "string", "table": "users"}
+    ],
+    "reasoning": "PRIMARY KEY condition detected: users.id = ?"
+  }
+}
+```
+
+### 算出例
+
+#### 例1: 単一レコード（PRIMARY KEY検索）
+```sql
+SELECT id, name, email FROM users WHERE id = /*= user_id */123
+```
+
+**算出結果:**
+- **Type**: `one`
+- **理由**: PRIMARY KEY (`id`) による完全一致検索
+- **テーブル**: `users`
+- **カラム**: `id`, `name`, `email`
+
+#### 例2: 単一レコード（集約関数）
+```sql
+SELECT COUNT(*) as total FROM users WHERE active = true
+```
+
+**算出結果:**
+- **Type**: `one`
+- **理由**: 集約関数は単一の値を返す
+- **テーブル**: `users`
+- **カラム**: `total` (計算フィールド)
+
+#### 例3: 複数レコード
+```sql
+SELECT id, name FROM users WHERE department = /*= dept */'Engineering'
+```
+
+**算出結果:**
+- **Type**: `many`
+- **理由**: 非UNIQUE条件による検索
+- **テーブル**: `users`
+- **カラム**: `id`, `name`
+
+#### 例4: レスポンスなし（INSERT文）
+```sql
+INSERT INTO users (name, email) VALUES (/*= name */'John', /*= email */'john@example.com')
+```
+
+**算出結果:**
+- **Type**: `none`
+- **理由**: RETURNING句がないINSERT文
+- **テーブル**: `users`
+- **カラム**: なし
+
+#### 例5: 単一レコード（単一行INSERT with RETURNING）
+```sql
+INSERT INTO users (name, email) VALUES (/*= name */'John', /*= email */'john@example.com') RETURNING id, created_at
+```
+
+**算出結果:**
+- **Type**: `one`
+- **理由**: 単一行INSERT文
+- **テーブル**: `users`
+- **カラム**: `id`, `created_at`
+
+#### 例6: 複数レコード（複数行INSERT with RETURNING）
+```sql
+INSERT INTO users (name, email) VALUES 
+    (/*= user1.name */'John', /*= user1.email */'john@example.com'),
+    (/*= user2.name */'Jane', /*= user2.email */'jane@example.com')
+RETURNING id, created_at
+```
+
+**算出結果:**
+- **Type**: `many`
+- **理由**: 複数行INSERT文
+- **テーブル**: `users`
+- **カラム**: `id`, `created_at`
+
+#### 例8: 複数レコード（SELECT文からのINSERT with RETURNING）
+```sql
+INSERT INTO users_backup (name, email) 
+SELECT name, email FROM users WHERE active = false 
+RETURNING id, created_at
+```
+
+**算出結果:**
+- **Type**: `many`
+- **理由**: SELECT文からのINSERT（複数行の可能性）
+- **テーブル**: `users_backup`
+- **カラム**: `id`, `created_at`
+#### 例9: 複数レコード（UPDATE with RETURNING）
+```sql
+UPDATE users SET active = false WHERE department = /*= dept */'Engineering' RETURNING id, name
+```
+
+**算出結果:**
+- **Type**: `many`
+- **理由**: 複数行が更新される可能性
+- **テーブル**: `users`
+- **カラム**: `id`, `name`
+
+**算出結果:**
+- **Type**: `many`
+- **理由**: 複数行が更新される可能性
+- **テーブル**: `users`
+- **カラム**: `id`, `name`
+
+### 利用用途
+
+#### 1. **コード生成での活用**
+```go
+// Go言語での生成例
+func GetUser(ctx context.Context, userID int) (*User, error)             // one (SELECT)
+func CountUsers(ctx context.Context) (int, error)                       // one (COUNT)
+func GetUsers(ctx context.Context, dept string) ([]*User, error)        // many (SELECT)
+func CreateUser(ctx context.Context, user *User) error                  // none (単一INSERT)
+func CreateUserWithID(ctx context.Context, user *User) (*User, error)   // one (単一INSERT RETURNING)
+func CreateUsers(ctx context.Context, users []*User) ([]*User, error)   // many (複数INSERT RETURNING)
+func UpdateUsers(ctx context.Context, dept string) ([]*User, error)     // many (UPDATE RETURNING)
+func DeleteUser(ctx context.Context, userID int) error                  // none (DELETE)
+```
+
+#### 2. **型安全性の向上**
+- **`one`**: 単一オブジェクトまたはnullを返す
+- **`many`**: 配列を返す（空配列の可能性あり）
+- **`none`**: エラーのみを返す（レスポンスデータなし）
+
+#### 3. **ORM連携**
+- **`one`**: `FindOne()`, `First()`, `Count()`メソッドの生成
+- **`many`**: `FindAll()`, `Where()`メソッドの生成
+- **`none`**: `Create()`, `Update()`, `Delete()`メソッドの生成（戻り値なし）
 
 ## システムフィールド機能
 
