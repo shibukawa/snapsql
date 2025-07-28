@@ -8,7 +8,6 @@ import (
 	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
-	"github.com/shibukawa/snapsql/parser/parserstep5"
 )
 
 func TestSystemFieldIntegration_Simple(t *testing.T) {
@@ -63,7 +62,7 @@ UPDATE users SET name = 'Updated Name', email = 'updated@example.com' WHERE id =
 	}
 
 	// Step 1: Check system fields and get implicit parameters
-	gerr := &parserstep5.GenerateError{}
+	gerr := &GenerateError{}
 	implicitParams := CheckSystemFields(updateStmt, config, parameters, gerr)
 	assert.False(t, gerr.HasErrors(), "Expected no errors but got: %v", gerr)
 	assert.Equal(t, 2, len(implicitParams)) // updated_at (default), updated_by (implicit)
@@ -139,7 +138,7 @@ INSERT INTO users (name, email) VALUES ('John', 'john@example.com')`
 	}
 
 	// Should get implicit parameters for INSERT
-	gerr := &parserstep5.GenerateError{}
+	gerr := &GenerateError{}
 	implicitParams := CheckSystemFields(stmt, config, parameters, gerr)
 	assert.False(t, gerr.HasErrors(), "Expected no errors but got: %v", gerr)
 	assert.Equal(t, 2, len(implicitParams))
@@ -263,7 +262,7 @@ func TestCheckSystemFields_MockData(t *testing.T) {
 		{Name: "lock_no", Type: "int"}, // Explicit parameter provided
 	}
 
-	gerr := &parserstep5.GenerateError{}
+	gerr := &GenerateError{}
 	implicitParams := CheckSystemFields(mockStmt, config, parameters, gerr)
 	assert.False(t, gerr.HasErrors(), "Expected no errors but got: %v", gerr)
 	assert.Equal(t, 2, len(implicitParams)) // updated_at (default), updated_by (implicit)

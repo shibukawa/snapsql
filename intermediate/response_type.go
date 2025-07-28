@@ -6,8 +6,8 @@ import (
 	"github.com/shibukawa/snapsql/typeinference"
 )
 
-// DetermineResponseType analyzes the statement and determines the response type
-func DetermineResponseType(stmt parser.StatementNode, tableInfo map[string]*TableInfo) []Response {
+// determineResponseType analyzes the statement and determines the response type
+func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*TableInfo) []Response {
 	// Convert tableInfo to DatabaseSchema format for typeinference package
 	schemas := convertTableInfoToSchemas(tableInfo)
 

@@ -1,4 +1,4 @@
-package parserstep5
+package intermediate
 
 import (
 	"fmt"
@@ -10,11 +10,16 @@ type GenerateError struct {
 	Errors []string
 }
 
-// AddError adds an error to the collection
-func (ge *GenerateError) AddError(err error) {
+// Add adds an error to the collection
+func (ge *GenerateError) Add(err error) {
 	if err != nil {
 		ge.Errors = append(ge.Errors, err.Error())
 	}
+}
+
+// AddError adds an error to the collection (alias for Add for backward compatibility)
+func (ge *GenerateError) AddError(err error) {
+	ge.Add(err)
 }
 
 // HasErrors returns true if there are any errors

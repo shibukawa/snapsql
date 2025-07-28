@@ -4,8 +4,36 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shibukawa/snapsql/tokenizer"
+	tok "github.com/shibukawa/snapsql/tokenizer"
 )
+
+// InstructionGenerator generates execution instructions from tokens
+type InstructionGenerator struct{}
+
+func (i *InstructionGenerator) Name() string {
+	return "InstructionGenerator"
+}
+
+func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
+	// Use existing GenerateInstructions function for all advanced features
+	// The TokenTransformer should have already added system field tokens
+	instructions := GenerateInstructions(ctx.Tokens, ctx.Expressions)
+
+	// Detect SQL patterns that need dialect-specific handling
+	dialectConversions := detectDialectPatterns(ctx.Tokens)
+
+	// Insert dialect-specific instructions where needed
+	instructions = insertDialectInstructions(instructions, dialectConversions)
+
+	// Set env_index in loop instructions based on environments
+	if len(ctx.Environments) > 0 {
+		envs := convertEnvironmentsToEnvs(ctx.Environments)
+		setEnvIndexInInstructions(envs, instructions)
+	}
+
+	ctx.Instructions = instructions
+	return nil
+}
 
 // DialectVariant represents a SQL variant for different database dialects
 type DialectVariant struct {
@@ -15,21 +43,21 @@ type DialectVariant struct {
 
 // DialectConversion represents a detected SQL pattern that needs dialect-specific conversion
 type DialectConversion struct {
-	StartTokenIndex int               `json:"start_token_index"`
-	EndTokenIndex   int               `json:"end_token_index"`
-	OriginalTokens  []tokenizer.Token `json:"original_tokens"`
-	Variants        []DialectVariant  `json:"variants"`
+	StartTokenIndex int              `json:"start_token_index"`
+	EndTokenIndex   int              `json:"end_token_index"`
+	OriginalTokens  []tok.Token      `json:"original_tokens"`
+	Variants        []DialectVariant `json:"variants"`
 }
 
 // detectDialectPatterns scans tokens for SQL patterns that need dialect-specific handling
-func detectDialectPatterns(tokens []tokenizer.Token) []DialectConversion {
+func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 	var conversions []DialectConversion
 
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
 
 		// Skip header comments and directives
-		if token.Type == tokenizer.BLOCK_COMMENT && isHeaderComment(token.Value) {
+		if token.Type == tok.BLOCK_COMMENT && isHeaderComment(token.Value) {
 			continue
 		}
 		if token.Directive != nil {
@@ -68,7 +96,7 @@ func detectDialectPatterns(tokens []tokenizer.Token) []DialectConversion {
 			conversion := &DialectConversion{
 				StartTokenIndex: i,
 				EndTokenIndex:   i,
-				OriginalTokens:  []tokenizer.Token{token},
+				OriginalTokens:  []tok.Token{token},
 				Variants: []DialectVariant{
 					{
 						Dialects:    []string{"postgresql", "sqlite"},
@@ -94,7 +122,7 @@ func detectDialectPatterns(tokens []tokenizer.Token) []DialectConversion {
 			conversion := &DialectConversion{
 				StartTokenIndex: i,
 				EndTokenIndex:   i,
-				OriginalTokens:  []tokenizer.Token{token},
+				OriginalTokens:  []tok.Token{token},
 				Variants: []DialectVariant{
 					{
 						Dialects:    []string{"postgresql"},
@@ -141,7 +169,7 @@ func detectDialectPatterns(tokens []tokenizer.Token) []DialectConversion {
 }
 
 // detectCastSyntax detects CAST(expr AS type) syntax and splits it into parts
-func detectCastSyntax(tokens []tokenizer.Token, startIndex int) *DialectConversion {
+func detectCastSyntax(tokens []tok.Token, startIndex int) *DialectConversion {
 	// Expected pattern: CAST ( expr AS type )
 	if startIndex+6 >= len(tokens) {
 		return nil
@@ -177,8 +205,8 @@ func detectCastSyntax(tokens []tokenizer.Token, startIndex int) *DialectConversi
 	}
 
 	// Extract expression and type
-	var exprTokens []tokenizer.Token
-	var typeTokens []tokenizer.Token
+	var exprTokens []tok.Token
+	var typeTokens []tok.Token
 
 	for i := startIndex + 2; i < asIndex; i++ {
 		exprTokens = append(exprTokens, tokens[i])
@@ -211,7 +239,7 @@ func detectCastSyntax(tokens []tokenizer.Token, startIndex int) *DialectConversi
 }
 
 // detectPostgreSQLCast detects expr::type syntax (including complex expressions)
-func detectPostgreSQLCast(tokens []tokenizer.Token, colonIndex int) *DialectConversion {
+func detectPostgreSQLCast(tokens []tok.Token, colonIndex int) *DialectConversion {
 	// Expected pattern: expr :: type
 	if colonIndex == 0 || colonIndex+1 >= len(tokens) {
 		return nil
@@ -295,8 +323,8 @@ func detectPostgreSQLCast(tokens []tokenizer.Token, colonIndex int) *DialectConv
 	}
 
 	// Extract expression and type tokens
-	var exprTokens []tokenizer.Token
-	var typeTokens []tokenizer.Token
+	var exprTokens []tok.Token
+	var typeTokens []tok.Token
 
 	for i := exprStartIndex; i < colonIndex; i++ {
 		exprTokens = append(exprTokens, tokens[i])
@@ -329,7 +357,7 @@ func detectPostgreSQLCast(tokens []tokenizer.Token, colonIndex int) *DialectConv
 }
 
 // detectNowFunction detects NOW() function
-func detectNowFunction(tokens []tokenizer.Token, startIndex int) *DialectConversion {
+func detectNowFunction(tokens []tok.Token, startIndex int) *DialectConversion {
 	// Expected pattern: NOW ( )
 	if startIndex+2 >= len(tokens) {
 		return nil
@@ -358,7 +386,7 @@ func detectNowFunction(tokens []tokenizer.Token, startIndex int) *DialectConvers
 }
 
 // detectConcatFunction detects CONCAT(...) function and splits it into parts
-func detectConcatFunction(tokens []tokenizer.Token, startIndex int) *DialectConversion {
+func detectConcatFunction(tokens []tok.Token, startIndex int) *DialectConversion {
 	// Expected pattern: CONCAT ( args )
 	if startIndex+2 >= len(tokens) {
 		return nil
@@ -390,7 +418,7 @@ func detectConcatFunction(tokens []tokenizer.Token, startIndex int) *DialectConv
 	}
 
 	// Extract arguments
-	var argTokens []tokenizer.Token
+	var argTokens []tok.Token
 	for i := startIndex + 2; i < closeParenIndex; i++ {
 		argTokens = append(argTokens, tokens[i])
 	}
@@ -416,7 +444,7 @@ func detectConcatFunction(tokens []tokenizer.Token, startIndex int) *DialectConv
 }
 
 // buildSQLFromTokens reconstructs SQL from tokens
-func buildSQLFromTokens(tokens []tokenizer.Token) string {
+func buildSQLFromTokens(tokens []tok.Token) string {
 	var result strings.Builder
 	for _, token := range tokens {
 		result.WriteString(token.Value)
@@ -744,7 +772,7 @@ func applyDialectConversions(instruction Instruction, conversions []DialectConve
 }
 
 // detectRandFunction detects RAND() function
-func detectRandFunction(tokens []tokenizer.Token, startIndex int) *DialectConversion {
+func detectRandFunction(tokens []tok.Token, startIndex int) *DialectConversion {
 	// Expected pattern: RAND ( )
 	if startIndex+2 >= len(tokens) {
 		return nil
@@ -773,7 +801,7 @@ func detectRandFunction(tokens []tokenizer.Token, startIndex int) *DialectConver
 }
 
 // detectRandomFunction detects RANDOM() function
-func detectRandomFunction(tokens []tokenizer.Token, startIndex int) *DialectConversion {
+func detectRandomFunction(tokens []tok.Token, startIndex int) *DialectConversion {
 	// Expected pattern: RANDOM ( )
 	if startIndex+2 >= len(tokens) {
 		return nil

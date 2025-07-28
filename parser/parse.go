@@ -62,6 +62,7 @@ type (
 	// Schema and namespace types
 	FunctionDefinition = cmn.FunctionDefinition
 	Namespace          = cmn.Namespace
+	SetAssign          = cmn.SetAssign
 
 	// Error types
 	ParseError = cmn.ParseError
@@ -81,6 +82,7 @@ type (
 
 	// Node type constants
 	NodeType = cmn.NodeType
+	JoinType = cmn.JoinType
 )
 
 // Re-export constants
@@ -131,6 +133,14 @@ const (
 	DependencyMain           = cmn.SQDependencyMain
 	DependencyFromSubquery   = cmn.SQDependencyFromSubquery
 	DependencySelectSubquery = cmn.SQDependencySelectSubquery
+
+	JoinNone    = cmn.JoinNone
+	JoinInner   = cmn.JoinInner
+	JoinLeft    = cmn.JoinLeft
+	JoinRight   = cmn.JoinRight
+	JoinFull    = cmn.JoinFull
+	JoinCross   = cmn.JoinCross
+	JoinNatural = cmn.JoinInvalid
 )
 
 // Re-export sentinel errors

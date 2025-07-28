@@ -3,7 +3,7 @@ package intermediate
 import (
 	"fmt"
 
-	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -18,9 +18,9 @@ func (t *TokenTransformer) Process(ctx *ProcessingContext) error {
 	// Transform tokens to include system fields without modifying StatementNode
 	if len(ctx.ImplicitParams) > 0 {
 		switch ctx.Statement.(type) {
-		case *parsercommon.InsertIntoStatement:
+		case *parser.InsertIntoStatement:
 			ctx.Tokens = t.addSystemFieldsToInsertTokens(ctx.Tokens, ctx.ImplicitParams)
-		case *parsercommon.UpdateStatement:
+		case *parser.UpdateStatement:
 			ctx.Tokens = t.addSystemFieldsToUpdateTokens(ctx.Tokens, ctx.ImplicitParams)
 		}
 	}

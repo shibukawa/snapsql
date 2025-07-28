@@ -2,8 +2,12 @@ package intermediate
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
-	"github.com/shibukawa/snapsql/parser/parserstep5"
+	. "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/parser"
+	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
 // SystemFieldProcessor handles system field validation and processing
@@ -19,7 +23,7 @@ func (s *SystemFieldProcessor) Process(ctx *ProcessingContext) error {
 		ctx.SystemFields = extractSystemFieldsInfo(ctx.Config, ctx.Statement)
 
 		// Perform system field validation and get implicit parameters
-		systemFieldErr := &parserstep5.GenerateError{}
+		systemFieldErr := &GenerateError{}
 		ctx.ImplicitParams = CheckSystemFields(ctx.Statement, ctx.Config, ctx.Parameters, systemFieldErr)
 
 		// Check if there were any system field validation errors
@@ -29,4 +33,477 @@ func (s *SystemFieldProcessor) Process(ctx *ProcessingContext) error {
 	}
 
 	return nil
+}
+
+type StatementTypeProvider interface {
+	Type() parser.NodeType
+}
+
+// CheckSystemFields validates system fields configuration and returns implicit parameters
+// Errors are accumulated in the provided GenerateError
+func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []Parameter, gerr *GenerateError) []ImplicitParameter {
+	if config == nil {
+		return nil
+	}
+
+	// Create a map of existing parameters for quick lookup
+	paramMap := make(map[string]bool)
+	for _, param := range parameters {
+		paramMap[param.Name] = true
+	}
+
+	// Determine statement type
+	stmtType := getStatementType(stmt)
+
+	// For INSERT statements, extract existing column names for explicit field validation
+	var existingColumns map[string]bool
+	if stmtType == "INSERT" {
+		if insertStmt, ok := stmt.(*parser.InsertIntoStatement); ok {
+			existingColumns = extractInsertColumnNames(insertStmt)
+		}
+	}
+
+	var implicitParams []ImplicitParameter
+
+	// Check each system field configured for the current operation
+	for _, field := range config.System.Fields {
+		var operation *SystemFieldOperation
+		var operationName string
+
+		switch stmtType {
+		case "INSERT":
+			if field.OnInsert.Default != nil || field.OnInsert.Parameter != "" {
+				operation = &field.OnInsert
+				operationName = "INSERT"
+			}
+		case "UPDATE":
+			if field.OnUpdate.Default != nil || field.OnUpdate.Parameter != "" {
+				operation = &field.OnUpdate
+				operationName = "UPDATE"
+			}
+		default:
+			// SELECT, DELETE, etc. don't need system field validation
+			continue
+		}
+
+		if operation == nil {
+			continue
+		}
+
+		// Perform validation logic with column existence check for INSERT
+		implicitParam := checkSystemFieldWithColumns(field, operation, operationName, paramMap, existingColumns, gerr)
+		if implicitParam != nil {
+			implicitParams = append(implicitParams, *implicitParam)
+		}
+	}
+
+	return implicitParams
+}
+
+// checkSystemFieldWithColumns performs validation for a single system field with column existence check
+func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperation, operationName string, paramMap map[string]bool, existingColumns map[string]bool, gerr *GenerateError) *ImplicitParameter {
+	// Handle parameter configuration
+	switch operation.Parameter {
+	case ParameterExplicit:
+		// Check if explicit parameter is provided
+		if !paramMap[field.Name] {
+			gerr.AddError(fmt.Errorf("%s statement requires explicit parameter '%s' but it was not provided", operationName, field.Name))
+			return nil
+		}
+
+		// For INSERT statements, also check if the field exists in column list
+		if operationName == "INSERT" && existingColumns != nil {
+			if !existingColumns[field.Name] {
+				gerr.AddError(fmt.Errorf("%s statement requires explicit system field '%s' to be included in column list", operationName, field.Name))
+				return nil
+			}
+		}
+
+		// Explicit parameter provided and column exists, no implicit parameter needed
+		return nil
+
+	case ParameterImplicit:
+		// Add to implicit parameters list
+		implicitParam := &ImplicitParameter{
+			Name: field.Name,
+			Type: field.Type,
+		}
+
+		// Add default value if specified
+		if operation.Default != nil {
+			implicitParam.Default = operation.Default
+		}
+
+		return implicitParam
+
+	case ParameterError:
+		// Check if parameter is provided (should cause error)
+		if paramMap[field.Name] {
+			gerr.AddError(fmt.Errorf("%s statement should not include parameter '%s' (configured as error)", operationName, field.Name))
+			return nil
+		}
+		// No parameter provided, no implicit parameter needed
+		return nil
+
+	default:
+		// For fields without explicit parameter configuration,
+		// if there's a default value and the parameter is not provided,
+		// it should be added as implicit parameter
+		if operation.Default != nil && !paramMap[field.Name] {
+			return &ImplicitParameter{
+				Name:    field.Name,
+				Type:    field.Type,
+				Default: operation.Default,
+			}
+		}
+	}
+
+	return nil
+}
+
+// extractInsertColumnNames extracts column names from INSERT statement
+func extractInsertColumnNames(stmt *parser.InsertIntoStatement) map[string]bool {
+	columns := make(map[string]bool)
+
+	// First try the Columns field
+	for _, column := range stmt.Columns {
+		columns[column.Name] = true
+	}
+
+	// If Columns field is empty, extract from clauses
+	if len(columns) == 0 {
+		for _, clause := range stmt.Clauses() {
+			if clause.Type() == parser.INSERT_INTO_CLAUSE {
+				// Extract column names from INSERT INTO clause tokens
+				tokens := clause.RawTokens()
+				inParentheses := false
+				for _, token := range tokens {
+					if token.Type == tok.OPENED_PARENS {
+						inParentheses = true
+						continue
+					}
+					if token.Type == tok.CLOSED_PARENS {
+						inParentheses = false
+						continue
+					}
+					if inParentheses && token.Type == tok.IDENTIFIER {
+						// Skip keywords
+						if !isKeywordOrTableName(token.Value) {
+							columns[token.Value] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return columns
+}
+
+// isKeywordOrTableName checks if a token value is a keyword or table name (not a column)
+func isKeywordOrTableName(value string) bool {
+	keywords := []string{"INSERT", "INTO", "VALUES", "SELECT", "FROM", "WHERE", "ORDER", "BY", "LIMIT", "OFFSET", "users"}
+	upperValue := strings.ToUpper(value)
+	return slices.Contains(keywords, upperValue)
+}
+
+// getStatementType determines the type of SQL statement
+func getStatementType(stmt StatementTypeProvider) string {
+	// Use the same approach as response_affinity.go
+	switch stmt.Type() {
+	case parser.SELECT_STATEMENT:
+		return "SELECT"
+	case parser.INSERT_INTO_STATEMENT:
+		return "INSERT"
+	case parser.UPDATE_STATEMENT:
+		return "UPDATE"
+	case parser.DELETE_FROM_STATEMENT:
+		return "DELETE"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// AddSystemFieldsToInsert adds system fields to INSERT statement's column list and VALUES clause
+// for each implicit parameter
+func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []ImplicitParameter) error {
+	fmt.Printf("DEBUG: AddSystemFieldsToInsert called with %d implicit params\n", len(implicitParams))
+	for _, param := range implicitParams {
+		fmt.Printf("DEBUG: Implicit param: %s\n", param.Name)
+	}
+
+	if len(implicitParams) == 0 {
+		return nil
+	}
+
+	// Check if this is an INSERT statement
+	if stmt.Type() != parser.INSERT_INTO_STATEMENT {
+		return nil // Only process INSERT statements
+	}
+
+	// Cast to InsertIntoStatement to access clauses
+	insertStmt, ok := stmt.(*parser.InsertIntoStatement)
+	if !ok {
+		return fmt.Errorf("failed to cast statement to InsertIntoStatement")
+	}
+
+	fmt.Printf("DEBUG: INSERT statement has %d existing columns\n", len(insertStmt.Columns))
+	for i, col := range insertStmt.Columns {
+		fmt.Printf("DEBUG: Existing column[%d]: %s\n", i, col.Name)
+	}
+
+	// Extract existing column names from Columns field
+	existingColumns := make(map[string]bool)
+	for _, column := range insertStmt.Columns {
+		existingColumns[column.Name] = true
+	}
+
+	// Determine which implicit parameters need to be added
+	var columnsToAdd []string
+	for _, param := range implicitParams {
+		if !existingColumns[param.Name] {
+			columnsToAdd = append(columnsToAdd, param.Name)
+		}
+	}
+
+	fmt.Printf("DEBUG: Columns to add: %v\n", columnsToAdd)
+
+	if len(columnsToAdd) == 0 {
+		fmt.Printf("DEBUG: No columns to add, returning\n")
+		return nil
+	}
+
+	// Add columns to Columns field
+	for _, columnName := range columnsToAdd {
+		fmt.Printf("DEBUG: Adding column: %s\n", columnName)
+		insertStmt.Columns = append(insertStmt.Columns, parser.FieldName{Name: columnName})
+	}
+
+	fmt.Printf("DEBUG: After adding columns, INSERT statement has %d columns\n", len(insertStmt.Columns))
+	for i, col := range insertStmt.Columns {
+		fmt.Printf("DEBUG: Final column[%d]: %s\n", i, col.Name)
+	}
+
+	// Update InsertIntoClause tokens to include new columns
+	if insertStmt.Into != nil {
+		fmt.Printf("DEBUG: Updating InsertIntoClause tokens\n")
+		if err := addSystemColumnsToInsertIntoClause(insertStmt.Into, columnsToAdd); err != nil {
+			return fmt.Errorf("failed to add system columns to InsertIntoClause: %w", err)
+		}
+	}
+
+	// Add EMIT_SYSTEM_VALUE tokens to VALUES clause
+	if insertStmt.ValuesList != nil {
+		fmt.Printf("DEBUG: Adding system values to VALUES clause\n")
+		if err := addSystemValuesToValuesClause(insertStmt.ValuesList, columnsToAdd); err != nil {
+			return fmt.Errorf("failed to add system values to VALUES clause: %w", err)
+		}
+	} else {
+		fmt.Printf("DEBUG: No VALUES clause found\n")
+	}
+
+	return nil
+}
+
+// getColumnNames extracts column names from FieldName slice for debugging
+func getColumnNames(columns []parser.FieldName) []string {
+	var names []string
+	for _, column := range columns {
+		names = append(names, column.Name)
+	}
+	return names
+}
+
+// addSystemValuesToValuesClause adds EMIT_SYSTEM_VALUE tokens to VALUES clause
+func addSystemValuesToValuesClause(valuesClause *parser.ValuesClause, columnsToAdd []string) error {
+	tokens := valuesClause.RawTokens()
+
+	// Find the position to insert new values (before the closing parenthesis)
+	var insertPosition int = -1
+	for i := len(tokens) - 1; i >= 0; i-- {
+		if tokens[i].Type == tok.CLOSED_PARENS {
+			insertPosition = i
+			break
+		}
+	}
+
+	if insertPosition == -1 {
+		return fmt.Errorf("could not find closing parenthesis in VALUES clause")
+	}
+
+	// Create new tokens for the system values
+	var newTokens []tok.Token
+	for _, column := range columnsToAdd {
+		// Add comma and space before each new value
+		newTokens = append(newTokens, tok.Token{
+			Type:  tok.COMMA,
+			Value: ",",
+		})
+		newTokens = append(newTokens, tok.Token{
+			Type:  tok.WHITESPACE,
+			Value: " ",
+		})
+		// Add EMIT_SYSTEM_VALUE token
+		newTokens = append(newTokens, tok.Token{
+			Type:  tok.BLOCK_COMMENT,
+			Value: fmt.Sprintf("/*# EMIT_SYSTEM_VALUE: %s */", column),
+		})
+	}
+
+	// Insert new tokens before the closing parenthesis
+	for range newTokens {
+	}
+
+	return nil
+}
+
+// addSystemColumnsToInsertIntoClause adds system columns to InsertIntoClause tokens
+func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClause, columnsToAdd []string) error {
+	tokens := insertIntoClause.RawTokens()
+	fmt.Printf("DEBUG: InsertIntoClause has %d tokens before update\n", len(tokens))
+
+	// Find the position to insert new columns (before the closing parenthesis)
+	var insertPosition int = -1
+	for i := len(tokens) - 1; i >= 0; i-- {
+		if tokens[i].Type == tok.CLOSED_PARENS {
+			insertPosition = i
+			break
+		}
+	}
+
+	if insertPosition == -1 {
+		return fmt.Errorf("could not find closing parenthesis in InsertIntoClause")
+	}
+
+	// Create new tokens for the system columns
+	var newTokens []tok.Token
+	for _, column := range columnsToAdd {
+		// Add comma and space before each new column
+		newTokens = append(newTokens, tok.Token{
+			Type:  tok.COMMA,
+			Value: ",",
+		})
+		newTokens = append(newTokens, tok.Token{
+			Type:  tok.WHITESPACE,
+			Value: " ",
+		})
+		// Add the column name
+		newTokens = append(newTokens, tok.Token{
+			Type:  tok.IDENTIFIER,
+			Value: column,
+		})
+	}
+
+	// Insert new tokens before the closing parenthesis
+	updatedTokens := make([]tok.Token, 0, len(tokens)+len(newTokens))
+	updatedTokens = append(updatedTokens, tokens[:insertPosition]...)
+	updatedTokens = append(updatedTokens, newTokens...)
+	updatedTokens = append(updatedTokens, tokens[insertPosition:]...)
+
+	// TODO: Update the InsertIntoClause tokens in pipeline approach
+	// insertIntoClause.SetRawTokens(updatedTokens)
+
+	// Also update the Columns field in InsertIntoClause
+	for _, column := range columnsToAdd {
+		insertIntoClause.Columns = append(insertIntoClause.Columns, column)
+	}
+
+	fmt.Printf("DEBUG: InsertIntoClause has %d tokens after update\n", len(updatedTokens))
+	return nil
+}
+
+// AddSystemFieldsToUpdate adds EMIT_SYSTEM_VALUE calls to UPDATE statement's SET clause
+// for each implicit parameter
+func AddSystemFieldsToUpdate(stmt parser.StatementNode, implicitParams []ImplicitParameter) error {
+	if len(implicitParams) == 0 {
+		return nil
+	}
+
+	// Check if this is an UPDATE statement
+	if stmt.Type() != parser.UPDATE_STATEMENT {
+		return nil // Only process UPDATE statements
+	}
+
+	// Cast to UpdateStatement to access SET clause
+	updateStmt, ok := stmt.(*parser.UpdateStatement)
+	if !ok {
+		return fmt.Errorf("failed to cast statement to UpdateStatement")
+	}
+
+	// Find the SET clause
+	if updateStmt.Set == nil {
+		return fmt.Errorf("UPDATE statement has no SET clause")
+	}
+
+	// Add EMIT_SYSTEM_VALUE calls for each implicit parameter
+	for _, param := range implicitParams {
+		err := addSystemValueToSetClause(updateStmt.Set, param.Name)
+		if err != nil {
+			return fmt.Errorf("failed to add system value for %s: %w", param.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// addSystemValueToSetClause adds a system value assignment to the SET clause
+func addSystemValueToSetClause(setClause *parser.SetClause, columnName string) error {
+	// Create tokens for EMIT_SYSTEM_VALUE(column_name)
+	valueTokens := []tok.Token{
+		{Type: tok.IDENTIFIER, Value: "EMIT_SYSTEM_VALUE"},
+		{Type: tok.OPENED_PARENS, Value: "("},
+		{Type: tok.IDENTIFIER, Value: columnName},
+		{Type: tok.CLOSED_PARENS, Value: ")"},
+	}
+
+	// Create a new SetAssign for the system field
+	systemAssign := parser.SetAssign{
+		FieldName: columnName,
+		Value:     valueTokens,
+	}
+
+	// Add to existing assignments
+	setClause.Assigns = append(setClause.Assigns, systemAssign)
+
+	return nil
+}
+
+// GetSystemFieldsSQL generates the SQL fragment for system fields
+// This is a helper function to generate the actual SQL text for manual SQL construction
+func GetSystemFieldsSQL(implicitParams []ImplicitParameter) string {
+	if len(implicitParams) == 0 {
+		return ""
+	}
+
+	var systemCalls []string
+	for _, param := range implicitParams {
+		systemCalls = append(systemCalls, fmt.Sprintf("EMIT_SYSTEM_VALUE(%s)", param.Name))
+	}
+
+	return ", " + strings.Join(systemCalls, ", ")
+}
+
+// GetSystemFieldAssignments returns the system field assignments as SetAssign slice
+// This can be used to append to existing SET clause assignments
+func GetSystemFieldAssignments(implicitParams []ImplicitParameter) []parser.SetAssign {
+	var assignments []parser.SetAssign
+
+	for _, param := range implicitParams {
+		// Create tokens for EMIT_SYSTEM_VALUE(column_name)
+		valueTokens := []tok.Token{
+			{Type: tok.IDENTIFIER, Value: "EMIT_SYSTEM_VALUE"},
+			{Type: tok.OPENED_PARENS, Value: "("},
+			{Type: tok.IDENTIFIER, Value: param.Name},
+			{Type: tok.CLOSED_PARENS, Value: ")"},
+		}
+
+		assignment := parser.SetAssign{
+			FieldName: param.Name,
+			Value:     valueTokens,
+		}
+
+		assignments = append(assignments, assignment)
+	}
+
+	return assignments
 }

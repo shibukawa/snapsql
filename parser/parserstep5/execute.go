@@ -8,8 +8,8 @@ import (
 // It runs parserstep3 and parserstep4 first, then applies dummy detection and implicit if conditions.
 // Returns the processed statement and any errors from previous steps.
 func Execute(statement parsercommon.StatementNode, functionDef *parsercommon.FunctionDefinition) error {
-	// Create GenerateError to collect all generation errors
-	gerr := &GenerateError{}
+	// Create ParseError to collect all generation errors
+	gerr := &parsercommon.ParseError{}
 
 	// Apply parserstep5 processing
 	// Apply array expansion for VALUES clauses
@@ -23,7 +23,7 @@ func Execute(statement parsercommon.StatementNode, functionDef *parsercommon.Fun
 	validateAndLinkDirectives(statement, perr)
 
 	// Check for generation errors first
-	if gerr.HasErrors() {
+	if len(gerr.Errors) > 0 {
 		return gerr
 	}
 

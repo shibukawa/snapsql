@@ -131,18 +131,3 @@ func hasConditionalBlockBefore(tokens []tokenizer.Token, index int) bool {
 	}
 	return false
 }
-
-// shouldPlaceBoundaryAfterConditional checks if we should place a BOUNDARY after a conditional block
-func shouldPlaceBoundaryAfterConditional(tokens []tokenizer.Token, endIndex int) bool {
-	// Look ahead to see if the next significant token is a clause boundary
-	for i := endIndex + 1; i < len(tokens); i++ {
-		token := tokens[i]
-		if token.Type != tokenizer.WHITESPACE && token.Type != tokenizer.LINE_COMMENT {
-			if strings.TrimSpace(token.Value) == "" {
-				continue // Skip empty content
-			}
-			return isClauseBoundary(token)
-		}
-	}
-	return false
-}

@@ -35,7 +35,7 @@ type ObjectArrayExpansionInfo struct {
 
 // expandArraysInValues expands array variables in VALUES clauses
 // Converts: VALUES (/*= values */) -> VALUES (/*# for v : values *//*= v*/,/*# end */)
-func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition, gerr *GenerateError) {
+func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition, gerr *cmn.ParseError) {
 	// Only process INSERT statements
 	if stmt.Type() != cmn.INSERT_INTO_STATEMENT {
 		// For non-INSERT statements, check for object usage in IN clauses
@@ -70,7 +70,7 @@ func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinitio
 }
 
 // expandArraysInTokensWithNamespace processes tokens using Namespace for dynamic type checking
-func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.Namespace, gerr *GenerateError) {
+func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.Namespace, gerr *cmn.ParseError) {
 	// First pass: identify expansion markers and collect column information
 	var expansionInfo []ObjectExpansionInfo
 	var objectArrayExpansionInfo []ObjectArrayExpansionInfo
@@ -125,7 +125,7 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 				if isObjectArrayTypeWithNamespace(variableName, namespace) {
 					// Check if this is inside an IN clause - object arrays are not allowed in IN clauses
 					if isInsideInClause(tokens, i) {
-						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object array but object arrays cannot be used in IN clauses", ErrObjectInInClause, variableName))
+						gerr.Add(fmt.Errorf("%w: variable '%s' is an object array but object arrays cannot be used in IN clauses", ErrObjectInInClause, variableName))
 					} else if len(columnOrder) > 0 {
 						// Check if this is in a context where object array expansion is allowed
 						// Collect object array expansion info
@@ -137,7 +137,7 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 						// Mark this token for object array expansion
 						tokens[i].Value = fmt.Sprintf("/*# EXPAND_OBJECT_ARRAY: %s */", variableName)
 					} else {
-						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object array but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
+						gerr.Add(fmt.Errorf("%w: variable '%s' is an object array but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
 					}
 				} else if isArrayTypeWithNamespace(variableName, namespace) {
 					// Mark this token for expansion
@@ -145,7 +145,7 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 				} else if isObjectTypeWithNamespace(variableName, namespace) {
 					// Check if this is inside an IN clause - objects are not allowed in IN clauses
 					if isInsideInClause(tokens, i) {
-						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object but objects cannot be used in IN clauses", ErrObjectInInClause, variableName))
+						gerr.Add(fmt.Errorf("%w: variable '%s' is an object but objects cannot be used in IN clauses", ErrObjectInInClause, variableName))
 					} else if len(columnOrder) > 0 {
 						// Check if this is in a context where object expansion is allowed
 						// Collect object expansion info
@@ -157,7 +157,7 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 						// Mark this token for object expansion
 						tokens[i].Value = fmt.Sprintf("/*# EXPAND_OBJECT: %s */", variableName)
 					} else {
-						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
+						gerr.Add(fmt.Errorf("%w: variable '%s' is an object but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
 					}
 				} else {
 				}
@@ -428,7 +428,7 @@ func extractColumnOrderFromTokens(tokens []tokenizer.Token) []string {
 }
 
 // expandObjectInTokens performs the actual object expansion in tokens
-func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, namespace *cmn.Namespace, gerr *GenerateError) {
+func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, namespace *cmn.Namespace, gerr *cmn.ParseError) {
 	// Get the object value from namespace
 	objectValue, _, err := namespace.Eval(info.VariableName)
 	if err != nil {
@@ -445,7 +445,7 @@ func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, na
 	for _, column := range info.ColumnOrder {
 		if _, exists := objectMap[column]; !exists {
 			availableFields := slices.Collect(maps.Keys(objectMap))
-			gerr.AddError(fmt.Errorf("%w: object '%s' does not have required field '%s', available fields: %v",
+			gerr.Add(fmt.Errorf("%w: object '%s' does not have required field '%s', available fields: %v",
 				ErrMissingObjectField, info.VariableName, column, availableFields))
 			return
 		}
@@ -492,7 +492,7 @@ func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, na
 }
 
 // expandObjectArrayInTokens performs the actual object array expansion in tokens
-func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansionInfo, namespace *cmn.Namespace, gerr *GenerateError) {
+func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansionInfo, namespace *cmn.Namespace, gerr *cmn.ParseError) {
 	// Get the array value from namespace
 	arrayValue, _, err := namespace.Eval(info.VariableName)
 	if err != nil {
@@ -515,7 +515,7 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 		element := rv.Index(i).Interface()
 		objectMap, ok := element.(map[string]interface{})
 		if !ok {
-			gerr.AddError(fmt.Errorf("array element at index %d is not an object: %T", i, element))
+			gerr.Add(fmt.Errorf("array element at index %d is not an object: %T", i, element))
 			return
 		}
 
@@ -523,7 +523,7 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 		for _, column := range info.ColumnOrder {
 			if _, exists := objectMap[column]; !exists {
 				availableFields := slices.Collect(maps.Keys(objectMap))
-				gerr.AddError(fmt.Errorf("%w: object at index %d in array '%s' does not have required field '%s', available fields: %v",
+				gerr.Add(fmt.Errorf("%w: object at index %d in array '%s' does not have required field '%s', available fields: %v",
 					ErrMissingObjectField, i, info.VariableName, column, availableFields))
 				return
 			}
@@ -575,7 +575,7 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 }
 
 // checkObjectUsageInStatement checks for invalid object usage in non-INSERT statements
-func checkObjectUsageInStatement(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition, gerr *GenerateError) {
+func checkObjectUsageInStatement(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition, gerr *cmn.ParseError) {
 	if funcDef == nil {
 		return
 	}
@@ -609,12 +609,12 @@ func checkObjectUsageInStatement(stmt cmn.StatementNode, funcDef *cmn.FunctionDe
 			if isObjectTypeWithNamespace(variableName, namespace) {
 				// Check if this is inside an IN clause
 				if isInsideInClause(tokens, i) {
-					gerr.AddError(fmt.Errorf("%w: variable '%s' is an object but objects cannot be used in IN clauses", ErrObjectInInClause, variableName))
+					gerr.Add(fmt.Errorf("%w: variable '%s' is an object but objects cannot be used in IN clauses", ErrObjectInInClause, variableName))
 				}
 			} else if isObjectArrayTypeWithNamespace(variableName, namespace) {
 				// Check if this is inside an IN clause
 				if isInsideInClause(tokens, i) {
-					gerr.AddError(fmt.Errorf("%w: variable '%s' is an object array but object arrays cannot be used in IN clauses", ErrObjectInInClause, variableName))
+					gerr.Add(fmt.Errorf("%w: variable '%s' is an object array but object arrays cannot be used in IN clauses", ErrObjectInInClause, variableName))
 				}
 			}
 		}

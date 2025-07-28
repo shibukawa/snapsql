@@ -4,15 +4,15 @@ import (
 	"fmt"
 
 	. "github.com/shibukawa/snapsql"
-	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // TokenPipeline represents a token processing pipeline
 type TokenPipeline struct {
 	tokens     []tokenizer.Token
-	stmt       parsercommon.StatementNode
-	funcDef    *parsercommon.FunctionDefinition
+	stmt       parser.StatementNode
+	funcDef    *parser.FunctionDefinition
 	config     *Config
 	tableInfo  map[string]*TableInfo
 	processors []TokenProcessor
@@ -27,8 +27,8 @@ type TokenProcessor interface {
 // ProcessingContext holds the context for token processing
 type ProcessingContext struct {
 	Tokens      []tokenizer.Token
-	Statement   parsercommon.StatementNode
-	FunctionDef *parsercommon.FunctionDefinition
+	Statement   parser.StatementNode
+	FunctionDef *parser.FunctionDefinition
 	Config      *Config
 	TableInfo   map[string]*TableInfo
 
@@ -46,7 +46,7 @@ type ProcessingContext struct {
 }
 
 // NewTokenPipeline creates a new token processing pipeline
-func NewTokenPipeline(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, config *Config, tableInfo map[string]*TableInfo) *TokenPipeline {
+func NewTokenPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *Config, tableInfo map[string]*TableInfo) *TokenPipeline {
 	return &TokenPipeline{
 		tokens:    extractTokensFromStatement(stmt),
 		stmt:      stmt,
@@ -90,7 +90,7 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		ImplicitParameters: ctx.ImplicitParams,
 		SystemFields:       ctx.SystemFields,
 		ResponseAffinity:   ctx.ResponseAffinity,
-		Responses:          DetermineResponseType(ctx.Statement, ctx.TableInfo), // Add type inference result
+		Responses:          determineResponseType(ctx.Statement, ctx.TableInfo), // Add type inference result
 	}
 
 	return result, nil
@@ -124,7 +124,7 @@ func convertEnvironmentsToEnvs(environments []string) [][]EnvVar {
 }
 
 // CreateDefaultPipeline creates a pipeline with default processors
-func CreateDefaultPipeline(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, config *Config, tableInfo map[string]*TableInfo) *TokenPipeline {
+func CreateDefaultPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *Config, tableInfo map[string]*TableInfo) *TokenPipeline {
 	pipeline := NewTokenPipeline(stmt, funcDef, config, tableInfo)
 
 	// Add processors in order
