@@ -16,6 +16,7 @@ import (
 var (
 	ErrObjectInArrayContext = errors.New("object cannot be expanded in array context")
 	ErrMissingObjectField   = errors.New("object missing required field for column expansion")
+	ErrObjectInInClause     = errors.New("object cannot be used in IN clause")
 )
 
 // ObjectExpansionInfo holds information about object expansion
@@ -37,6 +38,8 @@ type ObjectArrayExpansionInfo struct {
 func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition, gerr *GenerateError) {
 	// Only process INSERT statements
 	if stmt.Type() != cmn.INSERT_INTO_STATEMENT {
+		// For non-INSERT statements, check for object usage in IN clauses
+		checkObjectUsageInStatement(stmt, funcDef, gerr)
 		return
 	}
 
@@ -53,7 +56,6 @@ func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinitio
 	// Create namespace for CEL evaluation
 	namespace, err := cmn.NewNamespaceFromDefinition(funcDef)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to create namespace: %v\n", err)
 		return
 	}
 
@@ -69,15 +71,6 @@ func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinitio
 
 // expandArraysInTokensWithNamespace processes tokens using Namespace for dynamic type checking
 func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.Namespace, gerr *GenerateError) {
-	fmt.Printf("DEBUG: expandArraysInTokensWithNamespace called with %d tokens\n", len(tokens))
-
-	// Print token sequence for debugging
-	fmt.Printf("DEBUG: Token sequence:\n")
-	for i, token := range tokens {
-		fmt.Printf("  [%d] %s: %s\n", i, token.Type, token.Value)
-	}
-	fmt.Printf("\n")
-
 	// First pass: identify expansion markers and collect column information
 	var expansionInfo []ObjectExpansionInfo
 	var objectArrayExpansionInfo []ObjectArrayExpansionInfo
@@ -85,37 +78,31 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 
 	// Extract column order from INSERT statement
 	columnOrder = extractColumnOrderFromTokens(tokens)
-	fmt.Printf("DEBUG: Extracted column order: %v\n", columnOrder)
 
 	// Process tokens to find expansion opportunities
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
-		fmt.Printf("DEBUG: Processing token [%d]: %s\n", i, token.Value)
 
 		// Handle FOR directive - enter loop scope
 		if isForDirective(token) {
 			loopVar, arrayVar := parseForDirective(token)
 			if loopVar != "" && arrayVar != "" {
-				fmt.Printf("DEBUG: Entering loop scope: %s : %s\n", loopVar, arrayVar)
 
 				// Evaluate the array variable to get its actual value
 				arrayValue, _, err := namespace.Eval(arrayVar)
 				if err != nil {
-					fmt.Printf("DEBUG: Failed to evaluate array variable %s: %v\n", arrayVar, err)
 					continue
 				}
 
 				// Convert to []any using reflection
 				arraySlice, err := convertToAnySlice(arrayValue)
 				if err != nil {
-					fmt.Printf("DEBUG: Failed to convert %s to []any: %v\n", arrayVar, err)
 					continue
 				}
 
 				// Enter loop with the actual array values
 				err = namespace.EnterLoop(loopVar, arraySlice)
 				if err != nil {
-					fmt.Printf("DEBUG: Failed to enter loop: %v\n", err)
 				}
 			}
 			continue
@@ -123,7 +110,6 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 
 		// Handle END directive - exit loop scope
 		if isEndDirective(token) {
-			fmt.Printf("DEBUG: Exiting loop scope\n")
 			namespace.ExitLoop()
 			continue
 		}
@@ -131,17 +117,17 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 		// Look for variable directive pattern: /*= variable_name */
 		if isVariableDirective(token) {
 			variableName := extractVariableName(token)
-			fmt.Printf("DEBUG: Found variable directive: %s\n", variableName)
 
 			// Check if this is inside parentheses (VALUES clause pattern)
 			if isInsideParentheses(tokens, i) {
-				fmt.Printf("DEBUG: Variable %s is inside parentheses\n", variableName)
 
 				// Use Namespace to check variable type in priority order
 				if isObjectArrayTypeWithNamespace(variableName, namespace) {
-					// Check if this is in a context where object array expansion is allowed
-					if len(columnOrder) > 0 {
-						fmt.Printf("DEBUG: Variable %s is object array type - should expand\n", variableName)
+					// Check if this is inside an IN clause - object arrays are not allowed in IN clauses
+					if isInsideInClause(tokens, i) {
+						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object array but object arrays cannot be used in IN clauses", ErrObjectInInClause, variableName))
+					} else if len(columnOrder) > 0 {
+						// Check if this is in a context where object array expansion is allowed
 						// Collect object array expansion info
 						objectArrayExpansionInfo = append(objectArrayExpansionInfo, ObjectArrayExpansionInfo{
 							TokenIndex:   i,
@@ -154,13 +140,14 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object array but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
 					}
 				} else if isArrayTypeWithNamespace(variableName, namespace) {
-					fmt.Printf("DEBUG: Variable %s is array type - should expand\n", variableName)
 					// Mark this token for expansion
 					tokens[i].Value = fmt.Sprintf("/*# EXPAND_ARRAY: %s */", variableName)
 				} else if isObjectTypeWithNamespace(variableName, namespace) {
-					// Check if this is in a context where object expansion is allowed
-					if len(columnOrder) > 0 {
-						fmt.Printf("DEBUG: Variable %s is object type - should expand\n", variableName)
+					// Check if this is inside an IN clause - objects are not allowed in IN clauses
+					if isInsideInClause(tokens, i) {
+						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object but objects cannot be used in IN clauses", ErrObjectInInClause, variableName))
+					} else if len(columnOrder) > 0 {
+						// Check if this is in a context where object expansion is allowed
 						// Collect object expansion info
 						expansionInfo = append(expansionInfo, ObjectExpansionInfo{
 							TokenIndex:   i,
@@ -173,10 +160,8 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 						gerr.AddError(fmt.Errorf("%w: variable '%s' is an object but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
 					}
 				} else {
-					fmt.Printf("DEBUG: Variable %s is not array, object array, or object type\n", variableName)
 				}
 			} else {
-				fmt.Printf("DEBUG: Variable %s is not inside parentheses\n", variableName)
 			}
 		}
 	}
@@ -280,67 +265,52 @@ func convertToAnySlice(value any) ([]any, error) {
 // isArrayTypeWithNamespace checks if a variable is an array type using Namespace CEL evaluation
 func isArrayTypeWithNamespace(variableName string, namespace *cmn.Namespace) bool {
 	// Try to evaluate the variable in the current namespace context
-	result, typeName, err := namespace.Eval(variableName)
+	result, _, err := namespace.Eval(variableName)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to evaluate %s: %v\n", variableName, err)
 		return false
 	}
-
-	fmt.Printf("DEBUG: Variable %s has CEL type: %s, Go value type: %T\n", variableName, typeName, result)
 
 	// Use reflection to check if it's a slice or array
 	if result != nil {
 		rv := reflect.ValueOf(result)
 		isArray := rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array
 		if isArray {
-			fmt.Printf("DEBUG: Variable %s is a Go slice/array (detected via reflection)\n", variableName)
 		} else {
-			fmt.Printf("DEBUG: Variable %s is not a Go slice/array (kind: %s)\n", variableName, rv.Kind())
 		}
 		return isArray
 	}
 
-	fmt.Printf("DEBUG: Variable %s has nil value\n", variableName)
 	return false
 }
 
 // isObjectTypeWithNamespace checks if a variable is an object type (map) using Namespace CEL evaluation
 func isObjectTypeWithNamespace(variableName string, namespace *cmn.Namespace) bool {
 	// Try to evaluate the variable in the current namespace context
-	result, typeName, err := namespace.Eval(variableName)
+	result, _, err := namespace.Eval(variableName)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to evaluate %s: %v\n", variableName, err)
 		return false
 	}
-
-	fmt.Printf("DEBUG: Variable %s has CEL type: %s, Go value type: %T\n", variableName, typeName, result)
 
 	// Use reflection to check if it's a map (object)
 	if result != nil {
 		rv := reflect.ValueOf(result)
 		isObject := rv.Kind() == reflect.Map
 		if isObject {
-			fmt.Printf("DEBUG: Variable %s is a Go map/object (detected via reflection)\n", variableName)
 		} else {
-			fmt.Printf("DEBUG: Variable %s is not a Go map/object (kind: %s)\n", variableName, rv.Kind())
 		}
 		return isObject
 	}
 
-	fmt.Printf("DEBUG: Variable %s has nil value\n", variableName)
 	return false
 }
 
 // isObjectArrayTypeWithNamespace checks if a variable is an array of objects using Namespace CEL evaluation
 func isObjectArrayTypeWithNamespace(variableName string, namespace *cmn.Namespace) bool {
 	// Try to evaluate the variable in the current namespace context
-	result, typeName, err := namespace.Eval(variableName)
+	result, _, err := namespace.Eval(variableName)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to evaluate %s: %v\n", variableName, err)
 		return false
 	}
-
-	fmt.Printf("DEBUG: Variable %s has CEL type: %s, Go value type: %T\n", variableName, typeName, result)
 
 	// Use reflection to check if it's a slice or array
 	if result != nil {
@@ -353,21 +323,16 @@ func isObjectArrayTypeWithNamespace(variableName string, namespace *cmn.Namespac
 					firstRv := reflect.ValueOf(firstElement)
 					isObjectArray := firstRv.Kind() == reflect.Map
 					if isObjectArray {
-						fmt.Printf("DEBUG: Variable %s is an array of objects (detected via reflection)\n", variableName)
 					} else {
-						fmt.Printf("DEBUG: Variable %s is an array but elements are not objects (element kind: %s)\n", variableName, firstRv.Kind())
 					}
 					return isObjectArray
 				}
 			}
-			fmt.Printf("DEBUG: Variable %s is an empty array, cannot determine element type\n", variableName)
 			return false
 		}
-		fmt.Printf("DEBUG: Variable %s is not an array (kind: %s)\n", variableName, rv.Kind())
 		return false
 	}
 
-	fmt.Printf("DEBUG: Variable %s has nil value\n", variableName)
 	return false
 }
 
@@ -384,6 +349,40 @@ func isInsideParentheses(tokens []tokenizer.Token, index int) bool {
 			if parenCount < 0 {
 				// Found unmatched opening parenthesis
 				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isInsideInClause checks if a token position is inside an IN clause parentheses
+func isInsideInClause(tokens []tokenizer.Token, tokenIndex int) bool {
+	// Look backwards to find if there's an IN keyword before the opening parenthesis
+	parenDepth := 0
+
+	for i := tokenIndex - 1; i >= 0; i-- {
+		token := tokens[i]
+
+		if token.Type == tokenizer.CLOSED_PARENS {
+			parenDepth++
+		} else if token.Type == tokenizer.OPENED_PARENS {
+			if parenDepth == 0 {
+				// Look backwards from the opening parenthesis to find IN keyword
+				for j := i - 1; j >= 0; j-- {
+					prevToken := tokens[j]
+					if prevToken.Type == tokenizer.WHITESPACE {
+						continue
+					}
+					if (prevToken.Type == tokenizer.IDENTIFIER || prevToken.Type == tokenizer.RESERVED_IDENTIFIER) && strings.ToUpper(prevToken.Value) == "IN" {
+						return true
+					}
+					// If we hit a non-whitespace token that's not IN, stop looking
+					break
+				}
+				break
+			} else {
+				parenDepth--
 			}
 		}
 	}
@@ -430,20 +429,15 @@ func extractColumnOrderFromTokens(tokens []tokenizer.Token) []string {
 
 // expandObjectInTokens performs the actual object expansion in tokens
 func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, namespace *cmn.Namespace, gerr *GenerateError) {
-	fmt.Printf("DEBUG: Expanding object %s at token index %d with columns: %v\n",
-		info.VariableName, info.TokenIndex, info.ColumnOrder)
-
 	// Get the object value from namespace
 	objectValue, _, err := namespace.Eval(info.VariableName)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to evaluate object %s: %v\n", info.VariableName, err)
 		return
 	}
 
 	// Convert to map
 	objectMap, ok := objectValue.(map[string]interface{})
 	if !ok {
-		fmt.Printf("DEBUG: Object %s is not a map: %T\n", info.VariableName, objectValue)
 		return
 	}
 
@@ -464,7 +458,6 @@ func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, na
 	}
 
 	if len(fieldExpressions) > 0 {
-		fmt.Printf("DEBUG: Replacing token with first field: %s\n", fieldExpressions[0])
 		// Replace the EXPAND_OBJECT token with the first field expression
 		tokens[info.TokenIndex].Value = fieldExpressions[0]
 
@@ -492,9 +485,7 @@ func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, na
 		if len(newTokens) > 0 {
 			// This is a simplified insertion - in practice, we'd need to modify the slice properly
 			// For now, we'll just log what would be inserted
-			fmt.Printf("DEBUG: Would insert %d new tokens after index %d\n", len(newTokens), info.TokenIndex)
-			for _, token := range newTokens {
-				fmt.Printf("DEBUG: New token: %s = %s\n", token.Type, token.Value)
+			for range newTokens {
 			}
 		}
 	}
@@ -502,26 +493,20 @@ func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, na
 
 // expandObjectArrayInTokens performs the actual object array expansion in tokens
 func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansionInfo, namespace *cmn.Namespace, gerr *GenerateError) {
-	fmt.Printf("DEBUG: Expanding object array %s at token index %d with columns: %v\n",
-		info.VariableName, info.TokenIndex, info.ColumnOrder)
-
 	// Get the array value from namespace
 	arrayValue, _, err := namespace.Eval(info.VariableName)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to evaluate array %s: %v\n", info.VariableName, err)
 		return
 	}
 
 	// Convert to slice
 	rv := reflect.ValueOf(arrayValue)
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		fmt.Printf("DEBUG: Array %s is not a slice/array: %T\n", info.VariableName, arrayValue)
 		return
 	}
 
 	arrayLength := rv.Len()
 	if arrayLength == 0 {
-		fmt.Printf("DEBUG: Array %s is empty\n", info.VariableName)
 		return
 	}
 
@@ -556,7 +541,6 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 	}
 
 	if len(valuesClauses) > 0 {
-		fmt.Printf("DEBUG: Replacing token with first VALUES clause: %s\n", valuesClauses[0])
 		// Replace the EXPAND_OBJECT_ARRAY token with the first VALUES clause
 		tokens[info.TokenIndex].Value = valuesClauses[0]
 
@@ -584,9 +568,54 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 		if len(newTokens) > 0 {
 			// This is a simplified insertion - in practice, we'd need to modify the slice properly
 			// For now, we'll just log what would be inserted
-			fmt.Printf("DEBUG: Would insert %d new tokens after index %d\n", len(newTokens), info.TokenIndex)
-			for _, token := range newTokens {
-				fmt.Printf("DEBUG: New token: %s = %s\n", token.Type, token.Value)
+			for range newTokens {
+			}
+		}
+	}
+}
+
+// checkObjectUsageInStatement checks for invalid object usage in non-INSERT statements
+func checkObjectUsageInStatement(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinition, gerr *GenerateError) {
+	if funcDef == nil {
+		return
+	}
+
+	// Extract tokens from the statement using the same method as generator.go
+	tokens := []tokenizer.Token{}
+	for _, clause := range stmt.Clauses() {
+		tokens = append(tokens, clause.RawTokens()...)
+	}
+	if cte := stmt.CTE(); cte != nil {
+		tokens = append(tokens, cte.RawTokens()...)
+	}
+	tokens = append(tokens, stmt.LeadingTokens()...)
+
+	if len(tokens) == 0 {
+		return
+	}
+
+	// Create namespace for type checking
+	namespace, err := cmn.NewNamespaceFromDefinition(funcDef)
+	if err != nil {
+		return
+	}
+
+	// Check each token for variable directives
+	for i, token := range tokens {
+		if isVariableDirective(token) {
+			variableName := extractVariableName(token)
+
+			// Check if this is an object type
+			if isObjectTypeWithNamespace(variableName, namespace) {
+				// Check if this is inside an IN clause
+				if isInsideInClause(tokens, i) {
+					gerr.AddError(fmt.Errorf("%w: variable '%s' is an object but objects cannot be used in IN clauses", ErrObjectInInClause, variableName))
+				}
+			} else if isObjectArrayTypeWithNamespace(variableName, namespace) {
+				// Check if this is inside an IN clause
+				if isInsideInClause(tokens, i) {
+					gerr.AddError(fmt.Errorf("%w: variable '%s' is an object array but object arrays cannot be used in IN clauses", ErrObjectInInClause, variableName))
+				}
 			}
 		}
 	}

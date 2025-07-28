@@ -9,6 +9,7 @@ import (
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parserstep5"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -117,17 +118,28 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 		result.SystemFields = extractSystemFieldsInfo(config, stmt)
 
 		// Perform system field validation and get implicit parameters
-		implicitParams, err := CheckSystemFields(stmt, config, parameters)
-		if err != nil {
-			return nil, err
+		// Create a GenerateError to collect system field validation errors
+		systemFieldErr := &parserstep5.GenerateError{}
+		implicitParams := CheckSystemFields(stmt, config, parameters, systemFieldErr)
+
+		// Check if there were any system field validation errors
+		if systemFieldErr.HasErrors() {
+			return nil, fmt.Errorf("system field validation failed: %w", systemFieldErr)
 		}
+
 		result.ImplicitParameters = implicitParams
 
 		// For UPDATE statements, add system fields to SET clause
+		// For INSERT statements, add system fields to column list and VALUES clause
 		if len(implicitParams) > 0 {
-			err = AddSystemFieldsToUpdate(stmt, implicitParams)
-			if err != nil {
-				return nil, fmt.Errorf("failed to add system fields to UPDATE statement: %w", err)
+			if stmt.Type() == parsercommon.UPDATE_STATEMENT {
+				if err := AddSystemFieldsToUpdate(stmt, implicitParams); err != nil {
+					return nil, fmt.Errorf("failed to add system fields to UPDATE statement: %w", err)
+				}
+			} else if stmt.Type() == parsercommon.INSERT_INTO_STATEMENT {
+				if err := AddSystemFieldsToInsert(stmt, implicitParams); err != nil {
+					return nil, fmt.Errorf("failed to add system fields to INSERT statement: %w", err)
+				}
 			}
 		}
 	}

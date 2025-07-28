@@ -1,0 +1,5 @@
+User:
+  id: int
+  name: string
+  email: string
+  # phone field is missing - this should cause an error

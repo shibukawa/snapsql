@@ -10,7 +10,7 @@ import (
 func Execute(statement parsercommon.StatementNode, functionDef *parsercommon.FunctionDefinition) error {
 	// Create GenerateError to collect all generation errors
 	gerr := &GenerateError{}
-	
+
 	// Apply parserstep5 processing
 	// Apply array expansion for VALUES clauses
 	expandArraysInValues(statement, functionDef, gerr)
@@ -21,16 +21,16 @@ func Execute(statement parsercommon.StatementNode, functionDef *parsercommon.Fun
 
 	perr := &parsercommon.ParseError{}
 	validateAndLinkDirectives(statement, perr)
-	
+
 	// Check for generation errors first
 	if gerr.HasErrors() {
 		return gerr
 	}
-	
+
 	// Then check for parse errors
 	if len(perr.Errors) > 0 {
 		return perr
 	}
-	
+
 	return nil
 }
