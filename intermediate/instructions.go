@@ -129,6 +129,9 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 	// Track the position of the first significant token for the current instruction
 	var currentInstructionPos string
 
+	// Track the position of the current token being processed
+	var currentTokenPos string
+
 	// Track if we're inside a dummy literal block
 	inDummyBlock := false
 
@@ -192,12 +195,19 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			continue
 		}
 
+		// Update current token position for all significant tokens
+		if token.Type != tokenizer.WHITESPACE &&
+			token.Type != tokenizer.LINE_COMMENT &&
+			token.Type != tokenizer.BLOCK_COMMENT {
+			currentTokenPos = getPos(token)
+		}
+
 		// Update current instruction position if this is a significant token and we don't have one yet
 		if currentInstructionPos == "" &&
 			token.Type != tokenizer.WHITESPACE &&
 			token.Type != tokenizer.LINE_COMMENT &&
 			token.Type != tokenizer.BLOCK_COMMENT {
-			currentInstructionPos = getPos(token)
+			currentInstructionPos = currentTokenPos
 		}
 
 		// Check for boundary instructions
@@ -409,6 +419,27 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			// Don't add whitespace directly to the buffer
 
 		case tokenizer.BLOCK_COMMENT:
+			// Check for EMIT_SYSTEM_VALUE comment
+			if strings.Contains(token.Value, "EMIT_SYSTEM_VALUE:") {
+				// Extract system field name from comment
+				// Format: /*# EMIT_SYSTEM_VALUE: field_name */
+				parts := strings.Split(token.Value, "EMIT_SYSTEM_VALUE:")
+				if len(parts) == 2 {
+					fieldName := strings.TrimSpace(strings.TrimSuffix(parts[1], "*/"))
+
+					// Flush static buffer before processing
+					flushStaticBuffer()
+
+					// Add EMIT_SYSTEM_VALUE instruction
+					instructions = append(instructions, Instruction{
+						Op:          OpEmitSystemValue,
+						Pos:         getPos(token),
+						SystemField: fieldName,
+					})
+				}
+				continue
+			}
+
 			// Check if this is a directive
 			if token.Directive != nil {
 				// Flush static buffer before processing directive
@@ -494,7 +525,9 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 							Pos: pos,
 						})
 						// Pop from stack if it's an if-related directive
-						if len(directiveStack) > 0 && (directiveStack[len(directiveStack)-1] == "if" || directiveStack[len(directiveStack)-1] == "elseif" || directiveStack[len(directiveStack)-1] == "else") {
+						if len(directiveStack) > 0 && (directiveStack[len(directiveStack)-1] == "if" ||
+							directiveStack[len(directiveStack)-1] == "elseif" ||
+							directiveStack[len(directiveStack)-1] == "else") {
 							directiveStack = directiveStack[:len(directiveStack)-1]
 						}
 					}
@@ -567,13 +600,9 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			}
 
 		case tokenizer.LINE_COMMENT:
-			// Add a space if needed
-			if needSpace {
-				staticBuffer.WriteString(" ")
-				needSpace = false
-			}
-			// Append comment to buffer
-			staticBuffer.WriteString(token.Value)
+			// Skip line comments - they should not appear in the output
+			// Line comments can cause issues if newlines are removed
+			continue
 
 		case tokenizer.DUMMY_LITERAL:
 			// Skip dummy literals - they should not appear in the output
@@ -735,6 +764,22 @@ func extractVariableName(value string) string {
 	parts := strings.Split(value, "*/")
 	if len(parts) > 0 {
 		// Return trimmed variable name
+		return strings.TrimSpace(parts[0])
+	}
+
+	return ""
+}
+
+// extractConstantName extracts the constant name from a constant token
+// Format: /*$ constant_name */placeholder
+func extractConstantName(value string) string {
+	// Remove /*$ and */
+	value = strings.TrimPrefix(value, "/*$")
+
+	// Split by */
+	parts := strings.Split(value, "*/")
+	if len(parts) > 0 {
+		// Return trimmed constant name
 		return strings.TrimSpace(parts[0])
 	}
 

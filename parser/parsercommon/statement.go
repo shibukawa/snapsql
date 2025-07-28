@@ -190,13 +190,24 @@ type InsertIntoStatement struct {
 }
 
 func NewInsertIntoStatement(leadingTokens []tokenizer.Token, with *WithClause, clauses []ClauseNode) *InsertIntoStatement {
-	return &InsertIntoStatement{
+	stmt := &InsertIntoStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
 			with:          with,
 			clauses:       clauses,
 		},
 	}
+	
+	// Set clause references (Columns will be set later in parserstep4)
+	for _, clause := range clauses {
+		if insertIntoClause, ok := clause.(*InsertIntoClause); ok {
+			stmt.Into = insertIntoClause
+		} else if valuesClause, ok := clause.(*ValuesClause); ok {
+			stmt.ValuesList = valuesClause
+		}
+	}
+	
+	return stmt
 }
 
 // Clauses implements BlockNode.

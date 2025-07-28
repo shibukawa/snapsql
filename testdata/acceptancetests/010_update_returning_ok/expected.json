@@ -8,7 +8,25 @@
   "instructions": [
     {"op": "EMIT_STATIC", "pos": "7:1", "value": "UPDATE users SET name ="},
     {"op": "EMIT_EVAL", "pos": "8:12", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "8:41", "value": ", updated_at = NOW() WHERE id ="},
+    {"op": "EMIT_STATIC", "pos": "8:41", "value": ", updated_at = "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "8:56",
+      "sql_fragment": "NOW()",
+      "dialects": [
+        "mysql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "8:56",
+      "sql_fragment": "CURRENT_TIMESTAMP",
+      "dialects": [
+        "postgresql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "8:61", "value": " WHERE id ="},
     {"op": "EMIT_EVAL", "pos": "9:12", "expr_index": 1},
     {"op": "EMIT_STATIC", "pos": "10:1", "value": "RETURNING id, name, email, updated_at"}
   ],

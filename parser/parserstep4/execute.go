@@ -40,6 +40,15 @@ func Execute(stmt cmn.StatementNode) error {
 		}
 	case *cmn.InsertIntoStatement:
 		finalizeInsertIntoClause(s.Into, s.Select, perr)
+		
+		// Copy columns from InsertIntoClause to InsertIntoStatement
+		if s.Into != nil {
+			s.Columns = make([]cmn.FieldName, len(s.Into.Columns))
+			for i, columnName := range s.Into.Columns {
+				s.Columns[i] = cmn.FieldName{Name: columnName}
+			}
+		}
+		
 		if s.With != nil {
 			emptyCheck(s.With, perr)
 		}

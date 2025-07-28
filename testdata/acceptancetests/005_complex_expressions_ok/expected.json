@@ -11,9 +11,6 @@
   "format_version": "1",
   "function_name": "getComplexData",
   "instructions": [
-    {"op": "IF", "pos": "0:0", "condition": "page \u003e 0 ? (page - 1) * page_size : 0 != null"},
-    {"op": "IF", "pos": "0:0", "condition": "page_size != 0 ? page_size : 10 != null"},
-    {"op": "IF", "pos": "0:0", "condition": "sort_field != \"\""},
     {"op": "EMIT_STATIC", "pos": "15:1", "value": "SELECT id, name,"},
     {"op": "EMIT_EVAL", "pos": "18:3", "expr_index": 0},
     {"op": "EMIT_STATIC", "pos": "19:1", "value": "FROM users WHERE"},
@@ -37,10 +34,7 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "28:1"},
     {"op": "ELSE", "pos": "28:1"},
     {"op": "EMIT_EVAL", "pos": "28:8", "expr_index": -1},
-    {"op": "END", "pos": "28:1"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"}
+    {"op": "END", "pos": "28:1"}
   ],
   "name": "getComplexData",
   "parameters": [

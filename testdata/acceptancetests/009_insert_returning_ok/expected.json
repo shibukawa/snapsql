@@ -10,7 +10,25 @@
     {"op": "EMIT_EVAL", "pos": "8:9", "expr_index": 0},
     {"op": "EMIT_STATIC", "pos": "8:35", "value": ","},
     {"op": "EMIT_EVAL", "pos": "8:37", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "8:72", "value": ", NOW()) RETURNING id, name, email, created_at"}
+    {"op": "EMIT_STATIC", "pos": "8:72", "value": ", "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "8:74",
+      "sql_fragment": "NOW()",
+      "dialects": [
+        "mysql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "8:74",
+      "sql_fragment": "CURRENT_TIMESTAMP",
+      "dialects": [
+        "postgresql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "8:79", "value": ") RETURNING id, name, email, created_at"}
   ],
   "name": "insert_user_with_returning",
   "parameters": [

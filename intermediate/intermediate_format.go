@@ -31,24 +31,30 @@ const (
 	OpIfSystemOffset   = "IF_SYSTEM_OFFSET"   // Conditional based on system offset
 	OpEmitSystemLimit  = "EMIT_SYSTEM_LIMIT"  // Output system limit value
 	OpEmitSystemOffset = "EMIT_SYSTEM_OFFSET" // Output system offset value
-	OpEmitSystemFields = "EMIT_SYSTEM_FIELDS" // Output system fields
-	OpEmitSystemValues = "EMIT_SYSTEM_VALUES" // Output system values
+	OpEmitSystemValue  = "EMIT_SYSTEM_VALUE"  // Output system value for specific field
+
+	// Database dialect instructions
+	OpEmitIfDialect = "EMIT_IF_DIALECT" // Output SQL fragment if current dialect matches
 )
 
 // Instruction represents a single instruction in the instruction set
 type Instruction struct {
-	Op                  string   `json:"op"`
-	Pos                 string   `json:"pos,omitempty"`                   // Position "line:column" from original template
-	Value               string   `json:"value,omitempty"`                 // For EMIT_STATIC
-	Param               string   `json:"param,omitempty"`                 // For EMIT_PARAM (deprecated, use ExprIndex)
-	ExprIndex           *int     `json:"expr_index,omitempty"`            // Index into expressions array
-	Condition           string   `json:"condition,omitempty"`             // For IF, ELSE_IF (deprecated, use ExprIndex)
-	Variable            string   `json:"variable,omitempty"`              // For FOR
-	Collection          string   `json:"collection,omitempty"`            // For FOR (deprecated, use CollectionExprIndex)
-	CollectionExprIndex *int     `json:"collection_expr_index,omitempty"` // Index into expressions array for collection
-	EnvIndex            *int     `json:"env_index,omitempty"`             // Environment index for LOOP_START/LOOP_END
-	DefaultValue        string   `json:"default_value,omitempty"`         // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
-	Fields              []string `json:"fields,omitempty"`                // For EMIT_SYSTEM_FIELDS, EMIT_SYSTEM_VALUES
+	Op                  string `json:"op"`
+	Pos                 string `json:"pos,omitempty"`                   // Position "line:column" from original template
+	Value               string `json:"value,omitempty"`                 // For EMIT_STATIC
+	Param               string `json:"param,omitempty"`                 // For EMIT_PARAM (deprecated, use ExprIndex)
+	ExprIndex           *int   `json:"expr_index,omitempty"`            // Index into expressions array
+	Condition           string `json:"condition,omitempty"`             // For IF, ELSE_IF (deprecated, use ExprIndex)
+	Variable            string `json:"variable,omitempty"`              // For FOR
+	Collection          string `json:"collection,omitempty"`            // For FOR (deprecated, use CollectionExprIndex)
+	CollectionExprIndex *int   `json:"collection_expr_index,omitempty"` // Index into expressions array for collection
+	EnvIndex            *int   `json:"env_index,omitempty"`             // Environment index for LOOP_START/LOOP_END
+	DefaultValue        string `json:"default_value,omitempty"`         // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
+	SystemField         string `json:"system_field,omitempty"`          // For EMIT_SYSTEM_VALUE - system field name
+
+	// Database dialect fields
+	SqlFragment string   `json:"sql_fragment,omitempty"` // For EMIT_IF_DIALECT - SQL fragment to output
+	Dialects    []string `json:"dialects,omitempty"`     // For EMIT_IF_DIALECT - target database dialects
 }
 
 // Parameter represents a function parameter

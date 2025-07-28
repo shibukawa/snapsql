@@ -15,9 +15,158 @@
 - 言語固有の構造や前提条件なし
 - SQL構造と言語固有メタデータの明確な分離
 
+## 設計目標
+
+### 1. 言語非依存
+- あらゆるプログラミング言語で利用可能なJSON形式
+- 言語固有の構造や前提条件なし
+- SQL構造と言語固有メタデータの明確な分離
+
 ### 2. 完全な情報保持
 - テンプレートメタデータと関数定義
 - CEL式の完全な抽出と型情報
+
+## 処理フロー
+
+### 1. パーサーフェーズ（parser パッケージ）
+
+#### parserstep2: 基本構造解析
+- SQL文字列をトークン化
+- StatementNode（AST）の基本構造を構築
+- WITH句、各種clause の識別
+
+#### parserstep3: 構文検証
+- 基本的な構文エラーの検出
+
+#### parserstep4: Clause詳細解析
+各clause別に詳細な解析と検証を実行：
+
+**SELECT文の処理順序:**
+1. `finalizeSelectClause()` - SELECT句の詳細解析
+2. `finalizeFromClause()` - FROM句の詳細解析  
+3. `emptyCheck(WHERE)` - WHERE句の空チェック
+4. `finalizeGroupByClause()` - GROUP BY句の詳細解析
+5. `finalizeHavingClause()` - HAVING句の詳細解析（GROUP BYとの関連チェック）
+6. `finalizeOrderByClause()` - ORDER BY句の詳細解析
+7. `finalizeLimitOffsetClause()` - LIMIT/OFFSET句の詳細解析
+8. `emptyCheck(FOR)` - FOR句の空チェック
+
+**INSERT文の処理順序:**
+1. `finalizeInsertIntoClause()` - INSERT INTO句の詳細解析（カラムリスト解析）
+2. `InsertIntoStatement.Columns`への反映
+3. `emptyCheck(WITH)` - WITH句の空チェック
+4. SELECT部分がある場合は上記SELECT文の処理を実行
+5. `finalizeReturningClause()` - RETURNING句の詳細解析
+
+**UPDATE文の処理順序:**
+1. `finalizeUpdateClause()` - UPDATE句の詳細解析
+2. `finalizeSetClause()` - SET句の詳細解析
+3. `emptyCheck(WHERE)` - WHERE句の空チェック
+4. `finalizeReturningClause()` - RETURNING句の詳細解析
+
+**DELETE文の処理順序:**
+1. `finalizeDeleteFromClause()` - DELETE FROM句の詳細解析
+2. `emptyCheck(WHERE)` - WHERE句の空チェック
+3. `finalizeReturningClause()` - RETURNING句の詳細解析
+
+#### parserstep5: 高度な処理
+1. `expandArraysInValues()` - VALUES句での配列展開
+2. `detectDummyRanges()` - ダミー値の検出
+3. `applyImplicitIfConditions()` - LIMIT/OFFSET句への暗黙的if条件適用
+4. `validateAndLinkDirectives()` - ディレクティブの検証とリンク
+
+### 2. 中間形式生成フェーズ（intermediate パッケージ）
+
+#### 前処理
+1. `ExtractFromStatement()` - CEL式と環境変数の抽出
+2. 関数定義からのパラメータ抽出
+3. `extractSystemFieldsInfo()` - システムフィールド情報の抽出
+
+#### システムフィールド処理
+1. `CheckSystemFields()` - システムフィールドの検証と暗黙パラメータ生成
+2. Statement別のシステムフィールド追加:
+   - UPDATE文: `AddSystemFieldsToUpdate()` - SET句への追加
+   - INSERT文: `AddSystemFieldsToInsert()` - カラムリストとVALUES句への追加
+
+#### 命令生成
+1. `extractTokensFromStatement()` - StatementNodeからトークン列抽出
+2. `detectDialectPatterns()` - 方言固有パターンの検出
+3. `generateInstructions()` - 実行命令の生成
+4. `detectResponseAffinity()` - レスポンス親和性の検出
+
+## Clause別処理詳細
+
+### INSERT INTO Clause
+- **処理内容**: カラムリストの解析、テーブル名の抽出
+- **出力**: `InsertIntoClause.Columns[]`, `InsertIntoClause.Table`
+- **後続処理**: `InsertIntoStatement.Columns`への反映
+
+### VALUES Clause  
+- **処理内容**: 値リストの解析、配列展開
+- **出力**: 値トークンの構造化
+- **後続処理**: システムフィールド値の追加
+
+### SELECT Clause
+- **処理内容**: 選択フィールドの解析、関数呼び出しの検証
+- **出力**: フィールドリストの構造化
+
+### FROM Clause
+- **処理内容**: テーブル参照、JOIN構文の解析
+- **出力**: テーブル参照の構造化
+
+### WHERE/HAVING Clause
+- **処理内容**: 条件式の検証（空チェックのみ）
+- **出力**: 構文エラーの検出
+
+### GROUP BY Clause
+- **処理内容**: グループ化フィールドの解析
+- **出力**: グループ化条件の構造化
+
+### ORDER BY Clause
+- **処理内容**: ソート条件の解析、ASC/DESC指定の検証
+- **出力**: ソート条件の構造化
+
+### LIMIT/OFFSET Clause
+- **処理内容**: 制限値の検証、暗黙的if条件の適用
+- **出力**: 制限条件の構造化
+
+### SET Clause (UPDATE)
+- **処理内容**: 更新フィールドと値の解析
+- **出力**: 更新条件の構造化
+- **後続処理**: システムフィールドの追加
+
+### RETURNING Clause
+- **処理内容**: 戻り値フィールドの解析
+- **出力**: 戻り値の構造化
+
+## 課題と改善案
+
+### 現在の問題点
+1. **StatementNode更新の複雑さ**: システムフィールド追加でStatementNodeを変更後、再度トークン抽出が必要
+2. **処理の分散**: clause別処理がparserstep4とintermediateに分散
+3. **トークンレベル操作の複雑さ**: InsertIntoClauseのトークン直接操作が必要
+
+### 改善案: パイプライン処理
+```
+SQL文字列
+↓
+tokenizer: SQL → Token列
+↓  
+parser: Token列 → StatementNode (構造解析のみ)
+↓
+システムフィールド解析: StatementNode → ImplicitParameter[]
+↓
+トークン処理パイプライン:
+  Token列 → clause別変換 → システムフィールド挿入 → 命令生成
+↓
+中間形式JSON
+```
+
+**利点:**
+- StatementNodeは構造解析にのみ使用
+- 各clause別にトークン変換ルールを定義
+- テストしやすい独立したパイプライン段階
+- トークンレベルでの柔軟な操作が可能
 - 制御フロー構造（if/forブロック）の命令表現
 
 ### 3. コード生成対応

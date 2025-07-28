@@ -1,5 +1,6 @@
 {
   "envs": [
+    [],
     [
       {"name": "user", "type": "any"}
     ]
@@ -19,7 +20,7 @@
       "pos": "7:8",
       "variable": "user",
       "collection_expr_index": 0,
-      "env_index": 1
+      "env_index": 2
     },
     {"op": "EMIT_STATIC", "pos": "7:31", "value": "("},
     {"op": "EMIT_EVAL", "pos": "7:32", "expr_index": 2},

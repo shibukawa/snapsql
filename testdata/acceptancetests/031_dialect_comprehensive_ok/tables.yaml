@@ -1,0 +1,41 @@
+users:
+  columns:
+    id:
+      type: integer
+      primary_key: true
+    name:
+      type: varchar
+      length: 255
+      nullable: false
+    first_name:
+      type: varchar
+      length: 100
+      nullable: false
+    last_name:
+      type: varchar
+      length: 100
+      nullable: false
+    age:
+      type: integer
+      nullable: true
+    price:
+      type: decimal
+      precision: 10
+      scale: 2
+      nullable: true
+    salary:
+      type: numeric
+      precision: 12
+      scale: 2
+      nullable: true
+    bonus:
+      type: numeric
+      precision: 12
+      scale: 2
+      nullable: true
+    active:
+      type: boolean
+      nullable: false
+    created_at:
+      type: timestamp
+      nullable: false

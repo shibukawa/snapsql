@@ -3,13 +3,11 @@ package intermediate
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
-	"github.com/shibukawa/snapsql/parser/parserstep5"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -37,111 +35,14 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo, config)
 }
 
-// generateIntermediateFormat is the common implementation for both SQL and Markdown
+// generateIntermediateFormat is the common implementation using the new pipeline approach
 func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
-	// Create the intermediate format
-	result := &IntermediateFormat{
-		FormatVersion: "1",
-	}
+	// Create and execute the token processing pipeline
+	pipeline := CreateDefaultPipeline(stmt, funcDef, config, tableInfo)
 
-	// Extract CEL expressions and environment variables
-	expressions, envs := ExtractFromStatement(stmt)
-
-	// Extract tokens for instruction generation
-	tokens := extractTokensFromStatement(stmt)
-
-	// Check for invalid CEL expressions
-	for _, expr := range expressions {
-		if strings.Contains(expr, "missing_closing_parenthesis") {
-			return nil, fmt.Errorf("invalid CEL expression: %s", expr)
-		}
-	}
-
-	// Generate instructions
-	instructions := GenerateInstructions(tokens, expressions)
-
-	// Set env_index in loop instructions based on envs
-	setEnvIndexInInstructions(envs, instructions)
-
-	// Add clause-level IF conditions
-	instructions = addClauseIfConditions(stmt, instructions)
-
-	// Determine response affinity
-	responseAffinity := DetermineResponseAffinity(stmt, tableInfo)
-
-	// Determine response type using provided table info
-	responses := DetermineResponseType(stmt, tableInfo)
-
-	// Extract function information from the function definition
-	var functionName string
-	var parameters []Parameter
-
-	if funcDef != nil {
-		functionName = funcDef.FunctionName
-
-		// Convert function parameters to intermediate format parameters
-		parameters = make([]Parameter, 0, len(funcDef.ParameterOrder))
-		for _, paramName := range funcDef.ParameterOrder {
-			// Use OriginalParameters for parameter type names (preserves common type names)
-			originalParamValue := funcDef.OriginalParameters[paramName]
-
-			var paramType string
-			if originalParamValue != nil {
-				// For common types, use the original type name (e.g., "User", "Department[]")
-				paramType = extractParameterTypeFromOriginal(originalParamValue)
-			} else {
-				// Fallback to normalized type if original is not available
-				paramValue := funcDef.Parameters[paramName]
-				paramType = extractParameterType(paramValue)
-			}
-
-			// Add the parameter
-			parameters = append(parameters, Parameter{
-				Name: paramName,
-				Type: paramType,
-			})
-		}
-	}
-
-	// Populate the intermediate format
-	result.Name = functionName // Use function name as name for now
-	result.FunctionName = functionName
-	result.Parameters = parameters
-	result.Responses = responses
-	result.ResponseAffinity = string(responseAffinity)
-	result.Expressions = expressions
-	result.Envs = envs
-	result.Instructions = instructions
-
-	// Add system fields information from config
-	if config != nil {
-		result.SystemFields = extractSystemFieldsInfo(config, stmt)
-
-		// Perform system field validation and get implicit parameters
-		// Create a GenerateError to collect system field validation errors
-		systemFieldErr := &parserstep5.GenerateError{}
-		implicitParams := CheckSystemFields(stmt, config, parameters, systemFieldErr)
-
-		// Check if there were any system field validation errors
-		if systemFieldErr.HasErrors() {
-			return nil, fmt.Errorf("system field validation failed: %w", systemFieldErr)
-		}
-
-		result.ImplicitParameters = implicitParams
-
-		// For UPDATE statements, add system fields to SET clause
-		// For INSERT statements, add system fields to column list and VALUES clause
-		if len(implicitParams) > 0 {
-			if stmt.Type() == parsercommon.UPDATE_STATEMENT {
-				if err := AddSystemFieldsToUpdate(stmt, implicitParams); err != nil {
-					return nil, fmt.Errorf("failed to add system fields to UPDATE statement: %w", err)
-				}
-			} else if stmt.Type() == parsercommon.INSERT_INTO_STATEMENT {
-				if err := AddSystemFieldsToInsert(stmt, implicitParams); err != nil {
-					return nil, fmt.Errorf("failed to add system fields to INSERT statement: %w", err)
-				}
-			}
-		}
+	result, err := pipeline.Execute()
+	if err != nil {
+		return nil, fmt.Errorf("pipeline execution failed: %w", err)
 	}
 
 	return result, nil
