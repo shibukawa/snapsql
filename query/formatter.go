@@ -66,9 +66,9 @@ func (f *Formatter) formatAsTable(result *QueryResult, output io.Writer) error {
 		colWidths[i] = len(col)
 	}
 
-	for _, row := range result.Rows {
-		for i, val := range row {
-			strVal := formatValue(val)
+	for _, row := range data {
+		for i, col := range result.Columns {
+			strVal := formatValue(row[col])
 			if len(strVal) > colWidths[i] {
 				colWidths[i] = len(strVal)
 			}
@@ -93,10 +93,10 @@ func (f *Formatter) formatAsTable(result *QueryResult, output io.Writer) error {
 	sb.WriteString("\n")
 
 	// Print rows
-	for _, row := range result.Rows {
+	for _, row := range data {
 		sb.WriteString("|")
-		for i, val := range row {
-			strVal := formatValue(val)
+		for i, col := range result.Columns {
+			strVal := formatValue(row[col])
 			sb.WriteString(fmt.Sprintf(" %-*s |", colWidths[i], strVal))
 		}
 		sb.WriteString("\n")
@@ -143,10 +143,10 @@ func (f *Formatter) formatAsMarkdown(result *QueryResult, output io.Writer) erro
 	sb.WriteString("\n")
 
 	// Print rows
-	for _, row := range result.Rows {
+	for _, row := range data {
 		sb.WriteString("| ")
-		for _, val := range row {
-			strVal := formatValue(val)
+		for _, col := range result.Columns {
+			strVal := formatValue(row[col])
 			sb.WriteString(strVal)
 			sb.WriteString(" | ")
 		}
