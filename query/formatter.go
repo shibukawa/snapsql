@@ -8,24 +8,23 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/shibukawa/formatdata-go"
 )
 
 // Formatter formats query results
 type Formatter struct {
-	Format OutputFormat
+	FormatType OutputFormat
 }
 
 // NewFormatter creates a new result formatter
 func NewFormatter(format OutputFormat) *Formatter {
 	return &Formatter{
-		Format: format,
+		FormatType: format,
 	}
 }
 
 // Format formats query results according to the specified format
 func (f *Formatter) Format(result *QueryResult, output io.Writer) error {
-	switch f.Format {
+	switch f.FormatType {
 	case FormatTable:
 		return f.formatAsTable(result, output)
 	case FormatJSON:
@@ -37,7 +36,7 @@ func (f *Formatter) Format(result *QueryResult, output io.Writer) error {
 	case FormatMarkdown:
 		return f.formatAsMarkdown(result, output)
 	default:
-		return fmt.Errorf("%w: %s", ErrInvalidOutputFormat, f.Format)
+		return fmt.Errorf("%w: %s", ErrInvalidOutputFormat, f.FormatType)
 	}
 }
 
@@ -48,58 +47,116 @@ func (f *Formatter) FormatExplain(result *QueryResult, output io.Writer) error {
 	return err
 }
 
-// formatAsTable formats results as a text table using formatdata-go
+// formatAsTable formats results as a text table
 func (f *Formatter) formatAsTable(result *QueryResult, output io.Writer) error {
 	if len(result.Rows) == 0 {
 		fmt.Fprintln(output, "No results")
 		return nil
 	}
 
-	// Convert rows to maps for formatdata
+	// Convert rows to maps for formatting
 	data := rowsToMaps(result.Columns, result.Rows)
 
-	// Create table formatter
-	table := formatdata.NewTableFormatter()
-	table.SetHeader(result.Columns)
+	// Create a simple ASCII table
+	var sb strings.Builder
 
-	// Add footer with count and duration
-	footer := []string{
-		fmt.Sprintf("%d rows", result.Count),
-		fmt.Sprintf("Time: %v", result.Duration),
+	// Calculate column widths
+	colWidths := make([]int, len(result.Columns))
+	for i, col := range result.Columns {
+		colWidths[i] = len(col)
 	}
-	// Pad footer to match column count
-	for len(footer) < len(result.Columns) {
-		footer = append(footer, "")
-	}
-	table.SetFooter(footer[:len(result.Columns)])
 
-	// Format and output
-	formatted := table.Format(data)
-	_, err := fmt.Fprintln(output, formatted)
+	for _, row := range result.Rows {
+		for i, val := range row {
+			strVal := formatValue(val)
+			if len(strVal) > colWidths[i] {
+				colWidths[i] = len(strVal)
+			}
+		}
+	}
+
+	// Print header
+	sb.WriteString("+")
+	for _, width := range colWidths {
+		sb.WriteString(strings.Repeat("-", width+2))
+		sb.WriteString("+")
+	}
+	sb.WriteString("\n|")
+	for i, col := range result.Columns {
+		sb.WriteString(fmt.Sprintf(" %-*s |", colWidths[i], col))
+	}
+	sb.WriteString("\n+")
+	for _, width := range colWidths {
+		sb.WriteString(strings.Repeat("-", width+2))
+		sb.WriteString("+")
+	}
+	sb.WriteString("\n")
+
+	// Print rows
+	for _, row := range result.Rows {
+		sb.WriteString("|")
+		for i, val := range row {
+			strVal := formatValue(val)
+			sb.WriteString(fmt.Sprintf(" %-*s |", colWidths[i], strVal))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Print footer
+	sb.WriteString("+")
+	for _, width := range colWidths {
+		sb.WriteString(strings.Repeat("-", width+2))
+		sb.WriteString("+")
+	}
+	sb.WriteString("\n")
+
+	// Add count and duration
+	sb.WriteString(fmt.Sprintf("%d rows in set (%.3f sec)\n", result.Count, result.Duration.Seconds()))
+
+	_, err := fmt.Fprintln(output, sb.String())
 	return err
 }
 
-// formatAsMarkdown formats results as a Markdown table using formatdata-go
+// formatAsMarkdown formats results as a Markdown table
 func (f *Formatter) formatAsMarkdown(result *QueryResult, output io.Writer) error {
 	if len(result.Rows) == 0 {
 		fmt.Fprintln(output, "No results")
 		return nil
 	}
 
-	// Convert rows to maps for formatdata
+	// Convert rows to maps for formatting
 	data := rowsToMaps(result.Columns, result.Rows)
 
-	// Create markdown formatter
-	md := formatdata.NewMarkdownFormatter()
-	md.SetHeader(result.Columns)
+	// Create a Markdown table
+	var sb strings.Builder
 
-	// Format and output
-	formatted := md.Format(data)
+	// Print header
+	sb.WriteString("| ")
+	for _, col := range result.Columns {
+		sb.WriteString(col)
+		sb.WriteString(" | ")
+	}
+	sb.WriteString("\n|")
+	for range result.Columns {
+		sb.WriteString(" --- |")
+	}
+	sb.WriteString("\n")
+
+	// Print rows
+	for _, row := range result.Rows {
+		sb.WriteString("| ")
+		for _, val := range row {
+			strVal := formatValue(val)
+			sb.WriteString(strVal)
+			sb.WriteString(" | ")
+		}
+		sb.WriteString("\n")
+	}
 
 	// Add footer as a comment
-	footer := fmt.Sprintf("\n<!-- %d rows, Time: %v -->", result.Count, result.Duration)
+	sb.WriteString(fmt.Sprintf("\n<!-- %d rows, Time: %v -->", result.Count, result.Duration))
 
-	_, err := fmt.Fprintln(output, formatted+footer)
+	_, err := fmt.Fprintln(output, sb.String())
 	return err
 }
 

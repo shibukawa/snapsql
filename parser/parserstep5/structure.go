@@ -11,7 +11,7 @@ import (
 func validateAndLinkDirectives(stmt cmn.StatementNode, parseErr *cmn.ParseError) {
 	// Validate directives in each clause separately
 	for _, clause := range stmt.Clauses() {
-		validateClause(clause.ContentTokens(), parseErr)
+		validateClause(clause.RawTokens(), parseErr)
 	}
 }
 

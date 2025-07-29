@@ -52,10 +52,10 @@ func (cbn *clauseBaseNode) baseNode() *clauseBaseNode {
 
 func (cbn *clauseBaseNode) SetIfCondition(condition string, ifIndex, endIndex int, prevClause ClauseNode) {
 	cbn.ifCondition = condition
-	if endIndex != -1 { // for implicit if condition
+	if endIndex != -1 { // for explicit if condition
 		cbn.bodyTokens = cbn.bodyTokens[:endIndex]
 		pbn := prevClause.baseNode()
-		pbn.bodyTokens = cbn.bodyTokens[:ifIndex]
+		pbn.bodyTokens = pbn.bodyTokens[:ifIndex]
 	}
 }
 

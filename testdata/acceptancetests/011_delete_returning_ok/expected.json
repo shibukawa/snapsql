@@ -1,0 +1,16 @@
+{
+  "expressions": [
+    "user_id"
+  ],
+  "format_version": "1",
+  "function_name": "delete_user_with_returning",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "DELETE FROM users WHERE id ="},
+    {"op": "EMIT_EVAL", "pos": "7:12", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "8:1", "value": "RETURNING id, name, email"}
+  ],
+  "parameters": [
+    {"name": "user_id", "type": "int"}
+  ],
+  "response_affinity": "many"
+}

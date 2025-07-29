@@ -1,0 +1,9 @@
+users:
+  columns:
+    id:
+      type: integer
+      primary_key: true
+    name:
+      type: varchar
+      length: 255
+      nullable: false

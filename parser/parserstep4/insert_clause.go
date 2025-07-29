@@ -55,9 +55,11 @@ func finalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Se
 			perr.Add(fmt.Errorf("%w at %s: invalid column name", cmn.ErrInvalidSQL, part.Skipped[0].Val.Position.String()))
 			continue
 		}
-		n := columnName[0].Val
-		clause.Columns = append(clause.Columns, n.Value)
-		nameToPos[n.Value] = append(nameToPos[n.Value], n.Position.String())
+		if len(columnName) > 0 {
+			n := columnName[0].Val
+			clause.Columns = append(clause.Columns, n.Value)
+			nameToPos[n.Value] = append(nameToPos[n.Value], n.Position.String())
+		}
 		if part.Match[0].Val.Type == tok.CLOSED_PARENS {
 			break
 		}

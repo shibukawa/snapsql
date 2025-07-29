@@ -77,11 +77,20 @@ func (t *sqlTokenizer) allTokens() ([]Token, error) {
 
 // Tokenize is the public API that tokenizes SQL and returns all tokens.
 // It always includes whitespace and comments as they are important information.
-func Tokenize(sql string) ([]Token, error) {
+// The optional lineOffset parameter adds the specified number to all line numbers.
+func Tokenize(sql string, lineOffset ...int) ([]Token, error) {
 	t := newSqlTokenizer(sql)
 	tokens, err := t.allTokens()
 	if err != nil {
 		return nil, err
+	}
+
+	// Apply line offset if provided
+	if len(lineOffset) > 0 && lineOffset[0] != 0 {
+		offset := lineOffset[0]
+		for i := range tokens {
+			tokens[i].Position.Line += offset
+		}
 	}
 
 	// Assign indices
@@ -219,6 +228,10 @@ func (t *tokenizer) nextToken() (Token, error) {
 			return token, nil
 		case '*':
 			token := t.newToken(MULTIPLY, string(t.current))
+			t.readChar()
+			return token, nil
+		case '%':
+			token := t.newToken(MODULO, string(t.current))
 			t.readChar()
 			return token, nil
 		default:

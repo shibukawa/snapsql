@@ -1,0 +1,19 @@
+{
+  "expressions": [
+    "values"
+  ],
+  "format_version": "1",
+  "function_name": "insertUsers",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "INSERT INTO users (id) VALUES ("},
+    {"op": "EMIT_EVAL", "pos": "6:32", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "6:45", "value": ")"}
+  ],
+  "parameters": [
+    {
+      "name": "values",
+      "type": "int[]"
+    }
+  ],
+  "response_affinity": "none"
+}

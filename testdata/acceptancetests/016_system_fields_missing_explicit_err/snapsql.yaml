@@ -1,0 +1,6 @@
+system:
+  fields:
+    - name: lock_no
+      type: int
+      on_update:
+        parameter: explicit

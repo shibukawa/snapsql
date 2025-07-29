@@ -55,7 +55,7 @@ func TestExecute(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Execute parserstep5 (includes parserstep3 and parserstep4)
-			err = Execute(statement)
+			err = Execute(statement, nil)
 			assert.NoError(t, err)
 		})
 	}

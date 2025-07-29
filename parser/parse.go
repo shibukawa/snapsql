@@ -62,6 +62,7 @@ type (
 	// Schema and namespace types
 	FunctionDefinition = cmn.FunctionDefinition
 	Namespace          = cmn.Namespace
+	SetAssign          = cmn.SetAssign
 
 	// Error types
 	ParseError = cmn.ParseError
@@ -81,6 +82,7 @@ type (
 
 	// Node type constants
 	NodeType = cmn.NodeType
+	JoinType = cmn.JoinType
 )
 
 // Re-export constants
@@ -131,6 +133,14 @@ const (
 	DependencyMain           = cmn.SQDependencyMain
 	DependencyFromSubquery   = cmn.SQDependencyFromSubquery
 	DependencySelectSubquery = cmn.SQDependencySelectSubquery
+
+	JoinNone    = cmn.JoinNone
+	JoinInner   = cmn.JoinInner
+	JoinLeft    = cmn.JoinLeft
+	JoinRight   = cmn.JoinRight
+	JoinFull    = cmn.JoinFull
+	JoinCross   = cmn.JoinCross
+	JoinNatural = cmn.JoinInvalid
 )
 
 // Re-export sentinel errors
@@ -198,7 +208,7 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	}
 
 	// Step 5: Run parserstep5 - Directive structure validation
-	if err := parserstep5.Execute(stmt); err != nil {
+	if err := parserstep5.Execute(stmt, functionDef); err != nil {
 		return nil, fmt.Errorf("parserstep5 failed: %w", err)
 	}
 
@@ -270,21 +280,11 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 	}
 
 	// Extract function definition from SQL comments
-	var functionDef *FunctionDefinition
-	extractedDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
-	if err == nil {
-		functionDef = extractedDef
-	} else {
-		// Create an empty function definition if none was found
-		functionDef = &FunctionDefinition{
-			FunctionName:   "empty_function",
-			Description:    "Auto-generated empty function",
-			Parameters:     make(map[string]any),
-			ParameterOrder: []string{},
-		}
+	functionDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// Parse the tokens
 	stmt, err := RawParse(tokens, functionDef, constants)
 	return stmt, functionDef, err
 }

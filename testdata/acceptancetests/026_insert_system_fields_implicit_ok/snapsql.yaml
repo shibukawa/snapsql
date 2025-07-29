@@ -1,0 +1,12 @@
+system:
+  fields:
+    - name: created_at
+      type: timestamp
+      on_insert:
+        parameter: implicit
+        default: "NOW()"
+    - name: updated_at
+      type: timestamp
+      on_insert:
+        parameter: implicit
+        default: "NOW()"

@@ -332,7 +332,7 @@ func detectWrappedIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Tok
 			prevClauseBody[ifIndex].Val.Original.Position.String(),
 			clauseHead[0].Val.Original.Type)
 	}
-	return ifCondition, endIndex, ifIndex, nil
+	return ifCondition, ifIndex, endIndex, nil
 }
 
 func splitter(tt tok.TokenType) pc.Parser[Entity] {

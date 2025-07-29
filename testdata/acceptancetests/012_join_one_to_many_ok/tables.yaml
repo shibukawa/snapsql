@@ -1,0 +1,39 @@
+tables:
+  users:
+    columns:
+      id:
+        type: int
+        primary_key: true
+      name:
+        type: string
+        primary_key: false
+      email:
+        type: string
+        primary_key: false
+      created_at:
+        type: timestamp
+        primary_key: false
+      updated_at:
+        type: timestamp
+        primary_key: false
+
+  jobs:
+    columns:
+      id:
+        type: int
+        primary_key: true
+      user_id:
+        type: int
+        primary_key: false
+      title:
+        type: string
+        primary_key: false
+      company:
+        type: string
+        primary_key: false
+      created_at:
+        type: timestamp
+        primary_key: false
+      updated_at:
+        type: timestamp
+        primary_key: false

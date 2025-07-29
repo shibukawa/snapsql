@@ -1,0 +1,37 @@
+{
+  "format_version": "1",
+  "name": "getNestedData",
+  "function_name": "getNestedData",
+  "parameters": [
+    {
+      "name": "departments",
+      "type": "string[]"
+    }
+  ],
+  "instructions": [],
+  "expressions": [
+    "departments",
+    "dept",
+    "dept.id",
+    "dept.name",
+    "dept.employees",
+    "emp",
+    "emp.id",
+    "emp.name",
+    "!for.last"
+  ],
+  "envs": [
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      }
+    ],
+    [
+      {
+        "name": "emp",
+        "type": "any"
+      }
+    ]
+  ]
+}

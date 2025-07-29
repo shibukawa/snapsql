@@ -1,0 +1,3 @@
+{
+  "error": "parserstep5 failed: object cannot be used in IN clause: variable 'filter' is an object but objects cannot be used in IN clauses"
+}

@@ -1,0 +1,37 @@
+{
+  "expressions": [
+    "user.id",
+    "user.name"
+  ],
+  "format_version": "1",
+  "function_name": "insertUser",
+  "implicit_parameters": [
+    {"name": "created_at", "type": "timestamp", "default": "NOW()"},
+    {"name": "updated_at", "type": "timestamp", "default": "NOW()"}
+  ],
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "INSERT INTO users (id, name, created_at, updated_at) VALUES ("},
+    {"op": "EMIT_EVAL", "pos": "6:38", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "6:53", "value": ","},
+    {"op": "EMIT_EVAL", "pos": "6:55", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "pos": "6:77", "system_field": "created_at"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "pos": "6:77", "system_field": "updated_at"},
+    {"op": "EMIT_STATIC", "pos": "6:77", "value": ")"}
+  ],
+  "parameters": [
+    {"name": "user", "type": "../testdata/acceptancetests/026_insert_system_fields_implicit_ok/User"}
+  ],
+  "response_affinity": "none",
+  "system_fields": [
+    {
+      "name": "created_at",
+      "on_insert": {"default": "NOW()", "parameter": "implicit"}
+    },
+    {
+      "name": "updated_at",
+      "on_insert": {"default": "NOW()", "parameter": "implicit"}
+    }
+  ]
+}

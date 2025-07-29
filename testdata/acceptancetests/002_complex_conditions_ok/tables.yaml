@@ -1,0 +1,31 @@
+tables:
+  users:
+    columns:
+      id:
+        type: int
+        primary_key: true
+        nullable: false
+      name:
+        type: string
+        nullable: false
+        max_length: 255
+      age:
+        type: int
+        nullable: true
+      department:
+        type: string
+        nullable: false
+        max_length: 100
+      status:
+        type: string
+        nullable: false
+        max_length: 20
+        default: "active"
+      created_at:
+        type: timestamp
+        nullable: false
+        default: "CURRENT_TIMESTAMP"
+      updated_at:
+        type: timestamp
+        nullable: false
+        default: "CURRENT_TIMESTAMP"

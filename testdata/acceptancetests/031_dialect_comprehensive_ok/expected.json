@@ -1,0 +1,351 @@
+{
+  "expressions": [
+    "user_id"
+  ],
+  "format_version": "1",
+  "function_name": "get_comprehensive_dialect_test",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "10:5",
+      "sql_fragment": "AS",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "10:5",
+      "sql_fragment": "INTEGER)",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "10:5",
+      "sql_fragment": "::",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "10:5",
+      "sql_fragment": "INTEGER)",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "10:25", "value": " as age_cast_standard, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "11:0",
+      "sql_fragment": "::",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "11:0",
+      "sql_fragment": "DECIMAL(10,2)",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "11:0",
+      "sql_fragment": "AS",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "11:0",
+      "sql_fragment": "DECIMAL(10,2))",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "11:25", "value": " as price_cast_postgresql, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "12:5",
+      "sql_fragment": "::",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "12:5",
+      "sql_fragment": "NUMERIC(12,2)",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "12:5",
+      "sql_fragment": "AS",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "12:5",
+      "sql_fragment": "NUMERIC(12,2))",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "12:36", "value": " as total_cast_complex, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "15:5",
+      "sql_fragment": "CONCAT(",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "15:5",
+      "sql_fragment": ")",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "15:5",
+      "sql_fragment": " || ",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "15:5",
+      "sql_fragment": " || ",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "15:39", "value": " as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "19:5",
+      "sql_fragment": "NOW()",
+      "dialects": [
+        "mysql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "19:5",
+      "sql_fragment": "CURRENT_TIMESTAMP",
+      "dialects": [
+        "postgresql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "19:10", "value": " as time_mysql, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "20:5",
+      "sql_fragment": "CURRENT_TIMESTAMP",
+      "dialects": [
+        "postgresql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "20:5",
+      "sql_fragment": "NOW()",
+      "dialects": [
+        "mysql"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "20:22", "value": " as time_standard, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "23:5",
+      "sql_fragment": "TRUE",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "23:5",
+      "sql_fragment": "1",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "23:9", "value": " as bool_true, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "24:5",
+      "sql_fragment": "FALSE",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "24:5",
+      "sql_fragment": "0",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "24:10", "value": " as bool_false, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "27:5",
+      "sql_fragment": "RAND()",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "27:5",
+      "sql_fragment": "RANDOM()",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "27:11", "value": " as random_mysql, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "28:5",
+      "sql_fragment": "RANDOM()",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "28:5",
+      "sql_fragment": "RAND()",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "28:13", "value": " as random_postgresql, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "31:5",
+      "sql_fragment": "AS",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "31:5",
+      "sql_fragment": "TEXT)",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "31:5",
+      "sql_fragment": "::",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "31:5",
+      "sql_fragment": "TEXT)",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "31:24", "value": " as nested_cast_time, "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "32:5",
+      "sql_fragment": "CONCAT(",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "32:5",
+      "sql_fragment": ")",
+      "dialects": [
+        "mysql",
+        "sqlite"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "32:5",
+      "sql_fragment": " || ",
+      "dialects": [
+        "postgresql"
+      ]
+    },
+    {"op": "EMIT_STATIC", "pos": "32:37", "value": " as nested_concat_cast FROM users WHERE id ="},
+    {"op": "EMIT_EVAL", "pos": "35:12", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "36:3", "value": "AND active = TRUE AND created_at \u003e "},
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "19:5",
+      "sql_fragment": "NOW()",
+      "dialects": [
+        "mysql"
+      ]
+    },
+    {
+      "op": "EMIT_IF_DIALECT",
+      "pos": "19:5",
+      "sql_fragment": "CURRENT_TIMESTAMP",
+      "dialects": [
+        "postgresql",
+        "sqlite"
+      ]
+    },
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
+  ],
+  "parameters": [
+    {"name": "user_id", "type": "int"}
+  ],
+  "response_affinity": "many"
+}

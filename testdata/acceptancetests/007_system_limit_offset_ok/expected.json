@@ -1,0 +1,36 @@
+{
+  "expressions": [
+    "min_age",
+    "max_age"
+  ],
+  "format_version": "1",
+  "function_name": "get_users_with_limit_offset",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT id, name, age FROM users WHERE age \u003e="},
+    {"op": "EMIT_EVAL", "pos": "14:12", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "15:5", "value": "AND age \u003c="},
+    {"op": "EMIT_EVAL", "pos": "15:16", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "16:1", "value": "LIMIT "},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "16:1"},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "16:1"},
+    {"op": "ELSE", "pos": "16:1"},
+    {"op": "EMIT_STATIC", "pos": "16:7", "value": "10"},
+    {"op": "END", "pos": "16:1"},
+    {"op": "EMIT_STATIC", "pos": "17:1", "value": "OFFSET "},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "17:1"},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "17:1"},
+    {"op": "ELSE", "pos": "17:1"},
+    {"op": "EMIT_STATIC", "pos": "17:8", "value": "20"},
+    {"op": "END", "pos": "17:1"}
+  ],
+  "parameters": [
+    {"name": "min_age", "type": "int"},
+    {"name": "max_age", "type": "int"}
+  ],
+  "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "int"},
+    {"name": "name", "type": "string"},
+    {"name": "age", "type": "int"}
+  ]
+}

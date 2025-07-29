@@ -18,9 +18,7 @@ SnapSQLは、SQLテンプレートを解析して中間命令セットを生成�
 ```json
 {
   "metadata": {
-    "source_file": "queries/users.snap.sql",
-    "hash": "sha256:...",
-    "timestamp": "2025-06-26T10:00:00Z"
+    "format_version": "1"
   },
   "parameters": {
     "include_email": {"type": "boolean"},
@@ -46,24 +44,28 @@ SnapSQLは、SQLテンプレートを解析して中間命令セットを生成�
   "instructions": [
     {
       "type": "static",
+      "pos": [1, 1, 0],
       "content": "SELECT id, name"
     },
     {
-      "type": "conditional",
+      "type": "jump_if_false",
+      "pos": [1, 18, 17],
       "condition": "include_email",
-      "instructions": [
-        {
-          "type": "static",
-          "content": ", email"
-        }
-      ]
+      "target": 3
     },
     {
       "type": "static",
+      "pos": [1, 42, 41],
+      "content": ", email"
+    },
+    {
+      "type": "static",
+      "pos": [1, 65, 64],
       "content": " FROM users_"
     },
     {
       "type": "variable",
+      "pos": [1, 76, 75],
       "name": "env",
       "validation": {
         "type": "string",
@@ -71,18 +73,20 @@ SnapSQLは、SQLテンプレートを解析して中間命令セットを生成�
       }
     },
     {
-      "type": "conditional",
+      "type": "jump_if_false",
+      "pos": [1, 85, 84],
       "condition": "filters.active != null",
-      "instructions": [
-        {
-          "type": "static",
-          "content": " WHERE active = "
-        },
-        {
-          "type": "variable",
-          "name": "filters.active"
-        }
-      ]
+      "target": 8
+    },
+    {
+      "type": "static",
+      "pos": [1, 110, 109],
+      "content": " WHERE active = "
+    },
+    {
+      "type": "variable",
+      "pos": [1, 125, 124],
+      "name": "filters.active"
     }
   ]
 }
@@ -90,9 +94,7 @@ SnapSQLは、SQLテンプレートを解析して中間命令セットを生成�
 
 ### メタデータセクション
 
-* `source_file`: 元のSQLテンプレートファイルのパス
-* `hash`: ソースファイルのハッシュ値（変更検知用）
-* `timestamp`: 生成時のタイムスタンプ
+* `format_version`: フォーマットバージョン。現在は1のみ。
 
 ### パラメータセクション
 
@@ -108,6 +110,7 @@ SnapSQLは、SQLテンプレートを解析して中間命令セットを生成�
    ```json
    {
      "type": "static",
+     "pos": [1, 1, 0],
      "content": "SELECT * FROM"
    }
    ```
@@ -116,6 +119,7 @@ SnapSQLは、SQLテンプレートを解析して中間命令セットを生成�
    ```json
    {
      "type": "variable",
+     "pos": [1, 15, 14],
      "name": "table_name",
      "validation": {
        "type": "string",
@@ -124,32 +128,62 @@ SnapSQLは、SQLテンプレートを解析して中間命令セットを生成�
    }
    ```
 
-3. `conditional`: 条件分岐
+3. `jump_if_false`: 条件が偽の場合に指定されたインデックスにジャンプ
    ```json
    {
-     "type": "conditional",
+     "type": "jump_if_false",
+     "pos": [1, 25, 24],
      "condition": "include_email",
-     "instructions": [...]
+     "target": 5
    }
    ```
 
-4. `loop`: 繰り返し処理
+4. `loop_start`: ループの開始
    ```json
    {
-     "type": "loop",
-     "source": "sort_fields",
-     "separator": ", ",
-     "instructions": [...]
+     "type": "loop_start",
+     "pos": [1, 30, 29],
+     "variable": "item",
+     "collection": "sort_fields",
+     "end_target": 10
    }
    ```
 
-5. `array_expansion`: 配列の展開（IN句用）
+5. `loop_end`: ループの終了（ループ開始に戻る）
+   ```json
+   {
+     "type": "loop_end",
+     "pos": [1, 100, 99],
+     "start_target": 4
+   }
+   ```
+
+6. `array_expansion`: 配列の展開（IN句用）
    ```json
    {
      "type": "array_expansion",
+     "pos": [1, 50, 49],
      "source": "departments",
      "separator": ", ",
      "quote": true
+   }
+   ```
+
+7. `emit_if_not_boundary`: 境界でない場合のみ出力（カンマ、AND、ORなど）
+   ```json
+   {
+     "type": "emit_if_not_boundary",
+     "pos": [1, 60, 59],
+     "content": ", "
+   }
+   ```
+
+8. `emit_static_boundary`: 境界を示す静的テキスト（閉じかっこ、clauseの境界など）
+   ```json
+   {
+     "type": "emit_static_boundary",
+     "pos": [1, 70, 69],
+     "content": ") FROM"
    }
    ```
 

@@ -42,6 +42,10 @@ type baseStatement struct {
 	subqueryAnalysis     *SubqueryAnalysisResult // Subquery analysis information
 }
 
+func (bs *baseStatement) LeadingTokens() []tokenizer.Token {
+	return bs.leadingTokens
+}
+
 // GetFieldSources implements StatementNode
 func (bs *baseStatement) GetFieldSources() map[string]*SQFieldSource {
 	if bs.fieldSources == nil {
@@ -139,11 +143,6 @@ func (s *SelectStatement) Clauses() []ClauseNode {
 	return s.clauses
 }
 
-// LeadingTokens implements BlockNode.
-func (s *SelectStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
-}
-
 // Position implements BlockNode.
 func (s *SelectStatement) Position() tokenizer.Position {
 	panic("unimplemented")
@@ -191,23 +190,29 @@ type InsertIntoStatement struct {
 }
 
 func NewInsertIntoStatement(leadingTokens []tokenizer.Token, with *WithClause, clauses []ClauseNode) *InsertIntoStatement {
-	return &InsertIntoStatement{
+	stmt := &InsertIntoStatement{
 		baseStatement: baseStatement{
 			leadingTokens: leadingTokens,
 			with:          with,
 			clauses:       clauses,
 		},
 	}
+	
+	// Set clause references (Columns will be set later in parserstep4)
+	for _, clause := range clauses {
+		if insertIntoClause, ok := clause.(*InsertIntoClause); ok {
+			stmt.Into = insertIntoClause
+		} else if valuesClause, ok := clause.(*ValuesClause); ok {
+			stmt.ValuesList = valuesClause
+		}
+	}
+	
+	return stmt
 }
 
 // Clauses implements BlockNode.
 func (n *InsertIntoStatement) Clauses() []ClauseNode {
 	return n.clauses
-}
-
-// LeadingTokens implements BlockNode.
-func (n *InsertIntoStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
 }
 
 // Position implements BlockNode.
@@ -262,11 +267,6 @@ func (n *UpdateStatement) Clauses() []ClauseNode {
 	return n.clauses
 }
 
-// LeadingTokens implements StatementNode.
-func (n *UpdateStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
-}
-
 // Position implements StatementNode.
 func (n *UpdateStatement) Position() tokenizer.Position {
 	panic("unimplemented")
@@ -316,11 +316,6 @@ func NewDeleteFromStatement(leadingTokens []tokenizer.Token, with *WithClause, c
 // Clauses implements BlockNode.
 func (n *DeleteFromStatement) Clauses() []ClauseNode {
 	return n.clauses
-}
-
-// LeadingTokens implements BlockNode.
-func (n *DeleteFromStatement) LeadingTokens() []tokenizer.Token {
-	panic("unimplemented")
 }
 
 // Position implements BlockNode.

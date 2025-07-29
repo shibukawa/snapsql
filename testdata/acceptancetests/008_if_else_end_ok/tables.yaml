@@ -1,0 +1,27 @@
+tables:
+  users:
+    columns:
+      id:
+        type: int
+        primary_key: true
+        nullable: false
+      name:
+        type: string
+        nullable: false
+        max_length: 255
+      email:
+        type: string
+        nullable: false
+        max_length: 255
+        unique: true
+      age:
+        type: int
+        nullable: true
+      created_at:
+        type: timestamp
+        nullable: false
+        default: "CURRENT_TIMESTAMP"
+      updated_at:
+        type: timestamp
+        nullable: false
+        default: "CURRENT_TIMESTAMP"

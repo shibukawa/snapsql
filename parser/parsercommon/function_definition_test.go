@@ -43,11 +43,13 @@ parameters:
 				assert.Equal(t, "int", user["id"], "user.id should be int")
 				assert.Equal(t, "string", user["name"], "user.name should be string")
 				assert.Equal(t, "string", user["email"], "user.email should be string")
+				assert.Equal(t, "api/users/User", def.OriginalParameters["user"])
 
 				// Check that .User is also expanded
 				admin, ok := def.Parameters["admin"].(map[string]any)
 				assert.True(t, ok, "admin parameter should be a map")
 				assert.Equal(t, "int", admin["id"], "admin.id should be int")
+				assert.Equal(t, "api/users/User", def.OriginalParameters["admin"])
 
 				// Check that Department is recursively expanded
 				dept, ok := user["department"].(string)
@@ -83,7 +85,7 @@ name: GetGlobalType
 function_name: getGlobalType
 description: Get global type
 parameters:
-  global: GlobalType
+  global: /GlobalType
 `,
 			basePath:        basePath,
 			projectRootPath: projectRoot,
@@ -105,7 +107,7 @@ function_name: getUsers
 description: Get user list
 parameters:
   users: User[]
-  globals: GlobalType[]
+  globals: /GlobalType[]
 `,
 			basePath:        basePath,
 			projectRootPath: projectRoot,

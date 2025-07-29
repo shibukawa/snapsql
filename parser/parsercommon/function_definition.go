@@ -34,18 +34,19 @@ var validParameterNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 var commonTypeRefRegex = regexp.MustCompile(`^([\.\/]*)([A-Z][a-zA-Z0-9_]*)(\[\])?$`)
 
 type FunctionDefinition struct {
-	FunctionName   string                    `yaml:"function_name"`
-	Description    string                    `yaml:"description"`
-	Parameters     map[string]any            `yaml:"-"` // normalized, checked
-	ParameterOrder []string                  `yaml:"-"`
-	RawParameters  yaml.MapSlice             `yaml:"parameters"`
-	Generators     map[string]map[string]any `yaml:"generators"`
-	dummyData      map[string]any
+	FunctionName       string                    `yaml:"function_name"`
+	Description        string                    `yaml:"description"`
+	Parameters         map[string]any            `yaml:"-"` // normalized, checked
+	OriginalParameters map[string]any            `yaml:"-"` // original from YAML
+	ParameterOrder     []string                  `yaml:"-"`
+	RawParameters      yaml.MapSlice             `yaml:"parameters"`
+	Generators         map[string]map[string]any `yaml:"generators"`
+	dummyData          map[string]any
 
 	// Common type related fields
-	commonTypes     map[string]map[string]any // Loaded common type definitions
-	basePath        string                    // Base path for resolving relative paths (location of definition file)
-	projectRootPath string                    // Project root path
+	commonTypes     map[string]map[string]map[string]any // Loaded common type definitions
+	basePath        string                               // Base path for resolving relative paths (location of definition file)
+	projectRootPath string                               // Project root path
 }
 
 func ParseFunctionDefinitionFromSQLComment(tokens []tokenizer.Token, basePath string, projectRootPath string) (*FunctionDefinition, error) {
@@ -152,28 +153,17 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 	f.ParameterOrder = nil
 	f.basePath = basePath
 	f.projectRootPath = projectRootPath
-	f.commonTypes = make(map[string]map[string]any)
-
-	// Load common type definitions
-	if err := f.loadCommonTypesFile(basePath); err != nil {
-		return err
-	}
-
-	// Also load common type definitions from project root (if exists)
-	if projectRootPath != "" && projectRootPath != basePath {
-		if err := f.loadCommonTypesFile(projectRootPath); err != nil {
-			return err
-		}
-	}
+	f.commonTypes = make(map[string]map[string]map[string]any)
 
 	// Normalize parameters and resolve common type references
-	normalized, order, err := f.normalizeAndResolveParameters(f.RawParameters)
+	normalized, order, original, err := f.normalizeAndResolveParameters(f.RawParameters)
 	if err != nil {
 		f.dummyData = nil
 		return fmt.Errorf("%w: %v", ErrParameterValidation, err)
 	}
 	f.Parameters = normalized
 	f.ParameterOrder = order
+	f.OriginalParameters = original
 
 	dummy, err := generateDummyData(f.Parameters)
 	if err != nil {
@@ -283,7 +273,14 @@ func generateDummyData(params map[string]any) (map[string]any, error) {
 			if len(val) == 1 {
 				switch elem := val[0].(type) {
 				case string:
-					result[k] = []any{generateDummyValueFromString(elem)}
+					// Check if it's a common type reference that should be kept as string
+					if strings.HasPrefix(elem, "./") {
+						// For common types, keep the reference as is for now
+						// The actual object structure should be resolved at the parameter resolution stage
+						result[k] = []any{elem}
+					} else {
+						result[k] = []any{generateDummyValueFromString(elem)}
+					}
 				case map[string]any:
 					d, err := generateDummyData(elem)
 					if err != nil {
@@ -347,6 +344,12 @@ func generateDummyValueFromString(typeStr string) any {
 		base := t[:len(t)-2]
 		return []any{generateDummyValueFromString(base)}
 	}
+	// Common Type reference: ./User, ./Product etc.
+	if strings.HasPrefix(t, "./") {
+		// For Common Types, return a placeholder string that represents the type
+		// This will be handled by the type system later
+		return t
+	}
 	return ""
 }
 
@@ -401,6 +404,10 @@ func InferTypeStringFromDummyValue(val any) string {
 		case "00000000-0000-0000-0000-000000000000":
 			return "uuid"
 		default:
+			// Check if it's a Common Type reference
+			if strings.HasPrefix(v, "./") {
+				return v
+			}
 			return "string"
 		}
 	case map[string]any:
@@ -419,8 +426,11 @@ func InferTypeStringFromDummyValue(val any) string {
 }
 
 // loadCommonTypesFile loads common type definitions from _common.yaml file
-func (f *FunctionDefinition) loadCommonTypesFile(dirPath string) error {
-	filePath := filepath.Join(dirPath, "_common.yaml")
+func (f *FunctionDefinition) loadCommonTypesFile(absTargetDirPath string, targetDirKey string) error {
+	if _, ok := f.commonTypes[targetDirKey]; ok {
+		return nil
+	}
+	filePath := filepath.Join(absTargetDirPath, "_common.yaml")
 
 	// Check if file exists
 	_, err := os.Stat(filePath)
@@ -442,6 +452,7 @@ func (f *FunctionDefinition) loadCommonTypesFile(dirPath string) error {
 	if err := yaml.Unmarshal(data, &commonTypes); err != nil {
 		return err
 	}
+	f.commonTypes[targetDirKey] = make(map[string]map[string]any)
 
 	// Extract only type definitions that start with uppercase letter
 	for typeName, typeDef := range commonTypes {
@@ -449,16 +460,7 @@ func (f *FunctionDefinition) loadCommonTypesFile(dirPath string) error {
 			// Ensure type definition is a map
 			if typeDefMap, ok := typeDef.(map[string]any); ok {
 				// Create type name with relative path (e.g., ./User)
-				relPath := "." + string(filepath.Separator)
-				fullTypeName := relPath + typeName
-				f.commonTypes[fullTypeName] = typeDefMap
-
-				// Also register without path (e.g., User)
-				f.commonTypes[typeName] = typeDefMap
-
-				// Register with the directory path as prefix
-				dirTypeName := dirPath + string(filepath.Separator) + typeName
-				f.commonTypes[dirTypeName] = typeDefMap
+				f.commonTypes[targetDirKey][typeName] = typeDefMap
 			}
 		}
 	}
@@ -467,8 +469,9 @@ func (f *FunctionDefinition) loadCommonTypesFile(dirPath string) error {
 }
 
 // normalizeAndResolveParameters recursively normalizes parameters and resolves common type references
-func (f *FunctionDefinition) normalizeAndResolveParameters(params yaml.MapSlice) (map[string]any, []string, error) {
-	result := make(map[string]any, len(params))
+func (f *FunctionDefinition) normalizeAndResolveParameters(params yaml.MapSlice) (map[string]any, []string, map[string]any, error) {
+	resultParams := make(map[string]any, len(params))
+	originalParams := make(map[string]any, len(params))
 	order := make([]string, 0, len(params))
 	errs := &ParseError{}
 
@@ -484,18 +487,19 @@ func (f *FunctionDefinition) normalizeAndResolveParameters(params yaml.MapSlice)
 			continue
 		}
 		order = append(order, key)
-
-		result[key] = f.normalizeAndResolveAny(item.Value, key, errs)
+		detail, original := f.normalizeAndResolveAny(item.Value, key, errs)
+		resultParams[key] = detail
+		originalParams[key] = original
 	}
 
 	if len(errs.Errors) > 0 {
-		return result, order, errs
+		return resultParams, order, originalParams, errs
 	}
-	return result, order, nil
+	return resultParams, order, originalParams, nil
 }
 
 // normalizeAndResolveAny normalizes any value and resolves common type references
-func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs *ParseError) any {
+func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs *ParseError) (any, any) {
 	switch val := v.(type) {
 	case []any:
 		// Array literal ([int], [string], etc.)
@@ -505,53 +509,63 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 			switch elemType := elem.(type) {
 			case string:
 				// If array element is a string, check if it's a common type reference
-				resolvedType := f.resolveCommonTypeRef(elemType)
+				resolvedType, commonTypeName := f.resolveCommonTypeRef(elemType)
 				if resolvedType != nil {
 					// Return array of common type
-					return []any{resolvedType}
+					return []any{resolvedType}, commonTypeName + "[]"
 				}
-				return elemType + "[]"
+				return elemType + "[]", elemType + "[]"
 			case map[string]any:
-				return []any{f.normalizeAndResolveAny(elemType, fullName+"[]", errs)}
+				detail, original := f.normalizeAndResolveAny(elemType, fullName+"[]", errs)
+				return []any{detail}, []any{original}
 			default:
-				return []any{f.normalizeAndResolveAny(elemType, fullName+"[]", errs)}
+				detail, original := f.normalizeAndResolveAny(elemType, fullName+"[]", errs)
+				return []any{detail}, []any{original}
 			}
 		} else {
 			// Recursively normalize each element of the array
-			result := make([]any, len(val))
+			detailResult := make([]any, len(val))
+			originalResult := make([]any, len(val))
 			for i, e := range val {
-				result[i] = f.normalizeAndResolveAny(e, fullName+fmt.Sprintf("[%d]", i), errs)
+				detail, original := f.normalizeAndResolveAny(e, fullName+fmt.Sprintf("[%d]", i), errs)
+				detailResult[i] = detail
+				originalResult[i] = original
 			}
-			return result
+			return detailResult, originalResult
 		}
 	case map[string]any:
-		result := make(map[string]any)
+		detailResult := make(map[string]any)
+		originalResult := make(map[string]any)
 		for k, v := range val {
 			if !validParameterNameRegex.MatchString(k) {
 				errs.Add(fmt.Errorf("%w: invalid parameter name: %s", ErrInvalidForSnapSQL, fullName+"."+k))
 				continue
 			}
-			result[k] = f.normalizeAndResolveAny(v, fullName+"."+k, errs)
+			detail, original := f.normalizeAndResolveAny(v, fullName+"."+k, errs)
+			detailResult[k] = detail
+			originalResult[k] = original
 		}
-		return result
+		return detailResult, originalResult
 	case string:
 		// If string, check if it's a common type reference
-		resolvedType := f.resolveCommonTypeRef(val)
+		resolvedType, commonTypeName := f.resolveCommonTypeRef(val)
 		if resolvedType != nil {
-			return resolvedType
+			return resolvedType, commonTypeName
 		}
-		return normalizeTypeString(val)
+		v := normalizeTypeString(val)
+		return v, v
 	default:
-		return inferTypeFromValue(val)
+		v := inferTypeFromValue(val)
+		return v, v
 	}
 }
 
 // resolveCommonTypeRef resolves a common type reference
-func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) any {
+func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) {
 	// Check if it's a common type reference
 	matches := commonTypeRefRegex.FindStringSubmatch(typeStr)
 	if matches == nil {
-		return nil
+		return nil, ""
 	}
 
 	path := matches[1]          // Path part (e.g., "../", "./", "")
@@ -559,137 +573,47 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) any {
 	isArray := matches[3] != "" // Whether it's an array (has "[]" or not)
 
 	// If path is specified, load _common.yaml from the corresponding directory
-	if path != "" {
-		var targetPath string
-		if path == "." {
-			targetPath = f.basePath
-		} else {
-			// First try path relative to basePath
-			targetPath = filepath.Clean(filepath.Join(f.basePath, path))
-		}
-
-		if err := f.loadCommonTypesFile(targetPath); err == nil {
-			// Loading successful
-		} else if f.projectRootPath != "" {
-			// If loading from basePath fails, try path relative to projectRootPath
-			targetPath = filepath.Clean(filepath.Join(f.projectRootPath, path))
-			if err := f.loadCommonTypesFile(targetPath); err != nil {
-				// Ignore errors and continue
-				// Will error later if type is not found
-			}
-		}
-
-		// Try to find the type with the full path
-		if path != "." {
-			// For relative paths like "../roles/Role", we need to construct the key correctly
-			if strings.Contains(path, "../") || strings.Contains(path, "./") {
-				// Try with the full path
-				fullPath := filepath.Clean(filepath.Join(f.basePath, path))
-				fullTypeName := fullPath + string(filepath.Separator) + typeName
-
-				typeDef, found := f.commonTypes[fullTypeName]
-				if found {
-					// Make a deep copy of the type definition
-					typeCopy := deepCopyMap(typeDef)
-
-					// If it's an array
-					if isArray {
-						return []any{typeCopy}
-					}
-
-					return typeCopy
-				}
-
-				// Try with just the directory name + type name
-				dirName := filepath.Base(fullPath)
-				dirTypeName := dirName + string(filepath.Separator) + typeName
-
-				typeDef, found = f.commonTypes[dirTypeName]
-				if found {
-					// Make a deep copy of the type definition
-					typeCopy := deepCopyMap(typeDef)
-
-					// If it's an array
-					if isArray {
-						return []any{typeCopy}
-					}
-
-					return typeCopy
-				}
-
-				// Try with the target path + type name
-				targetTypeName := targetPath + string(filepath.Separator) + typeName
-
-				typeDef, found = f.commonTypes[targetTypeName]
-				if found {
-					// Make a deep copy of the type definition
-					typeCopy := deepCopyMap(typeDef)
-
-					// If it's an array
-					if isArray {
-						return []any{typeCopy}
-					}
-
-					return typeCopy
-				}
-			}
-		}
+	if path == "" {
+		path = "."
 	}
 
-	// Convert type name to full form (including path)
-	fullTypeName := path + typeName
+	var targetPath string
+	var absTargetPath string
+	
+	// If basePath is a file path, get its directory
+	baseDir := f.basePath
+	if filepath.Ext(baseDir) != "" {
+		baseDir = filepath.Dir(baseDir)
+	}
+	
+	if strings.HasPrefix(path, ".") {
+		absTargetPath = filepath.Clean(filepath.Join(baseDir, path))
+		targetPath, _ = filepath.Rel(f.projectRootPath, absTargetPath)
+	} else if strings.HasPrefix(path, "/") {
+		targetPath = strings.TrimPrefix(path, "/")
+		absTargetPath = filepath.Clean(filepath.Join(f.projectRootPath, targetPath))
+	} else {
+		targetPath = filepath.Clean(filepath.Join(f.projectRootPath, path))
+		absTargetPath = filepath.Clean(filepath.Join(f.projectRootPath, targetPath))
+	}
+	targetPathKey := filepath.ToSlash(targetPath)
+	f.loadCommonTypesFile(absTargetPath, targetPathKey)
 
-	// Search for common type
-	typeDef, found := f.commonTypes[fullTypeName]
-	if !found {
-		// Search by type name only (without path)
-		typeDef, found = f.commonTypes[typeName]
-		if !found {
-			return nil
+	typeDef, found := f.commonTypes[targetPathKey][typeName]
+	var typeKey string
+	if targetPathKey == "" {
+		typeKey = typeName
+	} else {
+		typeKey = targetPathKey + "/" + typeName
+	}
+	if found {
+		if isArray {
+			return []any{typeDef}, typeKey + "[]"
 		}
+		return typeDef, typeKey
 	}
 
-	// Make a deep copy of the type definition
-	typeCopy := deepCopyMap(typeDef)
-
-	// If it's an array
-	if isArray {
-		return []any{typeCopy}
-	}
-
-	return typeCopy
-}
-
-// deepCopyMap creates a deep copy of a map
-func deepCopyMap(m map[string]any) map[string]any {
-	result := make(map[string]any)
-	for k, v := range m {
-		switch val := v.(type) {
-		case map[string]any:
-			result[k] = deepCopyMap(val)
-		case []any:
-			result[k] = deepCopySlice(val)
-		default:
-			result[k] = val
-		}
-	}
-	return result
-}
-
-// deepCopySlice creates a deep copy of a slice
-func deepCopySlice(s []any) []any {
-	result := make([]any, len(s))
-	for i, v := range s {
-		switch val := v.(type) {
-		case map[string]any:
-			result[i] = deepCopyMap(val)
-		case []any:
-			result[i] = deepCopySlice(val)
-		default:
-			result[i] = val
-		}
-	}
-	return result
+	return nil, ""
 }
 
 // getStringFromMap safely extracts a string value from a map with a default fallback

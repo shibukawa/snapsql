@@ -10,7 +10,6 @@ import (
 func Execute(statement cmn.StatementNode, paramNamespace *cmn.Namespace, constNamespace *cmn.Namespace) *cmn.ParseError {
 	// Validate template variables and directives using both namespaces
 	perr := &cmn.ParseError{}
-	replaceDummyLiterals(statement, paramNamespace, perr)
 
 	validateVariables(statement, paramNamespace, constNamespace, perr)
 

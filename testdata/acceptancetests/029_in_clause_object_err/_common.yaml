@@ -1,0 +1,3 @@
+UserFilter:
+  department_id: int
+  status: string

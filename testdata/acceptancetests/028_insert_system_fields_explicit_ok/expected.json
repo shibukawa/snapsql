@@ -1,0 +1,37 @@
+{
+  "expressions": [
+    "user.id",
+    "user.name",
+    "created_at",
+    "updated_at"
+  ],
+  "format_version": "1",
+  "function_name": "insertUser",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "8:1", "value": "INSERT INTO users (id, name, created_at, updated_at) VALUES ("},
+    {"op": "EMIT_EVAL", "pos": "8:62", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "8:77", "value": ","},
+    {"op": "EMIT_EVAL", "pos": "8:79", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "8:101", "value": ","},
+    {"op": "EMIT_EVAL", "pos": "8:103", "expr_index": 2},
+    {"op": "EMIT_STATIC", "pos": "8:123", "value": "(),"},
+    {"op": "EMIT_EVAL", "pos": "8:127", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "8:147", "value": "())"}
+  ],
+  "parameters": [
+    {"name": "user", "type": "../testdata/acceptancetests/028_insert_system_fields_explicit_ok/User"},
+    {"name": "created_at", "type": "timestamp"},
+    {"name": "updated_at", "type": "timestamp"}
+  ],
+  "response_affinity": "none",
+  "system_fields": [
+    {
+      "name": "created_at",
+      "on_insert": {"parameter": "explicit"}
+    },
+    {
+      "name": "updated_at",
+      "on_insert": {"parameter": "explicit"}
+    }
+  ]
+}

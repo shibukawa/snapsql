@@ -651,3 +651,55 @@ func TestTokenizerSnapSQLDirectives(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenizeWithLineOffset(t *testing.T) {
+	sql := "SELECT id\nFROM users"
+	
+	// Test without offset
+	tokens, err := Tokenize(sql)
+	assert.NoError(t, err)
+	
+	// Find the FROM token
+	var fromToken Token
+	for _, token := range tokens {
+		if token.Type == FROM {
+			fromToken = token
+			break
+		}
+	}
+	
+	assert.Equal(t, 2, fromToken.Position.Line) // Should be on line 2
+	
+	// Test with offset of 10
+	tokensWithOffset, err := Tokenize(sql, 10)
+	assert.NoError(t, err)
+	
+	// Find the FROM token with offset
+	var fromTokenWithOffset Token
+	for _, token := range tokensWithOffset {
+		if token.Type == FROM {
+			fromTokenWithOffset = token
+			break
+		}
+	}
+	
+	assert.Equal(t, 12, fromTokenWithOffset.Position.Line) // Should be on line 12 (2 + 10)
+}
+
+func TestModuloToken(t *testing.T) {
+	sql := "SELECT id % 10 FROM users"
+	tokens, err := Tokenize(sql)
+	assert.NoError(t, err)
+
+	// Find the MODULO token
+	var moduloToken Token
+	for _, token := range tokens {
+		if token.Type == MODULO {
+			moduloToken = token
+			break
+		}
+	}
+
+	assert.Equal(t, MODULO, moduloToken.Type)
+	assert.Equal(t, "%", moduloToken.Value)
+}
