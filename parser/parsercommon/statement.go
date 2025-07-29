@@ -197,7 +197,7 @@ func NewInsertIntoStatement(leadingTokens []tokenizer.Token, with *WithClause, c
 			clauses:       clauses,
 		},
 	}
-	
+
 	// Set clause references (Columns will be set later in parserstep4)
 	for _, clause := range clauses {
 		if insertIntoClause, ok := clause.(*InsertIntoClause); ok {
@@ -206,7 +206,7 @@ func NewInsertIntoStatement(leadingTokens []tokenizer.Token, with *WithClause, c
 			stmt.ValuesList = valuesClause
 		}
 	}
-	
+
 	return stmt
 }
 
