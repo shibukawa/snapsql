@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/fatih/color"
@@ -54,7 +55,7 @@ func (i *InitCmd) Run(ctx *Context) error {
 }
 
 func createDir(path string) error {
-	return ensureDir(path)
+	return os.MkdirAll(path, 0755)
 }
 
 func createSampleConfig() error {
@@ -152,4 +153,15 @@ environments:
 `
 
 	return writeFile(filepath.Join("constants", "database.yaml"), sampleConstants)
+}
+
+// writeFile writes content to a file
+func writeFile(path, content string) error {
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	
+	return os.WriteFile(path, []byte(content), 0644)
 }
