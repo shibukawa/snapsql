@@ -561,14 +561,14 @@ func isExpressionBoundary(token tok.Token) bool {
 	// Check token types first (most efficient)
 	switch token.Type {
 	case tok.SELECT, tok.FROM, tok.WHERE, tok.AND, tok.OR, tok.ORDER, tok.GROUP, tok.HAVING,
-		 tok.INSERT, tok.UPDATE, tok.DELETE, tok.SET, tok.VALUES, tok.INTO, tok.AS,
-		 tok.JOIN, tok.LEFT, tok.RIGHT, tok.INNER, tok.OUTER, tok.ON, tok.UNION,
-		 tok.LIMIT, tok.OFFSET, tok.DISTINCT, tok.ALL, tok.CASE, tok.WHEN,
-		 tok.THEN, tok.ELSE, tok.END:
+		tok.INSERT, tok.UPDATE, tok.DELETE, tok.SET, tok.VALUES, tok.INTO, tok.AS,
+		tok.JOIN, tok.LEFT, tok.RIGHT, tok.INNER, tok.OUTER, tok.ON, tok.UNION,
+		tok.LIMIT, tok.OFFSET, tok.DISTINCT, tok.ALL, tok.CASE, tok.WHEN,
+		tok.THEN, tok.ELSE, tok.END:
 		return true
 	case tok.COMMA, tok.SEMICOLON, tok.EQUAL, tok.NOT_EQUAL, tok.LESS_THAN, tok.GREATER_THAN,
-		 tok.LESS_EQUAL, tok.GREATER_EQUAL, tok.PLUS, tok.MINUS,
-		 tok.MULTIPLY, tok.DIVIDE, tok.MODULO:
+		tok.LESS_EQUAL, tok.GREATER_EQUAL, tok.PLUS, tok.MINUS,
+		tok.MULTIPLY, tok.DIVIDE, tok.MODULO:
 		return true
 	}
 
@@ -592,13 +592,13 @@ func isTypeBoundary(token tok.Token) bool {
 	// Check token types first (most efficient)
 	switch token.Type {
 	case tok.AS, tok.FROM, tok.WHERE, tok.AND, tok.OR, tok.ORDER, tok.GROUP, tok.HAVING,
-		 tok.JOIN, tok.LEFT, tok.RIGHT, tok.INNER, tok.OUTER, tok.ON, tok.UNION,
-		 tok.LIMIT, tok.OFFSET, tok.DISTINCT, tok.ALL, tok.CASE, tok.WHEN,
-		 tok.THEN, tok.ELSE, tok.END:
+		tok.JOIN, tok.LEFT, tok.RIGHT, tok.INNER, tok.OUTER, tok.ON, tok.UNION,
+		tok.LIMIT, tok.OFFSET, tok.DISTINCT, tok.ALL, tok.CASE, tok.WHEN,
+		tok.THEN, tok.ELSE, tok.END:
 		return true
 	case tok.COMMA, tok.SEMICOLON, tok.EQUAL, tok.NOT_EQUAL, tok.LESS_THAN, tok.GREATER_THAN,
-		 tok.LESS_EQUAL, tok.GREATER_EQUAL, tok.PLUS, tok.MINUS,
-		 tok.MULTIPLY, tok.DIVIDE, tok.MODULO:
+		tok.LESS_EQUAL, tok.GREATER_EQUAL, tok.PLUS, tok.MINUS,
+		tok.MULTIPLY, tok.DIVIDE, tok.MODULO:
 		return true
 	}
 

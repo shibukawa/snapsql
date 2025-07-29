@@ -53,9 +53,9 @@ func isClauseBoundary(token tokenizer.Token) bool {
 
 	// Check for SQL clause keywords using token types
 	switch token.Type {
-	case tokenizer.FROM, tokenizer.WHERE, tokenizer.GROUP, 
-		 tokenizer.HAVING, tokenizer.LIMIT, tokenizer.OFFSET, tokenizer.UNION,
-		 tokenizer.CLOSED_PARENS:
+	case tokenizer.FROM, tokenizer.WHERE, tokenizer.GROUP,
+		tokenizer.HAVING, tokenizer.LIMIT, tokenizer.OFFSET, tokenizer.UNION,
+		tokenizer.CLOSED_PARENS:
 		return true
 	}
 

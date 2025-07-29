@@ -11,6 +11,7 @@ func (m *MetadataExtractor) Process(ctx *ProcessingContext) error {
 	// Extract function information from the function definition
 	if ctx.FunctionDef != nil {
 		ctx.FunctionName = ctx.FunctionDef.FunctionName
+		ctx.Description = ctx.FunctionDef.Description
 
 		// Convert function parameters to intermediate format parameters
 		ctx.Parameters = make([]Parameter, 0, len(ctx.FunctionDef.ParameterOrder))

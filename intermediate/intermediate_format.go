@@ -117,6 +117,9 @@ type IntermediateFormat struct {
 	// Query name
 	Name string `json:"name,omitempty"`
 
+	// Description of the query/function
+	Description string `json:"description,omitempty"`
+
 	// Function name for code generation
 	FunctionName string `json:"function_name,omitempty"`
 

@@ -1282,15 +1282,23 @@ const (
 #### 2. **判定アルゴリズム**
 
 **単一レコード（`one`）の条件:**
-- PRIMARY KEYによる完全一致検索
-- UNIQUE制約フィールドによる完全一致検索
-- `LIMIT 1`が明示的に指定されている
-- COUNT(), SUM(), AVG()等の集約関数（単一の値を返すため）
+- SELECT
+  - PRIMARY KEYによる完全一致検索
+  - UNIQUE制約フィールドによる完全一致検索
+  - `LIMIT 1`が明示的に指定されている
+  - COUNT(), SUM(), AVG()等の集約関数（単一の値を返すため）
+  - JOINを含むが、LEFT INNER JOINもしくはINNER JOINで駆動表の要素が一位に定まり、結合するテーブルは配列として処理する指定がされている
+- INSERT
+  - RETURNING句がある単一要素のINSERT
+- UPDATE
+  - RETURNING句があり、PRIMARY KEYによる完全一致検索が行われているUPDATE
+- DELETE
+  - RETURNING句があり、PRIMARY KEYによる完全一致検索が行われているDELETE
 
 **複数レコード（`many`）の条件:**
 - 上記以外のSELECT文
-- JOINを含むクエリ
-- GROUP BYを含むクエリ（複数行の集約結果）
+- RETURNING句があり、複数要素のINSERT
+- RETURNING句があるがWHERE句で主キーの完全一致をしていないUPDATE/DELETE句
 
 **レスポンスなし（`none`）の条件:**
 - INSERT文でRETURNING句がない

@@ -47,8 +47,11 @@ func determineResponseAffinity(stmt parser.StatementNode, tableInfo map[string]*
 		// For SELECT statements, check if it's a single row query
 		selectStmt, ok := stmt.(*parser.SelectStatement)
 		if ok {
-			// Check if it has LIMIT 1
-			if hasLimit1(selectStmt) {
+			// Check if it has aggregate functions (COUNT, SUM, AVG, etc.)
+			if hasAggregateFunctions(selectStmt) {
+				affinity = ResponseAffinityOne
+			} else if hasLimit1(selectStmt) {
+				// Check if it has LIMIT 1
 				affinity = ResponseAffinityOne
 			} else if hasUniqueKeyCondition(selectStmt, tableInfo) {
 				// Check if it's a single row query (e.g., has a WHERE clause with a primary key)
@@ -77,19 +80,27 @@ func determineResponseAffinity(stmt parser.StatementNode, tableInfo map[string]*
 		// For UPDATE statements, check if it has a RETURNING clause
 		updateStmt, ok := stmt.(*parser.UpdateStatement)
 		if ok && updateStmt.Returning != nil {
-			// UPDATE with RETURNING typically returns multiple rows
-			affinity = ResponseAffinityMany
+			// UPDATE with RETURNING: check if it has unique key condition
+			if hasUniqueKeyConditionForUpdate(updateStmt, tableInfo) {
+				affinity = ResponseAffinityOne
+			} else {
+				affinity = ResponseAffinityMany
+			}
 		} else {
 			// UPDATE without RETURNING doesn't return rows
 			affinity = ResponseAffinityNone
 		}
 
 	case parser.DELETE_FROM_STATEMENT:
-		// For DELETE statements, parser if it has a RETURNING clause
+		// For DELETE statements, check if it has a RETURNING clause
 		deleteStmt, ok := stmt.(*parser.DeleteFromStatement)
 		if ok && deleteStmt.Returning != nil {
-			// DELETE with RETURNING typically returns multiple rows
-			affinity = ResponseAffinityMany
+			// DELETE with RETURNING: check if it has unique key condition
+			if hasUniqueKeyConditionForDelete(deleteStmt, tableInfo) {
+				affinity = ResponseAffinityOne
+			} else {
+				affinity = ResponseAffinityMany
+			}
 		} else {
 			// DELETE without RETURNING doesn't return rows
 			affinity = ResponseAffinityNone
@@ -422,4 +433,153 @@ func isBulkInsert(stmt *parser.InsertIntoStatement) bool {
 	// This is a placeholder implementation
 	// In a real implementation, we would check if the INSERT has multiple VALUES clauses
 	return false
+}
+
+// hasAggregateFunctions checks if a SELECT statement contains aggregate functions
+func hasAggregateFunctions(stmt *parser.SelectStatement) bool {
+	if stmt.Select == nil {
+		return false
+	}
+
+	// List of common aggregate functions
+	aggregateFunctions := []string{
+		"COUNT", "SUM", "AVG", "MIN", "MAX",
+		"STDDEV", "VARIANCE", "GROUP_CONCAT", "STRING_AGG",
+	}
+
+	// Check each selected field
+	for _, field := range stmt.Select.Fields {
+		// Check both OriginalField and FieldName
+		fieldsToCheck := []string{
+			strings.ToUpper(strings.TrimSpace(field.OriginalField)),
+			strings.ToUpper(strings.TrimSpace(field.FieldName)),
+		}
+
+		for _, fieldText := range fieldsToCheck {
+			if fieldText == "" {
+				continue
+			}
+
+			// Check if the field contains any aggregate function
+			for _, aggFunc := range aggregateFunctions {
+				// Check for function name followed by optional spaces and opening parenthesis
+				pattern := aggFunc + "("
+				spacePattern := aggFunc + " ("
+				if strings.Contains(fieldText, pattern) || strings.Contains(fieldText, spacePattern) {
+					return true
+				}
+			}
+		}
+	}
+
+	// Check the body tokens as a fallback
+	// This handles cases where the parser doesn't properly extract field information
+	if bodyTokens := stmt.Select.ContentTokens(); len(bodyTokens) > 0 {
+		var bodyText strings.Builder
+		for _, token := range bodyTokens {
+			bodyText.WriteString(token.Value)
+			bodyText.WriteString(" ")
+		}
+		selectText := strings.ToUpper(bodyText.String())
+
+		for _, aggFunc := range aggregateFunctions {
+			// Check for function name followed by optional spaces and opening parenthesis
+			pattern := aggFunc + "("
+			spacePattern := aggFunc + " ("
+			if strings.Contains(selectText, pattern) || strings.Contains(selectText, spacePattern) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// hasUniqueKeyConditionForUpdate checks if an UPDATE statement has a WHERE clause with a unique key condition
+func hasUniqueKeyConditionForUpdate(stmt *parser.UpdateStatement, tableInfo map[string]*TableInfo) bool {
+	if stmt.Where == nil {
+		return false
+	}
+
+	// Get the table name from UPDATE clause
+	tableName := getUpdateTableName(stmt)
+	if tableName == "" {
+		return false
+	}
+
+	// Get table info
+	info, exists := tableInfo[tableName]
+	if !exists {
+		return false
+	}
+
+	// Get primary key columns
+	primaryKeys := getPrimaryKeyColumns(info)
+	if len(primaryKeys) == 0 {
+		return false
+	}
+
+	// Check if WHERE clause contains all primary key conditions
+	return checkPrimaryKeyConditions(stmt.Where, primaryKeys, tableName, "")
+}
+
+// hasUniqueKeyConditionForDelete checks if a DELETE statement has a WHERE clause with a unique key condition
+func hasUniqueKeyConditionForDelete(stmt *parser.DeleteFromStatement, tableInfo map[string]*TableInfo) bool {
+	if stmt.Where == nil {
+		return false
+	}
+
+	// Get the table name from DELETE clause
+	tableName := getDeleteTableName(stmt)
+	if tableName == "" {
+		return false
+	}
+
+	// Get table info
+	info, exists := tableInfo[tableName]
+	if !exists {
+		return false
+	}
+
+	// Get primary key columns
+	primaryKeys := getPrimaryKeyColumns(info)
+	if len(primaryKeys) == 0 {
+		return false
+	}
+
+	// Check if WHERE clause contains all primary key conditions
+	return checkPrimaryKeyConditions(stmt.Where, primaryKeys, tableName, "")
+}
+
+// getUpdateTableName extracts the table name from UPDATE statement
+func getUpdateTableName(stmt *parser.UpdateStatement) string {
+	if stmt.Update == nil {
+		return ""
+	}
+	return stmt.Update.Table.TableName
+}
+
+// getDeleteTableName extracts the table name from DELETE statement
+func getDeleteTableName(stmt *parser.DeleteFromStatement) string {
+	if stmt.From == nil {
+		return ""
+	}
+	return stmt.From.Table.TableName
+}
+
+// checkPrimaryKeyConditions checks if WHERE clause contains all primary key conditions
+func checkPrimaryKeyConditions(whereClause *parser.WhereClause, primaryKeys []string, tableName string, tableAlias string) bool {
+	if whereClause == nil || len(primaryKeys) == 0 {
+		return false
+	}
+
+	// Get WHERE clause text
+	whereText := getWhereClauseText(whereClause)
+
+	// Check if all primary keys are specified with equality
+	if tableAlias != "" {
+		return areAllPrimaryKeysInWhereForTableWithAlias(primaryKeys, whereText, tableName, tableAlias)
+	} else {
+		return areAllPrimaryKeysInWhere(primaryKeys, whereText)
+	}
 }

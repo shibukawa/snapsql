@@ -40,6 +40,7 @@ type ProcessingContext struct {
 	Instructions   []Instruction
 
 	// Metadata
+	Description      string
 	FunctionName     string
 	Parameters       []Parameter
 	ResponseAffinity string
@@ -81,6 +82,7 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 	// Build the final intermediate format
 	result := &IntermediateFormat{
 		FormatVersion:      "1",
+		Description:        ctx.Description,
 		FunctionName:       ctx.FunctionName,
 		Parameters:         ctx.Parameters,
 		Expressions:        ctx.Expressions,
