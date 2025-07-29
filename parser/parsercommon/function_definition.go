@@ -572,20 +572,21 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) 
 	typeName := matches[2]      // Type name part (e.g., "User")
 	isArray := matches[3] != "" // Whether it's an array (has "[]" or not)
 
-	// If path is specified, load _common.yaml from the corresponding directory
-	if path == "" {
-		path = "."
-	}
-
-	var targetPath string
-	var absTargetPath string
-	
 	// If basePath is a file path, get its directory
 	baseDir := f.basePath
 	if filepath.Ext(baseDir) != "" {
 		baseDir = filepath.Dir(baseDir)
 	}
-	
+
+	// If no path is specified (e.g., "User" instead of "./User"), search from basePath up to projectRootPath
+	if path == "" {
+		return f.searchCommonTypeInAncestors(typeName, isArray, baseDir)
+	}
+
+	// If path is specified, load _common.yaml from the corresponding directory
+	var targetPath string
+	var absTargetPath string
+
 	if strings.HasPrefix(path, ".") {
 		absTargetPath = filepath.Clean(filepath.Join(baseDir, path))
 		targetPath, _ = filepath.Rel(f.projectRootPath, absTargetPath)
@@ -611,6 +612,70 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) 
 			return []any{typeDef}, typeKey + "[]"
 		}
 		return typeDef, typeKey
+	}
+
+	return nil, ""
+}
+
+// searchCommonTypeInAncestors searches for a common type by traversing from basePath up to projectRootPath
+func (f *FunctionDefinition) searchCommonTypeInAncestors(typeName string, isArray bool, startDir string) (any, string) {
+	currentDir := startDir
+	projectRootAbs, err := filepath.Abs(f.projectRootPath)
+	if err != nil {
+		return nil, ""
+	}
+
+	for {
+		// Make currentDir absolute for comparison
+		currentDirAbs, err := filepath.Abs(currentDir)
+		if err != nil {
+			break
+		}
+
+		// Calculate relative path from project root for the key
+		targetPath, err := filepath.Rel(projectRootAbs, currentDirAbs)
+		if err != nil {
+			break
+		}
+
+		// Normalize path separators for consistent key format
+		targetPathKey := filepath.ToSlash(targetPath)
+		if targetPathKey == "." {
+			targetPathKey = ""
+		}
+
+		// Try to load common types from this directory
+		err = f.loadCommonTypesFile(currentDirAbs, targetPathKey)
+		if err == nil {
+			// Check if the type exists in this directory
+			if typeMap, exists := f.commonTypes[targetPathKey]; exists {
+				if typeDef, found := typeMap[typeName]; found {
+					var typeKey string
+					if targetPathKey == "" {
+						typeKey = typeName
+					} else {
+						typeKey = targetPathKey + "/" + typeName
+					}
+					if isArray {
+						return []any{typeDef}, typeKey + "[]"
+					}
+					return typeDef, typeKey
+				}
+			}
+		}
+
+		// Check if we've reached the project root
+		if currentDirAbs == projectRootAbs {
+			break
+		}
+
+		// Move up one directory
+		parentDir := filepath.Dir(currentDir)
+		if parentDir == currentDir {
+			// Reached filesystem root
+			break
+		}
+		currentDir = parentDir
 	}
 
 	return nil, ""
