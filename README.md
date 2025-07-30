@@ -45,7 +45,7 @@ flowchart LR
     MD -->|Template, Mock Data| SNAPSQL
     
     SNAPSQL -->|Generate| GOCODE
-    SNAPSQL -->|Generate (only from markdown)| MOCK
+    SNAPSQL -->|Generate| MOCK
     
     GOCODE -->|Import| APP
     GOCODE -->|Import| TEST
