@@ -33,7 +33,7 @@ flowchart LR
     MD[Markdown Files<br/>*.snap.md]
     
     SNAPSQL[SnapSQL<br/>CLI]
-    
+
     GOCODE[Go Code<br/>Type-safe Functions]
     MOCK[Mock Data<br/>JSON]
     
