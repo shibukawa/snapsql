@@ -45,9 +45,10 @@ type TablePatterns struct {
 
 // GenerationConfig represents code generation settings
 type GenerationConfig struct {
-	InputDir   string                     `yaml:"input_dir"`
-	Validate   bool                       `yaml:"validate"`
-	Generators map[string]GeneratorConfig `yaml:"generators"`
+	InputDir         string                     `yaml:"input_dir"`
+	Validate         bool                       `yaml:"validate"`
+	GenerateMockData bool                       `yaml:"generate_mock_data"`
+	Generators       map[string]GeneratorConfig `yaml:"generators"`
 }
 
 // GeneratorConfig represents a single generator configuration

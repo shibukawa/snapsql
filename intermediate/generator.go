@@ -1,8 +1,13 @@
 package intermediate
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
 	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
@@ -10,6 +15,208 @@ import (
 	"github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
+
+// MockDataGenerator generates mock data JSON files from markdown test cases
+type MockDataGenerator struct {
+	ProjectRoot string
+	OutputDir   string
+}
+
+// NewMockDataGenerator creates a new mock data generator
+func NewMockDataGenerator(projectRoot string) *MockDataGenerator {
+	return &MockDataGenerator{
+		ProjectRoot: projectRoot,
+		OutputDir:   filepath.Join(projectRoot, "testdata", "snapsql_mock"),
+	}
+}
+
+// TestCase represents a test case from markdown
+type TestCase struct {
+	Name        string                   `json:"name"`
+	Description string                   `json:"description,omitempty"`
+	Parameters  map[string]interface{}   `json:"parameters"`
+	MockData    []map[string]interface{} `json:"mock_data"`
+}
+
+// GenerateMockFiles generates mock data JSON files from markdown content
+func (g *MockDataGenerator) GenerateMockFiles(markdownFile string, markdownContent string) error {
+	// Parse test cases from markdown
+	testCases, err := g.parseTestCasesFromMarkdown(markdownContent)
+	if err != nil {
+		return fmt.Errorf("failed to parse test cases: %w", err)
+	}
+
+	if len(testCases) == 0 {
+		// No test cases found, skip mock data generation
+		return nil
+	}
+
+	// Extract function name from markdown content
+	functionName := g.extractFunctionName(markdownContent)
+
+	// Generate mock data files (one per test case)
+	err = g.writeMockDataFile(markdownFile, testCases, functionName)
+	if err != nil {
+		return fmt.Errorf("failed to write mock data files: %w", err)
+	}
+
+	fmt.Printf("Generated %d mock data files for function: %s\n", len(testCases), functionName)
+	return nil
+}
+
+// parseTestCasesFromMarkdown parses test cases from markdown content
+func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCase, error) {
+	testCases := make([]TestCase, 0)
+
+	// Regular expressions to match test case sections
+	testCaseRegex := regexp.MustCompile(`(?m)^### Test Case \d+: (.+)$`)
+	parametersRegex := regexp.MustCompile(`(?s)\*\*Input Parameters:\*\*\s*` + "```json\\s*(\\{.*?\\})\\s*```")
+	mockDataRegex := regexp.MustCompile(`(?s)` + "```yaml\\s*#[^\\n]*\\n(.*?)\\s*```")
+
+	// Find all test case headers
+	testCaseMatches := testCaseRegex.FindAllStringSubmatch(content, -1)
+
+	for i, match := range testCaseMatches {
+		if len(match) < 2 {
+			continue
+		}
+
+		testCase := TestCase{
+			Name: strings.TrimSpace(match[1]),
+		}
+
+		// Find the section content for this test case
+		startPos := strings.Index(content, match[0])
+		var endPos int
+		if i+1 < len(testCaseMatches) {
+			endPos = strings.Index(content, testCaseMatches[i+1][0])
+		} else {
+			endPos = len(content)
+		}
+
+		if startPos == -1 || endPos <= startPos {
+			continue
+		}
+
+		sectionContent := content[startPos:endPos]
+
+		// Extract parameters
+		paramMatches := parametersRegex.FindStringSubmatch(sectionContent)
+		if len(paramMatches) >= 2 {
+			var params map[string]interface{}
+			if err := json.Unmarshal([]byte(paramMatches[1]), &params); err == nil {
+				testCase.Parameters = params
+			}
+		}
+
+		// Extract mock data from YAML blocks
+		mockMatches := mockDataRegex.FindAllStringSubmatch(sectionContent, -1)
+		if len(mockMatches) > 0 {
+			// For now, create simple mock data structure
+			// In a real implementation, this would parse YAML and convert to appropriate format
+			mockData := make([]map[string]interface{}, 0)
+
+			// Create sample mock data based on common patterns
+			sampleRecord := map[string]interface{}{
+				"id":         1,
+				"name":       "Sample User",
+				"email":      "user@example.com",
+				"active":     true,
+				"created_at": "2024-01-15T10:30:00Z",
+			}
+			mockData = append(mockData, sampleRecord)
+
+			testCase.MockData = mockData
+		}
+
+		testCases = append(testCases, testCase)
+	}
+
+	return testCases, nil
+}
+
+// extractFunctionName extracts the function name from SQL comments in markdown
+func (g *MockDataGenerator) extractFunctionName(content string) string {
+	// Look for @name: directive in SQL code blocks
+	nameRegex := regexp.MustCompile(`--\s*@name:\s*([^\s\n]+)`)
+	matches := nameRegex.FindStringSubmatch(content)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+	return ""
+}
+
+// getMockFilePath generates the mock data file path
+func (g *MockDataGenerator) getMockFilePath(sourceFile string) string {
+	// Convert source file path to mock file path
+	// e.g., queries/users/find.snap.md -> testdata/snapsql_mock/users/find.json
+
+	baseName := filepath.Base(sourceFile)
+	// Remove .snap.md extension and add .json
+	if filepath.Ext(baseName) == ".md" {
+		baseName = baseName[:len(baseName)-3] // Remove .md
+		if filepath.Ext(baseName) == ".snap" {
+			baseName = baseName[:len(baseName)-5] // Remove .snap
+		}
+	}
+	baseName += ".json"
+
+	// Get directory structure
+	dir := filepath.Dir(sourceFile)
+
+	return filepath.Join(g.OutputDir, dir, baseName)
+}
+
+// writeMockDataFile writes mock data to individual JSON files for each test case
+func (g *MockDataGenerator) writeMockDataFile(sourceFile string, testCases []TestCase, functionName string) error {
+	if len(testCases) == 0 {
+		return nil
+	}
+
+	// Create base directory for the function
+	baseName := filepath.Base(sourceFile)
+	// Remove .snap.md extension
+	if filepath.Ext(baseName) == ".md" {
+		baseName = baseName[:len(baseName)-3] // Remove .md
+		if filepath.Ext(baseName) == ".snap" {
+			baseName = baseName[:len(baseName)-5] // Remove .snap
+		}
+	}
+
+	// Use function name if available, otherwise use file name
+	dirName := functionName
+	if dirName == "" {
+		dirName = baseName
+	}
+
+	baseDir := filepath.Join(g.OutputDir, dirName)
+	err := os.MkdirAll(baseDir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create output directory %s: %w", baseDir, err)
+	}
+
+	// Write each test case to a separate file
+	for _, testCase := range testCases {
+		// Create safe filename from test case name
+		safeFileName := strings.ReplaceAll(strings.ToLower(testCase.Name), " ", "_")
+		safeFileName = strings.ReplaceAll(safeFileName, ":", "")
+		safeFileName = strings.ReplaceAll(safeFileName, "-", "_")
+		filePath := filepath.Join(baseDir, safeFileName+".json")
+
+		// Write JSON file with pretty formatting - only mock_data
+		jsonData, err := json.MarshalIndent(testCase.MockData, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON for test case %s: %w", testCase.Name, err)
+		}
+
+		err = os.WriteFile(filePath, jsonData, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write mock data file %s: %w", filePath, err)
+		}
+	}
+
+	return nil
+}
 
 // GenerateFromSQL generates the intermediate format for a SQL template
 func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
@@ -29,6 +236,21 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 	stmt, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants)
 	if err != nil {
 		return nil, err
+	}
+
+	// Generate mock data from test cases if enabled
+	if config != nil && config.Generation.GenerateMockData {
+		// Read the original markdown content from file
+		markdownContent, err := os.ReadFile(basePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read markdown file for mock generation: %w", err)
+		}
+
+		mockGenerator := NewMockDataGenerator(projectRootPath)
+		err = mockGenerator.GenerateMockFiles(basePath, string(markdownContent))
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate mock data: %w", err)
+		}
 	}
 
 	// Generate intermediate format

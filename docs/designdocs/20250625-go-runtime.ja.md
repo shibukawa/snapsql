@@ -300,7 +300,7 @@ package snapsqlgo
 
 // DBExecutor represents the unified interface for database operations
 type DBExecutor interface {
-    PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
+    PrepareConSQtext(ctx context.Context, query string) (*sql.Stmt, error)
     QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
     ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }

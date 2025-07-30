@@ -1,6 +1,7 @@
 package intermediate
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -17,9 +18,7 @@ func (c *CELExpressionExtractor) Name() string {
 
 func (c *CELExpressionExtractor) Process(ctx *ProcessingContext) error {
 	// Extract CEL expressions and environment variables from the statement
-	expressions, envs := extractFromStatement(ctx.Statement)
-
-	ctx.Expressions = expressions
+	_, envs := extractFromStatement(ctx.Statement)
 
 	// Convert [][]EnvVar to []string for now (simplified)
 	var envStrings []string
@@ -30,7 +29,113 @@ func (c *CELExpressionExtractor) Process(ctx *ProcessingContext) error {
 	}
 	ctx.Environments = envStrings
 
+	// Extract enhanced CEL information with proper environment mapping
+	celExpressions, celEnvironments := c.extractEnhancedCELInfo(ctx.Statement)
+	ctx.CELExpressions = celExpressions
+	ctx.CELEnvironments = celEnvironments
+
 	return nil
+}
+
+// extractEnhancedCELInfo extracts CEL expressions with environment mapping
+func (c *CELExpressionExtractor) extractEnhancedCELInfo(stmt parser.StatementNode) ([]CELExpression, []CELEnvironment) {
+	expressions := make([]CELExpression, 0)
+	environments := make([]CELEnvironment, 0)
+
+	expressionCounter := 0
+	currentEnvIndex := 0
+
+	// Create base environment (index 0) - uses parameters from interface_schema
+	baseEnv := CELEnvironment{
+		Index:               0,
+		AdditionalVariables: []CELVariableInfo{}, // Empty - uses parameters
+	}
+	environments = append(environments, baseEnv)
+
+	// Helper function to create CEL expression
+	createExpression := func(expr string, line int) CELExpression {
+		expressionCounter++
+		return CELExpression{
+			ID:               fmt.Sprintf("expr_%03d", expressionCounter),
+			Expression:       expr,
+			EnvironmentIndex: currentEnvIndex,
+			Position: Position{
+				Line:   line,
+				Column: 0,
+			},
+		}
+	}
+
+	// Process all tokens from the statement
+	processTokens := func(tokens []tokenizer.Token) {
+		for _, token := range tokens {
+			if token.Directive != nil {
+				switch token.Directive.Type {
+				case "if", "elseif":
+					if token.Directive.Condition != "" {
+						expr := createExpression(token.Directive.Condition, 0)
+						expressions = append(expressions, expr)
+					}
+
+				case "for":
+					// Parse "variable : collection" format
+					parts := strings.Split(token.Directive.Condition, ":")
+					if len(parts) == 2 {
+						variable := strings.TrimSpace(parts[0])
+						collection := strings.TrimSpace(parts[1])
+
+						// Add collection expression to current environment
+						collectionExpr := createExpression(collection, 0)
+						expressions = append(expressions, collectionExpr)
+
+						// Create new environment for loop body
+						currentEnvIndex++
+						loopEnv := CELEnvironment{
+							Index: currentEnvIndex,
+							AdditionalVariables: []CELVariableInfo{
+								{
+									Name: variable,
+									Type: "any", // Could be inferred from collection type
+								},
+							},
+						}
+						environments = append(environments, loopEnv)
+					}
+
+				case "end":
+					// Return to parent environment
+					if currentEnvIndex > 0 {
+						currentEnvIndex--
+					}
+
+				case "variable":
+					var varExpr string
+					if token.Directive.Condition != "" {
+						varExpr = token.Directive.Condition
+					} else if token.Value != "" && strings.HasPrefix(token.Value, "/*=") && strings.HasSuffix(token.Value, "*/") {
+						varExpr = strings.TrimSpace(token.Value[3 : len(token.Value)-2])
+					}
+
+					if varExpr != "" {
+						expr := createExpression(varExpr, 0)
+						expressions = append(expressions, expr)
+					}
+				}
+			}
+		}
+	}
+
+	// Process tokens from each clause
+	for _, clause := range stmt.Clauses() {
+		processTokens(clause.RawTokens())
+	}
+
+	// Process CTE tokens if available
+	if cte := stmt.CTE(); cte != nil {
+		processTokens(cte.RawTokens())
+	}
+
+	return expressions, environments
 }
 
 // EnvVar represents an environment variable

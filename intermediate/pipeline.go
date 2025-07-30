@@ -33,11 +33,14 @@ type ProcessingContext struct {
 	TableInfo   map[string]*TableInfo
 
 	// Processing results
-	Expressions    []string
 	Environments   []string
 	ImplicitParams []ImplicitParameter
 	SystemFields   []SystemFieldInfo
 	Instructions   []Instruction
+
+	// Enhanced CEL information
+	CELExpressions  []CELExpression
+	CELEnvironments []CELEnvironment
 
 	// Metadata
 	Description      string
@@ -85,7 +88,8 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		Description:        ctx.Description,
 		FunctionName:       ctx.FunctionName,
 		Parameters:         ctx.Parameters,
-		Expressions:        ctx.Expressions,
+		CELExpressions:     ctx.CELExpressions,
+		CELEnvironments:    ctx.CELEnvironments,
 		Envs:               convertEnvironmentsToEnvs(ctx.Environments), // Convert environments to Envs format
 		Instructions:       ctx.Instructions,
 		ImplicitParameters: ctx.ImplicitParams,
