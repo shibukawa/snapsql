@@ -37,7 +37,7 @@ LIMIT /*= pagination.limit */10;
 
 ### Variable Substitution
 
-Use `/*= expression */default_value` for variable substitution:
+Use `/*= expression */dummy_value` for variable substitution:
 
 ```sql
 -- Basic substitution
