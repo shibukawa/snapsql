@@ -1,0 +1,172 @@
+package markdownparser
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/yuin/goldmark/ast"
+)
+
+// ASTSection represents a markdown section with AST nodes
+type ASTSection struct {
+	Heading     ast.Node   // The heading node
+	HeadingText string     // Extracted heading text
+	StartLine   int        // Line number where section starts
+	Content     []ast.Node // All nodes between this heading and the next
+}
+
+// extractSectionsFromAST extracts sections and title from AST
+func extractSectionsFromAST(doc ast.Node, content []byte) (string, map[string]ASTSection) {
+	sections := make(map[string]ASTSection)
+	var title string
+	var currentSection *ASTSection
+
+	// Walk through the AST
+	err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+
+		switch node := n.(type) {
+		case *ast.Heading:
+			headingText := extractTextFromHeadingNode(node, content)
+			
+			// H1 is title
+			if node.Level == 1 {
+				title = headingText
+				return ast.WalkContinue, nil
+			}
+
+			// Create new section for H2
+			if node.Level == 2 {
+				sectionName := strings.ToLower(headingText)
+				currentSection = &ASTSection{
+					Heading:     node,
+					HeadingText: headingText,
+					StartLine:   node.Lines().At(0).Start,
+					Content:     make([]ast.Node, 0),
+				}
+				sections[sectionName] = *currentSection
+				return ast.WalkContinue, nil
+			}
+
+			// For H3 and below, add to current section if exists
+			if currentSection != nil && node.Level > 2 {
+				currentSection.Content = append(currentSection.Content, node)
+				sections[strings.ToLower(currentSection.HeadingText)] = *currentSection
+			}
+
+		case *ast.FencedCodeBlock, *ast.Paragraph, *ast.List:
+			// Add content to current section
+			if currentSection != nil {
+				currentSection.Content = append(currentSection.Content, node)
+				sections[strings.ToLower(currentSection.HeadingText)] = *currentSection
+			}
+		}
+
+		return ast.WalkContinue, nil
+	})
+
+	if err != nil {
+		return "", nil
+	}
+
+	return title, sections
+}
+
+// extractTextFromHeadingNode extracts text content from a heading node
+func extractTextFromHeadingNode(n ast.Node, content []byte) string {
+	var text strings.Builder
+	err := ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering && n.Kind() == ast.KindText {
+			text.Write(n.Text(content))
+		}
+		return ast.WalkContinue, nil
+	})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(text.String())
+}
+
+// validateRequiredSections checks if all required sections are present
+func validateRequiredSections(sections map[string]ASTSection) error {
+	// Description or Overview is required
+	descriptionFound := false
+	for sectionName := range sections {
+		if sectionName == "description" || sectionName == "overview" {
+			descriptionFound = true
+			break
+		}
+	}
+	if !descriptionFound {
+		return fmt.Errorf("%w: description or overview", ErrMissingRequiredSection)
+	}
+
+	// SQL is required
+	if _, exists := sections["sql"]; !exists {
+		return fmt.Errorf("%w: sql", ErrMissingRequiredSection)
+	}
+
+	return nil
+}
+
+// extractSQLFromASTNodes extracts SQL content from AST nodes
+func extractSQLFromASTNodes(nodes []ast.Node, content []byte) (string, int) {
+	for _, node := range nodes {
+		if codeBlock, ok := node.(*ast.FencedCodeBlock); ok {
+			info := string(codeBlock.Info.Text(content))
+			if strings.ToLower(strings.TrimSpace(info)) == "sql" {
+				var sql strings.Builder
+				lines := codeBlock.Lines()
+				for i := 0; i < lines.Len(); i++ {
+					line := lines.At(i)
+					sql.Write(line.Value(content))
+					if i < lines.Len()-1 {
+						sql.WriteString("\n")
+					}
+				}
+				return sql.String(), codeBlock.Lines().At(0).Start
+			}
+		}
+	}
+	return "", 0
+}
+
+// extractParameterBlock extracts parameter definitions from AST nodes
+func extractParameterBlock(nodes []ast.Node, content []byte) string {
+	var parameterContent strings.Builder
+	
+	for _, node := range nodes {
+		switch n := node.(type) {
+		case *ast.FencedCodeBlock:
+			info := string(n.Info.Text(content))
+			if strings.ToLower(strings.TrimSpace(info)) == "yaml" ||
+				strings.ToLower(strings.TrimSpace(info)) == "json" {
+				lines := n.Lines()
+				for i := 0; i < lines.Len(); i++ {
+					line := lines.At(i)
+					parameterContent.Write(line.Value(content))
+					if i < lines.Len()-1 {
+						parameterContent.WriteString("\n")
+					}
+				}
+				return parameterContent.String()
+			}
+		case *ast.List:
+			// Extract parameter definitions from list items
+			ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+				if entering && n.Kind() == ast.KindText {
+					text := string(n.Text(content))
+					if strings.Contains(text, ":") {
+						parameterContent.WriteString(text)
+						parameterContent.WriteString("\n")
+					}
+				}
+				return ast.WalkContinue, nil
+			})
+		}
+	}
+	
+	return parameterContent.String()
+}
