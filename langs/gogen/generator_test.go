@@ -65,6 +65,7 @@ func TestGenerator(t *testing.T) {
 	gen := New(format,
 		WithPackageName("generated"),
 		WithMockPath("comprehensive/find_user_by_id"),
+		WithDialect("postgresql"),
 	)
 
 	var buf strings.Builder
@@ -79,6 +80,7 @@ func TestGeneratorWithoutDescription(t *testing.T) {
 	gen := &Generator{
 		PackageName: "generated",
 		MockPath:    "test/mock",
+		Dialect:     "postgresql",
 		Format: &intermediate.IntermediateFormat{
 			FunctionName: "TestFunction",
 			// Description is empty

@@ -101,7 +101,7 @@ func UpdateUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 	}
 
 	// Build SQL
-	query := "UPDATE users SET name =?, updated_at = NOW()CURRENT_TIMESTAMP WHERE id =?RETURNING id, name, email, updated_at"
+	query := "UPDATE users SET name =?, updated_at = CURRENT_TIMESTAMP WHERE id =?RETURNING id, name, email, updated_at"
 	args := []any{
 		newName,
 		userID,

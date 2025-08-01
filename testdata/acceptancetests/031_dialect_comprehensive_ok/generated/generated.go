@@ -88,7 +88,7 @@ func GetComprehensiveDialectTest(ctx context.Context, executor snapsqlgo.DBExecu
 	}
 
 	// Build SQL
-	query := "SELECT id, name, ASINTEGER)::INTEGER) as age_cast_standard, ::DECIMAL(10,2)ASDECIMAL(10,2)) as price_cast_postgresql, ::NUMERIC(12,2)ASNUMERIC(12,2)) as total_cast_complex, CONCAT() ||  ||  as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, NOW()CURRENT_TIMESTAMP as time_mysql, CURRENT_TIMESTAMPNOW() as time_standard, TRUE1 as bool_true, FALSE0 as bool_false, RAND()RANDOM() as random_mysql, RANDOM()RAND() as random_postgresql, ASTEXT)::TEXT) as nested_cast_time, CONCAT() ||  as nested_concat_cast FROM users WHERE id =?AND active = TRUE AND created_at > NOW()CURRENT_TIMESTAMP"
+	query := "SELECT id, name, ::INTEGER) as age_cast_standard, ::DECIMAL(10,2) as price_cast_postgresql, ::NUMERIC(12,2) as total_cast_complex,  ||  ||  as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, CURRENT_TIMESTAMP as time_mysql, CURRENT_TIMESTAMP as time_standard, TRUE as bool_true, FALSE as bool_false, RANDOM() as random_mysql, RANDOM() as random_postgresql, ::TEXT) as nested_cast_time,  ||  as nested_concat_cast FROM users WHERE id =?AND active = TRUE AND created_at > CURRENT_TIMESTAMP"
 	args := []any{
 		userID,
 	}

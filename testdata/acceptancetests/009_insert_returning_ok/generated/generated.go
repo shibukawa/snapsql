@@ -101,7 +101,7 @@ func InsertUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 	}
 
 	// Build SQL
-	query := "INSERT INTO users (name, email, created_at) VALUES (?,?, NOW()CURRENT_TIMESTAMP) RETURNING id, name, email, created_at"
+	query := "INSERT INTO users (name, email, created_at) VALUES (?,?, CURRENT_TIMESTAMP) RETURNING id, name, email, created_at"
 	args := []any{
 		userName,
 		userEmail,

@@ -17,8 +17,8 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 	var code []string
 
 	switch format.ResponseAffinity {
-	case "none":
-		// No result expected (INSERT/UPDATE/DELETE)
+	case "none", "":
+		// No result expected (INSERT/UPDATE/DELETE) or empty affinity
 		code = append(code, "// Execute query (no result expected)")
 		code = append(code, "_, err = stmt.ExecContext(ctx, args...)")
 		code = append(code, "if err != nil {")

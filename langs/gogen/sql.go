@@ -19,6 +19,11 @@ type sqlBuilderData struct {
 
 // processSQLBuilderWithDialect processes instructions and generates SQL building code for a specific dialect
 func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, dialect string) (*sqlBuilderData, error) {
+	// Require dialect to be specified
+	if dialect == "" {
+		return nil, fmt.Errorf("dialect must be specified (postgres, mysql, sqlite)")
+	}
+
 	// Use intermediate package's optimization with dialect filtering
 	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {

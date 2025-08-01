@@ -42,7 +42,7 @@ func TestAcceptanceGeneration(t *testing.T) {
 
 			// Generate Go code
 			var goCode strings.Builder
-			goGen := New(format, WithPackageName("generated"))
+			goGen := New(format, WithPackageName("generated"), WithDialect("postgresql"))
 			err = goGen.Generate(&goCode)
 			if err != nil {
 				t.Logf("Failed to generate Go code for %s: %v", testName, err)

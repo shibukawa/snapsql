@@ -88,7 +88,7 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 	}
 
 	// Build SQL
-	query := "SELECT id, name, ASTEXT)::TEXT) as current_time_text, ::INTEGERASINTEGER) as bool_as_int FROM users WHERE id =?"
+	query := "SELECT id, name, ::TEXT) as current_time_text, ::INTEGER as bool_as_int FROM users WHERE id =?"
 	args := []any{
 		userID,
 	}

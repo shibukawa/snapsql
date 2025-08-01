@@ -118,6 +118,33 @@ func processCELEnvironments(format *intermediate.IntermediateFormat) ([]celEnvir
 func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error) {
 	baseType := strings.TrimSuffix(strings.TrimSuffix(v.Type, "[]"), "*")
 
+	// Check for custom types (file paths or relative paths)
+	if strings.Contains(baseType, "/") || strings.Contains(baseType, ".") {
+		// This is a custom type - extract the type name
+		typeName := extractTypeNameFromPath(baseType)
+
+		// Handle arrays and pointers
+		goType := typeName
+		celType := fmt.Sprintf("types.NewObjectType(\"%s\")", typeName)
+
+		isArray := strings.HasSuffix(v.Type, "[]")
+		if isArray {
+			goType = "[]" + goType
+			celType = "ListType(" + celType + ")"
+		}
+		if strings.HasSuffix(v.Type, "*") {
+			goType = "*" + goType
+		}
+
+		return celVariableData{
+			Name:     v.Name,
+			CelType:  celType,
+			GoType:   goType,
+			IsArray:  isArray,
+			IsObject: true,
+		}, nil
+	}
+
 	celType, ok := celTypeMap[strings.ToLower(baseType)]
 	if !ok {
 		return celVariableData{}, fmt.Errorf("unsupported type: %s", v.Type)
@@ -146,6 +173,13 @@ func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error)
 		IsArray:  isArray,
 		IsObject: strings.HasPrefix(v.Type, "."), // Types starting with . are objects
 	}, nil
+}
+
+// extractTypeNameFromPath extracts the type name from a file path
+func extractTypeNameFromPath(typePath string) string {
+	// Handle relative paths like "./User" or "../testdata/acceptancetests/017_common_type_ok/User"
+	parts := strings.Split(typePath, "/")
+	return parts[len(parts)-1] // Return the last part as type name
 }
 
 // generateCELPrograms generates CEL program initialization code

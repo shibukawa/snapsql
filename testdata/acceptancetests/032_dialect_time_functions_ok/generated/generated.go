@@ -75,7 +75,7 @@ func GetCurrentTime(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...
 	}
 
 	// Build SQL
-	query := "SELECT id, name, NOW()CURRENT_TIMESTAMP as current_time_now, CURRENT_TIMESTAMPNOW() as current_time_standard FROM users"
+	query := "SELECT id, name, CURRENT_TIMESTAMP as current_time_now, CURRENT_TIMESTAMP as current_time_standard FROM users"
 	args := []any{}
 
 	// Execute query
