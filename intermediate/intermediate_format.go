@@ -136,10 +136,10 @@ type IntermediateFormat struct {
 	Instructions []Instruction `json:"instructions"`
 
 	// Enhanced CEL expressions with metadata
-	CELExpressions []CELExpression `json:"-"`
+	CELExpressions []CELExpression `json:"cel_expressions"`
 
 	// CEL environments with variable definitions
-	CELEnvironments []CELEnvironment `json:"-"`
+	CELEnvironments []CELEnvironment `json:"cel_environments"`
 
 	// Environment variables by level
 	Envs [][]EnvVar `json:"envs,omitempty"`
