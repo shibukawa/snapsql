@@ -98,14 +98,18 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to process response struct: %w", err)
 	}
 
-	// Add aggregation struct definitions for specific test cases
-	if g.Format.FunctionName == "get_users_with_jobs" {
-		jobStruct := `type GetUsersWithJobsJob struct {
-	ID      int    ` + "`json:\"id\"`" + `
-	Title   string ` + "`json:\"title\"`" + `
-	Company string ` + "`json:\"company\"`" + `
-}`
-		structDefinitions = append(structDefinitions, jobStruct)
+	// Generate hierarchical structs if needed
+	hierarchicalGroups, _, err := detectHierarchicalStructure(g.Format.Responses)
+	if err != nil {
+		return fmt.Errorf("failed to detect hierarchical structure: %w", err)
+	}
+
+	if len(hierarchicalGroups) > 0 {
+		hierarchicalStructs, _, err := generateHierarchicalStructs(g.Format.FunctionName, hierarchicalGroups, nil)
+		if err != nil {
+			return fmt.Errorf("failed to generate hierarchical structs: %w", err)
+		}
+		structDefinitions = append(structDefinitions, hierarchicalStructs...)
 	}
 
 	// Generate type registrations for custom types
@@ -127,47 +131,47 @@ func (g *Generator) Generate(w io.Writer) error {
 	funcName := snakeToCamel(g.Format.FunctionName)
 
 	data := struct {
-		Timestamp       time.Time
-		PackageName     string
-		FunctionName    string
-		LowerFuncName   string
-		Description     string
-		MockPath        string
-		CELEnvironments []celEnvironmentData
-		CELPrograms     []celProgramData
-		Instructions    []instruction
-		ResponseType        string
-		ResponseStruct      *responseStructData
-		SQLBuilder          *sqlBuilderData
-		QueryExecution      *queryExecutionData
-		Parameters          []parameterData
-		StructDefinitions   []string
-		TypeRegistrations   []string
-		TypeDefinitions     map[string]map[string]string
-		ImplicitParams      []implicitParam
-		Imports         map[string]struct{}
-		NumCELEnvs      int
-		NumCELPrograms  int
+		Timestamp         time.Time
+		PackageName       string
+		FunctionName      string
+		LowerFuncName     string
+		Description       string
+		MockPath          string
+		CELEnvironments   []celEnvironmentData
+		CELPrograms       []celProgramData
+		Instructions      []instruction
+		ResponseType      string
+		ResponseStruct    *responseStructData
+		SQLBuilder        *sqlBuilderData
+		QueryExecution    *queryExecutionData
+		Parameters        []parameterData
+		StructDefinitions []string
+		TypeRegistrations []string
+		TypeDefinitions   map[string]map[string]string
+		ImplicitParams    []implicitParam
+		Imports           map[string]struct{}
+		NumCELEnvs        int
+		NumCELPrograms    int
 	}{
-		Timestamp:       time.Now(),
-		PackageName:     g.PackageName,
-		FunctionName:    funcName,
-		LowerFuncName:   strings.ToLower(funcName),
-		Description:     g.Format.Description,
-		MockPath:        g.MockPath,
-		CELEnvironments: celEnvs,
-		CELPrograms:     celPrograms,
-		Parameters:          parameters,
-		ResponseType:        responseType,
-		ResponseStruct:      responseStruct,
-		SQLBuilder:          sqlBuilder,
-		QueryExecution:      queryExecution,
-		StructDefinitions:   structDefinitions,
-		TypeRegistrations:   typeRegistrations,
-		TypeDefinitions:     typeDefinitions,
-		NumCELEnvs:          len(g.Format.CELEnvironments),
-		NumCELPrograms:  len(g.Format.CELExpressions),
-		Imports:         make(map[string]struct{}),
+		Timestamp:         time.Now(),
+		PackageName:       g.PackageName,
+		FunctionName:      funcName,
+		LowerFuncName:     strings.ToLower(funcName),
+		Description:       g.Format.Description,
+		MockPath:          g.MockPath,
+		CELEnvironments:   celEnvs,
+		CELPrograms:       celPrograms,
+		Parameters:        parameters,
+		ResponseType:      responseType,
+		ResponseStruct:    responseStruct,
+		SQLBuilder:        sqlBuilder,
+		QueryExecution:    queryExecution,
+		StructDefinitions: structDefinitions,
+		TypeRegistrations: typeRegistrations,
+		TypeDefinitions:   typeDefinitions,
+		NumCELEnvs:        len(g.Format.CELEnvironments),
+		NumCELPrograms:    len(g.Format.CELExpressions),
+		Imports:           make(map[string]struct{}),
 	}
 
 	// Collect imports from all environments
@@ -179,9 +183,9 @@ func (g *Generator) Generate(w io.Writer) error {
 
 	// Execute template
 	tmpl, err := template.New("go").Funcs(template.FuncMap{
-		"toLower": strings.ToLower,
+		"toLower":  strings.ToLower,
 		"backtick": func() string { return "`" },
-		"title": strings.Title,
+		"title":    strings.Title,
 		"celTypeConvert": func(typeName string) string {
 			// Handle array types
 			if strings.HasPrefix(typeName, "[]") {
@@ -189,14 +193,14 @@ func (g *Generator) Generate(w io.Writer) error {
 				elementCELType := convertSingleType(elementType)
 				return fmt.Sprintf("types.NewListType(%s)", elementCELType)
 			}
-			
+
 			// Handle pointer types
 			if strings.HasPrefix(typeName, "*") {
 				baseType := strings.TrimPrefix(typeName, "*")
 				// For nullable types, we still use the base type in CEL
 				return convertSingleType(baseType)
 			}
-			
+
 			return convertSingleType(typeName)
 		},
 		"convertSingleType": func(typeName string) string {
@@ -256,7 +260,7 @@ func snakeToCamel(s string) string {
 		}
 		return strings.ToUpper(string(s[0])) + s[1:]
 	}
-	
+
 	words := strings.Split(s, "_")
 	for i := range words {
 		words[i] = capitalizeWord(words[i])
@@ -323,7 +327,7 @@ func snakeToCamelLower(s string) string {
 func processParameters(params []intermediate.Parameter, funcName string) ([]parameterData, []string, error) {
 	result := make([]parameterData, len(params))
 	var structDefinitions []string
-	
+
 	for i, param := range params {
 		// Special handling for complex types based on function name and parameter name
 		if funcName == "insert_all_sub_departments" && param.Name == "departments" {
@@ -340,7 +344,7 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 }`,
 			}
 			structDefinitions = append(structDefinitions, structDefs...)
-			
+
 			result[i] = parameterData{
 				Name:     snakeToCamelLower(param.Name),
 				Type:     "[]InsertAllSubDepartmentsDepartment",
@@ -348,20 +352,20 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 			}
 			continue
 		}
-		
+
 		// Default type conversion
 		goType, err := convertToGoType(param.Type)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to convert parameter %s type: %w", param.Name, err)
 		}
-		
+
 		result[i] = parameterData{
 			Name:     snakeToCamelLower(param.Name),
 			Type:     goType,
 			Required: !param.Optional,
 		}
 	}
-	
+
 	return result, structDefinitions, nil
 }
 
@@ -376,7 +380,7 @@ func convertToGoType(snapType string) (string, error) {
 		}
 		return "[]" + goBaseType, nil
 	}
-	
+
 	// Handle pointers
 	if strings.HasSuffix(snapType, "*") {
 		baseType := strings.TrimSuffix(snapType, "*")
@@ -386,7 +390,7 @@ func convertToGoType(snapType string) (string, error) {
 		}
 		return "*" + goBaseType, nil
 	}
-	
+
 	// Handle custom types (relative paths)
 	if strings.HasPrefix(snapType, "../") || strings.HasPrefix(snapType, "./") {
 		// Extract the type name from the path
@@ -394,7 +398,7 @@ func convertToGoType(snapType string) (string, error) {
 		typeName := parts[len(parts)-1]
 		return typeName, nil
 	}
-	
+
 	// Handle basic types
 	switch strings.ToLower(snapType) {
 	case "int", "int32", "int64":
@@ -424,27 +428,33 @@ func convertToGoType(snapType string) (string, error) {
 
 // processResponseType determines the response type based on response affinity and responses
 func processResponseType(format *intermediate.IntermediateFormat) (string, error) {
-	// Special handling for specific test cases with aggregation
-	if format.FunctionName == "get_users_with_jobs" {
-		switch format.ResponseAffinity {
-		case "one":
-			return "GetUsersWithJobsResult", nil
-		case "many":
-			return "[]GetUsersWithJobsResult", nil
-		case "none":
-			return "interface{}", nil
-		default:
-			return "[]GetUsersWithJobsResult", nil
-		}
-	}
-
 	if len(format.Responses) == 0 {
 		return "interface{}", nil
 	}
 
-	// Generate struct name based on function name
+	// Check for hierarchical structure
+	hierarchicalGroups, _, err := detectHierarchicalStructure(format.Responses)
+	if err != nil {
+		return "", fmt.Errorf("failed to detect hierarchical structure: %w", err)
+	}
+
 	structName := generateStructName(format.FunctionName)
 
+	if len(hierarchicalGroups) > 0 {
+		// Hierarchical response
+		switch format.ResponseAffinity {
+		case "one":
+			return structName, nil
+		case "many":
+			return "[]" + structName, nil
+		case "none":
+			return "interface{}", nil
+		default:
+			return structName, nil
+		}
+	}
+
+	// Regular flat response
 	switch format.ResponseAffinity {
 	case "one":
 		return structName, nil
@@ -464,14 +474,14 @@ func generateStructName(functionName string) string {
 	// e.g., "find_user" -> "FindUserResult"
 	// e.g., "getFilteredData" -> "GetFilteredDataResult"
 	camelName := snakeToCamel(functionName)
-	
+
 	// Add "Result" suffix if it doesn't already end with a noun-like suffix
-	if !strings.HasSuffix(camelName, "Result") && 
-	   !strings.HasSuffix(camelName, "Response") &&
-	   !strings.HasSuffix(camelName, "Data") {
+	if !strings.HasSuffix(camelName, "Result") &&
+		!strings.HasSuffix(camelName, "Response") &&
+		!strings.HasSuffix(camelName, "Data") {
 		return camelName + "Result"
 	}
-	
+
 	// If it ends with "Data", keep it as is
 	return camelName + "Result"
 }
@@ -484,47 +494,50 @@ type responseStructData struct {
 
 // responseFieldData represents a field in a response struct
 type responseFieldData struct {
-	Name     string
-	Type     string
-	JSONTag  string
+	Name      string
+	Type      string
+	JSONTag   string
 	IsPointer bool
 }
 
 // processResponseStruct processes response fields and generates struct data
 func processResponseStruct(format *intermediate.IntermediateFormat) (*responseStructData, error) {
-	// Special handling for specific test cases with aggregation
-	if format.FunctionName == "get_users_with_jobs" {
-		return &responseStructData{
-			Name: "GetUsersWithJobsResult",
-			Fields: []responseFieldData{
-				{Name: "ID", Type: "int", JSONTag: "id"},
-				{Name: "Name", Type: "string", JSONTag: "name"},
-				{Name: "Email", Type: "string", JSONTag: "email"},
-				{Name: "Jobs", Type: "[]GetUsersWithJobsJob", JSONTag: "jobs"},
-			},
-		}, nil
-	}
-
 	if len(format.Responses) == 0 {
 		return nil, nil
 	}
 
+	// Check for hierarchical structure
+	hierarchicalGroups, rootFields, err := detectHierarchicalStructure(format.Responses)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect hierarchical structure: %w", err)
+	}
+
+	if len(hierarchicalGroups) > 0 {
+		// This is a hierarchical response - use hierarchical processing
+		_, mainStruct, err := generateHierarchicalStructs(format.FunctionName, hierarchicalGroups, rootFields)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate hierarchical structs: %w", err)
+		}
+		return mainStruct, nil
+	}
+
+	// Regular flat structure
 	structName := generateStructName(format.FunctionName)
-	
+
 	fields := make([]responseFieldData, len(format.Responses))
-	
+
 	for i, response := range format.Responses {
 		goType, err := convertToGoType(response.Type)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert response field %s type: %w", response.Name, err)
 		}
-		
+
 		// Handle nullable fields
 		isPointer := response.IsNullable
 		if isPointer && !strings.HasPrefix(goType, "*") {
 			goType = "*" + goType
 		}
-		
+
 		fields[i] = responseFieldData{
 			Name:      celNameToGoName(response.Name), // Convert snake_case to PascalCase
 			Type:      goType,
@@ -532,7 +545,7 @@ func processResponseStruct(format *intermediate.IntermediateFormat) (*responseSt
 			IsPointer: isPointer,
 		}
 	}
-	
+
 	return &responseStructData{
 		Name:   structName,
 		Fields: fields,
@@ -774,10 +787,10 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 	lines := strings.Split(structDef, "\n")
 	fields := make(map[string]string)
 	var typeName string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Extract type name from "type TypeName struct {"
 		if strings.HasPrefix(line, "type ") && strings.Contains(line, "struct") {
 			parts := strings.Fields(line)
@@ -786,12 +799,12 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 			}
 			continue
 		}
-		
+
 		// Skip empty lines and braces
 		if line == "" || line == "{" || line == "}" {
 			continue
 		}
-		
+
 		// Parse field definition: "FieldName FieldType `json:\"field_name\"`"
 		if strings.Contains(line, "`json:") {
 			// Extract field name and type
@@ -799,7 +812,7 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 			if len(parts) >= 2 {
 				_ = parts[0] // fieldName (not used in current implementation)
 				fieldType := parts[1]
-				
+
 				// Extract JSON tag name
 				jsonTagStart := strings.Index(line, "`json:\"")
 				if jsonTagStart != -1 {
@@ -807,7 +820,7 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 					jsonTagEnd := strings.Index(line[jsonTagStart:], "\"")
 					if jsonTagEnd != -1 {
 						jsonFieldName := line[jsonTagStart : jsonTagStart+jsonTagEnd]
-						
+
 						// Convert Go type to CEL type
 						celType := goTypeToCELType(fieldType)
 						fields[jsonFieldName] = celType
@@ -816,7 +829,7 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 			}
 		}
 	}
-	
+
 	return typeName, fields
 }
 
@@ -828,13 +841,13 @@ func goTypeToCELType(goType string) string {
 		elementCELType := goTypeToCELType(elementType)
 		return "[]" + elementCELType
 	}
-	
+
 	// Handle pointer types
 	if strings.HasPrefix(goType, "*") {
 		baseType := strings.TrimPrefix(goType, "*")
 		return "*" + goTypeToCELType(baseType)
 	}
-	
+
 	// Handle basic types
 	switch goType {
 	case "int", "int32", "int64":
@@ -863,13 +876,13 @@ func snapTypeToCELType(snapType string) string {
 		elementCELType := snapTypeToCELType(elementType)
 		return "[]" + elementCELType
 	}
-	
+
 	// Handle pointer types
 	if strings.HasPrefix(snapType, "*") {
 		baseType := strings.TrimPrefix(snapType, "*")
 		return "*" + snapTypeToCELType(baseType)
 	}
-	
+
 	// Handle basic types
 	switch strings.ToLower(snapType) {
 	case "int", "int32", "int64":
@@ -922,39 +935,39 @@ func generateTypeRegistrations(format *intermediate.IntermediateFormat, structDe
 func extractCELParameters(celEnvs []intermediate.CELEnvironment, existingParams []parameterData) []parameterData {
 	var additionalParams []parameterData
 	existingNames := make(map[string]bool)
-	
+
 	// Create map of existing parameter names
 	for _, param := range existingParams {
 		existingNames[param.Name] = true
 	}
-	
+
 	// Extract variables from CEL environments
 	for _, env := range celEnvs {
 		for _, variable := range env.AdditionalVariables {
 			// Convert snake_case to camelCase for Go parameter name
 			paramName := snakeToCamelLower(variable.Name)
-			
+
 			// Skip if parameter already exists
 			if existingNames[paramName] {
 				continue
 			}
-			
+
 			// Convert type
 			goType, err := convertToGoType(variable.Type)
 			if err != nil {
 				// Skip unsupported types
 				continue
 			}
-			
+
 			additionalParams = append(additionalParams, parameterData{
 				Name: paramName,
 				Type: goType,
 			})
-			
+
 			existingNames[paramName] = true
 		}
 	}
-	
+
 	return additionalParams
 }
 

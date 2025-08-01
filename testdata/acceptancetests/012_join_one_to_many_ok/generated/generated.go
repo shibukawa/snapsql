@@ -26,14 +26,17 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
+type GetUserWithJobsResultJobs struct {
+	ID int `json:"id"`
+	Title string `json:"title"`
+	Company string `json:"company"`
+}
 // GetUserWithJobsResult represents the response structure for GetUserWithJobs
 type GetUserWithJobsResult struct {
-	U.Id int `json:"u.id"`
-	U.Name string `json:"u.name"`
-	U.Email string `json:"u.email"`
-	JobsID int `json:"jobs__id"`
-	JobsTitle string `json:"jobs__title"`
-	JobsCompany string `json:"jobs__company"`
+	Jobs []GetUserWithJobsResultJobs `json:"jobs"`
+	UID int `json:"u.id"`
+	UName string `json:"u.name"`
+	UEmail string `json:"u.email"`
 }
 
 // GetUserWithJobs specific CEL programs and mock path
@@ -44,6 +47,54 @@ var (
 const getuserwithjobsMockPath = ""
 
 func init() {
+	// Static accessor functions for each type
+	getuserwithjobsresultjobsCompanyAccessor := func(value interface{}) ref.Val {
+		v := value.(*GetUserWithJobsResultJobs)
+		return snapsqlgo.ConvertGoValueToCEL(v.Company)
+	}
+	getuserwithjobsresultjobsIDAccessor := func(value interface{}) ref.Val {
+		v := value.(*GetUserWithJobsResultJobs)
+		return snapsqlgo.ConvertGoValueToCEL(v.ID)
+	}
+	getuserwithjobsresultjobsTitleAccessor := func(value interface{}) ref.Val {
+		v := value.(*GetUserWithJobsResultJobs)
+		return snapsqlgo.ConvertGoValueToCEL(v.Title)
+	}
+
+	// Create type definitions for local registry
+	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
+		"GetUserWithJobsResultJobs": {
+			"company": snapsqlgo.CreateFieldInfo(
+				"company", 
+				types.StringType, 
+				getuserwithjobsresultjobsCompanyAccessor,
+			),
+			"id": snapsqlgo.CreateFieldInfo(
+				"id", 
+				types.IntType, 
+				getuserwithjobsresultjobsIDAccessor,
+			),
+			"title": snapsqlgo.CreateFieldInfo(
+				"title", 
+				types.StringType, 
+				getuserwithjobsresultjobsTitleAccessor,
+			),
+		},
+	}
+
+	// Create and set up local registry
+	registry := snapsqlgo.NewLocalTypeRegistry()
+	for typeName, fields := range typeDefinitions {
+		structInfo := &snapsqlgo.StructInfo{
+			Name:    typeName,
+			CelType: types.NewObjectType(typeName),
+			Fields:  fields,
+		}
+		registry.RegisterStruct(typeName, structInfo)
+	}
+	
+	// Set global registry for nested type resolution
+	snapsqlgo.SetGlobalRegistry(registry)
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
@@ -52,6 +103,7 @@ func init() {
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
 		snapsqlgo.DecimalLibrary,
+		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
 		cel.Variable("user_id", cel.IntType),
 	)
 	if err != nil {
@@ -110,7 +162,15 @@ func GetUserWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, userID 
 	defer stmt.Close()
 	// Execute query and scan single row
 	row := stmt.QueryRowContext(ctx, args...)
-	// TODO: Single row aggregation not implemented yet
+	err = row.Scan(
+	    &result.Jobs,
+	    &result.UID,
+	    &result.UName,
+	    &result.UEmail
+	)
+	if err != nil {
+	    return result, fmt.Errorf("failed to scan row: %w", err)
+	}
 
 	return result, nil
 }

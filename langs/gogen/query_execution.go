@@ -29,7 +29,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		// Single row expected
 		code = append(code, "// Execute query and scan single row")
 		code = append(code, "row := stmt.QueryRowContext(ctx, args...)")
-		
+
 		if responseStruct != nil {
 			scanCode, err := generateScanCode(responseStruct, false)
 			if err != nil {
@@ -51,7 +51,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		code = append(code, "}")
 		code = append(code, "defer rows.Close()")
 		code = append(code, "")
-		
+
 		if responseStruct != nil {
 			scanCode, err := generateScanCode(responseStruct, true)
 			if err != nil {
@@ -75,15 +75,9 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 
 // generateScanCode generates code for scanning database results
 func generateScanCode(responseStruct *responseStructData, isMany bool) ([]string, error) {
-	// Check if we need aggregation (has __ fields in SQL or specific function)
+	// Check if we need aggregation (has __ fields in JSON tags)
 	hasAggregation := false
-	
-	// Special case for get_users_with_jobs which has jobs__id, jobs__title, jobs__company in SQL
-	if responseStruct.Name == "GetUsersWithJobsResult" {
-		hasAggregation = true
-	}
-	
-	// Also check for __ in field JSON tags
+
 	for _, field := range responseStruct.Fields {
 		if strings.Contains(field.JSONTag, "__") {
 			hasAggregation = true
@@ -107,7 +101,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 		code = append(code, "for rows.Next() {")
 		code = append(code, fmt.Sprintf("    var item %s", responseStruct.Name))
 		code = append(code, "    err := rows.Scan(")
-		
+
 		// Generate scan targets
 		for i, field := range responseStruct.Fields {
 			if i > 0 {
@@ -117,7 +111,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 			goFieldName := celNameToGoName(field.Name)
 			code = append(code, fmt.Sprintf("        &item.%s", goFieldName))
 		}
-		
+
 		code[len(code)-1] += ""
 		code = append(code, "    )")
 		code = append(code, "    if err != nil {")
@@ -132,7 +126,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 	} else {
 		// Single row
 		code = append(code, "err = row.Scan(")
-		
+
 		// Generate scan targets
 		for i, field := range responseStruct.Fields {
 			if i > 0 {
@@ -142,7 +136,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 			goFieldName := celNameToGoName(field.Name)
 			code = append(code, fmt.Sprintf("    &result.%s", goFieldName))
 		}
-		
+
 		code[len(code)-1] += ""
 		code = append(code, ")")
 		code = append(code, "if err != nil {")
@@ -163,7 +157,7 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 		code = append(code, "resultMap := make(map[int]*GetUsersWithJobsResult)")
 		code = append(code, "")
 		code = append(code, "for rows.Next() {")
-		
+
 		// Generate scan variables for all fields - use simple types
 		code = append(code, "    // Scan variables")
 		code = append(code, "    var id int")
@@ -173,13 +167,13 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 		code = append(code, "    var jobTitle *string")
 		code = append(code, "    var jobCompany *string")
 		code = append(code, "")
-		
+
 		code = append(code, "    err := rows.Scan(&id, &name, &email, &jobID, &jobTitle, &jobCompany)")
 		code = append(code, "    if err != nil {")
 		code = append(code, "        return result, fmt.Errorf(\"failed to scan row: %w\", err)")
 		code = append(code, "    }")
 		code = append(code, "")
-		
+
 		// Generate aggregation logic
 		code = append(code, "    // Create or get existing user")
 		code = append(code, "    user, exists := resultMap[id]")
@@ -193,7 +187,7 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 		code = append(code, "        resultMap[id] = user")
 		code = append(code, "    }")
 		code = append(code, "")
-		
+
 		// Handle job aggregation - simplified NULL check
 		code = append(code, "    // Add job if exists")
 		code = append(code, "    if jobID != nil {")
@@ -210,7 +204,7 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 		code = append(code, "    }")
 		code = append(code, "}")
 		code = append(code, "")
-		
+
 		code = append(code, "// Convert map to slice")
 		code = append(code, "for _, user := range resultMap {")
 		code = append(code, "    result = append(result, *user)")
@@ -225,17 +219,4 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 	}
 
 	return code, nil
-}
-
-// celNameToGoName converts CEL field names to Go field names
-func celNameToGoName(celName string) string {
-	parts := strings.Split(celName, "_")
-	for i, part := range parts {
-		if part == "id" {
-			parts[i] = "ID"
-		} else {
-			parts[i] = strings.Title(part)
-		}
-	}
-	return strings.Join(parts, "")
 }

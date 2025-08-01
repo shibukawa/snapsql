@@ -43,7 +43,7 @@ func processSQLBuilder(format *intermediate.IntermediateFormat) (*sqlBuilderData
 	// TODO: Get dialect from configuration
 	// For now, use empty string to include all dialects
 	// This should be passed from the generator or configuration
-	dialect := "" 
+	dialect := ""
 	return processSQLBuilderWithDialect(format, dialect)
 }
 
@@ -64,7 +64,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 	}
 
 	staticSQL := strings.Join(sqlParts, "")
-	
+
 	// Convert expression indices to parameter names for static SQL
 	var parameterNames []string
 	for _, exprIndex := range arguments {
@@ -75,7 +75,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 			parameterNames = append(parameterNames, paramName)
 		}
 	}
-	
+
 	return &sqlBuilderData{
 		IsStatic:       true,
 		StaticSQL:      staticSQL,
@@ -89,30 +89,30 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var code []string
 	hasArguments := false
-	
+
 	// Track control flow stack
 	controlStack := []string{}
-	
+
 	// Add boundary tracking variables
 	code = append(code, "var boundaryNeeded bool")
-	
+
 	// Add parameter map for loop variables
 	code = append(code, "paramMap := map[string]interface{}{")
 	for _, param := range format.Parameters {
 		code = append(code, fmt.Sprintf("    %q: %s,", param.Name, snakeToCamelLower(param.Name)))
 	}
 	code = append(code, "}")
-	
+
 	for _, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
 			code = append(code, fmt.Sprintf("builder.WriteString(%q)", inst.Value))
 			code = append(code, "boundaryNeeded = true")
-			
+
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
 				code = append(code, fmt.Sprintf("// Evaluate expression %d", *inst.ExprIndex))
-				code = append(code, fmt.Sprintf("result, err := %sPrograms[%d].Eval(paramMap)", 
+				code = append(code, fmt.Sprintf("result, err := %sPrograms[%d].Eval(paramMap)",
 					strings.ToLower(format.FunctionName), *inst.ExprIndex))
 				code = append(code, "if err != nil {")
 				code = append(code, "    return result, fmt.Errorf(\"failed to evaluate expression: %w\", err)")
@@ -120,20 +120,20 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "args = append(args, result.Value())")
 				hasArguments = true
 			}
-			
+
 		case "EMIT_UNLESS_BOUNDARY":
 			code = append(code, "if boundaryNeeded {")
 			code = append(code, fmt.Sprintf("    builder.WriteString(%q)", inst.Value))
 			code = append(code, "}")
 			code = append(code, "boundaryNeeded = true")
-			
+
 		case "BOUNDARY":
 			code = append(code, "boundaryNeeded = false")
-			
+
 		case "IF":
 			if inst.ExprIndex != nil {
 				code = append(code, fmt.Sprintf("// IF condition: expression %d", *inst.ExprIndex))
-				code = append(code, fmt.Sprintf("condResult, err := %sPrograms[%d].Eval(paramMap)", 
+				code = append(code, fmt.Sprintf("condResult, err := %sPrograms[%d].Eval(paramMap)",
 					strings.ToLower(format.FunctionName), *inst.ExprIndex))
 				code = append(code, "if err != nil {")
 				code = append(code, "    return result, fmt.Errorf(\"failed to evaluate condition: %w\", err)")
@@ -141,33 +141,33 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "if condResult.Value().(bool) {")
 				controlStack = append(controlStack, "if")
 			}
-			
+
 		case "ELSEIF":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "if" {
 				code = append(code, "} else if condResult.Value().(bool) {")
 			}
-			
+
 		case "ELSE":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "if" {
 				code = append(code, "} else {")
 			}
-			
+
 		case "LOOP_START":
 			if inst.CollectionExprIndex != nil {
 				code = append(code, fmt.Sprintf("// FOR loop: evaluate collection expression %d", *inst.CollectionExprIndex))
-				code = append(code, fmt.Sprintf("collectionResult%d, err := %sPrograms[%d].Eval(paramMap)", 
+				code = append(code, fmt.Sprintf("collectionResult%d, err := %sPrograms[%d].Eval(paramMap)",
 					*inst.CollectionExprIndex, strings.ToLower(format.FunctionName), *inst.CollectionExprIndex))
 				code = append(code, "if err != nil {")
 				code = append(code, "    return result, fmt.Errorf(\"failed to evaluate collection: %w\", err)")
 				code = append(code, "}")
-				code = append(code, fmt.Sprintf("collection%d := collectionResult%d.Value().([]interface{})", 
+				code = append(code, fmt.Sprintf("collection%d := collectionResult%d.Value().([]interface{})",
 					*inst.CollectionExprIndex, *inst.CollectionExprIndex))
-				code = append(code, fmt.Sprintf("for _, %sLoopVar := range collection%d {", 
+				code = append(code, fmt.Sprintf("for _, %sLoopVar := range collection%d {",
 					inst.Variable, *inst.CollectionExprIndex))
 				code = append(code, fmt.Sprintf("    paramMap[%q] = %sLoopVar", inst.Variable, inst.Variable))
 				controlStack = append(controlStack, "for")
 			}
-			
+
 		case "LOOP_END":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "for" {
 				// Find the corresponding LOOP_START to get the variable name
@@ -184,12 +184,12 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "}")
 				controlStack = controlStack[:len(controlStack)-1]
 			}
-			
+
 		case "END":
 			if len(controlStack) > 0 {
 				controlType := controlStack[len(controlStack)-1]
 				controlStack = controlStack[:len(controlStack)-1]
-				
+
 				switch controlType {
 				case "if":
 					code = append(code, "}")
@@ -197,7 +197,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			}
 		}
 	}
-	
+
 	return &sqlBuilderData{
 		IsStatic:     false,
 		BuilderCode:  code,

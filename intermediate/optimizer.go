@@ -6,13 +6,13 @@ import (
 
 // OptimizedInstruction represents an optimized instruction
 type OptimizedInstruction struct {
-	Op                    string
-	Value                 string
-	ExprIndex             *int
-	SqlFragment           string
-	Variable              string // for LOOP_START
-	CollectionExprIndex   *int   // for LOOP_START
-	EnvIndex              *int   // for LOOP_START/LOOP_END
+	Op                  string
+	Value               string
+	ExprIndex           *int
+	SqlFragment         string
+	Variable            string // for LOOP_START
+	CollectionExprIndex *int   // for LOOP_START
+	EnvIndex            *int   // for LOOP_START/LOOP_END
 }
 
 // OptimizeInstructions filters and optimizes instructions for a specific dialect
@@ -63,7 +63,7 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 			// Check if we're in a static context (no control flow between here and next BOUNDARY)
 			isStaticContext := true
 			boundaryFound := false
-			
+
 			// Look ahead to find the next BOUNDARY or control flow instruction
 			for j := i + 1; j < len(instructions); j++ {
 				nextInst := instructions[j]
@@ -76,8 +76,8 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 					goto checkComplete
 				}
 			}
-			
-			checkComplete:
+
+		checkComplete:
 			if isStaticContext && boundaryFound {
 				// Skip this instruction (will be handled by BOUNDARY)
 			} else if isStaticContext && !boundaryFound {

@@ -17,7 +17,7 @@ var celTypeMap = map[string]string{
 	"float":     "DoubleType",
 	"float32":   "DoubleType",
 	"float64":   "DoubleType",
-	"decimal":   "DoubleType",  // Using double for decimal
+	"decimal":   "DoubleType", // Using double for decimal
 	"timestamp": "TimestampType",
 	"date":      "TimestampType",
 	"time":      "TimestampType",
@@ -117,7 +117,7 @@ func processCELEnvironments(format *intermediate.IntermediateFormat) ([]celEnvir
 // processCELVariable converts a SnapSQL variable to CEL variable data
 func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error) {
 	baseType := strings.TrimSuffix(strings.TrimSuffix(v.Type, "[]"), "*")
-	
+
 	celType, ok := celTypeMap[strings.ToLower(baseType)]
 	if !ok {
 		return celVariableData{}, fmt.Errorf("unsupported type: %s", v.Type)
@@ -144,7 +144,7 @@ func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error)
 		CelType:  celType,
 		GoType:   goType,
 		IsArray:  isArray,
-		IsObject: strings.HasPrefix(v.Type, "."),  // Types starting with . are objects
+		IsObject: strings.HasPrefix(v.Type, "."), // Types starting with . are objects
 	}, nil
 }
 
@@ -154,7 +154,7 @@ func generateCELPrograms(format *intermediate.IntermediateFormat, envs []celEnvi
 
 	for i, expr := range format.CELExpressions {
 		program := celProgramData{
-			Index:           i,
+			Index:          i,
 			ID:             expr.ID,
 			Expression:     expr.Expression,
 			EnvironmentIdx: expr.EnvironmentIndex,
@@ -167,7 +167,7 @@ func generateCELPrograms(format *intermediate.IntermediateFormat, envs []celEnvi
 
 // celProgramData represents a CEL program for code generation
 type celProgramData struct {
-	Index           int
+	Index          int
 	ID             string
 	Expression     string
 	EnvironmentIdx int

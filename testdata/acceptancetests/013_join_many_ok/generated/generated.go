@@ -26,18 +26,6 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
-type GetUsersWithJobsJob struct {
-	ID      int    `json:"id"`
-	Title   string `json:"title"`
-	Company string `json:"company"`
-}
-// GetUsersWithJobsResult represents the response structure for GetUsersWithJobs
-type GetUsersWithJobsResult struct {
-	ID int `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Jobs []GetUsersWithJobsJob `json:"jobs"`
-}
 
 // GetUsersWithJobs specific CEL programs and mock path
 var (
@@ -47,54 +35,6 @@ var (
 const getuserswithjobsMockPath = ""
 
 func init() {
-	// Static accessor functions for each type
-	getuserswithjobsjobCompanyAccessor := func(value interface{}) ref.Val {
-		v := value.(*GetUsersWithJobsJob)
-		return snapsqlgo.ConvertGoValueToCEL(v.Company)
-	}
-	getuserswithjobsjobIDAccessor := func(value interface{}) ref.Val {
-		v := value.(*GetUsersWithJobsJob)
-		return snapsqlgo.ConvertGoValueToCEL(v.ID)
-	}
-	getuserswithjobsjobTitleAccessor := func(value interface{}) ref.Val {
-		v := value.(*GetUsersWithJobsJob)
-		return snapsqlgo.ConvertGoValueToCEL(v.Title)
-	}
-
-	// Create type definitions for local registry
-	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
-		"GetUsersWithJobsJob": {
-			"company": snapsqlgo.CreateFieldInfo(
-				"company", 
-				types.StringType, 
-				getuserswithjobsjobCompanyAccessor,
-			),
-			"id": snapsqlgo.CreateFieldInfo(
-				"id", 
-				types.IntType, 
-				getuserswithjobsjobIDAccessor,
-			),
-			"title": snapsqlgo.CreateFieldInfo(
-				"title", 
-				types.StringType, 
-				getuserswithjobsjobTitleAccessor,
-			),
-		},
-	}
-
-	// Create and set up local registry
-	registry := snapsqlgo.NewLocalTypeRegistry()
-	for typeName, fields := range typeDefinitions {
-		structInfo := &snapsqlgo.StructInfo{
-			Name:    typeName,
-			CelType: types.NewObjectType(typeName),
-			Fields:  fields,
-		}
-		registry.RegisterStruct(typeName, structInfo)
-	}
-	
-	// Set global registry for nested type resolution
-	snapsqlgo.SetGlobalRegistry(registry)
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
@@ -103,7 +43,6 @@ func init() {
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
 		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
 		cel.Variable("department", cel.StringType),
 	)
 	if err != nil {
@@ -126,12 +65,12 @@ func init() {
 		getuserswithjobsPrograms[0] = program
 	}
 }
-// GetUsersWithJobs - []GetUsersWithJobsResult Affinity
-func GetUsersWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, department string, opts ...snapsqlgo.FuncOpt) ([]GetUsersWithJobsResult, error) {
-	var result []GetUsersWithJobsResult
+// GetUsersWithJobs - interface{} Affinity
+func GetUsersWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, department string, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
+	var result interface{}
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithjobs", "[]getuserswithjobsresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithjobs", "interface{}")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -140,9 +79,9 @@ func GetUsersWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, depart
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[[]GetUsersWithJobsResult](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to []GetUsersWithJobsResult struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
 		}
 
 		return result, nil
@@ -167,58 +106,8 @@ func GetUsersWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, depart
 	}
 	defer rows.Close()
 	
-	// Scan rows with aggregation
-	resultMap := make(map[int]*GetUsersWithJobsResult)
-	
-	for rows.Next() {
-	    // Scan variables
-	    var id int
-	    var name string
-	    var email string
-	    var jobID *int
-	    var jobTitle *string
-	    var jobCompany *string
-	
-	    err := rows.Scan(&id, &name, &email, &jobID, &jobTitle, &jobCompany)
-	    if err != nil {
-	        return result, fmt.Errorf("failed to scan row: %w", err)
-	    }
-	
-	    // Create or get existing user
-	    user, exists := resultMap[id]
-	    if !exists {
-	        user = &GetUsersWithJobsResult{
-	            ID:    id,
-	            Name:  name,
-	            Email: email,
-	            Jobs:  []GetUsersWithJobsJob{},
-	        }
-	        resultMap[id] = user
-	    }
-	
-	    // Add job if exists
-	    if jobID != nil {
-	        job := GetUsersWithJobsJob{
-	            ID: *jobID,
-	        }
-	        if jobTitle != nil {
-	            job.Title = *jobTitle
-	        }
-	        if jobCompany != nil {
-	            job.Company = *jobCompany
-	        }
-	        user.Jobs = append(user.Jobs, job)
-	    }
-	}
-	
-	// Convert map to slice
-	for _, user := range resultMap {
-	    result = append(result, *user)
-	}
-	
-	if err = rows.Err(); err != nil {
-	    return result, fmt.Errorf("error iterating rows: %w", err)
-	}
+	// Generic scan for interface{} result - not implemented
+	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }

@@ -29,13 +29,13 @@ func TestGenerator(t *testing.T) {
 		},
 		CELExpressions: []intermediate.CELExpression{
 			{
-				ID: "expr_001",
-				Expression: "id",
+				ID:               "expr_001",
+				Expression:       "id",
 				EnvironmentIndex: 0,
 			},
 			{
-				ID: "expr_002",
-				Expression: "tenant_id",
+				ID:               "expr_002",
+				Expression:       "tenant_id",
 				EnvironmentIndex: 0,
 			},
 		},
@@ -98,7 +98,7 @@ func TestGeneratorWithoutDescription(t *testing.T) {
 	assert.NoError(t, err)
 
 	generated := buf.String()
-	
+
 	// Should use fallback comment format when description is empty
 	assert.Contains(t, generated, "// TestFunction - TestFunctionResult Affinity")
 	assert.NotContains(t, generated, "finds a user")
