@@ -173,7 +173,7 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 		if err != nil {
 			continue
 		}
-		
+
 		intermediateData, err := intermediate.FromJSON(fileData)
 		if err != nil {
 			continue
@@ -332,7 +332,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 
 		generatedFiles = append(generatedFiles, outputFile)
 		processedCount++
-		
+
 		if ctx.Verbose {
 			color.Green("Generated: %s", outputFile)
 		}
