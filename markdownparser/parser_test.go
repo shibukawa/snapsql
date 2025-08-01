@@ -489,7 +489,7 @@ SELECT * FROM users
 
 			_, err := Parse(strings.NewReader(fullInput))
 			assert.Error(t, err)
-			assert.True(t, strings.Contains(err.Error(), tc.errorMsg), 
+			assert.True(t, strings.Contains(err.Error(), tc.errorMsg),
 				"Expected error containing %q, got %q", tc.errorMsg, err.Error())
 		})
 	}

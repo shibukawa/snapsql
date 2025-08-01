@@ -318,7 +318,7 @@ func mapFieldsToReflectValue(destValue reflect.Value, fields map[string]any) err
 // convertValue converts a value to the target type
 func convertValue(value any, targetType reflect.Type) (reflect.Value, error) {
 	valueType := reflect.TypeOf(value)
-	
+
 	// Handle nil values for pointer types
 	if value == nil {
 		if targetType.Kind() == reflect.Ptr {

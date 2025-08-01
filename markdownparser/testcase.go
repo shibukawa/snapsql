@@ -10,7 +10,7 @@ import (
 // TestCase represents a single test case
 type TestCase struct {
 	Name           string
-	Fixture        map[string][]map[string]any  // テーブル名をキーとしたマップ
+	Fixture        map[string][]map[string]any // テーブル名をキーとしたマップ
 	Parameters     map[string]any
 	ExpectedResult []map[string]any
 }
@@ -56,7 +56,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 				if emphasis != nil {
 					text := extractTextFromNode(emphasis, content)
 					text = strings.ToLower(strings.TrimSpace(text))
-					
+
 					if strings.HasPrefix(text, "parameters:") || text == "params:" {
 						currentSection = TestSection{Type: "parameters"}
 					} else if strings.HasPrefix(text, "expected:") || strings.HasPrefix(text, "expected results:") || text == "results:" {

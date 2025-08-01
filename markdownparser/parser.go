@@ -12,10 +12,10 @@ import (
 
 // Sentinel errors
 var (
-	ErrInvalidFrontMatter      = fmt.Errorf("invalid front matter")
-	ErrMissingRequiredSection  = fmt.Errorf("missing required section")
-	ErrInvalidTestCase         = fmt.Errorf("invalid test case")
-	ErrDuplicateParameters     = fmt.Errorf("duplicate parameters section")
+	ErrInvalidFrontMatter       = fmt.Errorf("invalid front matter")
+	ErrMissingRequiredSection   = fmt.Errorf("missing required section")
+	ErrInvalidTestCase          = fmt.Errorf("invalid test case")
+	ErrDuplicateParameters      = fmt.Errorf("duplicate parameters section")
 	ErrDuplicateExpectedResults = fmt.Errorf("duplicate expected results section")
 )
 

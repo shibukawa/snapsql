@@ -99,8 +99,13 @@ func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan single row
-	row := stmt.QueryRowContext(ctx, args...)
+	// Execute query and scan multiple rows
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+	    return result, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+	
 	// Generic scan for interface{} result - not implemented
 	// This would require runtime reflection or predefined column mapping
 

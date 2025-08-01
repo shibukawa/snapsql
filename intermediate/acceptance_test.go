@@ -179,8 +179,8 @@ func TestAcceptance(t *testing.T) {
 				if genErr == nil {
 					t.Errorf("Expected an error but got none for test %s. SQL file exists: %v, Markdown file exists: %v",
 						testName,
-						fileExists(sqlPath),
-						fileExists(markdownPath))
+						fileExistsHelper(sqlPath),
+						fileExistsHelper(markdownPath))
 				}
 				return
 			}
@@ -226,4 +226,10 @@ func TestAcceptance(t *testing.T) {
 			assert.Equal(t, expected, actual)
 		})
 	}
+}
+
+// fileExistsHelper checks if a file exists
+func fileExistsHelper(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

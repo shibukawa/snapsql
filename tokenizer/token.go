@@ -22,19 +22,19 @@ const (
 	EOF TokenType = iota + 1
 	WHITESPACE
 
-	STRING        // string literals ('text')
-	IDENTIFIER    // quoted identifiers ("col")
-	NUMBER        // numeric literals
-	BOOLEAN       // boolean literals (true, false)
-	DUMMY_START   // marker for start of dummy literal
-	DUMMY_END     // marker for end of dummy literal
-	DUMMY_LITERAL // placeholder for /*= variable */ directives
+	STRING            // string literals ('text')
+	IDENTIFIER        // quoted identifiers ("col")
+	NUMBER            // numeric literals
+	BOOLEAN           // boolean literals (true, false)
+	DUMMY_START       // marker for start of dummy literal
+	DUMMY_END         // marker for end of dummy literal
+	DUMMY_LITERAL     // placeholder for /*= variable */ directives
 	DUMMY_PLACEHOLDER // placeholder for parsing only, will be replaced
-	OPENED_PARENS // (
-	CLOSED_PARENS // )
-	COMMA         // ,
-	SEMICOLON     // ;
-	DOT           // .
+	OPENED_PARENS     // (
+	CLOSED_PARENS     // )
+	COMMA             // ,
+	SEMICOLON         // ;
+	DOT               // .
 
 	// --- Comments ---
 	LINE_COMMENT  // -- line comment
