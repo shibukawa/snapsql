@@ -13,6 +13,7 @@ import (
 // Config represents the SnapSQL configuration
 type Config struct {
 	Dialect       string                 `yaml:"dialect"`
+	InputDir      string                 `yaml:"input_dir"` // Moved from GenerationConfig
 	Databases     map[string]Database    `yaml:"databases"`
 	ConstantFiles []string               `yaml:"constant_files"`
 	Schema        SchemaExtractionConfig `yaml:"schema_extraction"`
@@ -45,7 +46,6 @@ type TablePatterns struct {
 
 // GenerationConfig represents code generation settings
 type GenerationConfig struct {
-	InputDir         string                     `yaml:"input_dir"`
 	Validate         bool                       `yaml:"validate"`
 	GenerateMockData bool                       `yaml:"generate_mock_data"`
 	Generators       map[string]GeneratorConfig `yaml:"generators"`
@@ -177,6 +177,7 @@ func LoadConfig(configPath string) (*Config, error) {
 func getDefaultConfig() *Config {
 	return &Config{
 		Dialect:       "postgres",
+		InputDir:      "./queries", // Moved from GenerationConfig
 		Databases:     make(map[string]Database),
 		ConstantFiles: []string{},
 		Schema: SchemaExtractionConfig{
@@ -188,7 +189,6 @@ func getDefaultConfig() *Config {
 			},
 		},
 		Generation: GenerationConfig{
-			InputDir: "./queries",
 			Validate: true,
 			Generators: map[string]GeneratorConfig{
 				"json": {
@@ -286,8 +286,8 @@ func applyDefaults(config *Config) {
 		config.Dialect = "postgres"
 	}
 
-	if config.Generation.InputDir == "" {
-		config.Generation.InputDir = "./queries"
+	if config.InputDir == "" {
+		config.InputDir = "./queries"
 	}
 
 	// Initialize generators map if nil
@@ -435,7 +435,7 @@ func expandConfigEnvVars(config *Config) {
 	}
 
 	// Expand generation paths
-	config.Generation.InputDir = expandEnvVars(config.Generation.InputDir)
+	config.InputDir = expandEnvVars(config.InputDir)
 
 	// Expand generator output paths
 	for name, generator := range config.Generation.Generators {

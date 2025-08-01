@@ -57,18 +57,18 @@ func NewMockResult(rowsAffected, lastInsertId int64) *MockResult {
 // LoadMockDataFromFile loads mock data from a JSON file
 func LoadMockDataFromFile(mockPath, testCaseName string) (any, error) {
 	filePath := filepath.Join("testdata/snapsql_mock", mockPath, testCaseName+".json")
-	
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read mock file %s: %w", filePath, err)
 	}
-	
+
 	var result any
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse mock JSON %s: %w", filePath, err)
 	}
-	
+
 	return result, nil
 }
 
@@ -119,8 +119,8 @@ type FuncConfig struct {
 	EnableExplain        bool
 	ExplainCallback      func(ExplainResult)
 	EnableLogging        bool
-	LogFormat           LogFormat
-	LogOutput           interface{}
+	LogFormat            LogFormat
+	LogOutput            interface{}
 	RuntimeLimit         *int
 	RuntimeOffset        *int
 }

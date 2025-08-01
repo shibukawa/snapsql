@@ -38,7 +38,7 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 	// Determine input path
 	inputPath := g.Input
 	if inputPath == "" {
-		inputPath = config.Generation.InputDir
+		inputPath = config.InputDir
 	}
 
 	// Merge constant files from config and command line

@@ -36,16 +36,16 @@ const (
 // QueryOptions contains options for query execution
 type QueryOptions struct {
 	// Database connection options
-	Driver          string
+	Driver           string
 	ConnectionString string
-	Timeout         int
+	Timeout          int
 
 	// Query execution options
 	Explain        bool
 	ExplainAnalyze bool
 	Limit          int
 	Offset         int
-	
+
 	// Safety options
 	ExecuteDangerousQuery bool
 
@@ -111,17 +111,17 @@ func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string,
 func IsDangerousQuery(sql string) bool {
 	// Normalize SQL by removing extra whitespace and converting to uppercase
 	normalizedSQL := strings.ToUpper(strings.TrimSpace(sql))
-	
+
 	// Check for DELETE without WHERE
 	if strings.HasPrefix(normalizedSQL, "DELETE FROM") && !strings.Contains(normalizedSQL, "WHERE") {
 		return true
 	}
-	
+
 	// Check for UPDATE without WHERE
 	if strings.HasPrefix(normalizedSQL, "UPDATE") && !strings.Contains(normalizedSQL, "WHERE") {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -170,7 +170,7 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute template: %w", err)
 	}
-	
+
 	// Check for dangerous queries
 	if IsDangerousQuery(sql) && !options.ExecuteDangerousQuery {
 		return nil, fmt.Errorf("%w: query contains DELETE/UPDATE without WHERE clause. Use --execute-dangerous-query flag to execute anyway", ErrDangerousQuery)
@@ -276,7 +276,7 @@ func convertSQLValue(v interface{}) interface{} {
 	case []byte:
 		// Try to convert []byte to string or JSON
 		str := string(value)
-		
+
 		// Check if it's a JSON object or array
 		if (str[0] == '{' && str[len(str)-1] == '}') || (str[0] == '[' && str[len(str)-1] == ']') {
 			var jsonValue interface{}
@@ -284,7 +284,7 @@ func convertSQLValue(v interface{}) interface{} {
 				return jsonValue
 			}
 		}
-		
+
 		return str
 	default:
 		return value
@@ -307,7 +307,7 @@ func OpenDatabase(driver, connectionString string, timeout int) (*sql.DB, error)
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
-	
+
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("%w: %v", ErrDatabaseConnection, err)

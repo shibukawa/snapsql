@@ -325,6 +325,57 @@ func TestUserListAPI_WithMockData(t *testing.T) {
 
 This approach enables testing without database dependencies while ensuring mock data never diverges from reality, as it's generated from the same templates used in production.
 
+## Configuration
+
+SnapSQL uses a `snapsql.yaml` configuration file:
+
+```yaml
+# Database dialect (postgres, mysql, sqlite)
+dialect: postgres
+
+# Input directory for SQL templates (moved to root level)
+input_dir: "./queries"
+
+# Database connections
+databases:
+  development:
+    driver: postgres
+    connection: "postgresql://user:password@localhost:5432/mydb"
+    schema: public
+
+# Code generation settings
+generation:
+  validate: true
+  generate_mock_data: true
+  
+  # Configure generators for multiple languages
+  generators:
+    json:
+      output: "./generated"
+      enabled: true
+      pretty: true
+      include_metadata: true
+    
+    go:
+      output: "./internal/queries"
+      enabled: false
+      package: "queries"              # Optional: auto-inferred from output path if omitted
+      preserve_hierarchy: true        # Optional: maintain directory structure (default: true)
+      mock_path: "./testdata/mocks"   # Optional: base path for mock data files
+      generate_tests: false           # Optional: generate test files (default: false)
+    
+    # Package name auto-inference examples:
+    # output: "./internal/queries"     -> package: "queries"
+    # output: "./pkg/db-queries"       -> package: "queries" (longest part after splitting by '-')
+    # output: "./generated/go-models"  -> package: "models"
+    # output: "./src/user-go-api"      -> package: "user" (longest part)
+    
+    typescript:
+      output: "./src/generated"
+      enabled: false
+      types: true
+```
+
 ## Documentation
 
 - [Template Syntax](docs/template-syntax.md) - Complete guide to SnapSQL template syntax

@@ -27,17 +27,17 @@ import (
 
 // FieldInfo represents information about a struct field
 type FieldInfo struct {
-	Name      string      // CEL上で使用する名前
-	GoName    string      // Go構造体のフィールド名
-	CelType   *types.Type // CEL型情報
-	Accessor  func(interface{}) ref.Val // 静的アクセサー関数
+	Name     string                    // CEL上で使用する名前
+	GoName   string                    // Go構造体のフィールド名
+	CelType  *types.Type               // CEL型情報
+	Accessor func(interface{}) ref.Val // 静的アクセサー関数
 }
 
 // StructInfo represents information about a struct type
 type StructInfo struct {
-	Name      string                 // 構造体名
-	CelType   *types.Type           // CEL型情報
-	Fields    map[string]FieldInfo   // フィールド情報
+	Name      string                    // 構造体名
+	CelType   *types.Type               // CEL型情報
+	Fields    map[string]FieldInfo      // フィールド情報
 	Converter func(interface{}) ref.Val // 静的変換関数
 }
 
@@ -152,21 +152,21 @@ func (a *LocalTypeAdapter) NativeToValue(value interface{}) ref.Val {
 	if value == nil {
 		return types.NullValue
 	}
-	
+
 	// Get the type name
 	valueType := reflect.TypeOf(value)
 	if valueType.Kind() == reflect.Ptr {
 		valueType = valueType.Elem()
 	}
-	
+
 	typeName := valueType.Name()
-	
+
 	// Check if this type is registered
 	if structInfo, exists := a.registry.GetStructInfo(typeName); exists {
 		// 静的変換関数を使用
 		return structInfo.Converter(value)
 	}
-	
+
 	// Fall back to default adapter
 	return types.DefaultTypeAdapter.NativeToValue(value)
 }
@@ -237,7 +237,7 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 	if value == nil {
 		return types.NullValue
 	}
-	
+
 	switch v := value.(type) {
 	case int:
 		return types.Int(int64(v))
@@ -274,7 +274,7 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 		if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
 			return convertSliceToCEL(rv)
 		}
-		
+
 		// Handle pointers to structs
 		if rv.Kind() == reflect.Ptr {
 			if rv.IsNil() {
@@ -282,7 +282,7 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 			}
 			rv = rv.Elem()
 		}
-		
+
 		// Handle structs - check if it's a registered type
 		if rv.Kind() == reflect.Struct {
 			typeName := rv.Type().Name()
@@ -292,7 +292,7 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 				}
 			}
 		}
-		
+
 		// For complex types, use default adapter
 		return types.DefaultTypeAdapter.NativeToValue(value)
 	}
@@ -302,12 +302,12 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 func convertSliceToCEL(rv reflect.Value) ref.Val {
 	length := rv.Len()
 	celValues := make([]ref.Val, length)
-	
+
 	for i := 0; i < length; i++ {
 		element := rv.Index(i).Interface()
 		celValues[i] = ConvertGoValueToCEL(element)
 	}
-	
+
 	return types.DefaultTypeAdapter.NativeToValue(celValues)
 }
 
@@ -316,12 +316,12 @@ func convertSliceToCEL(rv reflect.Value) ref.Val {
 // CreateCELOptionsWithTypes creates CEL options with a local type registry
 func CreateCELOptionsWithTypes(typeDefinitions map[string]map[string]FieldInfo) []cel.EnvOption {
 	registry := NewLocalTypeRegistry()
-	
+
 	// Register all types
 	for typeName, fields := range typeDefinitions {
 		registry.RegisterStructWithFields(typeName, fields)
 	}
-	
+
 	return []cel.EnvOption{
 		cel.CustomTypeAdapter(NewLocalTypeAdapter(registry)),
 		cel.CustomTypeProvider(NewLocalTypeProvider(registry)),
@@ -332,7 +332,7 @@ func CreateCELOptionsWithTypes(typeDefinitions map[string]map[string]FieldInfo) 
 func CreateFieldInfo(celName string, celType *types.Type, accessor func(interface{}) ref.Val) FieldInfo {
 	// Convert CEL name to Go name automatically
 	goName := celNameToGoName(celName)
-	
+
 	return FieldInfo{
 		Name:     celName,
 		GoName:   goName,

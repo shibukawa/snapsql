@@ -30,7 +30,7 @@ func extractSectionsFromAST(doc ast.Node, content []byte) (string, map[string]AS
 		switch node := n.(type) {
 		case *ast.Heading:
 			headingText := extractTextFromHeadingNode(node, content)
-			
+
 			// H1 is title
 			if node.Level == 1 {
 				title = headingText
@@ -136,7 +136,7 @@ func extractSQLFromASTNodes(nodes []ast.Node, content []byte) (string, int) {
 // extractParameterBlock extracts parameter definitions from AST nodes
 func extractParameterBlock(nodes []ast.Node, content []byte) string {
 	var parameterContent strings.Builder
-	
+
 	for _, node := range nodes {
 		switch n := node.(type) {
 		case *ast.FencedCodeBlock:
@@ -167,6 +167,6 @@ func extractParameterBlock(nodes []ast.Node, content []byte) string {
 			})
 		}
 	}
-	
+
 	return parameterContent.String()
 }

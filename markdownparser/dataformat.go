@@ -121,7 +121,7 @@ func parseExpectedResults(content []byte) ([]map[string]any, error) {
 // parseValue converts string value to appropriate type
 func parseValue(value string) any {
 	value = strings.TrimSpace(value)
-	
+
 	// Try boolean
 	switch strings.ToLower(value) {
 	case "true":
@@ -216,7 +216,7 @@ type DBUnitXML struct {
 // parseDBUnitXML parses DBUnit XML format
 func parseDBUnitXML(content string) (*DBUnitXML, error) {
 	doc := &DBUnitXML{}
-	
+
 	// Parse XML
 	root := etree.NewDocument()
 	if err := root.ReadFromString(content); err != nil {
@@ -234,7 +234,7 @@ func parseDBUnitXML(content string) (*DBUnitXML, error) {
 	for _, elem := range dataset.ChildElements() {
 		tableName := elem.Tag
 		row := make(map[string]any)
-		
+
 		// Convert attributes to map and check for table field
 		hasTableField := false
 		for _, attr := range elem.Attr {
@@ -243,12 +243,12 @@ func parseDBUnitXML(content string) (*DBUnitXML, error) {
 				hasTableField = true
 			}
 		}
-		
+
 		// Add table name to the row if there's no conflict
 		if !hasTableField {
 			row["_table"] = tableName // Use _table to avoid conflicts
 		}
-		
+
 		tableMap[tableName] = append(tableMap[tableName], row)
 	}
 
@@ -256,16 +256,16 @@ func parseDBUnitXML(content string) (*DBUnitXML, error) {
 	for tableName, rows := range tableMap {
 		tableData := struct {
 			Name string
-			Rows []struct{Data map[string]any}
+			Rows []struct{ Data map[string]any }
 		}{
 			Name: tableName,
-			Rows: make([]struct{Data map[string]any}, len(rows)),
+			Rows: make([]struct{ Data map[string]any }, len(rows)),
 		}
-		
+
 		for i, row := range rows {
 			tableData.Rows[i].Data = row
 		}
-		
+
 		doc.Tables = append(doc.Tables, tableData)
 	}
 
