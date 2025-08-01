@@ -1,824 +1,357 @@
 # SnapSQL
 
-SnapSQL is a SQL template engine that enables dynamic SQL generation using the 2-way SQL format. It allows developers to write SQL templates that can be executed as standard SQL during development while providing runtime flexibility for dynamic query construction.
+SnapSQL is a SQL template engine that enables dynamic SQL generation using the **2-way SQL format**. Write SQL templates that work as standard SQL during development while providing runtime flexibility for dynamic query construction.
 
-## Features
+## Philosophy
 
-- **2-way SQL Format**: Write SQL templates that work as standard SQL when comments are removed
-- **Dynamic Query Building**: Add WHERE clauses, ORDER BY, and SELECT fields dynamically at runtime
-- **Security First**: Controlled modifications prevent SQL injection - only allows safe operations like field selection, simple conditions, and table suffix changes
-- **Multi-Database Support**: Designed to work with PostgreSQL, MySQL, and SQLite databases
-- **Google CEL Integration**: Uses Common Expression Language for conditions and parameter references
-- **Advanced SQL Parsing**: Comprehensive SQL parser with support for complex queries, CTEs, and DML operations
-- **Template Engine**: Powerful template processing with conditional blocks, loops, and variable substitution
-- **Bulk Operations**: Support for bulk INSERT operations with dynamic field mapping
-- **Type Safety**: Strong type checking and parameter validation
+### SQL is a Public Interface
+SQL queries are not just implementation details—they are the public interface between your application and data. SnapSQL treats SQL as a first-class citizen, making queries visible, testable, and maintainable rather than hiding them behind abstraction layers. SQL itself should be properly tested and guaranteed to be of high quality.
+
+In onion architecture and clean architecture, data access and UI are represented in the same layer. While developers happily expose UI interfaces through OpenAPI, GraphQL, or gRPC specifications, they often insist on hiding database access behind repository patterns. SnapSQL challenges this inconsistency by treating your SQL queries as the explicit, documented interface to your data layer. SnapSQL doesn't hide transactions, unleashing the full power of relational databases.
+
+### Static Typing is a Communication Tool
+Types are not just for the compiler—they communicate intent and structure to developers, AI agents, and tooling ecosystems. SnapSQL generates type-safe interfaces from your SQL templates using advanced type inference from SQL schemas and database metadata, making the contract between queries and application code explicit and self-documenting.
+
+Through if/for directive comments, a single SQL template can be flexibly adapted for different use cases while maintaining type safety. Database common system columns (like created_at, updated_at, version) are handled naturally within the type system, providing seamless integration with your application's data models.
+
+### Runtime Should be Thin
+Heavy ORMs and query builders add unnecessary complexity and performance overhead. SnapSQL's runtime libraries are lightweight adapters that execute pre-processed templates efficiently, keeping the runtime footprint minimal while maximizing developer productivity.
+
+Smaller dependencies result in smaller program sizes and reduced security attack surfaces. The Go runtime library depends only on the standard library plus `github.com/google/cel-go` and `github.com/shopspring/decimal`, ensuring minimal external dependencies.
+
+### Mocking is Opening Pandora's Box
+Wrong mocking makes code complex, creates tight coupling, and makes refactoring difficult. It increases code written for mocks rather than for quality. Incorrect mock data accelerates the divergence between reality and implementation, hiding bugs until integration testing.
+
+SnapSQL enables mocking at the most decoupled point without changing production code, providing authentic mock data that never diverges from reality. This approach is inspired by Mock Service Worker and Prism Contract Testing.
 
 ## How It Works
 
-SnapSQL works with your existing database infrastructure and table schemas:
-
-1. **Build Time**: The `snapsql` tool (Go) converts SQL templates and markdown files containing SQL into intermediate JSON files containing AST and metadata *(Planned)*
-2. **Runtime**: Language-specific libraries use the intermediate files to dynamically construct SQL queries based on runtime parameters *(Planned)*
-3. **Current State**: The core SQL parser and template engine are implemented in Go
-
-**Prerequisites**: SnapSQL assumes you have an existing database with tables already created. It works with PostgreSQL, MySQL, and SQLite databases.
-
-## Runtime Features
-
-### Type-Safe Query Functions
-
-The runtime libraries generate type-safe functions based on the parsed SQL structure, providing:
-
-- **Strongly Typed Parameters**: Function signatures that match your SQL template parameters
-- **Result Type Mapping**: Automatic mapping of SQL results to language-specific types
-- **Compile-Time Safety**: Catch parameter mismatches and type errors at compile time
-- **IDE Support**: Full autocomplete and IntelliSense support for query parameters and results
-
-### Mock and Testing Support
-
-SnapSQL provides built-in testing capabilities without requiring database connections:
-
-- **Mock Data Generation**: Return dummy data that matches your query structure for unit testing
-- **YAML-Based Mock Data**: Define mock responses using YAML format with [dbtestify](https://github.com/shibukawa/dbtestify) library integration
-- **Configurable Responses**: Define custom mock responses for different test scenarios
-- **Zero Database Dependencies**: Run tests without setting up test databases
-- **Consistent Data Shapes**: Mock data follows the same type structure as real query results
-
-### Performance Analysis
-
-Built-in performance analysis tools help optimize your queries:
-
-- **Execution Plan Analysis**: Generate and analyze query execution plans
-- **Performance Estimation**: Predict query performance based on table statistics and query complexity
-- **Bottleneck Detection**: Identify potential performance issues before deployment
-- **Optimization Suggestions**: Receive recommendations for query improvements
-
-These features work seamlessly without requiring changes to your application code - simply toggle between production, mock, and analysis modes through configuration.
-
-## Template Syntax
-
-SnapSQL uses comment-based directives that don't interfere with standard SQL execution, following the **2-way SQL format**:
-
-### Control Flow Directives
-- `/*# if condition */` - Conditional blocks
-- `/*# elseif condition */` - Alternative conditions (Note: uses `elseif`, not `else if`)
-- `/*# else */` - Default condition
-- `/*# end */` - End conditional blocks (unified ending for all control structures)
-- `/*# for variable : list */` - Loop over collections
-- `/*# end */` - End loop blocks
-
-### Variable Substitution
-- `/*= variable */` - Variable placeholders with dummy literals for 2-way SQL compatibility
-
-### 2-Way SQL Format
-
-SnapSQL templates are designed to work as **valid SQL** when comments are removed, enabling:
-- **IDE Support**: Full syntax highlighting and IntelliSense
-- **SQL Linting**: Standard SQL tools can validate basic syntax
-- **Development Testing**: Execute templates with dummy values during development
-
-#### Variable Substitution with Dummy Literals
-
-Variables include dummy literals that make the SQL valid when comments are stripped:
-
-```sql
--- Template with dummy literals
-SELECT * FROM users_/*= table_suffix */test
-WHERE active = /*= filters.active */true
-  AND department IN (/*= filters.departments */'sales', 'marketing')
-LIMIT /*= pagination.limit */10;
-
--- Valid SQL when comments removed
-SELECT * FROM users_test
-WHERE active = true
-  AND department IN ('sales', 'marketing')
-LIMIT 10;
-
--- Runtime result with actual parameters
-SELECT * FROM users_prod
-WHERE active = false
-  AND department IN ('engineering', 'design', 'product')
-LIMIT 20;
+```mermaid
+flowchart LR
+    DB[(Database<br/>Tables Defined)]
+    SQL[SQL Files<br/>*.snap.sql]
+    MD[Markdown Files<br/>*.snap.md]
+    
+    SNAPSQL[SnapSQL<br/>CLI]
+    
+    GOCODE[Go Code<br/>Type-safe Functions]
+    MOCK[Mock Data<br/>JSON]
+    
+    APP[Application<br/>Program]
+    TEST[Test Code]
+    
+    DB -->|Schema Info| SNAPSQL
+    SQL -->|Templates| SNAPSQL
+    MD -->|Template, Mock Data| SNAPSQL
+    
+    SNAPSQL -->|Generate| GOCODE
+    SNAPSQL -->|Generate| MOCK
+    
+    GOCODE -->|Import| APP
+    GOCODE -->|Import| TEST
+    MOCK -->|Load| TEST
+    
+    MD -->|Unit Test| MD
+    
+    classDef database fill:#e1f5fe
+    classDef source fill:#f3e5f5
+    classDef generator fill:#e8f5e8
+    classDef output fill:#fff3e0
+    classDef usage fill:#fce4ec
+    
+    class DB database
+    class SQL,MD source
+    class SNAPSQL generator
+    class GOCODE,MOCK output
+    class APP,TEST usage
 ```
 
-#### Automatic Runtime Adjustments
+## Key Features
 
-The runtime automatically handles:
-- **Trailing Commas**: Removed when conditional fields are excluded
-- **Empty Clauses**: WHERE/ORDER BY clauses removed when all conditions are false
-- **Array Expansion**: `/*= array_var */` expands to `'val1', 'val2', 'val3'`
-- **Dummy Literal Removal**: Development dummy values replaced with actual parameters
-- **Conditional Clause Removal**: Entire clauses removed when variables are null/empty
-  - `WHERE` clause: Removed when all conditions are null/empty
-  - `ORDER BY` clause: Removed when sort fields are null/empty
-  - `LIMIT` clause: Removed when limit is null or negative
-  - `OFFSET` clause: Removed when offset is null or negative
-  - `AND/OR` conditions: Individual conditions removed when variables are null/empty
+- **2-way SQL Format**: Templates work as valid SQL when comments are removed
+- **Dynamic Query Building**: Add WHERE clauses, ORDER BY, and SELECT fields at runtime
+- **Security First**: Controlled modifications prevent SQL injection
+- **Multi-Database Support**: PostgreSQL, MySQL, and SQLite
+- **Template Engine**: Conditional blocks, loops, and variable substitution
+- **CLI Tool**: Generate, validate, and execute SQL templates
 
-### Template Formatting Guidelines
+## Quick Start
 
-1. **Indentation in Control Blocks**: Content inside `/*# if */` and `/*# for */` blocks should be indented one level
-2. **Line Breaks for Readability**: Start `/*# for */` blocks on new lines for better visibility
-3. **Consistent Structure**: Maintain consistent indentation to improve template readability
+### Installation
 
-```sql
--- Good formatting with proper indentation
-SELECT 
-    id,
-    name,
-    /*# if include_email */
-        email,
-    /*# end */
-    /*# for field : additional_fields */
-        /*= field */
-    /*# end */
-FROM users
-ORDER BY 
-    /*# for sort : sort_fields */
-        /*= sort.field */ /*= sort.direction */
-    /*# end */name ASC;
-
--- Avoid: Poor formatting without indentation
-SELECT id, name, /*# if include_email */email,/*# end */ /*# for field : additional_fields *//*= field *//*# end */ FROM users;
-```
-
-### Template Writing Guidelines
-
-1. **Use trailing delimiters**: Write `field,` not `,field` for better readability and JSON-like syntax
-2. **Include dummy literals**: Ensure SQL remains valid when comments are removed
-3. **Use consistent endings**: Always use `/*# end */` for all control structures
-4. **Leverage automatic adjustments**: Don't worry about trailing commas or empty clauses
-5. **Omit obvious conditions**: Skip `/*# if */` blocks for automatic clause removal (WHERE, ORDER BY, LIMIT, OFFSET)
-
-### Template Formatting Guidelines
-
-1. **Trailing Delimiters**: Use trailing commas, AND, OR for better readability (JSON-like syntax)
-2. **Indentation in Control Blocks**: Content inside `/*# if */` and `/*# for */` blocks should be indented one level
-3. **Line Breaks for Readability**: Start `/*# for */` blocks on new lines for better visibility
-4. **Consistent Structure**: Maintain consistent indentation to improve template readability
-
-```sql
--- Good formatting with trailing delimiters (JSON-like, familiar to modern developers)
-SELECT 
-    id,
-    name,
-    /*# if include_email */
-    email,
-    /*# end */
-    /*# for field : additional_fields */
-    /*= field */,
-    /*# end */
-    created_at
-FROM users
-WHERE active = true
-    /*# if filters.departments */
-    AND department IN (/*= filters.departments */'sales', 'marketing')
-    /*# end */
-ORDER BY 
-    /*# for sort : sort_fields */
-    /*= sort.field */ /*= sort.direction */,
-    /*# end */
-    name ASC;
-
--- Avoid: Leading delimiters (SQL traditional but less familiar to JSON/programming users)
-SELECT 
-    id
-    , name
-    /*# if include_email */
-    , email
-    /*# end */
-FROM users;
-```
-
-### Automatic Clause Removal Examples
-
-```sql
--- You can write simply:
-WHERE active = /*= filters.active */true
-    /*# if filters.departments */
-    AND department IN (/*= filters.departments */'sales', 'marketing')
-    /*# end */
-ORDER BY 
-    /*# for sort : sort_fields */
-    /*= sort.field */ /*= sort.direction */,
-    /*# end */
-    name ASC
-LIMIT /*= pagination.limit */10
-OFFSET /*= pagination.offset */5
-
--- Instead of verbose conditional blocks:
-/*# if filters.active */
-WHERE active = /*= filters.active */
-    /*# if filters.departments */
-    AND department IN (/*= filters.departments */)
-    /*# end */
-/*# end */
-/*# if sort_fields */
-ORDER BY 
-    /*# for sort : sort_fields */
-    /*= sort.field */ /*= sort.direction */,
-    /*# end */
-/*# end */
-/*# if pagination.limit > 0 */
-LIMIT /*= pagination.limit */
-/*# end */
-```
-
-### Example Template
-
-```sql
-SELECT 
-    id,
-    name,
-    /*# if include_email */
-    email,
-    /*# end */
-    /*# if include_profile */
-    profile_image,
-    bio,
-    /*# end */
-    /*# for field : additional_fields */
-    /*= field */,
-    /*# end */
-    created_at
-FROM users_/*= table_suffix */test
-WHERE active = /*= filters.active */true
-    /*# if filters.departments */
-    AND department IN (/*= filters.departments */'sales', 'marketing')
-    /*# end */
-ORDER BY 
-    /*# for sort : sort_fields */
-    /*= sort.field */ /*= sort.direction */,
-    /*# end */
-    name ASC
-LIMIT /*= pagination.limit */10
-OFFSET /*= pagination.offset */5;
-```
-
-### Bulk Insert Example
-
-SnapSQL supports bulk INSERT operations with multiple VALUES clauses:
-
-```sql
--- Basic bulk insert
-INSERT INTO users (name, email, created_at) 
-VALUES 
-    ('John Doe', 'john@example.com', NOW()),
-    ('Jane Smith', 'jane@example.com', NOW()),
-    ('Bob Wilson', 'bob@example.com', NOW());
-
--- Dynamic bulk insert with SnapSQL variables
-INSERT INTO products (name, price, category_id) 
-VALUES 
-    (/*= product1.name */'Product A', /*= product1.price */100.50, /*= product1.category_id */1),
-    (/*= product2.name */'Product B', /*= product2.price */200.75, /*= product2.category_id */2),
-    (/*= product3.name */'Product C', /*= product3.price */150.25, /*= product3.category_id */1);
-
--- Conditional bulk insert
-INSERT INTO orders (user_id, product_id, quantity) 
-VALUES 
-    (/*= order.user_id */1, /*= order.product_id */1, /*= order.quantity */2)
-    /*# if include_bulk_orders */
-    , (/*= bulk_order1.user_id */2, /*= bulk_order1.product_id */2, /*= bulk_order1.quantity */1)
-    , (/*= bulk_order2.user_id */3, /*= bulk_order2.product_id */3, /*= bulk_order2.quantity */5)
-    /*# end */;
-
--- Map array bulk insert (automatic expansion)
--- When 'products' is []map[string]any, it automatically expands to multiple VALUES clauses
-INSERT INTO products (name, price, category_id) 
-VALUES /*= products */('Product A', 100.50, 1);
-
--- Single map insert (non-bulk)
--- When 'product' is map[string]any, it's treated as regular variables
-INSERT INTO products (name, price, category_id) 
-VALUES (/*= product.name */'Product A', /*= product.price */100.50, /*= product.category_id */1);
-```
-
-When comments are removed, this becomes valid SQL:
-```sql
-SELECT 
-    id,
-    name,
-        email,
-        profile_image,
-        bio
-        field1
-FROM users_test
-WHERE active = true
-    AND department IN ('sales', 'marketing')
-ORDER BY 
-        name ASC, created_at DESC
-    name ASC
-LIMIT 10
-OFFSET 5;
-```
-
-Runtime result with actual parameters:
-```sql
-SELECT 
-    id,
-    name,
-    email
-FROM users_prod
-WHERE active = false
-    AND department IN ('engineering', 'design', 'product')
-ORDER BY created_at DESC
-LIMIT 20
-OFFSET 40;
-```
-
-## Supported Dynamic Operations
-
-### ✅ Allowed Operations
-- Adding/removing WHERE conditions
-- Adding/removing ORDER BY clauses  
-- Adding/removing SELECT fields
-- Table name suffix modification (e.g., `users_test`, `log_202412`)
-- Array expansion in IN clauses (e.g., `/*= departments */` → `'sales', 'marketing', 'engineering'`)
-- Trailing comma and parentheses control
-- Conditional removal of entire clauses (WHERE, ORDER BY)
-- **Bulk INSERT operations** with multiple VALUES clauses
-- **Dynamic DML operations** (INSERT, UPDATE, DELETE with SnapSQL variables)
-
-### ❌ Restricted Operations
-- Major structural changes to SQL
-- Dynamic table name changes (except suffixes)
-- Arbitrary SQL injection
-
-### Runtime Processing Features
-
-#### Automatic Cleanup
-- **Trailing Commas**: Automatically removed when conditional fields are excluded
-- **Empty WHERE Clauses**: Entire WHERE clause removed when no conditions are active
-- **Empty ORDER BY**: ORDER BY clause removed when no sort fields are specified
-- **Dummy Literals**: Development dummy values replaced with actual runtime values
-
-#### Array Processing
-- **IN Clause Expansion**: Array variables automatically expand to comma-separated quoted values
-- **Bulk Operations**: Support for bulk insert operations with dynamic field mapping
-
-## Installation
-
-### Build Tool *(Planned)*
 ```bash
 go install github.com/shibukawa/snapsql@latest
 ```
 
-### Runtime Libraries *(Planned)*
-
-#### Go
-```bash
-go get github.com/shibukawa/snapsql
-```
-
-#### Java *(Planned)*
-```xml
-<dependency>
-    <groupId>com.github.shibukawa</groupId>
-    <artifactId>snapsql-java</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-
-#### Python *(Planned)*
-```bash
-pip install snapsql-python
-```
-
-#### Node.js *(Planned)*
-```bash
-npm install snapsql-js
-```
-
-### Current Usage (Development)
-
-Currently, you can use SnapSQL as a Go library for parsing and processing SQL templates:
+### Create a Project
 
 ```bash
-go get github.com/shibukawa/snapsql
+# Initialize a new SnapSQL project
+snapsql init my-project
+cd my-project
+
+# Generate intermediate files
+snapsql generate
+
+# Test a query with dry-run
+snapsql query queries/users.snap.sql --dry-run --params-file params.json
 ```
 
-## Configuration
+### Example Template
 
-SnapSQL uses a `snapsql.yaml` configuration file to manage database connections, generation settings, and other options.
-
-### Environment Variable Support
-
-SnapSQL supports environment variable expansion in configuration files:
-
-```yaml
-# Database connections with environment variables
-databases:
-  development:
-    driver: "postgres"
-    connection: "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
-    schema: "public"
-  
-  production:
-    driver: "postgres"
-    connection: "postgres://${PROD_DB_USER}:${PROD_DB_PASS}@${PROD_DB_HOST}:${PROD_DB_PORT}/${PROD_DB_NAME}"
-    schema: "public"
-
-# Generation settings
-generation:
-  input_dir: "./queries"
-  validate: true
-  
-  # Configure generators for multiple languages
-  generators:
-    json:
-      output: "./generated"
-      enabled: true
-      settings:
-        pretty: true
-        include_metadata: true
-    
-    go:
-      output: "./internal/queries"
-      enabled: false
-      package: "queries"              # Optional: auto-inferred from output path if omitted
-      preserve_hierarchy: true        # Optional: maintain directory structure (default: true)
-      mock_path: "./testdata/mocks"   # Optional: base path for mock data files
-      generate_tests: false           # Optional: generate test files (default: false)
-    
-    # Package name auto-inference examples:
-    # output: "./internal/queries"     -> package: "queries"
-    # output: "./pkg/db-queries"       -> package: "queries" (longest part after splitting by '-')
-    # output: "./generated/go-models"  -> package: "models"
-    # output: "./src/user-go-api"      -> package: "user" (longest part)
-    
-    typescript:
-      output: "./src/generated"
-      enabled: false
-      settings:
-        types: true
-```
-
-### Generator Configuration
-
-Each generator in the `generators` section supports:
-
-- **`output`**: Output directory for generated files
-- **`enabled`**: Whether the generator is enabled (default: false, except JSON which is always enabled)
-- **`settings`**: Generator-specific settings (flexible key-value pairs)
-
-#### Built-in Generators
-
-| Generator | Settings | Description |
-|-----------|----------|-------------|
-| `json` | `pretty`, `include_metadata` | Always enabled, generates intermediate JSON files |
-| `go` | `package`, `generate_tests` | Go language code generation |
-| `typescript` | `types`, `module_type` | TypeScript code generation |
-| `java` | `package`, `use_lombok` | Java language code generation |
-| `python` | `package`, `use_dataclasses` | Python code generation |
-
-#### Custom Generators
-
-You can add any custom generator by specifying its name and configuration:
-
-```yaml
-generation:
-  generators:
-    rust:
-      output: "./src/generated"
-      enabled: true
-      settings:
-        crate_name: "queries"
-        async_runtime: "tokio"
-    
-    csharp:
-      output: "./Generated"
-      enabled: true
-      settings:
-        namespace: "MyApp.Queries"
-        use_nullable: true
-```
-
-Custom generators are executed as external plugins named `snapsql-gen-<language>` (e.g., `snapsql-gen-rust`, `snapsql-gen-csharp`).
-
-### .env File Support
-
-Create a `.env` file in your project root:
-
-```bash
-# Database credentials
-DB_USER=myuser
-DB_PASS=mypassword
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=mydb
-
-# Production database
-PROD_DB_USER=produser
-PROD_DB_PASS=prodpassword
-PROD_DB_HOST=prod.example.com
-PROD_DB_PORT=5432
-PROD_DB_NAME=proddb
-```
-
-## Usage
-
-### 1. Create SQL Templates
-
-Create `.snap.sql` or `.snap.md` files with SnapSQL syntax:
-
-#### Simple SQL Template (`.snap.sql`)
-```sql
--- queries/users.snap.sql
-SELECT 
-    id,
-    name
-    /*# if include_email */,
-    email
-    /*# end */
-FROM users_/*= env */test
-/*# if filters.active */
-WHERE active = /*= filters.active */true
-/*# end */
-/*# if sort_by != "" */
-ORDER BY /*= sort_by */name
-/*# end */
-```
-
-#### Literate Programming with Markdown (`.snap.md`)
-
-SnapSQL supports literate programming through `.snap.md` files that combine SQL templates with documentation, design notes, and comprehensive testing:
+There are two types format. Primary one is Markdown. Another is SQL. It includes SQL and parameter list, directives (in comment)
 
 ````markdown
-# User Query Template
+# Get Project User List
 
-## Design Overview
+## Description
 
-This template handles user data retrieval with dynamic field selection and filtering capabilities.
+Get project user list with department information.
 
-### Requirements
-- Support conditional email field inclusion based on user permissions
-- Environment-specific table selection (dev/staging/prod)
-- Optional filtering by user status
-- Configurable sorting
+## Parameters
 
-## SQL Template
+```yaml
+project_id: int
+include_profile: bool
+page_size: int
+page: int
+```
+
+## SQL
 
 ```sql
 SELECT 
-    id, 
-    name
-    /*# if include_email */,
-    email
-    /*# endif */
-FROM users_/*= env */
-/*# if filters.active */
-WHERE active = true
-/*# endif */
-/*# if sort_by != "" */
-ORDER BY /*= sort_by */
-/*# endif */
-```
-
-## Test Cases
-
-### Test Case 1: Basic Query
-**Input Parameters:**
-```json
-{
-    "include_email": false,
-    "env": "prod",
-    "filters": {"active": false},
-    "sort_by": ""
-}
-```
-
-**Expected Output:**
-```sql
-SELECT id, name FROM users_prod
-```
-
-### Test Case 2: Full Query with All Options
-**Input Parameters:**
-```json
-{
-    "include_email": true,
-    "env": "dev",
-    "filters": {"active": true},
-    "sort_by": "created_at"
-}
-```
-
-**Expected Output:**
-```sql
-SELECT id, name, email FROM users_dev WHERE active = true ORDER BY created_at
-```
-
-## Mock Data Examples
-
-```yaml
-# Mock response for user query
-users:
-  - id: 1
-    name: "John Doe"
-    email: "john@example.com"
-    active: true
-    created_at: "2024-01-15T10:30:00Z"
-  - id: 2
-    name: "Jane Smith"
-    email: "jane@example.com"
-    active: true
-    created_at: "2024-02-20T14:45:00Z"
-  - id: 3
-    name: "Bob Wilson"
-    email: "bob@example.com"
-    active: false
-    created_at: "2024-03-10T09:15:00Z"
+    u.id, 
+    u.name,
+    /*# if include_profile */
+        p.bio,
+        p.avatar_url,
+    /*# end */
+    d.id as departments__id,
+    d.name as departments__name,
+FROM users AS u
+    JOIN departments AS d ON u.department_id = d.id
+    /*# if include_profile */
+        LEFT JOIN profiles AS p ON u.id = p.user_id
+    /*# end */
+WHERE
+  u.project_id = /*= project_id */ AND
+  u.active = /*= active */
+LIMIT /*= page_size != 0 ? page_size : 10 */
+OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */
 ```
 ````
 
-### 2. Generate Code
+This template works as valid SQL when comments are removed, while providing runtime flexibility. Fields with double underscores (`departments__id`, `departments__name`) are automatically structured into nested objects. And it supports CEL expression.
 
-```bash
-# Generate all configured languages
-snapsql generate
+### Generated Code Usage
 
-# Generate specific language
-snapsql generate --lang go
+```go
+// Generated type-safe function
+func GetProjectUserList(ctx context.Context, db *sql.DB, projectId bool, includeProfile bool, pageSize int, page int) iter.Seq2[User, error] {
+    // SnapSQL generates this function from the template above
+}
 
-# Generate from single file
-snapsql generate -i queries/users.snap.sql
-
-# Generate with constant files
-snapsql generate --const constants.yaml
+// Usage in your application
+func main() {
+    db, _ := sql.Open("postgres", "connection_string")
+    
+    for user, err := range GetProjectUserList(ctx, db, 
+        10,    // includeEmail
+        false, // includeProfile
+        10,    // pageSize
+        20,    // page
+    ) {
+        if err != nil {
+            log.Fatal(err)
+        }
+        fmt.Printf("User: %s (%s)\n", user.Name, user.Departments[0].Name)
+    }
+}
 ```
 
-### 3. Use Runtime Libraries *(Planned)*
+This is a basic example, but SnapSQL provides many additional features:
 
-#### Go Example *(Planned)*
+* **Smart Return Types**: Analyzes queries and generates appropriate return types - `iter.Seq2[Res, error]` for multiple results, `Res, error` for single results, and `sql.Result, error` for queries without return values.
+* **Context-based System Data**: Automatically expands system data embedded in context into parameters (similar to Java's logging API MDC mechanism)
+* **Loop Constructs**: Support for `for` loops in templates for dynamic query generation
+* **Constant Data Expansion**: Template expansion with predefined constant data
+* **Complex Conditional Expressions**: Advanced conditional logic using CEL (Common Expression Language)
+
+### Markdown Testing Example
+
+The above markdown can have test cases. SnapSQL runs unit tests without host programming language (Like Java or Python).
+
+````markdown
+## Test Cases
+
+### Test: Basic user list
+
+**Fixtures (Pre-test Data):**
+```yaml
+# users table
+users:
+  - {id: 1, name: "John Doe", email: "john@example.com", department_id: 1, active: true, created_at: "2024-01-15T10:30:00Z"}
+  - {id: 2, name: "Jane Smith", email: "jane@example.com", department_id: 2, active: true, created_at: "2024-01-14T09:15:00Z"}
+  - {id: 3, name: "Bob Wilson", email: "bob@example.com", department_id: 1, active: false, created_at: "2024-01-13T08:20:00Z"}
+
+# departments table  
+departments:
+  - {id: 1, name: "Engineering", description: "Software development team"}
+  - {id: 2, name: "Design", description: "UI/UX design team"}
+```
+
+**Parameters:**
+```yaml
+project_id: 15
+include_profile: true
+page_size: 3
+page: 1
+```
+
+**Expected Results:**
+```yaml
+- {id: 1, name: "John Doe", email: "john@example.com", created_at: "2024-01-15T10:30:00Z", departments__id: 1, departments__name: "Engineering"}
+- {id: 2, name: "Jane Smith", email: "jane@example.com", created_at: "2024-01-14T09:15:00Z", departments__id: 2, departments__name: "Design"}
+```
+
+### Test: Empty result
+
+**Fixtures (Pre-test Data):**
+```yaml
+# users table (only inactive users)
+users:
+  - {id: 3, name: "Bob Wilson", email: "bob@example.com", department_id: 1, active: false, created_at: "2024-01-13T08:20:00Z"}
+
+# departments table  
+departments:
+  - {id: 1, name: "Engineering", description: "Software development team"}
+```
+
+**Parameters:**
+```yaml
+active: false
+limit: 10
+```
+
+**Expected Results:**
+```yaml
+[]
+```
+````
+
+This Markdown file serves as both documentation and executable test, providing mock data for unit testing without database dependencies.
+
+**Additional Testing Features:**
+
+* **dbtestify Integration**: Test framework compliant with [dbtestify](https://github.com/shibukawa/dbtestify) library for comprehensive database testing
+* **Pre-test Data Setup**: Ability to configure initial table data before test execution, not just expected results
+* **Multiple Data Formats**: Support for test data in YAML, JSON, CSV, and dbunit XML formats
+* **Comprehensive Test Scenarios**: Define complex test cases with setup, execution, and verification phases
+* **Database-agnostic Testing**: Run the same tests across different database engines
+
+### Mock Testing Example
+
 ```go
 package main
 
 import (
-    "github.com/shibukawa/snapsql"
+    "context"
+    "encoding/json"
+    "net/http"
+    "net/http/httptest"
+    "testing"
+    
+    "github.com/shibukawa/snapsql/langs/snapsqlgo"
+    "github.com/alecthomas/assert/v2"
 )
 
-func main() {
-    engine := snapsql.New("generated/")
+func TestGetUserList_WithMockData(t *testing.T) {
+    // Create context with mock data from the "basic_user_list" test case
+    ctx := snapsqlgo.WithConfig(context.Background(), "user_list_query", 
+        snapsqlgo.WithMockData("basic_user_list"))
     
-    params := map[string]any{
-        "include_email": true,
-        "env": "prod",
-        "filters": map[string]any{
-            "active": true,
-        },
-        "sort_by": "created_at",
+    // The same function call, but now returns mock data instead of hitting the database
+    users := make([]User, 0)
+    for user, err := range GetUserList(ctx, nil, // db can be nil when using mock
+        true,  // includeEmail
+        false, // includeProfile
+        "prod", // tableSuffix
+        Pagination{Limit: 10, Offset: 0},
+    ) {
+        assert.NoError(t, err)
+        users = append(users, user)
     }
     
-    query, args, err := engine.Build("users", params)
-    if err != nil {
-        panic(err)
-    }
+    // Verify mock data matches expectations
+    assert.Equal(t, 2, len(users))
+    assert.Equal(t, "John Doe", users[0].Name)
+    assert.Equal(t, "Engineering", users[0].Departments[0].Name)
+    assert.Equal(t, "Jane Smith", users[1].Name)
+    assert.Equal(t, "Design", users[1].Departments[0].Name)
+}
+
+func TestUserListAPI_WithMockData(t *testing.T) {
+    // Create context with mock data for HTTP service testing
+    ctx := snapsqlgo.WithConfig(context.Background(), "user_list_query", 
+        snapsqlgo.WithMockData("basic_user_list"))
     
-    // Execute with your database driver
-    rows, err := db.Query(query, args...)
+    // Create HTTP request with mock context
+    req := httptest.NewRequest("GET", "/api/users?include_email=true", nil)
+    req = req.WithContext(ctx)
+    
+    // Create response recorder
+    w := httptest.NewRecorder()
+    
+    // Call your HTTP handler (which internally calls GetUserList)
+    userListHandler(w, req)
+    
+    // Verify HTTP response
+    assert.Equal(t, http.StatusOK, w.Code)
+    
+    var response struct {
+        Users []User `json:"users"`
+        Count int    `json:"count"`
+    }
+    err := json.Unmarshal(w.Body.Bytes(), &response)
+    assert.NoError(t, err)
+    
+    // Verify mock data was used
+    assert.Equal(t, 2, response.Count)
+    assert.Equal(t, "John Doe", response.Users[0].Name)
+    assert.Equal(t, "Engineering", response.Users[0].Departments[0].Name)
 }
 ```
 
-#### Python Example *(Planned)*
-```python
-import snapsql
+This approach enables testing without database dependencies while ensuring mock data never diverges from reality, as it's generated from the same templates used in production.
 
-engine = snapsql.Engine("generated/")
+## Documentation
 
-params = {
-    "include_email": True,
-    "env": "prod", 
-    "filters": {
-        "active": True
-    },
-    "sort_by": "created_at"
-}
+- [Template Syntax](docs/template-syntax.md) - Complete guide to SnapSQL template syntax
+- [Configuration](docs/configuration.md) - Project configuration and database setup
+- [CLI Commands](docs/cli-commands.md) - Command-line tool reference
+- [Installation Guide](docs/installation.md) - Detailed installation instructions
+- [Development Guide](docs/development.md) - Contributing and development setup
 
-query, args = engine.build("users", params)
+## Current Status
 
-# Execute with your database driver
-cursor.execute(query, args)
-```
+🚧 **Under Development** - Core functionality is implemented and working. Runtime libraries for multiple languages are planned.
 
-### Current Usage (Development)
+**Working Features:**
+- ✅ SQL template parsing and validation
+- ✅ CLI tool with generate, validate, and query commands
+- ✅ 2-way SQL format support
+- ✅ Dry-run mode for testing templates
 
-Currently, you can use SnapSQL CLI tool for generating intermediate files and parsing SQL templates:
-
-```bash
-# Initialize a new project
-snapsql init
-
-# Generate intermediate JSON files
-snapsql generate
-
-# Generate specific language (when implemented)
-snapsql generate --lang go
-
-# Validate templates
-snapsql validate
-```
-
-You can also use SnapSQL as a Go library for parsing SQL templates:
-
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/shibukawa/snapsql/parser"
-    "github.com/shibukawa/snapsql/tokenizer"
-)
-
-func main() {
-    sql := `SELECT id, name FROM users WHERE active = /*= active */true`
-    
-    tokens, err := tokenizer.Tokenize(sql)
-    if err != nil {
-        panic(err)
-    }
-    
-    ast, err := parser.Parse(tokens)
-    if err != nil {
-        panic(err)
-    }
-    
-    fmt.Printf("Parsed AST: %+v\n", ast)
-}
-```
-
-## Intermediate Format Schema
-
-SnapSQL generates intermediate JSON files that follow a standardized format. The JSON schema for these files is available at:
-
-- **Schema File**: [`docs/intermediate-format-schema.json`](docs/intermediate-format-schema.json)
-- **Schema ID**: `https://github.com/shibukawa/snapsql/schemas/intermediate-format.json`
-
-### Schema Validation
-
-You can validate generated intermediate files using JSON Schema validators:
-
-```bash
-# Using ajv-cli
-npm install -g ajv-cli
-ajv validate -s docs/intermediate-format-schema.json -d generated/your-file.json
-
-# Using other validators
-# Most JSON Schema validators support Draft-07 format
-```
-
-### Intermediate File Structure
-
-The intermediate format includes:
-
-- **`source`**: Original template file information (path and content)
-- **`interface_schema`**: Extracted parameter definitions and metadata (optional)
-- **`ast`**: Abstract Syntax Tree of the parsed SQL
-
-**Example intermediate file:**
-```json
-{
-  "source": {
-    "file": "/path/to/users.snap.sql",
-    "content": "SELECT * FROM users WHERE id = /*= user_id */1;"
-  },
-  "interface_schema": {
-    "name": "user_query",
-    "function_name": "getUser",
-    "parameters": [
-      {
-        "name": "user_id",
-        "type": "int"
-      }
-    ]
-  },
-  "ast": {
-    "type": "SELECT_STATEMENT",
-    "pos": [1, 1, 0],
-    "Children": {
-      "select_clause": { ... },
-      "from_clause": { ... },
-      "where_clause": { ... }
-    }
-  }
-}
-```
-
-## Development Status
-
-🚧 **Under Development** - This project is currently in the design and early development phase.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues and pull requests.
+**Planned Features:**
+- 🔄 Runtime libraries (Go, Python, TypeScript, Java)
+- 🔄 Type-safe query generation
+- 🔄 Mock data support for testing
 
 ## License
 
-- **Build Tool (`snapsql`)**: Licensed under AGPL-3.0
-- **Runtime Libraries**: Licensed under Apache-2.0
-
-This dual licensing approach ensures the build tool remains open source while allowing flexible use of runtime libraries in various projects.
+- **CLI Tool**: AGPL-3.0
+- **Runtime Libraries**: Apache-2.0 (planned)
 
 ## Repository
 

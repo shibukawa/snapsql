@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/fatih/color"
 	"github.com/shibukawa/snapsql/pull"
@@ -114,7 +115,7 @@ func (p *PullCmd) resolveDatabaseConnection(config *Config) (string, string, err
 		dbType = envConfig.Driver
 
 		// Expand environment variables
-		dbURL = expandEnvVars(dbURL)
+		dbURL = os.ExpandEnv(dbURL)
 	} else {
 		return "", "", ErrMissingDBOrEnv
 	}
