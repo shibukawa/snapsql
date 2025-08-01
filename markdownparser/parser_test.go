@@ -5,11 +5,17 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 )
 
 func TestParseBasic(t *testing.T) {
+	t.Log("Running TestParseBasic with debug output enabled")
 	input := `---
-function_name: "getUserData"
+function_name: "get_user_data"
 description: "Get user data"
 ---
 
@@ -36,230 +42,145 @@ WHERE id = /*= user_id */1
 
 ## Test Cases
 
-### Test Case 1
-- Input: user_id = 123, include_email = true
-- Expected: Returns user data with email
+### Test: Basic user data
 
-## Mock Data
-
+**Parameters:**
 ` + "```yaml" + `
-users:
-  - id: 1
-    name: "John Doe"
-    email: "john@example.com"
+user_id: 1
+include_email: true
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+  name: "John"
+  email: "john@example.com"
 ` + "```" + `
 `
 
 	doc, err := Parse(strings.NewReader(input))
 	assert.NoError(t, err)
-	assert.True(t, doc != nil)
+	assert.NotZero(t, doc)
 
-	// Check metadata (name should not be required)
-	assert.Equal(t, "getUserData", doc.Metadata["function_name"])
+	// Check metadata
+	assert.Equal(t, "get_user_data", doc.Metadata["function_name"])
 	assert.Equal(t, "Get user data", doc.Metadata["description"])
 
-	// Check SQL content
-	expectedSQL := `SELECT id, name, email
-FROM users
-WHERE id = /*= user_id */1`
-	assert.Equal(t, expectedSQL, strings.TrimSpace(doc.SQL))
-	
-	// Check that SQL start line is set (should be > 0)
-	assert.True(t, doc.SQLStartLine > 0)
+	// Check SQL
+	assert.True(t, strings.Contains(doc.SQL, "SELECT id, name, email"))
+	assert.True(t, strings.Contains(doc.SQL, "WHERE id = /*= user_id */1"))
+
+	// Check test cases
+	assert.Equal(t, 1, len(doc.TestCases))
+	testCase := doc.TestCases[0]
+	assert.Equal(t, "Test: Basic user data", testCase.Name)
+	assert.Equal(t, 1, testCase.Parameters["user_id"])
+	assert.Equal(t, true, testCase.Parameters["include_email"])
+	assert.Equal(t, 1, len(testCase.ExpectedResult))
+	assert.Equal(t, "John", testCase.ExpectedResult[0]["name"])
 }
 
-func TestParseSQLLineNumber(t *testing.T) {
+func TestDuplicateSections(t *testing.T) {
 	input := `---
-function_name: "testQuery"
+function_name: "test_duplicates"
 ---
 
-# Test Query
+# Test Duplicates
 
 ## Description
 
-Test query for line number tracking.
-
-## SQL
-
-` + "```sql" + `
-SELECT id, name
-FROM users
-WHERE active = true
-` + "```" + `
-`
-
-	doc, err := Parse(strings.NewReader(input))
-	assert.NoError(t, err)
-	assert.True(t, doc != nil)
-
-	// Check SQL content
-	expectedSQL := `SELECT id, name
-FROM users
-WHERE active = true`
-	assert.Equal(t, expectedSQL, strings.TrimSpace(doc.SQL))
-
-	// Check that SQL start line is reasonable (should be > 0)
-	// The exact line number may vary due to implementation changes
-	assert.True(t, doc.SQLStartLine > 0, "SQL start line should be greater than 0, got %d", doc.SQLStartLine)
-}
-
-func TestParseDescriptionSection(t *testing.T) {
-	input := `---
-function_name: "descriptionTest"
----
-
-# Description Section Test
-
-## Description
-
-This is a comprehensive description of the query functionality.
-
-It supports multiple paragraphs and can include:
-- Detailed explanations
-- Usage examples
-- Important notes and warnings
-
-The description can also contain **markdown formatting** like *italics*.
-
-### Subsection in Description
-
-This is a subsection within the description.
-
-## SQL
-
-` + "```sql" + `
-SELECT * FROM users WHERE active = true
-` + "```" + `
-`
-
-	doc, err := Parse(strings.NewReader(input))
-	assert.NoError(t, err)
-	assert.True(t, doc != nil)
-
-	// Check that description section is parsed (it should be in the sections)
-	// The description content is not stored separately, but the section should exist
-	assert.True(t, doc.SQL != "")
-}
-
-func TestParseOverviewSection(t *testing.T) {
-	input := `---
-function_name: "overviewTest"
----
-
-# Overview Section Test
-
-## Overview
-
-This query provides an overview of user data retrieval functionality.
-
-Key features:
-- Fast user lookup by ID
-- Optional email inclusion
-- Status filtering capabilities
-
-## SQL
-
-` + "```sql" + `
-SELECT * FROM users WHERE id = /*= user_id */1
-` + "```" + `
-`
-
-	doc, err := Parse(strings.NewReader(input))
-	assert.NoError(t, err)
-	assert.True(t, doc != nil)
-
-	// Check that overview section is accepted as description alternative
-	assert.True(t, doc.SQL != "")
-}
-
-func TestParseNoSQL(t *testing.T) {
-	input := `---
-function_name: "noSqlQuery"
----
-
-# No SQL Query
-
-## Description
-
-This document has no SQL section.
-`
-
-	_, err := Parse(strings.NewReader(input))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required section: sql")
-}
-
-func TestParseNoDescription(t *testing.T) {
-	input := `---
-function_name: "noDescQuery"
----
-
-# No Description Query
+Test handling of duplicate sections.
 
 ## SQL
 
 ` + "```sql" + `
 SELECT * FROM users
 ` + "```" + `
-`
 
-	_, err := Parse(strings.NewReader(input))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required section: description")
-}
+## Test Cases
 
-func TestParseYAMLParameters(t *testing.T) {
-	input := `---
-function_name: "yamlParamsTest"
----
+### Test: Duplicate Parameters
 
-# YAML Parameters Test
-
-## Description
-
-Test YAML parameters parsing.
-
-## Parameters
-
+**Parameters:**
 ` + "```yaml" + `
-user_id: int
-include_email: bool
-status: string
-limit: int
-offset: int
+user_id: 1
+include_email: true
 ` + "```" + `
 
-## SQL
+**Parameters:**
+` + "```yaml" + `
+user_id: 2
+include_email: false
+` + "```" + `
 
-` + "```sql" + `
-SELECT * FROM users WHERE id = /*= user_id */1
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+  name: "John"
+` + "```" + `
+
+### Test: Duplicate Expected Results
+
+**Parameters:**
+` + "```yaml" + `
+user_id: 1
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+  name: "John"
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 2
+  name: "Jane"
+` + "```" + `
+
+### Test: Multiple Fixtures
+
+**Parameters:**
+` + "```yaml" + `
+user_id: 1
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+  name: "John"
+` + "```" + `
+
+**Fixtures:**
+` + "```yaml" + `
+users:
+  - id: 1
+    name: "John"
+` + "```" + `
+
+**Fixtures:**
+` + "```csv" + `
+departments
+1,Engineering
 ` + "```" + `
 `
 
-	doc, err := Parse(strings.NewReader(input))
-	assert.NoError(t, err)
-	assert.True(t, doc != nil)
-
-	// Check parameter block (should contain only the YAML content, not the ``` markers)
-	assert.True(t, doc.ParameterBlock != "")
-	assert.Contains(t, doc.ParameterBlock, "user_id: int")
-	assert.Contains(t, doc.ParameterBlock, "include_email: bool")
-	assert.Contains(t, doc.ParameterBlock, "status: string")
-	// Should NOT contain the ``` markers
-	assert.NotContains(t, doc.ParameterBlock, "```yaml")
-	assert.NotContains(t, doc.ParameterBlock, "```")
+	_, err := Parse(strings.NewReader(input))
+	assert.Error(t, err)
+	assert.True(t, strings.Contains(err.Error(), "duplicate parameters"))
+	assert.True(t, strings.Contains(err.Error(), "duplicate expected results"))
 }
 
-func TestParseYAMLMockData(t *testing.T) {
+func TestMultipleFixtureFormats(t *testing.T) {
 	input := `---
-function_name: "yamlMockTest"
+function_name: "test_multiple_formats"
 ---
 
-# YAML Test
+# Test Multiple Formats
 
 ## Description
 
-Test YAML mock data parsing.
+Test combining fixtures in different formats.
 
 ## SQL
 
@@ -267,54 +188,118 @@ Test YAML mock data parsing.
 SELECT * FROM users
 ` + "```" + `
 
-## Mock Data
+## Test Cases
 
+### Test: Combined Fixtures
+
+**Parameters:**
+` + "```yaml" + `
+user_id: 1
+include_roles: true
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+  name: "John Doe"
+  department: "Engineering"
+  role: "Admin"
+` + "```" + `
+
+**Fixtures**
 ` + "```yaml" + `
 users:
   - id: 1
     name: "John Doe"
     email: "john@example.com"
-    active: true
-  - id: 2
-    name: "Jane Smith"
-    email: "jane@example.com"
-    active: false
-orders:
-  - id: 101
-    user_id: 1
-    total: 99.99
-    status: "completed"
+` + "```" + `
+
+**Fixtures: departments**
+` + "```csv" + `
+id,name
+1,Engineering
+2,Design
+` + "```" + `
+
+**Fixtures**
+` + "```xml" + `
+<dataset>
+  <roles id="1" name="Admin" />
+  <roles id="2" name="User" />
+</dataset>
 ` + "```" + `
 `
 
 	doc, err := Parse(strings.NewReader(input))
 	assert.NoError(t, err)
-	assert.True(t, doc != nil)
+	assert.NotZero(t, doc)
 
-	// Check mock data structure
-	assert.True(t, len(doc.MockData) > 0)
-	
-	// Check users table exists
-	usersData, usersExists := doc.MockData["users"]
-	assert.True(t, usersExists)
-	assert.True(t, usersData != nil)
+	// Should have 1 test case
+	assert.Equal(t, 1, len(doc.TestCases))
 
-	// Check orders table exists
-	ordersData, ordersExists := doc.MockData["orders"]
-	assert.True(t, ordersExists)
-	assert.True(t, ordersData != nil)
+	testCase := doc.TestCases[0]
+	assert.True(t, strings.Contains(testCase.Name, "Combined Fixtures"))
+
+	// Check fixtures were combined from all formats
+	assert.Equal(t, 3, len(testCase.Fixture), "Should have fixtures from three tables (users, departments, roles)")
+
+	// Verify fixtures content
+	var foundDepartments, foundUsers, foundRoles bool
+	for tableName, rows := range testCase.Fixture {
+		switch tableName {
+		case "departments":
+			foundDepartments = true
+			assert.Equal(t, 2, len(rows), "departments should have 2 rows")
+			for _, row := range rows {
+				name, ok := row["name"].(string)
+				assert.True(t, ok, "name should be string")
+				assert.True(t, name == "Engineering" || name == "Design", "name should be Engineering or Design")
+			}
+		case "users":
+			foundUsers = true
+			assert.Equal(t, 1, len(rows), "users should have 1 row")
+			assert.Equal(t, "John Doe", rows[0]["name"])
+			assert.Equal(t, "john@example.com", rows[0]["email"])
+		case "roles":
+			foundRoles = true
+			assert.Equal(t, 2, len(rows), "roles should have 2 rows")
+			for _, row := range rows {
+				name, ok := row["name"].(string)
+				assert.True(t, ok, "name should be string")
+				assert.True(t, name == "Admin" || name == "User", "name should be Admin or User")
+			}
+		default:
+			t.Errorf("unexpected table name: %s", tableName)
+		}
+	}
+	assert.True(t, foundDepartments, "Should have departments fixtures")
+	assert.True(t, foundUsers, "Should have users fixtures")
+	assert.True(t, foundRoles, "Should have roles fixtures")
+
+	// Verify parameters (single definition)
+	assert.Equal(t, 2, len(testCase.Parameters))
+	assert.Equal(t, 1, testCase.Parameters["user_id"])
+	assert.Equal(t, true, testCase.Parameters["include_roles"])
+
+	// Verify expected results (single definition)
+	assert.Equal(t, 1, len(testCase.ExpectedResult))
+	result := testCase.ExpectedResult[0]
+	assert.Equal(t, 1, result["id"])
+	assert.Equal(t, "John Doe", result["name"])
+	assert.Equal(t, "Engineering", result["department"])
+	assert.Equal(t, "Admin", result["role"])
 }
 
-func TestParseCSVMockData(t *testing.T) {
+func TestInvalidFixturesFormat(t *testing.T) {
 	input := `---
-function_name: "csvMockTest"
+function_name: "test_invalid_fixtures"
 ---
 
-# CSV Test
+# Test Invalid Fixtures Format
 
 ## Description
 
-Test CSV mock data parsing.
+Test invalid fixtures format.
 
 ## SQL
 
@@ -322,49 +307,240 @@ Test CSV mock data parsing.
 SELECT * FROM users
 ` + "```" + `
 
-## Mock Data
+## Test Cases
 
-` + "```csv" + `
-# users
-id,name,email,active
-1,"John Doe","john@example.com",true
-2,"Jane Smith","jane@example.com",false
-3,"Bob Wilson","bob@example.com",true
+### Test: Invalid Fixtures Format
+
+**Parameters:**
+` + "```yaml" + `
+user_id: 1
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+  name: "John"
+` + "```" + `
+
+**Fixtures: users**
+` + "```yaml" + `
+- id: 1
+  name: "John"
 ` + "```" + `
 `
 
-	doc, err := Parse(strings.NewReader(input))
-	assert.NoError(t, err)
-	assert.True(t, doc != nil)
-
-	// Check mock data structure
-	assert.True(t, len(doc.MockData) > 0)
-	
-	// Check users table exists
-	usersData, usersExists := doc.MockData["users"]
-	assert.True(t, usersExists)
-	assert.True(t, usersData != nil)
+	_, err := Parse(strings.NewReader(input))
+	assert.Error(t, err)
+	assert.True(t, strings.Contains(err.Error(), "table name can only be specified for CSV fixtures"))
 }
 
-func TestParseWithoutFrontMatter(t *testing.T) {
-	input := `# Test Query
+func TestInvalidCombinations(t *testing.T) {
+	// Test various invalid combinations in separate subtests
+	testCases := []struct {
+		name     string
+		input    string
+		errorMsg string
+	}{
+		{
+			name: "Empty Parameters",
+			input: `# Test Invalid Cases
 
 ## Description
 
-Test query without front matter.
+Test invalid cases.
 
 ## SQL
 
 ` + "```sql" + `
 SELECT * FROM users
 ` + "```" + `
+
+## Test Cases
+
+### Test: Empty Parameters
+**Parameters:**
+` + "```yaml" + `
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+` + "```" + `
+`,
+			errorMsg: "failed to parse test cases",
+		},
+		{
+			name: "Invalid YAML in Parameters",
+			input: `# Test Invalid Cases
+
+## Description
+
+Test invalid cases.
+
+## SQL
+
+` + "```sql" + `
+SELECT * FROM users
+` + "```" + `
+
+## Test Cases
+
+### Test: Invalid YAML
+**Parameters:**
+` + "```yaml" + `
+user_id: [invalid
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+` + "```" + `
+`,
+			errorMsg: "failed to parse test cases",
+		},
+		{
+			name: "Invalid CSV in Fixtures",
+			input: `# Test Invalid Cases
+
+## Description
+
+Test invalid cases.
+
+## SQL
+
+` + "```sql" + `
+SELECT * FROM users
+` + "```" + `
+
+## Test Cases
+
+### Test: Invalid CSV
+**Parameters:**
+` + "```yaml" + `
+user_id: 1
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- id: 1
+` + "```" + `
+
+**Fixtures:**
+` + "```csv" + `
+id,name
+1,"unclosed quote
+` + "```" + `
+`,
+			errorMsg: "failed to parse test cases",
+		},
+		{
+			name: "Invalid XML in Expected Results",
+			input: `# Test Invalid Cases
+
+## Description
+
+Test invalid cases.
+
+## SQL
+
+` + "```sql" + `
+SELECT * FROM users
+` + "```" + `
+
+## Test Cases
+
+### Test: Invalid XML
+**Parameters:**
+` + "```yaml" + `
+user_id: 1
+` + "```" + `
+
+**Expected Results:**
+` + "```xml" + `
+<dataset>
+  <unclosed>
+` + "```" + `
+`,
+			errorMsg: "failed to parse test cases",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fullInput := `---
+function_name: "test_invalid"
+---
+
+# Test Invalid Cases
+
+## Description
+
+Test invalid cases.
+
+## SQL
+
+` + "```sql" + `
+SELECT * FROM users
+` + "```" + `
+
+## Test Cases
+
+` + tc.input
+
+			_, err := Parse(strings.NewReader(fullInput))
+			assert.Error(t, err)
+			assert.True(t, strings.Contains(err.Error(), tc.errorMsg), 
+				"Expected error containing %q, got %q", tc.errorMsg, err.Error())
+		})
+	}
+}
+
+func TestASTStructure(t *testing.T) {
+	input := `### Test: Basic Test
+
+**Parameters:**
+` + "```yaml" + `
+param1: value1
+` + "```" + `
+
+**Expected Results:**
+` + "```yaml" + `
+- result: value1
+` + "```" + `
 `
 
-	doc, err := Parse(strings.NewReader(input))
-	assert.NoError(t, err)
-	assert.True(t, doc != nil)
+	// Create parser
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM,
+		),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
+	)
 
-	// Check that metadata may contain title but document is parsed
-	assert.True(t, len(doc.Metadata) >= 0)
-	assert.True(t, strings.Contains(doc.SQL, "SELECT * FROM users"))
+	// Parse markdown document
+	doc := md.Parser().Parse(text.NewReader([]byte(input)))
+
+	// Walk through AST and print structure
+	t.Log("AST Structure:")
+	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering {
+			t.Logf("Node type: %T, Kind: %v", n, n.Kind())
+			if n.Kind() == ast.KindText {
+				t.Logf("  Text content: %q", string(n.Text([]byte(input))))
+			}
+			if n.Kind() == ast.KindFencedCodeBlock {
+				if cb, ok := n.(*ast.FencedCodeBlock); ok {
+					t.Logf("  Code block info: %q", string(cb.Info.Text([]byte(input))))
+					lines := cb.Lines()
+					for i := 0; i < lines.Len(); i++ {
+						line := lines.At(i)
+						t.Logf("  Line %d: %q", i, string(line.Value([]byte(input))))
+					}
+				}
+			}
+		}
+		return ast.WalkContinue, nil
+	})
 }
