@@ -437,8 +437,16 @@ generation:
     go:
       output: "./internal/queries"
       enabled: false
-      settings:
-        package: "queries"
+      package: "queries"              # Optional: auto-inferred from output path if omitted
+      preserve_hierarchy: true        # Optional: maintain directory structure (default: true)
+      mock_path: "./testdata/mocks"   # Optional: base path for mock data files
+      generate_tests: false           # Optional: generate test files (default: false)
+    
+    # Package name auto-inference examples:
+    # output: "./internal/queries"     -> package: "queries"
+    # output: "./pkg/db-queries"       -> package: "queries" (longest part after splitting by '-')
+    # output: "./generated/go-models"  -> package: "models"
+    # output: "./src/user-go-api"      -> package: "user" (longest part)
     
     typescript:
       output: "./src/generated"

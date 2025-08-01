@@ -16,7 +16,9 @@ type Generator struct {
 	OutputPath  string
 	Format      *intermediate.IntermediateFormat
 	MockPath    string
-	Dialect     string // Target database dialect (postgres, mysql, sqlite)
+	Dialect     string         // Target database dialect (postgres, mysql, sqlite)
+	Hierarchy   *FileHierarchy // File hierarchy information (optional)
+	BaseImport  string         // Base import path for hierarchical packages
 }
 
 // Option is a function that configures Generator
@@ -50,11 +52,30 @@ func WithMockPath(path string) Option {
 	}
 }
 
+// WithHierarchy sets the file hierarchy information
+func WithHierarchy(hierarchy FileHierarchy) Option {
+	return func(g *Generator) {
+		g.Hierarchy = &hierarchy
+		// Auto-adjust package name based on hierarchy
+		if hierarchy.RelativeDir != "." && hierarchy.RelativeDir != "" {
+			g.PackageName = GetPackageNameFromHierarchy(hierarchy, g.PackageName)
+		}
+	}
+}
+
+// WithBaseImport sets the base import path for hierarchical packages
+func WithBaseImport(baseImport string) Option {
+	return func(g *Generator) {
+		g.BaseImport = baseImport
+	}
+}
+
 // New creates a new Generator
 func New(format *intermediate.IntermediateFormat, opts ...Option) *Generator {
 	g := &Generator{
-		PackageName: "generated",
+		PackageName: "generated", // Default package name
 		Format:      format,
+		Dialect:     "", // Must be specified via WithDialect or WithConfig
 	}
 	for _, opt := range opts {
 		opt(g)
