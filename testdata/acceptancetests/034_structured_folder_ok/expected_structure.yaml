@@ -1,0 +1,26 @@
+# Expected output structure for structured folder test
+# This defines how the hierarchical input should be mapped to output
+
+input_structure:
+  - path: "users/find_user.snap.sql"
+    output: "users/find_user.go"
+  - path: "orders/create_order.snap.sql"
+    output: "orders/create_order.go"
+  - path: "orders/reports/monthly_sales.snap.sql"
+    output: "orders/reports/monthly_sales.go"
+  - path: "admin/user_stats.snap.md"
+    output: "admin/user_stats.go"
+
+common_types:
+  - path: "_common.yaml"
+    output: "common_types.go"
+  - path: "orders/_common.yaml"
+    output: "orders/common_types.go"
+
+expected_files:
+  - "users/find_user.go"
+  - "orders/create_order.go"
+  - "orders/reports/monthly_sales.go"
+  - "admin/user_stats.go"
+  - "common_types.go"
+  - "orders/common_types.go"

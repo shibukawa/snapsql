@@ -10,6 +10,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/goccy/go-yaml"
 	. "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/markdownparser"
 )
 
 // YAMLTableInfo represents the YAML structure for table information
@@ -117,12 +118,15 @@ func TestAcceptance(t *testing.T) {
 		testDir := filepath.Join(testDataDir, testName)
 
 		t.Run(testName, func(t *testing.T) {
-			// Read the input SQL file
+			// Check if this is an error test
+			isErrorTest := strings.HasSuffix(testName, "_err")
+
+			// Try to read SQL file first, then markdown file
+			var format *IntermediateFormat
+			var err, genErr error
+
+			markdownPath := filepath.Join(testDir, "input.snap.md")
 			sqlPath := filepath.Join(testDir, "input.snap.sql")
-			sqlContent, err := os.ReadFile(sqlPath)
-			if err != nil {
-				t.Fatalf("Failed to read input SQL file: %v", err)
-			}
 
 			// Load table information
 			tableInfo, err := loadTableInfo(testDir)
@@ -136,26 +140,58 @@ func TestAcceptance(t *testing.T) {
 				t.Fatalf("Failed to load config: %v", err)
 			}
 
-			// Generate intermediate format using the new function
-			reader := strings.NewReader(string(sqlContent))
-			format, err := GenerateFromSQL(reader, nil, sqlPath, "", tableInfo, config)
+			if _, err := os.Stat(sqlPath); err == nil {
+				// SQL file exists, use GenerateFromSQL (prioritize SQL)
+				sqlContent, err := os.ReadFile(sqlPath)
+				if err != nil {
+					t.Fatalf("Failed to read input SQL file: %v", err)
+				}
 
-			// Check if this is an error test
-			isErrorTest := strings.HasSuffix(testName, "_err")
+				// Generate intermediate format using the new function
+				reader := strings.NewReader(string(sqlContent))
+				format, genErr = GenerateFromSQL(reader, nil, sqlPath, "", tableInfo, config)
+
+				// Debug: log the SQL content and error for error tests
+				if isErrorTest {
+					t.Logf("Processing SQL file for error test %s:\n%s", testName, string(sqlContent))
+					t.Logf("GenerateFromSQL returned error: %v", genErr)
+				}
+			} else if _, err := os.Stat(markdownPath); err == nil {
+				// Fall back to markdown file only if SQL doesn't exist
+				file, err := os.Open(markdownPath)
+				if err != nil {
+					t.Fatalf("Failed to open markdown file: %v", err)
+				}
+				defer file.Close()
+
+				doc, err := markdownparser.Parse(file)
+				if err != nil {
+					t.Fatalf("Failed to parse markdown file: %v", err)
+				}
+
+				format, genErr = GenerateFromMarkdown(doc, markdownPath, testDir, nil, tableInfo, config)
+			} else {
+				t.Fatalf("Neither input.snap.sql nor input.snap.md found in %s", testDir)
+			}
 
 			if isErrorTest {
 				// For error tests, we expect an error
-				assert.Error(t, err)
+				if genErr == nil {
+					t.Errorf("Expected an error but got none for test %s. SQL file exists: %v, Markdown file exists: %v",
+						testName,
+						fileExists(sqlPath),
+						fileExists(markdownPath))
+				}
 				return
 			}
 
 			// For success tests, we expect no error
-			if err != nil {
-				t.Fatalf("Did not expect an error but got: %v", err)
+			if genErr != nil {
+				t.Fatalf("Did not expect an error but got: %v", genErr)
 			}
 
 			// Convert to JSON
-			actualJSON, err := format.ToJSON()
+			actualJSON, err := json.Marshal(format)
 			if err != nil {
 				t.Fatalf("Failed to convert to JSON: %v", err)
 			}

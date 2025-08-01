@@ -1,0 +1,9 @@
+users:
+  columns:
+    - name: id
+      type: int
+      primary_key: true
+    - name: name
+      type: string
+    - name: age
+      type: int

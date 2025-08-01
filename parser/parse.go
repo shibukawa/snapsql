@@ -309,8 +309,8 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 		return nil, nil, fmt.Errorf("failed to create function definition: %w", err)
 	}
 
-	// Tokenize the SQL content
-	tokens, err := tokenizer.Tokenize(doc.SQL)
+	// Tokenize the SQL content with line offset from markdown
+	tokens, err := tokenizer.Tokenize(doc.SQL, doc.SQLStartLine)
 	if err != nil {
 		return nil, functionDef, fmt.Errorf("tokenization failed: %w", err)
 	}

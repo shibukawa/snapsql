@@ -1,0 +1,11 @@
+# Root level common types
+User:
+  id: int
+  name: string
+  email: string
+  created_at: time
+
+BaseEntity:
+  id: int
+  created_at: time
+  updated_at: time

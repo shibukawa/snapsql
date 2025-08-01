@@ -135,8 +135,11 @@ type IntermediateFormat struct {
 	// Instruction sequence
 	Instructions []Instruction `json:"instructions"`
 
-	// CEL expressions
-	Expressions []string `json:"expressions,omitempty"`
+	// Enhanced CEL expressions with metadata
+	CELExpressions []CELExpression `json:"cel_expressions"`
+
+	// CEL environments with variable definitions
+	CELEnvironments []CELEnvironment `json:"cel_environments"`
 
 	// Environment variables by level
 	Envs [][]EnvVar `json:"envs,omitempty"`
@@ -202,6 +205,24 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 		result["envs"] = envs
+	}
+
+	// Custom marshal for CELExpressions
+	if len(f.CELExpressions) > 0 {
+		celExpressions, err := marshalCompact(f.CELExpressions)
+		if err != nil {
+			return nil, err
+		}
+		result["cel_expressions"] = celExpressions
+	}
+
+	// Custom marshal for CELEnvironments
+	if len(f.CELEnvironments) > 0 {
+		celEnvironments, err := marshalCompact(f.CELEnvironments)
+		if err != nil {
+			return nil, err
+		}
+		result["cel_environments"] = celEnvironments
 	}
 
 	// Marshal the modified map back to JSON
@@ -313,4 +334,32 @@ func FromJSON(data []byte) (*IntermediateFormat, error) {
 		return nil, fmt.Errorf("failed to parse intermediate format: %w", err)
 	}
 	return &format, nil
+}
+
+// CEL-related type definitions
+
+// CELExpression represents a CEL expression with its metadata
+type CELExpression struct {
+	ID               string   `json:"id"`
+	Expression       string   `json:"expression"`
+	EnvironmentIndex int      `json:"environment_index"`
+	Position         Position `json:"position,omitempty"`
+}
+
+// CELEnvironment represents a CEL environment with variable definitions
+type CELEnvironment struct {
+	Index               int               `json:"index"`
+	AdditionalVariables []CELVariableInfo `json:"additional_variables"`
+}
+
+// CELVariableInfo represents information about a CEL variable
+type CELVariableInfo struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// Position represents the position of an expression in the source
+type Position struct {
+	Line   int `json:"line"`
+	Column int `json:"column"`
 }

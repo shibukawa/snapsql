@@ -17,7 +17,14 @@ func (i *InstructionGenerator) Name() string {
 func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	// Use existing GenerateInstructions function for all advanced features
 	// The TokenTransformer should have already added system field tokens
-	instructions := GenerateInstructions(ctx.Tokens, ctx.Expressions)
+
+	// Extract expressions from CEL expressions for backward compatibility
+	expressions := make([]string, len(ctx.CELExpressions))
+	for j, celExpr := range ctx.CELExpressions {
+		expressions[j] = celExpr.Expression
+	}
+
+	instructions := GenerateInstructions(ctx.Tokens, expressions)
 
 	// Detect SQL patterns that need dialect-specific handling
 	dialectConversions := detectDialectPatterns(ctx.Tokens)

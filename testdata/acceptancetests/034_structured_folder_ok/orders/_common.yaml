@@ -1,0 +1,14 @@
+# Orders module common types
+Order:
+  id: int
+  user_id: int
+  total: decimal
+  status: string
+  created_at: time
+
+OrderItem:
+  id: int
+  order_id: int
+  product_name: string
+  quantity: int
+  price: decimal
