@@ -1,49 +1,46 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/shibukawa/snapsql/intermediate"
 )
 
-// GenerateCommand represents the generate command
-type GenerateCommand struct {
-	Input  string `help:"Input SQL file or directory" short:"i" default:"."`
-	Output string `help:"Output directory" short:"o" default:"./generated"`
-	Pretty bool   `help:"Pretty print JSON output" short:"p" default:"true"`
+// generateIntermediateFormat generates intermediate format from a single file
+func generateIntermediateFormat(inputFile, outputDir string, pretty bool) error {
+	// Check if the input file exists
+	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
+		return fmt.Errorf("input file does not exist: %s", inputFile)
+	}
+
+	// Read the input file
+	content, err := os.ReadFile(inputFile)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %v", inputFile, err)
+	}
+
+	// TODO: Implement proper intermediate format generation
+	// For now, this is a placeholder that indicates the feature is not yet implemented
+	_ = content
+	_ = outputDir
+	_ = pretty
+
+	fmt.Printf("Intermediate format generation for %s is not yet implemented\n", inputFile)
+	fmt.Println("This feature will be available in a future version.")
+
+	return nil
 }
 
-// Run executes the generate command
-func (cmd *GenerateCommand) Run() error {
-	// Create output directory if it doesn't exist
-	err := os.MkdirAll(cmd.Output, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create output directory: %v", err)
+// generateIntermediateFormats generates intermediate formats for all files in a directory
+func generateIntermediateFormats(inputDir, outputDir string, pretty bool) error {
+	// Check if the input directory exists
+	if _, err := os.Stat(inputDir); os.IsNotExist(err) {
+		return fmt.Errorf("input directory does not exist: %s", inputDir)
 	}
 
-	// Check if input is a file or directory
-	info, err := os.Stat(cmd.Input)
-	if err != nil {
-		return fmt.Errorf("failed to stat input: %v", err)
-	}
-
-	if info.IsDir() {
-		// Process all SQL files in the directory
-		return processDirectory(cmd.Input, cmd.Output, cmd.Pretty)
-	}
-
-	// Process a single file
-	return processFile(cmd.Input, cmd.Output, cmd.Pretty)
-}
-
-// processDirectory processes all SQL files in a directory
-func processDirectory(inputDir, outputDir string, pretty bool) error {
-	// Walk the directory
-	return filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
+	// Walk through the input directory
+	err := filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -53,60 +50,17 @@ func processDirectory(inputDir, outputDir string, pretty bool) error {
 			return nil
 		}
 
-		// Check if the file is a SQL file
-		if !strings.HasSuffix(path, ".snap.sql") && !strings.HasSuffix(path, ".snap.md") {
-			return nil
+		// Process only .snap.sql and .snap.md files
+		if strings.HasSuffix(path, ".snap.sql") || strings.HasSuffix(path, ".snap.md") {
+			return generateIntermediateFormat(path, outputDir, pretty)
 		}
 
-		// Process the file
-		return processFile(path, outputDir, pretty)
+		return nil
 	})
-}
 
-// processFile processes a single SQL file
-func processFile(inputFile, outputDir string, pretty bool) error {
-	// Read the file
-	content, err := os.ReadFile(inputFile)
 	if err != nil {
-		return fmt.Errorf("failed to read file %s: %v", inputFile, err)
+		return fmt.Errorf("failed to process input directory: %v", err)
 	}
 
-	// Generate the intermediate format
-	result, err := intermediate.GenerateIntermediateFormat(string(content), inputFile)
-	if err != nil {
-		return fmt.Errorf("failed to generate intermediate format for %s: %v", inputFile, err)
-	}
-
-	// Create the output file path
-	relPath, err := filepath.Rel(filepath.Dir(outputDir), inputFile)
-	if err != nil {
-		relPath = filepath.Base(inputFile)
-	}
-	outputFile := filepath.Join(outputDir, strings.TrimSuffix(relPath, filepath.Ext(relPath))+".json")
-
-	// Create the output directory if it doesn't exist
-	err = os.MkdirAll(filepath.Dir(outputFile), 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create output directory for %s: %v", outputFile, err)
-	}
-
-	// Marshal the result to JSON
-	var jsonData []byte
-	if pretty {
-		jsonData, err = json.MarshalIndent(result, "", "  ")
-	} else {
-		jsonData, err = json.Marshal(result)
-	}
-	if err != nil {
-		return fmt.Errorf("failed to marshal result to JSON: %v", err)
-	}
-
-	// Write the output file
-	err = os.WriteFile(outputFile, jsonData, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write output file %s: %v", outputFile, err)
-	}
-
-	fmt.Printf("Generated %s\n", outputFile)
 	return nil
 }
