@@ -1,0 +1,31 @@
+tables:
+  users:
+    columns:
+      id:
+        type: int
+        primary_key: true
+      name:
+        type: string
+      age:
+        type: int
+    system_fields:
+      created_at:
+        on_insert:
+          default: "NOW()"
+        on_update:
+          parameter: "error"
+      updated_at:
+        on_insert:
+          default: "NOW()"
+        on_update:
+          default: "NOW()"
+      created_by:
+        on_insert:
+          parameter: "implicit"
+        on_update:
+          parameter: "error"
+      updated_by:
+        on_insert:
+          parameter: "implicit"
+        on_update:
+          parameter: "implicit"

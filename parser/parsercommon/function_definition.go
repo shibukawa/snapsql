@@ -1,6 +1,7 @@
 package parsercommon
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -116,23 +117,91 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 		}
 	}
 
-	// Parse parameters from the parameter block
-	// We need to preserve the order of parameters as defined in the YAML
-	if doc.ParameterBlock != "" {
-		// Parse parameters while preserving order
+	// Parse parameters from the parameter text
+	if doc.ParametersText != "" {
+		// Parse the raw parameter text to yaml.MapSlice to preserve order
 		var rawParams yaml.MapSlice
-		if err := yaml.Unmarshal([]byte(doc.ParameterBlock), &rawParams); err != nil {
-			return nil, fmt.Errorf("failed to parse parameters: %w", err)
+		var err error
+		
+		switch doc.ParametersType {
+		case "yaml", "yml":
+			err = yaml.Unmarshal([]byte(doc.ParametersText), &rawParams)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse YAML parameters: %w", err)
+			}
+			
+		case "json":
+			// Parse JSON while preserving order using yaml parser (which preserves order)
+			// Convert JSON to YAML first, then parse with yaml parser
+			var jsonData interface{}
+			if err := json.Unmarshal([]byte(doc.ParametersText), &jsonData); err != nil {
+				return nil, fmt.Errorf("failed to parse JSON parameters: %w", err)
+			}
+			
+			// Convert back to YAML to preserve order
+			yamlBytes, err := yaml.Marshal(jsonData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert JSON to YAML: %w", err)
+			}
+			
+			err = yaml.Unmarshal(yamlBytes, &rawParams)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse converted YAML parameters: %w", err)
+			}
+			
+		case "list":
+			// Parse list format (e.g., "param1: type1\nparam2: type2")
+			rawParams, err = parseListFormatParameters(doc.ParametersText)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse list parameters: %w", err)
+			}
+			
+		default:
+			return nil, fmt.Errorf("unsupported parameter type: %s", doc.ParametersType)
 		}
+		
 		def.RawParameters = rawParams
 	}
 
-	// Finalize the definition
+	// Set base path and project root path for common type resolution
+	def.basePath = basePath
+	def.projectRootPath = projectRootPath
+
+	// Finalize the function definition to process parameters and resolve common types
 	if err := def.Finalize(basePath, projectRootPath); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to finalize function definition: %w", err)
 	}
 
 	return def, nil
+}
+
+// parseListFormatParameters parses list format parameters (e.g., "param1: type1\nparam2: type2")
+func parseListFormatParameters(text string) (yaml.MapSlice, error) {
+	var rawParams yaml.MapSlice
+	
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		
+		// Parse "name: type" format
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid list parameter format: %s", line)
+		}
+		
+		name := strings.TrimSpace(parts[0])
+		typeStr := strings.TrimSpace(parts[1])
+		
+		rawParams = append(rawParams, yaml.MapItem{
+			Key:   name,
+			Value: typeStr,
+		})
+	}
+	
+	return rawParams, nil
 }
 
 // parseFunctionDefinitionFromYAML parses a YAML string into a FunctionDefinition and calls Finalize.
@@ -263,11 +332,21 @@ func generateDummyData(params map[string]any) (map[string]any, error) {
 		case string:
 			result[k] = generateDummyValueFromString(val)
 		case map[string]any:
-			d, err := generateDummyData(val)
-			if err != nil {
-				return nil, err
+			// Check if this is a parameter definition with a "type" field
+			if typeVal, hasType := val["type"]; hasType {
+				if typeStr, ok := typeVal.(string); ok {
+					result[k] = generateDummyValueFromString(typeStr)
+				} else {
+					result[k] = generateDummyValueFromString("string")
+				}
+			} else {
+				// This is a nested object, recurse
+				d, err := generateDummyData(val)
+				if err != nil {
+					return nil, err
+				}
+				result[k] = d
 			}
-			result[k] = d
 		case []any:
 			// Array type: [object] or [type name]
 			if len(val) == 1 {
@@ -534,6 +613,27 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 			return detailResult, originalResult
 		}
 	case map[string]any:
+		// Check if this is a JSON parameter structure (has "type" field)
+		if typeVal, hasType := val["type"]; hasType {
+			// This is a JSON parameter definition like {"type": "int", "description": "...", "optional": true}
+			typeStr, ok := typeVal.(string)
+			if !ok {
+				errs.Add(fmt.Errorf("%w: parameter type is not string: %v", ErrInvalidForSnapSQL, typeVal))
+				return "string", val // Return original structure for OriginalParameters
+			}
+			
+			// Check if it's a common type reference
+			resolvedType, _ := f.resolveCommonTypeRef(typeStr)
+			if resolvedType != nil {
+				return resolvedType, val // Return original structure for OriginalParameters
+			}
+			
+			// Return the normalized type string, but preserve original structure
+			normalizedType := normalizeTypeString(typeStr)
+			return normalizedType, val // Return original structure for OriginalParameters
+		}
+		
+		// Regular map processing (for nested objects)
 		detailResult := make(map[string]any)
 		originalResult := make(map[string]any)
 		for k, v := range val {

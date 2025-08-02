@@ -675,7 +675,9 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) *Directive {
 
 	// If it starts with /*=
 	if strings.HasPrefix(trimmed, "/*=") && strings.HasSuffix(trimmed, "*/") {
-		return &Directive{Type: "variable"}
+		// Extract the condition between /*= and */
+		condition := strings.TrimSpace(trimmed[3 : len(trimmed)-2])
+		return &Directive{Type: "variable", Condition: condition}
 	}
 
 	return nil
