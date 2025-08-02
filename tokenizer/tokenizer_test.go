@@ -576,7 +576,7 @@ func TestTokenizerSnapSQLDirectives(t *testing.T) {
 				type_     string
 				condition string
 			}{
-				{type_: "variable", condition: ""},
+				{type_: "variable", condition: "user.name"},
 			},
 		},
 		{
@@ -607,7 +607,7 @@ func TestTokenizerSnapSQLDirectives(t *testing.T) {
 				type_     string
 				condition string
 			}{
-				{type_: "variable", condition: ""},
+				{type_: "variable", condition: "user.id"},
 				{type_: "const", condition: ""},
 				{type_: "if", condition: "status"},
 				{type_: "end", condition: ""},

@@ -61,6 +61,36 @@ func TestFinalizeLimitOffsetClause(t *testing.T) {
 			src:     "SELECT * FROM users LIMIT 20, 10",
 			wantErr: true,
 		},
+		{
+			name:    "LIMIT with CEL expression",
+			src:     "SELECT * FROM users LIMIT /*= limit != 0 ? limit : 10 */10",
+			wantErr: false,
+		},
+		{
+			name:    "OFFSET with CEL expression",
+			src:     "SELECT * FROM users LIMIT 10 OFFSET /*= page > 0 ? (page - 1) * 10 : 0 */0",
+			wantErr: false,
+		},
+		{
+			name:    "Both LIMIT and OFFSET with CEL expressions",
+			src:     "SELECT * FROM users LIMIT /*= limit != 0 ? limit : 10 */10 OFFSET /*= page > 0 ? (page - 1) * 10 : 0 */0",
+			wantErr: false,
+		},
+		{
+			name:    "LIMIT with CEL expression",
+			src:     "SELECT * FROM users LIMIT /*= limit != 0 ? limit : 10 */10",
+			wantErr: false,
+		},
+		{
+			name:    "OFFSET with CEL expression",
+			src:     "SELECT * FROM users LIMIT 10 OFFSET /*= page > 0 ? (page - 1) * 10 : 0 */0",
+			wantErr: false,
+		},
+		{
+			name:    "Both LIMIT and OFFSET with CEL expressions",
+			src:     "SELECT * FROM users LIMIT /*= limit != 0 ? limit : 10 */10 OFFSET /*= page > 0 ? (page - 1) * 10 : 0 */0",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

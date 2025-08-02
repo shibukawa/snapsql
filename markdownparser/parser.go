@@ -3,6 +3,7 @@ package markdownparser
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -22,7 +23,8 @@ var (
 // SnapSQLDocument represents the parsed SnapSQL markdown document
 type SnapSQLDocument struct {
 	Metadata       map[string]any
-	ParameterBlock string
+	ParametersText string // Raw parameter text (YAML/JSON)
+	ParametersType string // "yaml", "json", etc.
 	SQL            string
 	SQLStartLine   int // Line number where SQL code block starts
 	TestCases      []TestCase
@@ -84,11 +86,26 @@ func Parse(reader io.Reader) (*SnapSQLDocument, error) {
 		document.SQLStartLine = startLine
 	}
 
+	// Extract description if present and not already in metadata
+	if document.Metadata["description"] == nil {
+		if descSection, exists := sections["description"]; exists {
+			descText, err := extractTextFromASTNodes(descSection.Content, []byte(contentWithoutFrontMatter))
+			if err == nil && strings.TrimSpace(descText) != "" {
+				document.Metadata["description"] = strings.TrimSpace(descText)
+			}
+		}
+	}
+
 	// Extract parameters if present
 	parameterSectionNames := []string{"parameters", "params", "parameter"}
 	for _, sectionName := range parameterSectionNames {
 		if paramSection, exists := sections[sectionName]; exists {
-			document.ParameterBlock = extractParameterBlock(paramSection.Content, []byte(contentWithoutFrontMatter))
+			paramText, paramType, err := extractParameterTextFromASTNodes(paramSection.Content, []byte(contentWithoutFrontMatter))
+			if err != nil {
+				return nil, fmt.Errorf("failed to extract parameters: %w", err)
+			}
+			document.ParametersText = paramText
+			document.ParametersType = paramType
 			break
 		}
 	}

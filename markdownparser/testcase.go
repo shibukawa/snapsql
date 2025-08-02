@@ -57,9 +57,9 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 					text := extractTextFromNode(emphasis, content)
 					text = strings.ToLower(strings.TrimSpace(text))
 
-					if strings.HasPrefix(text, "parameters:") || text == "params:" {
+					if strings.HasPrefix(text, "parameters:") || text == "params:" || strings.HasPrefix(text, "input parameters:") {
 						currentSection = TestSection{Type: "parameters"}
-					} else if strings.HasPrefix(text, "expected:") || strings.HasPrefix(text, "expected results:") || text == "results:" {
+					} else if strings.HasPrefix(text, "expected:") || strings.HasPrefix(text, "expected results:") || strings.HasPrefix(text, "expected result:") || text == "results:" {
 						currentSection = TestSection{Type: "expected"}
 					} else if strings.HasPrefix(text, "fixtures") {
 						currentSection = TestSection{Type: "fixtures"}
@@ -122,7 +122,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 	return testCases, nil
 }
 
-// findFirstEmphasis finds the first emphasis node in a paragraph
+// findFirstEmphasis finds the first emphasis node (italic or bold) in a paragraph
 func findFirstEmphasis(paragraph *ast.Paragraph) *ast.Emphasis {
 	var emphasis *ast.Emphasis
 	ast.Walk(paragraph, func(n ast.Node, entering bool) (ast.WalkStatus, error) {

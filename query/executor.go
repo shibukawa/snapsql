@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -82,15 +83,7 @@ func NewExecutor(db *sql.DB) *Executor {
 	}
 }
 
-// LoadIntermediateFormat loads an intermediate format from a file
-func LoadIntermediateFormat(templateFile string) (*intermediate.IntermediateFormat, error) {
-	// Read the file
-	data, err := intermediate.FromJSON([]byte(templateFile))
-	if err != nil {
-		return nil, fmt.Errorf("failed to load template: %w", err)
-	}
-	return data, nil
-}
+// LoadIntermediateFormat is now implemented in template_loader.go
 
 // ExecuteWithTemplate executes a query using a template file
 func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string, params map[string]interface{}, options QueryOptions) (*QueryResult, error) {
@@ -125,50 +118,94 @@ func IsDangerousQuery(sql string) bool {
 	return false
 }
 
-// Compiler is a simple interface for SQL template compilation
-type Compiler interface {
-	CompileInstructions(instructions []intermediate.Instruction) error
-	Execute(params map[string]interface{}) (string, []interface{}, error)
+// buildSQLFromOptimized builds SQL from optimized instructions
+func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]interface{}) (string, []interface{}, error) {
+	var builder strings.Builder
+	var args []interface{}
+
+	// Create parameter map for evaluation
+	paramMap := make(map[string]interface{})
+	for k, v := range params {
+		paramMap[k] = v
+	}
+
+	// Create CEL programs for expressions
+	celPrograms := make(map[int]*cel.Program)
+	env, err := cel.NewEnv()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create CEL environment: %w", err)
+	}
+
+	for i, expr := range format.CELExpressions {
+		ast, issues := env.Compile(expr.Expression)
+		if issues.Err() != nil {
+			return "", nil, fmt.Errorf("failed to compile expression %d (%s): %w", i, expr.Expression, issues.Err())
+		}
+		program, err := env.Program(ast)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to create program for expression %d: %w", i, err)
+		}
+		celPrograms[i] = &program
+	}
+
+	// Process optimized instructions
+	for _, inst := range instructions {
+		switch inst.Op {
+		case "EMIT_STATIC":
+			builder.WriteString(inst.Value)
+
+		case "ADD_PARAM":
+			if inst.ExprIndex != nil {
+				program, exists := celPrograms[*inst.ExprIndex]
+				if !exists {
+					return "", nil, fmt.Errorf("expression index %d not found", *inst.ExprIndex)
+				}
+
+				// Evaluate expression
+				result, _, err := (*program).Eval(paramMap)
+				if err != nil {
+					return "", nil, fmt.Errorf("failed to evaluate expression %d: %w", *inst.ExprIndex, err)
+				}
+
+				builder.WriteString("?")
+				args = append(args, result.Value())
+			}
+
+		default:
+			// For now, ignore other operations (they should be handled by optimization)
+		}
+	}
+
+	return builder.String(), args, nil
 }
 
-// SimpleCompiler is a basic implementation of the Compiler interface
-type SimpleCompiler struct {
-	instructions []intermediate.Instruction
-}
-
-// NewCompiler creates a new SimpleCompiler
-func NewCompiler() *SimpleCompiler {
-	return &SimpleCompiler{}
-}
-
-// CompileInstructions compiles the given instructions
-func (c *SimpleCompiler) CompileInstructions(instructions []intermediate.Instruction) error {
-	c.instructions = instructions
-	return nil
-}
-
-// Execute executes the compiled instructions with the given parameters
-func (c *SimpleCompiler) Execute(params map[string]interface{}) (string, []interface{}, error) {
-	// This is a simplified implementation
-	// In a real implementation, this would execute the instructions
-	// For now, we'll just return a placeholder SQL
-	return "SELECT 1", nil, nil
+// getDialectFromDriver converts database driver name to dialect
+func getDialectFromDriver(driver string) string {
+	switch driver {
+	case "postgres", "pgx":
+		return "postgresql"
+	case "mysql":
+		return "mysql"
+	case "sqlite3":
+		return "sqlite"
+	default:
+		return "postgresql" // default
+	}
 }
 
 // Execute executes a query using an intermediate format
 func (e *Executor) Execute(ctx context.Context, format *intermediate.IntermediateFormat, params map[string]interface{}, options QueryOptions) (*QueryResult, error) {
-	// Create a compiler
-	compiler := NewCompiler()
-
-	// Compile the template
-	if err := compiler.CompileInstructions(format.Instructions); err != nil {
-		return nil, fmt.Errorf("failed to compile template: %w", err)
+	// Generate SQL from intermediate format using optimized instructions
+	dialect := getDialectFromDriver(options.Driver)
+	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
+	if err != nil {
+		return nil, fmt.Errorf("failed to optimize instructions: %w", err)
 	}
 
-	// Execute the template with parameters
-	sql, args, err := compiler.Execute(params)
+	// Build SQL and arguments
+	sql, args, err := e.buildSQLFromOptimized(optimizedInstructions, format, params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute template: %w", err)
+		return nil, fmt.Errorf("failed to build SQL: %w", err)
 	}
 
 	// Check for dangerous queries

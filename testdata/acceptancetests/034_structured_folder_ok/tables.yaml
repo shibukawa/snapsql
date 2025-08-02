@@ -1,0 +1,25 @@
+tables:
+  users:
+    columns:
+      id:
+        type: int
+        primary_key: true
+      name:
+        type: string
+      email:
+        type: string
+      created_at:
+        type: time
+  orders:
+    columns:
+      id:
+        type: int
+        primary_key: true
+      user_id:
+        type: int
+      total:
+        type: decimal
+      status:
+        type: string
+      created_at:
+        type: time

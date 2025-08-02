@@ -20,6 +20,16 @@ var (
 	)
 )
 
+// hasCELExpression checks if the tokens contain CEL expressions (variable directives)
+func hasCELExpression(tokens []tok.Token) bool {
+	for _, token := range tokens {
+		if token.Directive != nil && token.Directive.Type == "variable" {
+			return true
+		}
+	}
+	return false
+}
+
 // finalizeLimitOffsetClause finalizes the LIMIT and OFFSET clauses.
 func finalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.OffsetClause, perr *cmn.ParseError) {
 	// OFFSET without LIMIT is not allowed (MySQL/SQLite behavior)
@@ -53,6 +63,19 @@ func finalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.O
 
 	// Validate each clause
 	for i, pTokens := range inputs {
+		// Skip validation if CEL expressions are present
+		originalTokens := []tok.Token{}
+		if i == 0 && limitClause != nil {
+			originalTokens = limitClause.ContentTokens()
+		} else if offsetClause != nil {
+			originalTokens = offsetClause.ContentTokens()
+		}
+		
+		if hasCELExpression(originalTokens) {
+			// Skip number validation for clauses with CEL expressions
+			continue
+		}
+
 		pctx := pc.NewParseContext[tok.Token]()
 
 		_, match, err := number(pctx, pTokens)
@@ -82,6 +105,11 @@ func finalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.O
 // finalizeOffsetClause finalizes the OFFSET clause when used without LIMIT.
 func finalizeOffsetClause(offsetClause *cmn.OffsetClause, perr *cmn.ParseError) {
 	if offsetClause == nil {
+		return
+	}
+
+	// Skip validation if CEL expressions are present
+	if hasCELExpression(offsetClause.ContentTokens()) {
 		return
 	}
 
