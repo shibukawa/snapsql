@@ -1,9 +1,7 @@
 [
   {
-    "active": true,
-    "created_at": "2024-01-15T10:30:00Z",
-    "email": "user@example.com",
-    "id": 1,
-    "name": "Sample User"
+    "id": 123,
+    "name": "John Doe",
+    "age": 30
   }
 ]

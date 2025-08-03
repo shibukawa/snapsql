@@ -1,3 +1,8 @@
+---
+function_name: find_user
+response_affinity: one
+---
+
 # Find User Query
 
 ## Description
@@ -6,13 +11,13 @@ This query finds a user by their ID.
 
 ## Parameters
 
-- user_id: int
+```yaml
+user_id: int
+```
 
 ## SQL
 
 ```sql
--- @name: find_user
--- @affinity: one
 SELECT
     id,
     name,
@@ -26,32 +31,28 @@ WHERE
 ## Test Cases
 
 ### Test Case 1: Find existing user
-**Input Parameters:**
-```json
-{
-    "user_id": 123
-}
+
+**Parameters:**
+```yaml
+user_id: 123
 ```
 
-**Expected Result:**
+**Expected Results:**
 ```yaml
-# Mock data for find_user
 - id: 123
   name: "John Doe"
   age: 30
 ```
 
 ### Test Case 2: Find young user
-**Input Parameters:**
-```json
-{
-    "user_id": 456
-}
+
+**Parameters:**
+```yaml
+user_id: 456
 ```
 
-**Expected Result:**
+**Expected Results:**
 ```yaml
-# Mock data for find_user
 - id: 456
   name: "Jane Smith"
   age: 25

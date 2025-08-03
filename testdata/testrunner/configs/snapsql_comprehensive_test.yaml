@@ -1,0 +1,11 @@
+dialect: sqlite
+
+databases:
+  development:
+    driver: sqlite3
+    connection: "./test_comprehensive.db"
+    schema: main
+
+generation:
+  validate: true
+  generate_mock_data: false

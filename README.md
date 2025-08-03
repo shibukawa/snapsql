@@ -93,8 +93,8 @@ cd my-project
 # Generate intermediate files
 snapsql generate
 
-# Test a query with dry-run
-snapsql query queries/users.snap.sql --dry-run --params-file params.json
+# Test a query with dry-run (using testdata examples)
+snapsql query testdata/markdown/test_example.md --dry-run --params-file params.json
 ```
 
 ### Example Template
