@@ -1,0 +1,10 @@
+User: # User information with profile
+  id: int # User ID
+  name: string # User name
+  email: string # Email address
+  profile_id: int # Profile ID
+
+Profile: # Profile information
+  id: int # Profile ID
+  bio: string # Biography
+  avatar_url: string # Avatar URL

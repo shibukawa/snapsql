@@ -1,0 +1,4 @@
+Settings: # Settings information
+  id: int # Settings ID
+  theme: string # Theme preference
+  language: string # Language preference

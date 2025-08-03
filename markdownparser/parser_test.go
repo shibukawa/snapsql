@@ -291,15 +291,16 @@ id,name
 }
 
 func TestInvalidFixturesFormat(t *testing.T) {
+	// Test that YAML fixtures with table names are now supported
 	input := `---
-function_name: "test_invalid_fixtures"
+function_name: "test_valid_fixtures"
 ---
 
-# Test Invalid Fixtures Format
+# Test Valid Fixtures Format
 
 ## Description
 
-Test invalid fixtures format.
+Test valid fixtures format with table name.
 
 ## SQL
 
@@ -309,7 +310,7 @@ SELECT * FROM users
 
 ## Test Cases
 
-### Test: Invalid Fixtures Format
+### Test: Valid Fixtures Format with Table Name
 
 **Parameters:**
 ` + "```yaml" + `
@@ -329,9 +330,17 @@ user_id: 1
 ` + "```" + `
 `
 
-	_, err := Parse(strings.NewReader(input))
-	assert.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), "table name can only be specified for CSV fixtures"))
+	result, err := Parse(strings.NewReader(input))
+	assert.NoError(t, err)
+	assert.True(t, result != nil)
+	assert.True(t, len(result.TestCases) == 1)
+	
+	testCase := result.TestCases[0]
+	assert.Equal(t, "Test: Valid Fixtures Format with Table Name", testCase.Name)
+	_, exists := testCase.Fixture["users"]
+	assert.True(t, exists)
+	assert.True(t, len(testCase.Fixture["users"]) == 1)
+	assert.Equal(t, "John", testCase.Fixture["users"][0]["name"])
 }
 
 func TestInvalidCombinations(t *testing.T) {
