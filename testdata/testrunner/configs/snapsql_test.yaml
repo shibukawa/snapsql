@@ -1,0 +1,65 @@
+# SnapSQL Configuration for Testing
+dialect: sqlite
+
+# Input directory for SQL templates
+input_dir: "./queries"
+
+# Database connections
+databases:
+  development:
+    driver: sqlite3
+    connection: "./test.db"
+    schema: main
+  
+  test:
+    driver: sqlite3
+    connection: "./test.db"
+    schema: main
+    
+  production:
+    driver: postgres
+    connection: "postgresql://user:password@localhost:5432/mydb"
+    schema: public
+
+# Code generation settings
+generation:
+  validate: true
+  generate_mock_data: true
+  
+  generators:
+    json:
+      output: "./generated"
+      enabled: true
+      pretty: true
+      include_metadata: true
+    
+    go:
+      output: "./internal/queries"
+      enabled: false
+      package: "queries"
+      preserve_hierarchy: true
+      mock_path: "./testdata/mocks"
+      generate_tests: false
+
+# Validation settings
+validation:
+  strict_mode: true
+  check_unused_parameters: true
+  check_missing_parameters: true
+
+# Query execution settings
+query:
+  timeout: 30
+  max_rows: 10000
+  explain: false
+  explain_analyze: false
+
+# System settings
+system:
+  fields:
+    - name: "created_at"
+      type: "timestamp"
+    - name: "updated_at"
+      type: "timestamp"
+    - name: "version"
+      type: "integer"

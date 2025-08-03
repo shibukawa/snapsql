@@ -35,6 +35,27 @@ func parseParameters(content []byte) (map[string]any, error) {
 	return params, nil
 }
 
+// parseYAMLData parses YAML data into a slice of maps
+func parseYAMLData(content []byte, result *[]map[string]any) error {
+	content = bytes.TrimSpace(content)
+	if len(content) == 0 {
+		return fmt.Errorf("empty content")
+	}
+
+	if err := yaml.Unmarshal(content, result); err != nil {
+		return fmt.Errorf("failed to parse YAML data: %w", err)
+	}
+
+	// Normalize values
+	for i, row := range *result {
+		for k, v := range row {
+			(*result)[i][k] = normalizeValue(v)
+		}
+	}
+
+	return nil
+}
+
 // parseStructuredData parses data in various formats into a map of table names to rows
 func parseStructuredData(content []byte, format string) (map[string][]map[string]any, error) {
 	content = bytes.TrimSpace(content)

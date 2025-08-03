@@ -27,12 +27,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// FindUserQuery specific CEL programs and mock path
+// FindUser specific CEL programs and mock path
 var (
-	finduserqueryPrograms []cel.Program
+	finduserPrograms []cel.Program
 )
 
-const finduserqueryMockPath = ""
+const finduserMockPath = ""
 
 func init() {
 
@@ -46,12 +46,12 @@ func init() {
 		cel.Variable("user_id", cel.IntType),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create FindUserQuery CEL environment 0: %v", err))
+		panic(fmt.Sprintf("failed to create FindUser CEL environment 0: %v", err))
 	}
 	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
-	finduserqueryPrograms = make([]cel.Program, 1)
+	finduserPrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -62,19 +62,19 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
 		}
-		finduserqueryPrograms[0] = program
+		finduserPrograms[0] = program
 	}
 }
-// FindUserQuery - interface{} Affinity
-func FindUserQuery(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
+// FindUser - interface{} Affinity
+func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
 	var result interface{}
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduserquery", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduser", "interface{}")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(finduserqueryMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(finduserMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}

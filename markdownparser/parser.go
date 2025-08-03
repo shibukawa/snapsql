@@ -20,6 +20,19 @@ var (
 	ErrDuplicateExpectedResults = fmt.Errorf("duplicate expected results section")
 )
 
+// ParseOptions contains options for parsing markdown documents
+type ParseOptions struct {
+	// DatabaseOverride allows overriding the database connection info
+	DatabaseOverride *DatabaseConfig
+}
+
+// DatabaseConfig represents database connection configuration
+type DatabaseConfig struct {
+	Driver     string
+	Connection string
+	Dialect    string
+}
+
 // SnapSQLDocument represents the parsed SnapSQL markdown document
 type SnapSQLDocument struct {
 	Metadata       map[string]any
@@ -32,6 +45,11 @@ type SnapSQLDocument struct {
 
 // Parse parses a markdown query file and returns a SnapSQLDocument
 func Parse(reader io.Reader) (*SnapSQLDocument, error) {
+	return ParseWithOptions(reader, nil)
+}
+
+// ParseWithOptions parses a markdown query file with custom options
+func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument, error) {
 	// Read all content
 	content, err := io.ReadAll(reader)
 	if err != nil {
@@ -42,6 +60,17 @@ func Parse(reader io.Reader) (*SnapSQLDocument, error) {
 	frontMatter, contentWithoutFrontMatter, err := parseFrontMatter(string(content))
 	if err != nil {
 		return nil, err
+	}
+
+	// Apply database override if provided
+	if options != nil && options.DatabaseOverride != nil {
+		if frontMatter == nil {
+			frontMatter = make(map[string]any)
+		}
+		frontMatter["dialect"] = options.DatabaseOverride.Dialect
+		// Store connection info for test runners
+		frontMatter["_test_driver"] = options.DatabaseOverride.Driver
+		frontMatter["_test_connection"] = options.DatabaseOverride.Connection
 	}
 
 	// Create parser
