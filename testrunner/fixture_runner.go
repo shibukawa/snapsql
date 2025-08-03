@@ -208,8 +208,8 @@ func (ftr *FixtureTestRunner) parseTestFile(filePath string) (*TestFileInfo, err
 
 	// Parse parameters from parameter block if present
 	parameters := make(map[string]any)
-	if doc.ParameterBlock != "" {
-		// TODO: Parse YAML parameters from ParameterBlock
+	if doc.ParametersText != "" {
+		// TODO: Parse YAML parameters from ParametersText
 		// For now, leave empty
 	}
 
