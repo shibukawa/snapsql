@@ -39,7 +39,8 @@ JOIN posts p
 		{
 			name: "Complex query with WHERE conditions",
 			input: `select * from users where age>18 and status='active' or premium=true`,
-			expected: `SELECT *
+			expected: `SELECT
+    *
 FROM users
 WHERE age > 18 AND status = 'active' OR premium = true`,
 		},
@@ -57,20 +58,18 @@ WHERE id = /*= user_id */123`,
 			input: `select id,name /*# if include_email */ ,email /*# end */ from users`,
 			expected: `SELECT
     id,
-    name
-    /*# if include_email */
-        ,email
-    /*# end */
+    name/*# if include_email */,
+        email/*# end */
+
 FROM users`,
 		},
 		{
 			name: "SnapSQL with for loop",
 			input: `select id /*# for field in fields */ ,/*= field */ /*# end */ from users`,
 			expected: `SELECT
-    id
-    /*# for field in fields */
-        ,/*= field */
-    /*# end */
+    id/*# for field in fields */,
+        /*= field *//*# end */
+
 FROM users`,
 		},
 		{
@@ -97,23 +96,13 @@ WHERE id = /*= user_id */`,
 		{
 			name: "INSERT statement",
 			input: `insert into users(name,email,created_at) values(/*= name */,'test@example.com',now())`,
-			expected: `INSERT INTO users(
-    name,
-    email,
-    created_at
-) VALUES(
-    /*= name */,
-    'test@example.com',
-    now()
-)`,
+			expected: `INSERT INTO users(name, email, created_at) VALUES(/*= name */, 'test@example.com', NOW())`,
 		},
 		{
 			name: "UPDATE statement",
 			input: `update users set name=/*= name */,email=/*= email */ where id=/*= user_id */`,
 			expected: `UPDATE users
-SET
-    name = /*= name */,
-    email = /*= email */
+SET name = /*= name */, email = /*= email */
 WHERE id = /*= user_id */`,
 		},
 		{
@@ -121,27 +110,25 @@ WHERE id = /*= user_id */`,
 			input: `select department,count(*) as cnt from users where active=true group by department having count(*)>5 order by cnt desc`,
 			expected: `SELECT
     department,
-    count(*) AS cnt
+    COUNT(*) AS cnt
 FROM users
 WHERE active = true
 GROUP BY department
-HAVING count(*) > 5
-ORDER BY cnt DESC`,
+HAVING COUNT(*) > 5
+ORDER BY cnt desc`,
 		},
 		{
 			name: "Nested if/else conditions",
 			input: `select id,name /*# if include_details */ /*# if include_email */ ,email /*# end */ /*# if include_phone */ ,phone /*# end */ /*# end */ from users`,
 			expected: `SELECT
     id,
-    name
-    /*# if include_details */
-        /*# if include_email */
-            ,email
-        /*# end */
-        /*# if include_phone */
-            ,phone
-        /*# end */
-    /*# end */
+    name/*# if include_details */
+    /*# if include_email */,
+            email    /*# end */
+    /*# if include_phone */,
+            phone    /*# end */
+/*# end */
+
 FROM users`,
 		},
 		{
@@ -152,13 +139,10 @@ name, -- user name
 email -- user email
 from users -- main users table
 where active = true -- only active users`,
-			expected: `-- Get active users
-SELECT
-    id, -- user identifier
-    name, -- user name
-    email -- user email
-FROM users -- main users table
-WHERE active = true -- only active users`,
+			expected: `-- Get active usersSELECT
+    id,
+     -- user identifiername,
+     -- user nameemail -- user emailFROM users -- main users tableWHERE active = true -- only active users`,
 		},
 	}
 

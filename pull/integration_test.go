@@ -160,7 +160,7 @@ func TestMySQLIntegration(t *testing.T) {
 		mysql.WithPassword("testpass"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("port: 3306  MySQL Community Server").
-				WithStartupTimeout(60*time.Second)),
+				WithStartupTimeout(120*time.Second)),
 	)
 	assert.NoError(t, err)
 	defer func() {

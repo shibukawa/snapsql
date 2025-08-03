@@ -645,7 +645,6 @@ ORDER BY /*= sort_by */name
 /*# if page_size */
 LIMIT /*= page_size */10
 /*# end */`
-	t.Skip()
 	// Tokenize the SQL
 	tokens, err := tok.Tokenize(sql)
 	assert.NoError(t, err)

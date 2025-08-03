@@ -61,7 +61,7 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 		Timeout:  time.Minute,
 	}
 
-	result, err := executor.ExecuteTest(testCase, options)
+	result, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -132,7 +132,7 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 		Timeout:  time.Minute,
 	}
 
-	result, err := executor.ExecuteTest(testCase, options)
+	result, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/stretchr/testify/require"
 	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
@@ -50,7 +51,7 @@ func TestSystemFieldIntegration_Simple(t *testing.T) {
 	}
 
 	// Parse actual UPDATE statement with function definition
-	sql := `/*
+	sql := `/*#
 name: UpdateUser
 function_name: updateUser
 description: Update user information
@@ -62,10 +63,7 @@ UPDATE users SET name = 'Updated Name', email = 'updated@example.com' WHERE id =
 	reader := strings.NewReader(sql)
 
 	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "")
-	if err != nil {
-		t.Skipf("Parser not fully implemented yet: %v", err)
-		return
-	}
+	require.NoError(t, err, "Failed to parse SQL")
 
 	// Cast to UpdateStatement
 	updateStmt, ok := stmt.(*parsercommon.UpdateStatement)
@@ -131,7 +129,7 @@ func TestSystemFieldIntegration_InsertStatement(t *testing.T) {
 	}
 
 	// Parse actual INSERT statement with function definition
-	sql := `/*
+	sql := `/*#
 name: InsertUser
 function_name: insertUser
 description: Insert new user
@@ -143,10 +141,7 @@ INSERT INTO users (name, email) VALUES ('John', 'john@example.com')`
 	reader := strings.NewReader(sql)
 
 	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "")
-	if err != nil {
-		t.Skipf("Parser not fully implemented yet: %v", err)
-		return
-	}
+	require.NoError(t, err, "Failed to parse SQL")
 
 	parameters := []Parameter{
 		{Name: "name", Type: "string"},
