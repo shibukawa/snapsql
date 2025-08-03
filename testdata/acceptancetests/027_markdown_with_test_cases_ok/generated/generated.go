@@ -65,7 +65,7 @@ func init() {
 		finduserPrograms[0] = program
 	}
 }
-// FindUser - interface{} Affinity
+// FindUser This query finds a user by their ID.
 func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
 	var result interface{}
 

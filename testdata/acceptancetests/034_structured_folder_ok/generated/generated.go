@@ -26,6 +26,13 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
+// FindUserByIDResult represents the response structure for FindUserByID
+type FindUserByIDResult struct {
+	ID int `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+}
 
 // FindUserByID specific CEL programs and mock path
 var (
@@ -66,11 +73,11 @@ func init() {
 	}
 }
 // FindUserByID Find a user by their ID from hierarchical structure
-func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (FindUserByIDResult, error) {
+	var result FindUserByIDResult
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduserbyid", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduserbyid", "finduserbyidresult")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -79,9 +86,9 @@ func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[FindUserByIDResult](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to FindUserByIDResult struct: %w", err)
 		}
 
 		return result, nil
@@ -99,15 +106,17 @@ func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
-	rows, err := stmt.QueryContext(ctx, args...)
+	// Execute query and scan single row
+	row := stmt.QueryRowContext(ctx, args...)
+	err = row.Scan(
+	    &result.ID,
+	    &result.Name,
+	    &result.Email,
+	    &result.CreatedAt
+	)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute query: %w", err)
+	    return result, fmt.Errorf("failed to scan row: %w", err)
 	}
-	defer rows.Close()
-	
-	// Generic scan for interface{} result - not implemented
-	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }

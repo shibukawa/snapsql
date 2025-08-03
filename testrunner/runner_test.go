@@ -113,7 +113,7 @@ func TestFindTestPackages(t *testing.T) {
 
 func TestRunPackageTests(t *testing.T) {
 	// This test requires a real Go environment
-	// We'll test with the current package
+	// We'll test with a simple package to avoid infinite recursion
 	wd, err := os.Getwd()
 	require.NoError(t, err)
 	
@@ -123,12 +123,12 @@ func TestRunPackageTests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	
-	// Test running tests for the testrunner package itself
-	result := runner.runPackageTests(ctx, "./testrunner")
+	// Test running tests for the tokenizer package (simple, fast tests)
+	result := runner.runPackageTests(ctx, "./tokenizer")
 	
 	// The test should complete (success or failure doesn't matter for this test)
 	assert.NotEmpty(t, result.Package)
-	assert.Equal(t, "./testrunner", result.Package)
+	assert.Equal(t, "./tokenizer", result.Package)
 	assert.Greater(t, result.Duration, time.Duration(0))
 	// Don't assert on output being non-empty as it might be empty in some cases
 }
