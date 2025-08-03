@@ -23,13 +23,13 @@ type Context struct {
 
 // TestCmd represents the test command
 type TestCmd struct {
-	RunPattern   string `help:"Run only tests matching the regular expression" short:"r"`
-	Timeout      string `help:"Test timeout duration" default:"10m"`
-	Parallel     int    `help:"Number of parallel workers" default:"0"` // 0 means use CPU count
-	FixtureOnly  bool   `help:"Execute only fixture insertion and commit (requires --run pattern)"`
-	QueryOnly    bool   `help:"Execute only queries without fixtures"`
-	Commit       bool   `help:"Commit transactions instead of rollback"`
-	Environment  string `help:"Database environment to use from config" default:"development"`
+	RunPattern  string `help:"Run only tests matching the regular expression" short:"r"`
+	Timeout     string `help:"Test timeout duration" default:"10m"`
+	Parallel    int    `help:"Number of parallel workers" default:"0"` // 0 means use CPU count
+	FixtureOnly bool   `help:"Execute only fixture insertion and commit (requires --run pattern)"`
+	QueryOnly   bool   `help:"Execute only queries without fixtures"`
+	Commit      bool   `help:"Commit transactions instead of rollback"`
+	Environment string `help:"Database environment to use from config" default:"development"`
 }
 
 // Run executes the test command
@@ -213,6 +213,7 @@ var CLI struct {
 	Pull     PullCmd     `cmd:"" help:"Pull schema information from database"`
 	Query    QueryCmd    `cmd:"" help:"Execute SQL queries"`
 	Test     TestCmd     `cmd:"" help:"Run tests"`
+	Format   FormatCmd   `cmd:"" help:"Format SnapSQL template files"`
 	Version  VersionCmd  `cmd:"" help:"Show version information"`
 }
 
