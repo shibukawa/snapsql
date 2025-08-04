@@ -25,18 +25,18 @@ func NewMarkdownFormatter() *MarkdownFormatter {
 func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 	var result strings.Builder
 	scanner := bufio.NewScanner(strings.NewReader(markdown))
-	
+
 	var inSQLBlock bool
 	var sqlBlockContent strings.Builder
 	var blockIndent string
-	
+
 	// Regular expressions for SQL code blocks
 	sqlBlockStartRe := regexp.MustCompile(`^(\s*)\x60{3}sql\s*$`)
 	codeBlockEndRe := regexp.MustCompile(`^(\s*)\x60{3}\s*$`)
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		if !inSQLBlock {
 			// Check if this line starts a SQL code block
 			if match := sqlBlockStartRe.FindStringSubmatch(line); match != nil {
@@ -47,7 +47,7 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 				result.WriteString("\n")
 				continue
 			}
-			
+
 			// Regular line, just copy it
 			result.WriteString(line)
 			result.WriteString("\n")
@@ -56,7 +56,7 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 			if match := codeBlockEndRe.FindStringSubmatch(line); match != nil {
 				// End of SQL code block
 				inSQLBlock = false
-				
+
 				// Format the accumulated SQL content
 				sqlContent := sqlBlockContent.String()
 				if strings.TrimSpace(sqlContent) != "" {
@@ -65,7 +65,7 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 						// If formatting fails, use original content
 						formattedSQL = sqlContent
 					}
-					
+
 					// Add the formatted SQL with proper indentation
 					sqlLines := strings.Split(strings.TrimRight(formattedSQL, "\n"), "\n")
 					for _, sqlLine := range sqlLines {
@@ -76,7 +76,7 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 						result.WriteString("\n")
 					}
 				}
-				
+
 				// Add the closing code block marker
 				result.WriteString(line)
 				result.WriteString("\n")
@@ -91,11 +91,11 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 			}
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return "", fmt.Errorf("error reading markdown: %w", err)
 	}
-	
+
 	return strings.TrimRight(result.String(), "\n"), nil
 }
 
@@ -122,7 +122,7 @@ func (f *MarkdownFormatter) FormatFromReader(reader io.Reader, writer io.Writer)
 func IsMarkdownFile(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	base := strings.ToLower(filepath.Base(filename))
-	
+
 	// Check for .snap.md or .md extensions
 	return strings.HasSuffix(base, ".snap.md") || ext == ".md"
 }
@@ -131,20 +131,20 @@ func IsMarkdownFile(filename string) bool {
 func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, error) {
 	var result strings.Builder
 	scanner := bufio.NewScanner(strings.NewReader(markdown))
-	
+
 	var inSQLSection bool
 	var inCodeBlock bool
 	var sqlContent strings.Builder
 	var sectionIndent string
-	
+
 	// Regular expressions for SnapSQL Markdown sections
 	sqlSectionRe := regexp.MustCompile(`^(\s*)##\s+SQL\s*$`)
 	sectionHeaderRe := regexp.MustCompile(`^(\s*)##\s+`)
 	codeBlockRe := regexp.MustCompile(`^(\s*)\x60{3}(sql)?\s*$`)
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		if !inSQLSection {
 			// Check if this line starts the SQL section
 			if match := sqlSectionRe.FindStringSubmatch(line); match != nil {
@@ -154,7 +154,7 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 				result.WriteString("\n")
 				continue
 			}
-			
+
 			// Regular line, just copy it
 			result.WriteString(line)
 			result.WriteString("\n")
@@ -164,18 +164,18 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 				// New section started, end SQL section
 				inSQLSection = false
 				inCodeBlock = false
-				
+
 				// Process any accumulated SQL content
 				if sqlContent.Len() > 0 {
 					f.processSQLContent(&result, sqlContent.String(), sectionIndent)
 					sqlContent.Reset()
 				}
-				
+
 				result.WriteString(line)
 				result.WriteString("\n")
 				continue
 			}
-			
+
 			if !inCodeBlock {
 				// Check if this line starts a code block
 				if match := codeBlockRe.FindStringSubmatch(line); match != nil {
@@ -185,7 +185,7 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 					result.WriteString("\n")
 					continue
 				}
-				
+
 				// Regular line in SQL section
 				result.WriteString(line)
 				result.WriteString("\n")
@@ -194,13 +194,13 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 				if codeBlockRe.MatchString(line) {
 					// End of code block
 					inCodeBlock = false
-					
+
 					// Format the accumulated SQL content
 					if sqlContent.Len() > 0 {
 						f.processSQLContent(&result, sqlContent.String(), sectionIndent)
 						sqlContent.Reset()
 					}
-					
+
 					result.WriteString(line)
 					result.WriteString("\n")
 				} else {
@@ -211,16 +211,16 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 			}
 		}
 	}
-	
+
 	// Handle case where file ends while in SQL section
 	if inSQLSection && sqlContent.Len() > 0 {
 		f.processSQLContent(&result, sqlContent.String(), sectionIndent)
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return "", fmt.Errorf("error reading markdown: %w", err)
 	}
-	
+
 	return strings.TrimRight(result.String(), "\n"), nil
 }
 
@@ -229,13 +229,13 @@ func (f *MarkdownFormatter) processSQLContent(result *strings.Builder, sqlConten
 	if strings.TrimSpace(sqlContent) == "" {
 		return
 	}
-	
+
 	formattedSQL, err := f.sqlFormatter.Format(sqlContent)
 	if err != nil {
 		// If formatting fails, use original content
 		formattedSQL = sqlContent
 	}
-	
+
 	// Add the formatted SQL with proper indentation
 	sqlLines := strings.Split(strings.TrimRight(formattedSQL, "\n"), "\n")
 	for _, sqlLine := range sqlLines {

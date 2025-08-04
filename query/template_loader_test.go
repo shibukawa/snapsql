@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	. "github.com/shibukawa/snapsql" // For TableInfo and ColumnInfo
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/markdownparser"
-	. "github.com/shibukawa/snapsql" // For TableInfo and ColumnInfo
 )
 
 func TestLoadIntermediateFormat_MarkdownSimple(t *testing.T) {
@@ -141,7 +141,7 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 	assert.Equal(t, "include_profile", includeProfileParam.Name)
 	assert.Equal(t, "bool", includeProfileParam.Type)
 	assert.Equal(t, "", includeProfileParam.Description) // No description in simple format
-	assert.False(t, includeProfileParam.Optional) // Default is false
+	assert.False(t, includeProfileParam.Optional)        // Default is false
 
 	// Test limit parameter
 	limitParam, limitExists := paramMap["limit"]
@@ -149,7 +149,7 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 	assert.Equal(t, "limit", limitParam.Name)
 	assert.Equal(t, "int", limitParam.Type)
 	assert.Equal(t, "", limitParam.Description) // No description in simple format
-	assert.False(t, limitParam.Optional) // Default is false
+	assert.False(t, limitParam.Optional)        // Default is false
 }
 
 func TestLoadIntermediateFormat_MarkdownWithJSONParameters(t *testing.T) {
@@ -516,7 +516,7 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 
 	// Check that CEL expressions are properly extracted
 	assert.True(t, len(format.CELExpressions) > 0, "Should have CEL expressions")
-	
+
 	// Look for the LIMIT CEL expression
 	var limitExprFound bool
 	for _, expr := range format.CELExpressions {

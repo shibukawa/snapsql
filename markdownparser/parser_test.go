@@ -334,7 +334,7 @@ user_id: 1
 	assert.NoError(t, err)
 	assert.True(t, result != nil)
 	assert.True(t, len(result.TestCases) == 1)
-	
+
 	testCase := result.TestCases[0]
 	assert.Equal(t, "Test: Valid Fixtures Format with Table Name", testCase.Name)
 	_, exists := testCase.Fixture["users"]

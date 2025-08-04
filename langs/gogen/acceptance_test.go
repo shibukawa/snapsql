@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shibukawa/snapsql/intermediate"
 	snapsql "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/intermediate"
 )
 
 func TestAcceptanceGeneration(t *testing.T) {
@@ -29,7 +29,7 @@ func TestAcceptanceGeneration(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			// Check if this is an error test case
 			isErrorTest := strings.Contains(testName, "_err")
-			
+
 			if isErrorTest {
 				// For error test cases, we expect the intermediate generation to fail
 				inputPath := filepath.Join(testDir, "input.snap.sql")

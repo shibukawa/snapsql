@@ -71,7 +71,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	var allTestCases []*markdownparser.TestCase
 	var documentSQL string
 	var documentParameters map[string]any
-	
+
 	for _, file := range testFiles {
 		fileInfo, err := ftr.parseTestFile(file)
 		if err != nil {
@@ -80,13 +80,13 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 			}
 			continue
 		}
-		
+
 		// Use SQL and parameters from the first successfully parsed file
 		if documentSQL == "" {
 			documentSQL = fileInfo.SQL
 			documentParameters = fileInfo.Parameters
 		}
-		
+
 		allTestCases = append(allTestCases, fileInfo.TestCases...)
 	}
 
@@ -100,10 +100,10 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 			for _, tc := range allTestCases {
 				names = append(names, tc.Name)
 			}
-			return nil, fmt.Errorf("fixture-only mode requires exactly one test case, but found %d test cases: %s", 
+			return nil, fmt.Errorf("fixture-only mode requires exactly one test case, but found %d test cases: %s",
 				len(allTestCases), strings.Join(names, ", "))
 		}
-		
+
 		if ftr.verbose {
 			fmt.Printf("Selected test case for fixture-only mode: %s\n", allTestCases[0].Name)
 		}
@@ -121,7 +121,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	runner := fixtureexecutor.NewTestRunner(ftr.db, ftr.dialect, ftr.options)
 	runner.SetSQL(documentSQL)
 	runner.SetParameters(documentParameters)
-	
+
 	summary, err := runner.RunTests(ctx, allTestCases)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run tests: %w", err)
@@ -168,9 +168,9 @@ func (ftr *FixtureTestRunner) findMarkdownTestFiles() ([]string, error) {
 		}
 
 		// Look for markdown files with test cases
-		if strings.HasSuffix(info.Name(), ".md") && 
-		   (strings.Contains(info.Name(), "test") || 
-		    strings.Contains(info.Name(), "spec")) {
+		if strings.HasSuffix(info.Name(), ".md") &&
+			(strings.Contains(info.Name(), "test") ||
+				strings.Contains(info.Name(), "spec")) {
 			files = append(files, path)
 		}
 
@@ -227,7 +227,7 @@ func (ftr *FixtureTestRunner) filterTestFiles(testFiles []string) []string {
 		// Get filename without extension
 		filename := filepath.Base(file)
 		nameWithoutExt := strings.TrimSuffix(filename, filepath.Ext(filename))
-		
+
 		// Use prefix matching like Go's -run flag
 		if strings.HasPrefix(nameWithoutExt, ftr.runPattern) {
 			filtered = append(filtered, file)
@@ -260,10 +260,10 @@ func (ftr *FixtureTestRunner) filterTestCases(testCases []*markdownparser.TestCa
 			for _, tc := range filtered {
 				names = append(names, tc.Name)
 			}
-			return nil, fmt.Errorf("fixture-only mode requires exactly one test case, but pattern '%s' matches %d test cases: %s", 
+			return nil, fmt.Errorf("fixture-only mode requires exactly one test case, but pattern '%s' matches %d test cases: %s",
 				ftr.runPattern, len(filtered), strings.Join(names, ", "))
 		}
-		
+
 		if ftr.verbose {
 			fmt.Printf("Selected test case for fixture-only mode: %s\n", filtered[0].Name)
 		}

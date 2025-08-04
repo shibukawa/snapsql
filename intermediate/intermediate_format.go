@@ -241,89 +241,151 @@ func marshalCompact(v interface{}) (json.RawMessage, error) {
 	return data, nil
 }
 
-// ToJSON serializes the intermediate format to JSON
+// ToJSON serializes the intermediate format to JSON with improved formatting
 func (f *IntermediateFormat) ToJSON() ([]byte, error) {
-	// Use MarshalIndent for pretty printing
+	// Use standard JSON formatting with custom array compacting
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal intermediate format: %w", err)
 	}
 
-	// Make arrays more compact
-	data = compactArrays(data)
-
-	return data, nil
+	// Apply custom formatting to make arrays more compact
+	formatted := compactArraysInJSON(string(data))
+	return []byte(formatted), nil
 }
 
-// compactArrays makes arrays more compact in the JSON output
-func compactArrays(data []byte) []byte {
-	str := string(data)
-
-	// Make simple objects in arrays more compact
-	// Replace multi-line objects with single-line versions
-	lines := strings.Split(str, "\n")
+// compactArraysInJSON makes simple objects in arrays more compact
+func compactArraysInJSON(jsonStr string) string {
+	lines := strings.Split(jsonStr, "\n")
 	var result []string
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 
-		// Check if this line starts an object in an array
-		if strings.Contains(line, "{") && !strings.Contains(line, "}") {
-			// Look for the closing brace
-			objectLines := []string{line}
-			j := i + 1
-			for j < len(lines) && !strings.Contains(lines[j], "}") {
-				objectLines = append(objectLines, lines[j])
-				j++
-			}
-			if j < len(lines) {
-				objectLines = append(objectLines, lines[j])
-			}
+		// Check if this line starts an array with objects
+		if strings.Contains(line, ": [") && i+1 < len(lines) && strings.TrimSpace(lines[i+1]) == "{" {
+			// Look for simple objects in the array
+			arrayStart := i
+			arrayIndent := getIndentLevel(line)
 
-			// Check if this is a simple object (no nested objects/arrays)
-			isSimple := true
-			for _, objLine := range objectLines[1 : len(objectLines)-1] {
-				if strings.Contains(objLine, "{") || strings.Contains(objLine, "[") {
-					isSimple = false
+			// Process array elements
+			j := i + 1
+			var arrayElements []string
+			currentElement := []string{}
+
+			for j < len(lines) {
+				currentLine := lines[j]
+				currentIndent := getIndentLevel(currentLine)
+
+				// End of array
+				if strings.TrimSpace(currentLine) == "]" || strings.TrimSpace(currentLine) == "]," {
+					if len(currentElement) > 0 {
+						if isSimpleObject(currentElement) {
+							arrayElements = append(arrayElements, compactObject(currentElement, arrayIndent+2))
+						} else {
+							arrayElements = append(arrayElements, strings.Join(currentElement, "\n"))
+						}
+					}
+
+					// Reconstruct the array
+					result = append(result, line)
+					for _, element := range arrayElements {
+						result = append(result, element)
+					}
+					result = append(result, currentLine)
+					i = j
 					break
 				}
+
+				// Start of new object
+				if strings.TrimSpace(currentLine) == "{" && currentIndent > arrayIndent {
+					if len(currentElement) > 0 {
+						if isSimpleObject(currentElement) {
+							arrayElements = append(arrayElements, compactObject(currentElement, arrayIndent+2))
+						} else {
+							arrayElements = append(arrayElements, strings.Join(currentElement, "\n"))
+						}
+					}
+					currentElement = []string{currentLine}
+				} else {
+					currentElement = append(currentElement, currentLine)
+				}
+
+				j++
 			}
 
-			if isSimple && len(objectLines) <= 6 { // Only compact small objects
-				// Combine into single line
-				var parts []string
-				for _, objLine := range objectLines {
-					trimmed := strings.TrimSpace(objLine)
-					if trimmed != "" {
-						parts = append(parts, trimmed)
-					}
+			if j >= len(lines) {
+				// Fallback: add original lines if we couldn't process the array
+				for k := arrayStart; k < len(lines); k++ {
+					result = append(result, lines[k])
 				}
-				compactLine := strings.Join(parts, " ")
-				compactLine = strings.ReplaceAll(compactLine, "{ ", "{")
-				compactLine = strings.ReplaceAll(compactLine, " }", "}")
-
-				// Get the indentation from the original first line
-				indent := ""
-				for _, char := range line {
-					if char == ' ' || char == '\t' {
-						indent += string(char)
-					} else {
-						break
-					}
-				}
-
-				result = append(result, indent+compactLine)
-				i = j // Skip the processed lines
-			} else {
-				// Keep original formatting for complex objects
-				result = append(result, line)
+				break
 			}
 		} else {
 			result = append(result, line)
 		}
 	}
 
-	return []byte(strings.Join(result, "\n"))
+	return strings.Join(result, "\n")
+}
+
+// getIndentLevel returns the indentation level of a line
+func getIndentLevel(line string) int {
+	count := 0
+	for _, char := range line {
+		if char == ' ' {
+			count++
+		} else if char == '\t' {
+			count += 4 // Treat tab as 4 spaces
+		} else {
+			break
+		}
+	}
+	return count
+}
+
+// isSimpleObject checks if an object is simple enough to be compacted
+func isSimpleObject(lines []string) bool {
+	if len(lines) > 6 { // Don't compact large objects
+		return false
+	}
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Check for nested objects or arrays
+		if strings.Contains(trimmed, "{") && trimmed != "{" && trimmed != "}," && trimmed != "}" {
+			return false
+		}
+		if strings.Contains(trimmed, "[") && trimmed != "[]" {
+			return false
+		}
+	}
+	return true
+}
+
+// compactObject converts a multi-line object to a single line
+func compactObject(lines []string, indent int) string {
+	var parts []string
+	indentStr := strings.Repeat(" ", indent)
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+
+	if len(parts) == 0 {
+		return indentStr + "{}"
+	}
+
+	// Join parts and clean up spacing
+	compact := strings.Join(parts, " ")
+	compact = strings.ReplaceAll(compact, "{ ", "{")
+	compact = strings.ReplaceAll(compact, " }", "}")
+	compact = strings.ReplaceAll(compact, " ,", ",")
+
+	return indentStr + compact
 }
 
 // FromJSON deserializes the intermediate format from JSON

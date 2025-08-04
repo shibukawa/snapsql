@@ -190,8 +190,8 @@ func TestAcceptance(t *testing.T) {
 				t.Fatalf("Did not expect an error but got: %v", genErr)
 			}
 
-			// Convert to JSON
-			actualJSON, err := json.Marshal(format)
+			// Convert to JSON using the improved ToJSON method
+			actualJSON, err := format.ToJSON()
 			if err != nil {
 				t.Fatalf("Failed to convert to JSON: %v", err)
 			}

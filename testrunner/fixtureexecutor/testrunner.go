@@ -12,11 +12,11 @@ import (
 
 // TestResult represents the result of a single test execution
 type TestResult struct {
-	TestCase     *markdownparser.TestCase
-	Success      bool
-	Duration     time.Duration
-	Result       *ValidationResult
-	Error        error
+	TestCase *markdownparser.TestCase
+	Success  bool
+	Duration time.Duration
+	Result   *ValidationResult
+	Error    error
 }
 
 // TestSummary represents the overall test execution summary
@@ -33,7 +33,7 @@ type TestRunner struct {
 	executor   *Executor
 	workerPool chan struct{} // セマフォ
 	options    *ExecutionOptions
-	sql        string        // SQL query from document
+	sql        string         // SQL query from document
 	parameters map[string]any // Default parameters from document
 }
 

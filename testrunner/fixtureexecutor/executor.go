@@ -57,8 +57,8 @@ type ValidationResult struct {
 // TestExecution represents a single test execution context
 type TestExecution struct {
 	TestCase    *markdownparser.TestCase
-	SQL         string                 // SQL query from document
-	Parameters  map[string]any         // Parameters from test case
+	SQL         string         // SQL query from document
+	Parameters  map[string]any // Parameters from test case
 	Options     *ExecutionOptions
 	Transaction *sql.Tx
 	Executor    *Executor
@@ -174,14 +174,14 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute verify query: %w", err)
 		}
-		
+
 		// 4. Validate verify query results
 		if len(execution.TestCase.ExpectedResult) > 0 {
 			if err := e.validateVerifyResults(verifyResult, execution.TestCase.ExpectedResult); err != nil {
 				return nil, fmt.Errorf("verify query validation failed: %w", err)
 			}
 		}
-		
+
 		return verifyResult, nil
 	}
 
@@ -212,7 +212,7 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 func detectQueryType(sql string) QueryType {
 	// Remove leading whitespace and convert to uppercase
 	trimmed := strings.TrimSpace(strings.ToUpper(sql))
-	
+
 	if strings.HasPrefix(trimmed, "SELECT") || strings.HasPrefix(trimmed, "WITH") {
 		return SelectQuery
 	} else if strings.HasPrefix(trimmed, "INSERT") {
@@ -222,7 +222,7 @@ func detectQueryType(sql string) QueryType {
 	} else if strings.HasPrefix(trimmed, "DELETE") {
 		return DeleteQuery
 	}
-	
+
 	// Default to SELECT for unknown queries
 	return SelectQuery
 }
@@ -237,10 +237,10 @@ func hasReturningClause(sql string) bool {
 // executeQuery executes the SQL query and returns the result
 func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[string]any) (*ValidationResult, error) {
 	queryType := detectQueryType(sqlQuery)
-	
+
 	// TODO: Replace parameters in SQL query
 	// For now, execute the query as-is
-	
+
 	// Check for RETURNING clause in DML queries
 	if (queryType == InsertQuery || queryType == UpdateQuery || queryType == DeleteQuery) && hasReturningClause(sqlQuery) {
 		// Execute as SELECT query to get returned data
@@ -252,7 +252,7 @@ func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[stri
 		result.QueryType = queryType
 		return result, nil
 	}
-	
+
 	switch queryType {
 	case SelectQuery:
 		return e.executeSelectQuery(tx, sqlQuery)
@@ -270,16 +270,16 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 		return nil, fmt.Errorf("failed to execute SELECT query: %w", err)
 	}
 	defer rows.Close()
-	
+
 	// Get column names
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column names: %w", err)
 	}
-	
+
 	// Prepare result data
 	var data []map[string]any
-	
+
 	for rows.Next() {
 		// Create slice of interface{} for scanning
 		values := make([]interface{}, len(columns))
@@ -287,12 +287,12 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
-		
+
 		// Scan the row
 		if err := rows.Scan(valuePtrs...); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-		
+
 		// Convert to map
 		row := make(map[string]any)
 		for i, col := range columns {
@@ -306,11 +306,11 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 		}
 		data = append(data, row)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
-	
+
 	return &ValidationResult{
 		Data:         data,
 		RowsAffected: int64(len(data)),
@@ -324,12 +324,12 @@ func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryT
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute DML query: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get rows affected: %w", err)
 	}
-	
+
 	return &ValidationResult{
 		Data:         []map[string]any{{"rows_affected": rowsAffected}},
 		RowsAffected: rowsAffected,
@@ -517,22 +517,22 @@ func (e *Executor) getPlaceholder(position int) string {
 func (e *Executor) executeVerifyQuery(tx *sql.Tx, verifyQuery string) (*ValidationResult, error) {
 	// Split multiple queries by semicolon
 	queries := e.parseMultipleQueries(verifyQuery)
-	
+
 	var allResults []map[string]any
-	
+
 	for _, query := range queries {
 		if strings.TrimSpace(query) == "" {
 			continue
 		}
-		
+
 		result, err := e.executeSelectQuery(tx, query)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute verify query: %w", err)
 		}
-		
+
 		allResults = append(allResults, result.Data...)
 	}
-	
+
 	return &ValidationResult{
 		Data:         allResults,
 		RowsAffected: int64(len(allResults)),
@@ -545,18 +545,18 @@ func (e *Executor) parseMultipleQueries(sql string) []string {
 	lines := strings.Split(sql, "\n")
 	var currentQuery strings.Builder
 	var queries []string
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip comment-only lines
 		if strings.HasPrefix(trimmed, "--") {
 			continue
 		}
-		
+
 		currentQuery.WriteString(line)
 		currentQuery.WriteString("\n")
-		
+
 		// Check for query termination
 		if strings.HasSuffix(trimmed, ";") {
 			query := strings.TrimSpace(currentQuery.String())
@@ -566,7 +566,7 @@ func (e *Executor) parseMultipleQueries(sql string) []string {
 			currentQuery.Reset()
 		}
 	}
-	
+
 	// Add remaining query if any
 	if currentQuery.Len() > 0 {
 		query := strings.TrimSpace(currentQuery.String())
@@ -574,7 +574,7 @@ func (e *Executor) parseMultipleQueries(sql string) []string {
 			queries = append(queries, query)
 		}
 	}
-	
+
 	return queries
 }
 
@@ -583,27 +583,27 @@ func (e *Executor) validateDirectResults(result *ValidationResult, expectedResul
 	if len(result.Data) != len(expectedResults) {
 		return fmt.Errorf("expected %d result rows, got %d rows", len(expectedResults), len(result.Data))
 	}
-	
+
 	for i, expectedRow := range expectedResults {
 		actualRow := result.Data[i]
 		if err := compareRows(expectedRow, actualRow); err != nil {
 			return fmt.Errorf("result row %d mismatch: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }
 func (e *Executor) validateVerifyResults(result *ValidationResult, expectedResults []map[string]any) error {
 	if len(result.Data) != len(expectedResults) {
 		return fmt.Errorf("expected %d result rows, got %d rows", len(expectedResults), len(result.Data))
 	}
-	
+
 	for i, expectedRow := range expectedResults {
 		actualRow := result.Data[i]
 		if err := compareRows(expectedRow, actualRow); err != nil {
 			return fmt.Errorf("verify query result row %d mismatch: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }

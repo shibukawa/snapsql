@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/stretchr/testify/require"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/testhelper"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDetermineResponseAffinity(t *testing.T) {

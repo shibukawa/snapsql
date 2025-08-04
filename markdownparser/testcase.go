@@ -32,17 +32,17 @@ type TableFixture struct {
 // TestCase represents a single test case
 type TestCase struct {
 	Name           string
-	Fixtures       []TableFixture                // テーブルごとのfixture情報
-	Fixture        map[string][]map[string]any   // 後方互換性のため残す
+	Fixtures       []TableFixture              // テーブルごとのfixture情報
+	Fixture        map[string][]map[string]any // 後方互換性のため残す
 	Parameters     map[string]any
-	VerifyQuery    string                        // 検証用SELECTクエリ
+	VerifyQuery    string // 検証用SELECTクエリ
 	ExpectedResult []map[string]any
 }
 
 // TestSection represents a section within a test case
 type TestSection struct {
-	Type      string // "parameters", "expected", "fixtures"
-	TableName string // Only used for CSV fixtures
+	Type      string         // "parameters", "expected", "fixtures"
+	TableName string         // Only used for CSV fixtures
 	Strategy  InsertStrategy // Insert strategy for fixtures
 }
 
@@ -243,7 +243,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 			}
 			// 後方互換性のため既存のFixtureフィールドにも追加
 			testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
-			
+
 			// 新しいFixturesフィールドに追加
 			addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows)
 		} else {
@@ -255,10 +255,10 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 				if err := parseYAMLData(content, &rows); err != nil {
 					return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
 				}
-				
+
 				// 後方互換性のため既存のFixtureフィールドにも追加
 				testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
-				
+
 				// 新しいFixturesフィールドに追加
 				addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows)
 			} else {
@@ -270,7 +270,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 				for tableName, rows := range tableData {
 					// 後方互換性のため既存のFixtureフィールドにも追加
 					testCase.Fixture[tableName] = append(testCase.Fixture[tableName], rows...)
-					
+
 					// 新しいFixturesフィールドに追加（デフォルト戦略を使用）
 					addOrUpdateTableFixture(testCase, tableName, ClearInsert, rows)
 				}
@@ -280,6 +280,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 
 	return nil
 }
+
 // parseTableNameAndStrategy parses table name and insert strategy from fixture specification
 // Format: "table_name" or "table_name[strategy]"
 func parseTableNameAndStrategy(spec string) (string, InsertStrategy) {
@@ -287,15 +288,15 @@ func parseTableNameAndStrategy(spec string) (string, InsertStrategy) {
 	// 形式: "table_name" または "table_name[strategy]"
 	re := regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)(?:\[([^\]]+)\])?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(spec))
-	
+
 	if len(matches) == 0 {
 		// 無効な形式の場合はそのままテーブル名として扱い、デフォルト戦略を使用
 		return spec, ClearInsert
 	}
-	
+
 	tableName := matches[1]
 	strategy := ClearInsert // デフォルト
-	
+
 	if len(matches) > 2 && matches[2] != "" {
 		switch InsertStrategy(matches[2]) {
 		case Insert:
@@ -311,7 +312,7 @@ func parseTableNameAndStrategy(spec string) (string, InsertStrategy) {
 			strategy = ClearInsert
 		}
 	}
-	
+
 	return tableName, strategy
 }
 
@@ -325,7 +326,7 @@ func addOrUpdateTableFixture(testCase *TestCase, tableName string, strategy Inse
 			return
 		}
 	}
-	
+
 	// 新しいTableFixtureを作成
 	testCase.Fixtures = append(testCase.Fixtures, TableFixture{
 		TableName: tableName,

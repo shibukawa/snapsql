@@ -16,7 +16,7 @@ func TestSQLFormatter_Format(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "Basic SELECT statement",
+			name:  "Basic SELECT statement",
 			input: `select id,name,email from users where active=true`,
 			expected: `SELECT
     id,
@@ -26,7 +26,7 @@ FROM users
 WHERE active = true`,
 		},
 		{
-			name: "SELECT with JOIN",
+			name:  "SELECT with JOIN",
 			input: `select u.id,u.name,p.title from users u join posts p on u.id=p.user_id`,
 			expected: `SELECT
     u.id,
@@ -37,7 +37,7 @@ JOIN posts p
     ON u.id = p.user_id`,
 		},
 		{
-			name: "Complex query with WHERE conditions",
+			name:  "Complex query with WHERE conditions",
 			input: `select * from users where age>18 and status='active' or premium=true`,
 			expected: `SELECT
     *
@@ -45,7 +45,7 @@ FROM users
 WHERE age > 18 AND status = 'active' OR premium = true`,
 		},
 		{
-			name: "SnapSQL with inline expressions",
+			name:  "SnapSQL with inline expressions",
 			input: `select id,name from users where id=/*= user_id */123`,
 			expected: `SELECT
     id,
@@ -54,7 +54,7 @@ FROM users
 WHERE id = /*= user_id */123`,
 		},
 		{
-			name: "SnapSQL with if directive",
+			name:  "SnapSQL with if directive",
 			input: `select id,name /*# if include_email */ ,email /*# end */ from users`,
 			expected: `SELECT
     id,
@@ -64,7 +64,7 @@ WHERE id = /*= user_id */123`,
 FROM users`,
 		},
 		{
-			name: "SnapSQL with for loop",
+			name:  "SnapSQL with for loop",
 			input: `select id /*# for field in fields */ ,/*= field */ /*# end */ from users`,
 			expected: `SELECT
     id/*# for field in fields */,
@@ -94,19 +94,19 @@ FROM users
 WHERE id = /*= user_id */`,
 		},
 		{
-			name: "INSERT statement",
-			input: `insert into users(name,email,created_at) values(/*= name */,'test@example.com',now())`,
+			name:     "INSERT statement",
+			input:    `insert into users(name,email,created_at) values(/*= name */,'test@example.com',now())`,
 			expected: `INSERT INTO users(name, email, created_at) VALUES(/*= name */, 'test@example.com', NOW())`,
 		},
 		{
-			name: "UPDATE statement",
+			name:  "UPDATE statement",
 			input: `update users set name=/*= name */,email=/*= email */ where id=/*= user_id */`,
 			expected: `UPDATE users
 SET name = /*= name */, email = /*= email */
 WHERE id = /*= user_id */`,
 		},
 		{
-			name: "Complex query with GROUP BY and HAVING",
+			name:  "Complex query with GROUP BY and HAVING",
 			input: `select department,count(*) as cnt from users where active=true group by department having count(*)>5 order by cnt desc`,
 			expected: `SELECT
     department,
@@ -118,7 +118,7 @@ HAVING COUNT(*) > 5
 ORDER BY cnt desc`,
 		},
 		{
-			name: "Nested if/else conditions",
+			name:  "Nested if/else conditions",
 			input: `select id,name /*# if include_details */ /*# if include_email */ ,email /*# end */ /*# if include_phone */ ,phone /*# end */ /*# end */ from users`,
 			expected: `SELECT
     id,
@@ -150,11 +150,11 @@ where active = true -- only active users`,
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := formatter.Format(tt.input)
 			assert.NoError(t, err)
-			
+
 			// Normalize whitespace for comparison
 			expected := normalizeWhitespace(tt.expected)
 			actual := normalizeWhitespace(result)
-			
+
 			if expected != actual {
 				t.Errorf("Format() mismatch:\nExpected:\n%s\n\nActual:\n%s", tt.expected, result)
 			}
@@ -257,12 +257,12 @@ func TestSQLFormatter_IndentationLevels(t *testing.T) {
 	formatter := NewSQLFormatter()
 
 	input := `/*# if condition1 */ /*# if condition2 */ select id /*# end */ /*# end */`
-	
+
 	result, err := formatter.Format(input)
 	assert.NoError(t, err)
 
 	lines := strings.Split(result, "\n")
-	
+
 	// Check indentation levels
 	for _, line := range lines {
 		if strings.Contains(line, "/*# if condition1 */") {
@@ -302,7 +302,7 @@ func countLeadingSpaces(s string) int {
 
 func BenchmarkSQLFormatter_Format(t *testing.B) {
 	formatter := NewSQLFormatter()
-	
+
 	complexSQL := `/*#
 function_name: complex_query
 parameters:

@@ -27,7 +27,7 @@ func LoadIntermediateFormat(templateFile string) (*intermediate.IntermediateForm
 	}
 
 	ext := strings.ToLower(filepath.Ext(templateFile))
-	
+
 	switch ext {
 	case ".json":
 		return loadFromJSON(templateFile)
@@ -98,7 +98,7 @@ func generateFromMarkdown(filename string) (*intermediate.IntermediateFormat, er
 		if functionName, ok := doc.Metadata["function_name"].(string); ok {
 			format.FunctionName = functionName
 		}
-		
+
 		// Set description if available
 		if description, ok := doc.Metadata["description"].(string); ok {
 			format.Description = description

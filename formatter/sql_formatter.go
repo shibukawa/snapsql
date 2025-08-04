@@ -34,10 +34,10 @@ func (f *SQLFormatter) Format(sql string) (string, error) {
 
 // Token represents a SQL token
 type Token struct {
-	Type    TokenType
-	Value   string
-	IsSnap  bool // true if this is a SnapSQL directive
-	Indent  int  // indentation level
+	Type   TokenType
+	Value  string
+	IsSnap bool // true if this is a SnapSQL directive
+	Indent int  // indentation level
 }
 
 type TokenType int
@@ -64,14 +64,14 @@ func (f *SQLFormatter) Tokenize(sql string) ([]Token, error) {
 // tokenize breaks SQL into tokens while preserving SnapSQL directives
 func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 	var tokens []Token
-	
+
 	// Regular expressions for different token types
 	snapDirectiveRe := regexp.MustCompile(`/\*#[^*]*\*+(?:[^/*][^*]*\*+)*/|/\*=[^*]*\*+(?:[^/*][^*]*\*+)*/`)
 	commentRe := regexp.MustCompile(`--[^\n]*|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/`)
 	stringLiteralRe := regexp.MustCompile(`'([^'\\]|\\.)*'|"([^"\\]|\\.)*"`)
 	numberRe := regexp.MustCompile(`\d+(\.\d+)?`)
 	identifierRe := regexp.MustCompile(`[a-zA-Z_][a-zA-Z0-9_]*`)
-	
+
 	// Keywords that should be uppercase
 	keywords := map[string]bool{
 		"SELECT": true, "FROM": true, "WHERE": true, "JOIN": true, "INNER": true,
@@ -94,7 +94,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 			pos++
 			continue
 		}
-		
+
 		if sql[pos] == '\n' {
 			tokens = append(tokens, Token{Type: TokenNewline, Value: "\n"})
 			pos++
@@ -148,7 +148,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 			if identMatch := identifierRe.FindStringIndex(sql[pos:]); identMatch != nil && identMatch[0] == 0 {
 				ident := sql[pos : pos+identMatch[1]]
 				upperIdent := strings.ToUpper(ident)
-				
+
 				if keywords[upperIdent] {
 					tokens = append(tokens, Token{Type: TokenKeyword, Value: upperIdent})
 				} else {
@@ -171,7 +171,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 		case '=', '<', '>', '!', '+', '-', '*', '/', '%':
 			// Handle multi-character operators
 			if pos+1 < len(sql) && (sql[pos+1] == '=' || (char == '<' && sql[pos+1] == '>') || (char == '!' && sql[pos+1] == '=')) {
-				tokens = append(tokens, Token{Type: TokenOperator, Value: string(sql[pos:pos+2])})
+				tokens = append(tokens, Token{Type: TokenOperator, Value: string(sql[pos : pos+2])})
 				pos++
 			} else {
 				tokens = append(tokens, Token{Type: TokenOperator, Value: string(char)})
@@ -200,7 +200,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 			if strings.HasPrefix(token.Value, "/*#") {
 				// Handle if/for directives
 				directive := strings.TrimSpace(strings.Trim(strings.TrimPrefix(token.Value, "/*#"), "*/"))
-				
+
 				if strings.HasPrefix(directive, "if ") || strings.HasPrefix(directive, "for ") {
 					if needsNewline {
 						result.WriteString("\n")
@@ -250,17 +250,17 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 				if needsNewline || (lastToken != nil && lastToken.Type != TokenNewline && i > 0) {
 					result.WriteString("\n")
 				}
-				
+
 				// Special indentation for ON clause
 				indent := indentLevel
 				if token.Value == "ON" {
 					indent = indentLevel + 1
 				}
-				
+
 				result.WriteString(strings.Repeat(" ", indent*f.indentSize))
 				result.WriteString(token.Value)
 				needsNewline = false
-				
+
 				// Track if we're in a SELECT list or VALUES list
 				if token.Value == "SELECT" {
 					inSelectList = true
@@ -351,7 +351,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 	// Clean up extra newlines and ensure proper formatting
 	formatted := result.String()
 	formatted = f.cleanupFormatting(formatted)
-	
+
 	return formatted
 }
 
@@ -389,14 +389,14 @@ func (f *SQLFormatter) cleanupFormatting(sql string) string {
 
 	// Join lines and ensure proper spacing
 	result := strings.Join(cleanedLines, "\n")
-	
+
 	// Fix common formatting issues
 	result = regexp.MustCompile(`\s+,`).ReplaceAllString(result, ",")
 	result = regexp.MustCompile(`\(\s+`).ReplaceAllString(result, "(")
 	result = regexp.MustCompile(`\s+\)`).ReplaceAllString(result, ")")
-	
+
 	// Remove excessive blank lines
 	result = regexp.MustCompile(`\n\s*\n\s*\n`).ReplaceAllString(result, "\n\n")
-	
+
 	return strings.TrimSpace(result)
 }
