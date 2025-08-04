@@ -51,18 +51,18 @@ func (cmd *FormatCmd) formatFromReader(sqlFormatter *formatter.SQLFormatter, rea
 	}
 
 	var formatted string
-	
+
 	// Check if this is a Markdown file
 	if cmd.isMarkdownFile(filename) {
 		markdownFormatter := formatter.NewMarkdownFormatter()
-		
+
 		// Use SnapSQL Markdown formatter for .snap.md files
 		if strings.HasSuffix(strings.ToLower(filepath.Base(filename)), ".snap.md") {
 			formatted, err = markdownFormatter.FormatSnapSQLMarkdown(string(input))
 		} else {
 			formatted, err = markdownFormatter.Format(string(input))
 		}
-		
+
 		if err != nil {
 			return fmt.Errorf("failed to format Markdown in %s: %w", filename, err)
 		}
@@ -197,12 +197,12 @@ func (cmd *FormatCmd) formatDirectory(sqlFormatter *formatter.SQLFormatter, dirP
 func (cmd *FormatCmd) isSnapSQLFile(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	base := strings.ToLower(filepath.Base(filename))
-	
+
 	// Check for .snap.sql or .snap.md extensions
 	if strings.HasSuffix(base, ".snap.sql") || strings.HasSuffix(base, ".snap.md") {
 		return true
 	}
-	
+
 	// Also accept plain .sql and .md files
 	return ext == ".sql" || ext == ".md"
 }
@@ -211,7 +211,7 @@ func (cmd *FormatCmd) isSnapSQLFile(filename string) bool {
 func (cmd *FormatCmd) isMarkdownFile(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	base := strings.ToLower(filepath.Base(filename))
-	
+
 	// Check for .snap.md or .md extensions
 	return strings.HasSuffix(base, ".snap.md") || ext == ".md"
 }
@@ -225,26 +225,26 @@ func (cmd *FormatCmd) showDiff(original, formatted, filename string) error {
 
 	fmt.Printf("--- %s (original)\n", filename)
 	fmt.Printf("+++ %s (formatted)\n", filename)
-	
+
 	// Simple line-by-line diff
 	originalLines := strings.Split(original, "\n")
 	formattedLines := strings.Split(formatted, "\n")
-	
+
 	maxLines := len(originalLines)
 	if len(formattedLines) > maxLines {
 		maxLines = len(formattedLines)
 	}
-	
+
 	for i := 0; i < maxLines; i++ {
 		var origLine, formLine string
-		
+
 		if i < len(originalLines) {
 			origLine = originalLines[i]
 		}
 		if i < len(formattedLines) {
 			formLine = formattedLines[i]
 		}
-		
+
 		if origLine != formLine {
 			if origLine != "" {
 				fmt.Printf("-%s\n", origLine)
@@ -254,7 +254,7 @@ func (cmd *FormatCmd) showDiff(original, formatted, filename string) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 

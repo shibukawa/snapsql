@@ -34,7 +34,7 @@ type ValidationSpec struct {
 // parseValidationSpecs parses expected results into validation specifications
 func parseValidationSpecs(expectedResults []map[string]any) ([]ValidationSpec, error) {
 	var specs []ValidationSpec
-	
+
 	for _, result := range expectedResults {
 		for key, value := range result {
 			spec, err := parseValidationSpec(key, value)
@@ -44,7 +44,7 @@ func parseValidationSpecs(expectedResults []map[string]any) ([]ValidationSpec, e
 			specs = append(specs, spec)
 		}
 	}
-	
+
 	return specs, nil
 }
 
@@ -57,18 +57,18 @@ func parseValidationSpec(key string, value any) (ValidationSpec, error) {
 		if len(parts) != 2 {
 			return ValidationSpec{}, fmt.Errorf("invalid validation spec format: %s", key)
 		}
-		
+
 		tableName := parts[0]
 		strategyPart := strings.TrimSuffix(parts[1], "]")
 		strategy := ValidationStrategy(strategyPart)
-		
+
 		return ValidationSpec{
 			Strategy:  strategy,
 			TableName: tableName,
 			Expected:  value,
 		}, nil
 	}
-	
+
 	// Handle numeric validation keys
 	switch key {
 	case "rows_affected", "last_insert_id":
@@ -120,18 +120,18 @@ func (e *Executor) validateDirectResult(result *ValidationResult, spec Validatio
 	if !ok {
 		return fmt.Errorf("expected data must be an array of objects for direct result validation")
 	}
-	
+
 	if len(result.Data) != len(expected) {
 		return fmt.Errorf("expected %d rows, got %d rows", len(expected), len(result.Data))
 	}
-	
+
 	for i, expectedRow := range expected {
 		actualRow := result.Data[i]
 		if err := compareRows(expectedRow, actualRow); err != nil {
 			return fmt.Errorf("row %d mismatch: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -141,7 +141,7 @@ func (e *Executor) validateNumericResult(result *ValidationResult, spec Validati
 	if !ok {
 		return fmt.Errorf("expected numeric validation must be a map")
 	}
-	
+
 	for key, expectedValue := range expected {
 		switch key {
 		case "rows_affected":
@@ -160,7 +160,7 @@ func (e *Executor) validateNumericResult(result *ValidationResult, spec Validati
 			return fmt.Errorf("unsupported numeric validation key: %s", key)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -168,7 +168,7 @@ func (e *Executor) validateNumericResult(result *ValidationResult, spec Validati
 func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 	// Handle both array and single object formats
 	var expected []map[string]any
-	
+
 	switch v := spec.Expected.(type) {
 	case []map[string]any:
 		expected = v
@@ -186,7 +186,7 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 	default:
 		return fmt.Errorf("table state validation must be an array of objects or a single object, got %T", spec.Expected)
 	}
-	
+
 	// Query the table to get current state
 	query := fmt.Sprintf("SELECT * FROM %s", spec.TableName)
 	rows, err := tx.Query(query)
@@ -194,13 +194,13 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 		return fmt.Errorf("failed to query table %s: %w", spec.TableName, err)
 	}
 	defer rows.Close()
-	
+
 	// Get column names
 	columns, err := rows.Columns()
 	if err != nil {
 		return fmt.Errorf("failed to get column names: %w", err)
 	}
-	
+
 	// Read actual data
 	var actualData []map[string]any
 	for rows.Next() {
@@ -209,11 +209,11 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
-		
+
 		if err := rows.Scan(valuePtrs...); err != nil {
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
-		
+
 		row := make(map[string]any)
 		for i, col := range columns {
 			val := values[i]
@@ -225,12 +225,12 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 		}
 		actualData = append(actualData, row)
 	}
-	
+
 	// Compare expected and actual data
 	if len(expected) != len(actualData) {
 		return fmt.Errorf("expected %d rows in table %s, got %d rows", len(expected), spec.TableName, len(actualData))
 	}
-	
+
 	// TODO: Implement more sophisticated comparison (order-independent, partial matching)
 	for i, expectedRow := range expected {
 		if i >= len(actualData) {
@@ -240,7 +240,7 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 			return fmt.Errorf("table %s row %d mismatch: %w", spec.TableName, i, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -248,7 +248,7 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 	// Handle both array and single object formats
 	var expectedRows []map[string]any
-	
+
 	switch v := spec.Expected.(type) {
 	case []map[string]any:
 		expectedRows = v
@@ -266,13 +266,13 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 	default:
 		return fmt.Errorf("existence validation must be an array of objects or a single object, got %T", spec.Expected)
 	}
-	
+
 	for _, expectedRow := range expectedRows {
 		exists, ok := expectedRow["exists"].(bool)
 		if !ok {
 			return fmt.Errorf("existence validation requires 'exists' field with boolean value")
 		}
-		
+
 		// Build WHERE clause from other fields
 		var conditions []string
 		var args []interface{}
@@ -282,25 +282,25 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 				args = append(args, value)
 			}
 		}
-		
+
 		if len(conditions) == 0 {
 			return fmt.Errorf("existence validation requires at least one condition field")
 		}
-		
+
 		query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", spec.TableName, strings.Join(conditions, " AND "))
-		
+
 		var count int64
 		err := tx.QueryRow(query, args...).Scan(&count)
 		if err != nil {
 			return fmt.Errorf("failed to check existence: %w", err)
 		}
-		
+
 		actualExists := count > 0
 		if actualExists != exists {
 			return fmt.Errorf("expected exists=%t, got exists=%t for conditions %v", exists, actualExists, expectedRow)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -310,18 +310,18 @@ func (e *Executor) validateCount(tx *sql.Tx, spec ValidationSpec) error {
 	if err != nil {
 		return fmt.Errorf("invalid count value: %w", err)
 	}
-	
+
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", spec.TableName)
 	var actualCount int64
 	err = tx.QueryRow(query).Scan(&actualCount)
 	if err != nil {
 		return fmt.Errorf("failed to count rows in table %s: %w", spec.TableName, err)
 	}
-	
+
 	if actualCount != expectedCount {
 		return fmt.Errorf("expected count %d, got count %d", expectedCount, actualCount)
 	}
-	
+
 	return nil
 }
 
@@ -332,7 +332,7 @@ func compareRows(expected, actual map[string]any) error {
 		if !exists {
 			return fmt.Errorf("missing field '%s'", key)
 		}
-		
+
 		// Try to normalize numeric types for comparison
 		if !compareValues(expectedValue, actualValue) {
 			return fmt.Errorf("field '%s': expected %v (%T), got %v (%T)", key, expectedValue, expectedValue, actualValue, actualValue)
@@ -347,14 +347,14 @@ func compareValues(expected, actual any) bool {
 	if reflect.DeepEqual(expected, actual) {
 		return true
 	}
-	
+
 	// Try numeric conversion
 	expectedInt, expectedErr := convertToInt64(expected)
 	actualInt, actualErr := convertToInt64(actual)
 	if expectedErr == nil && actualErr == nil {
 		return expectedInt == actualInt
 	}
-	
+
 	// Try string conversion
 	expectedStr := fmt.Sprintf("%v", expected)
 	actualStr := fmt.Sprintf("%v", actual)

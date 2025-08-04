@@ -122,14 +122,14 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 		// Parse the raw parameter text to yaml.MapSlice to preserve order
 		var rawParams yaml.MapSlice
 		var err error
-		
+
 		switch doc.ParametersType {
 		case "yaml", "yml":
 			err = yaml.Unmarshal([]byte(doc.ParametersText), &rawParams)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse YAML parameters: %w", err)
 			}
-			
+
 		case "json":
 			// Parse JSON while preserving order using yaml parser (which preserves order)
 			// Convert JSON to YAML first, then parse with yaml parser
@@ -137,29 +137,29 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 			if err := json.Unmarshal([]byte(doc.ParametersText), &jsonData); err != nil {
 				return nil, fmt.Errorf("failed to parse JSON parameters: %w", err)
 			}
-			
+
 			// Convert back to YAML to preserve order
 			yamlBytes, err := yaml.Marshal(jsonData)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert JSON to YAML: %w", err)
 			}
-			
+
 			err = yaml.Unmarshal(yamlBytes, &rawParams)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse converted YAML parameters: %w", err)
 			}
-			
+
 		case "list":
 			// Parse list format (e.g., "param1: type1\nparam2: type2")
 			rawParams, err = parseListFormatParameters(doc.ParametersText)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse list parameters: %w", err)
 			}
-			
+
 		default:
 			return nil, fmt.Errorf("unsupported parameter type: %s", doc.ParametersType)
 		}
-		
+
 		def.RawParameters = rawParams
 	}
 
@@ -178,29 +178,29 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 // parseListFormatParameters parses list format parameters (e.g., "param1: type1\nparam2: type2")
 func parseListFormatParameters(text string) (yaml.MapSlice, error) {
 	var rawParams yaml.MapSlice
-	
+
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		// Parse "name: type" format
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid list parameter format: %s", line)
 		}
-		
+
 		name := strings.TrimSpace(parts[0])
 		typeStr := strings.TrimSpace(parts[1])
-		
+
 		rawParams = append(rawParams, yaml.MapItem{
 			Key:   name,
 			Value: typeStr,
 		})
 	}
-	
+
 	return rawParams, nil
 }
 
@@ -621,18 +621,18 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 				errs.Add(fmt.Errorf("%w: parameter type is not string: %v", ErrInvalidForSnapSQL, typeVal))
 				return "string", val // Return original structure for OriginalParameters
 			}
-			
+
 			// Check if it's a common type reference
 			resolvedType, _ := f.resolveCommonTypeRef(typeStr)
 			if resolvedType != nil {
 				return resolvedType, val // Return original structure for OriginalParameters
 			}
-			
+
 			// Return the normalized type string, but preserve original structure
 			normalizedType := normalizeTypeString(typeStr)
 			return normalizedType, val // Return original structure for OriginalParameters
 		}
-		
+
 		// Regular map processing (for nested objects)
 		detailResult := make(map[string]any)
 		originalResult := make(map[string]any)

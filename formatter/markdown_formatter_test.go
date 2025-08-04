@@ -138,7 +138,7 @@ SELECT
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := formatter.Format(tt.input)
 			assert.NoError(t, err)
-			
+
 			if result != tt.expected {
 				t.Errorf("Format() mismatch:\nExpected:\n%s\n\nActual:\n%s", tt.expected, result)
 			}
@@ -228,7 +228,7 @@ FROM users
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := formatter.FormatSnapSQLMarkdown(tt.input)
 			assert.NoError(t, err)
-			
+
 			if result != tt.expected {
 				t.Errorf("FormatSnapSQLMarkdown() mismatch:\nExpected:\n%s\n\nActual:\n%s", tt.expected, result)
 			}
@@ -259,7 +259,7 @@ func TestIsMarkdownFile(t *testing.T) {
 
 func BenchmarkMarkdownFormatter_Format(t *testing.B) {
 	formatter := NewMarkdownFormatter()
-	
+
 	complexMarkdown := `# Complex Query Documentation
 
 ## Overview

@@ -44,7 +44,7 @@ func NewSQLGenerator(instructions []intermediate.Instruction, expressions []inte
 func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interface{}, error) {
 	var result strings.Builder
 	sqlParams := make([]interface{}, 0) // Initialize as empty slice instead of nil
-	var conditionStack []bool // Stack to track if/else conditions
+	var conditionStack []bool           // Stack to track if/else conditions
 
 	for i, instr := range g.instructions {
 		// Skip instructions if we're in a false condition block

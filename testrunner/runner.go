@@ -20,20 +20,20 @@ type TestRunner struct {
 
 // TestResult represents the result of a single test package
 type TestResult struct {
-	Package   string
-	Success   bool
-	Duration  time.Duration
-	Output    string
-	Error     error
+	Package  string
+	Success  bool
+	Duration time.Duration
+	Output   string
+	Error    error
 }
 
 // TestSummary represents the overall test execution summary
 type TestSummary struct {
-	TotalPackages int
+	TotalPackages  int
 	PassedPackages int
 	FailedPackages int
-	TotalDuration time.Duration
-	Results       []TestResult
+	TotalDuration  time.Duration
+	Results        []TestResult
 }
 
 // NewTestRunner creates a new test runner instance
@@ -56,12 +56,12 @@ func (tr *TestRunner) SetRunPattern(pattern string) error {
 		tr.runPattern = nil
 		return nil
 	}
-	
+
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
 		return fmt.Errorf("invalid run pattern: %w", err)
 	}
-	
+
 	tr.runPattern = regex
 	return nil
 }
@@ -124,8 +124,8 @@ func (tr *TestRunner) findTestPackages() ([]string, error) {
 		// Skip vendor, .git, and other common directories
 		if info.IsDir() {
 			name := info.Name()
-			if name == "vendor" || name == ".git" || name == "node_modules" || 
-			   strings.HasPrefix(name, ".") {
+			if name == "vendor" || name == ".git" || name == "node_modules" ||
+				strings.HasPrefix(name, ".") {
 				return filepath.SkipDir
 			}
 			return nil
@@ -141,7 +141,7 @@ func (tr *TestRunner) findTestPackages() ([]string, error) {
 
 			// Convert to Go package path
 			pkgPath := "./" + filepath.ToSlash(relDir)
-			
+
 			// Add to packages if not already present
 			found := false
 			for _, existing := range packages {
@@ -164,24 +164,24 @@ func (tr *TestRunner) findTestPackages() ([]string, error) {
 // runPackageTests executes tests for a single package
 func (tr *TestRunner) runPackageTests(ctx context.Context, pkg string) TestResult {
 	startTime := time.Now()
-	
+
 	args := []string{"test"}
-	
+
 	if tr.verbose {
 		args = append(args, "-v")
 	}
-	
+
 	if tr.runPattern != nil {
 		args = append(args, "-run", tr.runPattern.String())
 	}
-	
+
 	args = append(args, pkg)
 
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = tr.projectRoot
-	
+
 	output, err := cmd.CombinedOutput()
-	
+
 	result := TestResult{
 		Package:  pkg,
 		Success:  err == nil,
@@ -197,7 +197,7 @@ func (tr *TestRunner) runPackageTests(ctx context.Context, pkg string) TestResul
 func (tr *TestRunner) PrintSummary(summary *TestSummary) {
 	fmt.Printf("\n")
 	fmt.Printf("=== Test Summary ===\n")
-	fmt.Printf("Packages: %d total, %d passed, %d failed\n", 
+	fmt.Printf("Packages: %d total, %d passed, %d failed\n",
 		summary.TotalPackages, summary.PassedPackages, summary.FailedPackages)
 	fmt.Printf("Duration: %.3fs\n", summary.TotalDuration.Seconds())
 

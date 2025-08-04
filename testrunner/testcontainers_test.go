@@ -244,7 +244,7 @@ func TestPostgreSQLBasic(t *testing.T) {
 	defer cleanup()
 
 	// Get connection string for override
-	connStr := fmt.Sprintf("postgres://testuser:testpass@%s/testdb?sslmode=disable", 
+	connStr := fmt.Sprintf("postgres://testuser:testpass@%s/testdb?sslmode=disable",
 		"localhost") // This will be overridden by the actual container connection
 
 	runTestCaseWithDB(t, db, "postgres", "pgx", connStr, "test_postgres_basic")

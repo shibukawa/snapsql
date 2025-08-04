@@ -70,7 +70,7 @@ func finalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.O
 		} else if offsetClause != nil {
 			originalTokens = offsetClause.ContentTokens()
 		}
-		
+
 		if hasCELExpression(originalTokens) {
 			// Skip number validation for clauses with CEL expressions
 			continue

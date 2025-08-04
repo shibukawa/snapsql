@@ -85,19 +85,19 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 				{Op: intermediate.OpEmitStatic, Value: "SELECT * FROM users WHERE id = "},
 				{Op: intermediate.OpEmitEval, ExprIndex: intPtr(99)},
 			},
-			expressions:  []intermediate.CELExpression{},
-			params:       map[string]interface{}{},
-			expectedSQL:  "",
-			expectError:  true,
+			expressions: []intermediate.CELExpression{},
+			params:      map[string]interface{}{},
+			expectedSQL: "",
+			expectError: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			generator := NewSQLGenerator(tc.instructions, tc.expressions, "postgresql")
-			
+
 			sql, args, err := generator.Generate(tc.params)
-			
+
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
@@ -180,9 +180,9 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			generator := NewSQLGenerator(tc.instructions, tc.expressions, "postgresql")
-			
+
 			sql, args, err := generator.Generate(tc.params)
-			
+
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
@@ -196,7 +196,7 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 
 func TestLoadIntermediateFormat_SupportedFileTypes(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	testCases := []struct {
 		name        string
 		filename    string
@@ -246,9 +246,9 @@ func TestLoadIntermediateFormat_SupportedFileTypes(t *testing.T) {
 				// Use non-existent file path
 				filePath = tc.filename
 			}
-			
+
 			_, err := LoadIntermediateFormat(filePath)
-			
+
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tc.errorMsg)
 		})

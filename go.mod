@@ -1,9 +1,8 @@
 module github.com/shibukawa/snapsql
 
-go 1.24.3
+go 1.24.5
 
 require (
-	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/alecthomas/kong v1.12.0
 	github.com/beevik/etree v1.5.1

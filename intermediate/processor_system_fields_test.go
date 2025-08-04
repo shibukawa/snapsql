@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/stretchr/testify/require"
 	. "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/stretchr/testify/require"
 )
 
 // GetSystemFieldsSQL generates the SQL fragment for system fields

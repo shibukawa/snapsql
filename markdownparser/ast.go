@@ -142,7 +142,7 @@ func extractParameterTextFromASTNodes(nodes []ast.Node, content []byte) (string,
 		case *ast.FencedCodeBlock:
 			info := string(n.Info.Text(content))
 			infoLower := strings.ToLower(strings.TrimSpace(info))
-			
+
 			// Extract content
 			var textContent strings.Builder
 			lines := n.Lines()
@@ -153,13 +153,13 @@ func extractParameterTextFromASTNodes(nodes []ast.Node, content []byte) (string,
 					textContent.WriteString("\n")
 				}
 			}
-			
+
 			if infoLower == "yaml" || infoLower == "yml" {
 				return textContent.String(), "yaml", nil
 			} else if infoLower == "json" {
 				return textContent.String(), "json", nil
 			}
-			
+
 		case *ast.List:
 			// Extract parameter definitions from list items
 			var listContent strings.Builder
@@ -180,7 +180,7 @@ func parseParameterSection(nodes []ast.Node, content []byte) (map[string]any, er
 		case *ast.FencedCodeBlock:
 			info := string(n.Info.Text(content))
 			infoLower := strings.ToLower(strings.TrimSpace(info))
-			
+
 			if infoLower == "yaml" || infoLower == "yml" {
 				// Extract YAML content
 				var yamlContent strings.Builder
@@ -192,14 +192,14 @@ func parseParameterSection(nodes []ast.Node, content []byte) (map[string]any, er
 						yamlContent.WriteString("\n")
 					}
 				}
-				
+
 				// Parse YAML
 				var params map[string]any
 				if err := yaml.Unmarshal([]byte(yamlContent.String()), &params); err != nil {
 					return nil, fmt.Errorf("failed to parse YAML parameters: %w", err)
 				}
 				return params, nil
-				
+
 			} else if infoLower == "json" {
 				// Extract JSON content
 				var jsonContent strings.Builder
@@ -211,7 +211,7 @@ func parseParameterSection(nodes []ast.Node, content []byte) (map[string]any, er
 						jsonContent.WriteString("\n")
 					}
 				}
-				
+
 				// Parse JSON
 				var params map[string]any
 				if err := json.Unmarshal([]byte(jsonContent.String()), &params); err != nil {
@@ -221,7 +221,7 @@ func parseParameterSection(nodes []ast.Node, content []byte) (map[string]any, er
 			}
 		}
 	}
-	
+
 	// No parameter block found
 	return nil, nil
 }
@@ -267,7 +267,7 @@ func extractParameterBlock(nodes []ast.Node, content []byte) string {
 // extractTextFromASTNodes extracts plain text content from AST nodes
 func extractTextFromASTNodes(nodes []ast.Node, content []byte) (string, error) {
 	var textContent strings.Builder
-	
+
 	for _, node := range nodes {
 		ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 			if entering {
@@ -284,6 +284,6 @@ func extractTextFromASTNodes(nodes []ast.Node, content []byte) (string, error) {
 			return ast.WalkContinue, nil
 		})
 	}
-	
+
 	return strings.TrimSpace(textContent.String()), nil
 }
