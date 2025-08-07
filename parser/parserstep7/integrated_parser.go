@@ -1,15 +1,15 @@
 package parserstep7
 
 import (
-	"errors"
 	"fmt"
 
+	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Sentinel errors
 var (
-	ErrInvalidStatement = errors.New("invalid statement for subquery parsing")
+	ErrInvalidStatement = snapsql.ErrInvalidStatement
 )
 
 // SubqueryParserIntegrated combines all parserstep7 functionality
@@ -142,7 +142,7 @@ func (spi *SubqueryParserIntegrated) GetAccessibleFieldsForNode(nodeID string) (
 	if fields, ok := result.([]*FieldSource); ok {
 		return fields, nil
 	}
-	return nil, fmt.Errorf("unexpected return type from GetAccessibleFieldsForNodeInGraph")
+	return nil, snapsql.ErrUnexpectedReturnType
 }
 
 // ValidateFieldAccess validates if a field can be accessed from a specific node
@@ -161,7 +161,7 @@ func (spi *SubqueryParserIntegrated) ResolveFieldReference(nodeID, fieldName str
 	if fields, ok := result.([]*FieldSource); ok {
 		return fields, nil
 	}
-	return nil, fmt.Errorf("unexpected return type from ResolveFieldInNodeFromGraph")
+	return nil, snapsql.ErrUnexpectedReturnType
 }
 
 // Reset resets all internal state

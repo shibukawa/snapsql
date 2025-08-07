@@ -19,6 +19,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shopspring/decimal"
 )
 
@@ -38,7 +39,7 @@ func NewDecimalFromFloat64(f float64) *Decimal {
 func NewDecimalFromString(s string) (*Decimal, error) {
 	d, err := decimal.NewFromString(s)
 	if err != nil {
-		return nil, fmt.Errorf("invalid decimal string: %s", s)
+		return nil, fmt.Errorf("%w: %s", snapsql.ErrInvalidDecimalString, s)
 	}
 	return &Decimal{d}, nil
 }
@@ -78,7 +79,7 @@ func (d *Decimal) ConvertToNative(typeDesc reflect.Type) (interface{}, error) {
 	if typeDesc == reflect.TypeOf("") {
 		return d.Decimal.String(), nil
 	}
-	return nil, fmt.Errorf("unsupported native conversion to %v for Decimal", typeDesc)
+	return nil, fmt.Errorf("%w: to %v for Decimal", snapsql.ErrUnsupportedConversion, typeDesc)
 }
 
 // ConvertToType converts Decimal to another CEL type (e.g., DOUBLE, STRING)

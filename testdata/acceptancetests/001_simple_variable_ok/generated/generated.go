@@ -28,7 +28,7 @@ import (
 )
 // GetUserByIDResult represents the response structure for GetUserByID
 type GetUserByIDResult struct {
-	ID int `json:"id"`
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Email string `json:"email"`
 }
@@ -108,7 +108,7 @@ func GetUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int,
 	// Execute query and scan single row
 	row := stmt.QueryRowContext(ctx, args...)
 	err = row.Scan(
-	    &result.ID,
+	    &result.Id,
 	    &result.Name,
 	    &result.Email
 	)

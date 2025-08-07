@@ -82,6 +82,7 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 			"email": email,
 		})
 	}
+	require.NoError(t, rows.Err())
 
 	assert.Equal(t, 2, len(users))
 	assert.Equal(t, "John Doe", users[0]["name"])
@@ -153,6 +154,7 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 			"email": email,
 		})
 	}
+	require.NoError(t, rows.Err())
 
 	// Should only have the new user, old user should be cleared
 	assert.Equal(t, 1, len(users))

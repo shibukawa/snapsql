@@ -9,13 +9,14 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/goccy/go-yaml"
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // parseParameters parses parameter data in various formats into a single map
 func parseParameters(content []byte) (map[string]any, error) {
 	content = bytes.TrimSpace(content)
 	if len(content) == 0 {
-		return nil, fmt.Errorf("empty parameter content")
+		return nil, snapsql.ErrEmptyContent
 	}
 
 	// Try YAML/JSON first
@@ -25,7 +26,7 @@ func parseParameters(content []byte) (map[string]any, error) {
 	}
 
 	if len(params) == 0 {
-		return nil, fmt.Errorf("empty parameters object")
+		return nil, snapsql.ErrEmptyParameters
 	}
 
 	// Convert numeric types to ensure consistency
@@ -39,7 +40,7 @@ func parseParameters(content []byte) (map[string]any, error) {
 func parseYAMLData(content []byte, result *[]map[string]any) error {
 	content = bytes.TrimSpace(content)
 	if len(content) == 0 {
-		return fmt.Errorf("empty content")
+		return snapsql.ErrEmptyContent
 	}
 
 	if err := yaml.Unmarshal(content, result); err != nil {
@@ -60,7 +61,7 @@ func parseYAMLData(content []byte, result *[]map[string]any) error {
 func parseStructuredData(content []byte, format string) (map[string][]map[string]any, error) {
 	content = bytes.TrimSpace(content)
 	if len(content) == 0 {
-		return nil, fmt.Errorf("empty content")
+		return nil, snapsql.ErrEmptyContent
 	}
 
 	result := make(map[string][]map[string]any)
@@ -108,14 +109,14 @@ func parseStructuredData(content []byte, format string) (map[string][]map[string
 		}
 	}
 
-	return nil, fmt.Errorf("failed to parse data: %q", string(content))
+	return nil, fmt.Errorf("%w: %q", snapsql.ErrFailedToParse, string(content))
 }
 
 // parseExpectedResults parses expected results data
 func parseExpectedResults(content []byte) ([]map[string]any, error) {
 	content = bytes.TrimSpace(content)
 	if len(content) == 0 {
-		return nil, fmt.Errorf("empty content")
+		return nil, snapsql.ErrEmptyContent
 	}
 
 	// Try YAML/JSON array format
@@ -133,7 +134,7 @@ func parseExpectedResults(content []byte) ([]map[string]any, error) {
 	}
 
 	if len(result) == 0 {
-		return nil, fmt.Errorf("empty expected results")
+		return nil, snapsql.ErrEmptyExpectedResults
 	}
 
 	return result, nil
@@ -247,7 +248,7 @@ func parseDBUnitXML(content string) (*DBUnitXML, error) {
 	// Process dataset
 	dataset := root.SelectElement("dataset")
 	if dataset == nil {
-		return nil, fmt.Errorf("no dataset element found")
+		return nil, snapsql.ErrNoDatasetElement
 	}
 
 	// Group elements by tag name (table name)
@@ -301,7 +302,7 @@ func parseCSVData(content []byte) ([]map[string]any, error) {
 	}
 
 	if len(records) < 2 {
-		return nil, fmt.Errorf("CSV must have at least a header row and one data row")
+		return nil, snapsql.ErrInvalidCSVFormat
 	}
 
 	headers := records[0]

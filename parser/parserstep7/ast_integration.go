@@ -1,15 +1,15 @@
 package parserstep7
 
 import (
-	"errors"
 	"fmt"
 
+	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Sentinel errors
 var (
-	ErrSubqueryExtraction = errors.New("failed to extract subqueries")
+	ErrSubqueryExtraction = snapsql.ErrSubqueryExtraction
 )
 
 // ASTIntegrator integrates with actual SQL AST structures to detect and parse subqueries

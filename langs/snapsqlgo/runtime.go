@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // DBExecutor interface supports sql.DB, sql.Conn, and sql.Tx
@@ -75,7 +76,7 @@ func LoadMockDataFromFile(mockPath, testCaseName string) (any, error) {
 // GetMockDataFromFiles loads and combines mock data from multiple test cases
 func GetMockDataFromFiles(mockPath string, dataNames []string) (any, error) {
 	if len(dataNames) == 0 {
-		return nil, fmt.Errorf("no mock data names specified")
+		return nil, snapsql.ErrNoMockDataNames
 	}
 
 	if len(dataNames) == 1 {
@@ -153,7 +154,10 @@ func WithConfig(ctx context.Context, funcPattern string, opts ...FuncOpt) contex
 		configData = make(map[string]*FuncConfig)
 	}
 
-	configMap := configData.(map[string]*FuncConfig)
+	configMap, ok := configData.(map[string]*FuncConfig)
+	if !ok {
+		configMap = make(map[string]*FuncConfig)
+	}
 	config := &FuncConfig{}
 
 	// Apply function options

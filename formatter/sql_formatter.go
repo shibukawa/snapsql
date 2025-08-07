@@ -204,7 +204,6 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 				if strings.HasPrefix(directive, "if ") || strings.HasPrefix(directive, "for ") {
 					if needsNewline {
 						result.WriteString("\n")
-						needsNewline = false
 					}
 					result.WriteString(strings.Repeat(" ", indentLevel*f.indentSize))
 					result.WriteString(token.Value)
@@ -370,11 +369,6 @@ func (f *SQLFormatter) isStatementKeyword(keyword string) bool {
 // needsSpaceBefore checks if a token needs a space before it
 func (f *SQLFormatter) needsSpaceBefore(value string) bool {
 	return value != "(" && value != ")" && value != "," && value != ";" && value != "."
-}
-
-// needsSpaceAfter checks if a token needs a space after it
-func (f *SQLFormatter) needsSpaceAfter(value string) bool {
-	return value != "(" && value != "." && value != "/*="
 }
 
 // cleanupFormatting cleans up the formatted SQL

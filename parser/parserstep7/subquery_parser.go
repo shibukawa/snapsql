@@ -1,8 +1,9 @@
 package parserstep7
 
 import (
-	"errors"
+	"fmt"
 
+	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
@@ -143,7 +144,7 @@ func (sp *SubqueryParser) analyzeDependenciesInStatement(stmt cmn.StatementNode,
 func (sp *SubqueryParser) parseSubqueryNode(nodeID string) error {
 	node := sp.dependencies.GetNode(nodeID)
 	if node == nil {
-		return errors.New("node not found: " + nodeID)
+		return fmt.Errorf("%w: %s", snapsql.ErrNodeNotFound, nodeID)
 	}
 
 	// Here we would perform detailed parsing of the subquery
@@ -224,15 +225,6 @@ func (sp *SubqueryParser) buildSelectFieldSources(stmt cmn.StatementNode, fieldS
 }
 
 // Helper methods
-func (sp *SubqueryParser) getSubqueryID(subquery cmn.StatementNode) string {
-	// Implementation placeholder
-	return ""
-}
-
-func (sp *SubqueryParser) isExpression(fieldKind cmn.FieldType) bool {
-	return fieldKind == cmn.FunctionField
-}
-
 func (sp *SubqueryParser) resolveTableSource(tableName, fieldName string, tableRefs map[string]*TableReference) *TableReference {
 	// Try to find existing table reference or create a new one
 	if ref, exists := tableRefs[tableName]; exists {

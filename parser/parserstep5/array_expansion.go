@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
@@ -242,14 +243,14 @@ func parseForDirective(token tokenizer.Token) (string, string) {
 // convertToAnySlice converts any slice type to []any using reflection
 func convertToAnySlice(value any) ([]any, error) {
 	if value == nil {
-		return nil, fmt.Errorf("value is nil")
+		return nil, snapsql.ErrValueIsNil
 	}
 
 	rv := reflect.ValueOf(value)
 
 	// Check if it's a slice or array
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		return nil, fmt.Errorf("value is not a slice or array, got %s", rv.Kind())
+		return nil, fmt.Errorf("%w: got %s", snapsql.ErrNotSliceOrArray, rv.Kind())
 	}
 
 	// Convert to []any
@@ -515,7 +516,7 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 		element := rv.Index(i).Interface()
 		objectMap, ok := element.(map[string]interface{})
 		if !ok {
-			gerr.Add(fmt.Errorf("array element at index %d is not an object: %T", i, element))
+			gerr.Add(fmt.Errorf("%w: at index %d: %T", snapsql.ErrArrayElementNotObject, i, element))
 			return
 		}
 

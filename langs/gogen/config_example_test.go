@@ -26,6 +26,10 @@ func TestConfigurationExamples(t *testing.T) {
 		Parameters: []intermediate.Parameter{
 			{Name: "id", Type: "int"},
 		},
+		Responses: []intermediate.Response{
+			{Name: "id", Type: "int"},
+			{Name: "name", Type: "string"},
+		},
 		Instructions: []intermediate.Instruction{
 			{Op: "EMIT_STATIC", Value: "SELECT * FROM users WHERE id = "},
 			{Op: "EMIT_EVAL", ExprIndex: &[]int{0}[0]},

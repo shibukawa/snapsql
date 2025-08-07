@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // HierarchicalMapper handles double underscore field mapping for JOIN queries
@@ -184,7 +186,7 @@ func (h *HierarchicalMapper[T]) mergePathGroup(entity *T, path string, fields ma
 	}
 
 	if !pathField.IsValid() {
-		return fmt.Errorf("path field %s not found in struct", path)
+		return fmt.Errorf("%w: path field %s", snapsql.ErrFieldNotFound, path)
 	}
 
 	// Handle slice fields (arrays)
@@ -324,7 +326,7 @@ func convertValue(value any, targetType reflect.Type) (reflect.Value, error) {
 		if targetType.Kind() == reflect.Ptr {
 			return reflect.Zero(targetType), nil
 		}
-		return reflect.Value{}, fmt.Errorf("cannot assign nil to non-pointer type %s", targetType)
+		return reflect.Value{}, fmt.Errorf("%w: %s", snapsql.ErrCannotAssignNil, targetType)
 	}
 
 	// Direct assignment if types match
@@ -350,5 +352,5 @@ func convertValue(value any, targetType reflect.Type) (reflect.Value, error) {
 		}
 	}
 
-	return reflect.Value{}, fmt.Errorf("cannot convert %s to %s", valueType, targetType)
+	return reflect.Value{}, fmt.Errorf("%w: %s to %s", snapsql.ErrCannotConvert, valueType, targetType)
 }

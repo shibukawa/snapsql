@@ -42,10 +42,14 @@ func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 	if err != nil {
 		return nil, err
 	}
+	dummyData, ok := fd.DummyData().(map[string]any)
+	if !ok {
+		dummyData = make(map[string]any)
+	}
 	result := &Namespace{
 		fd:            fd,
 		currentEnv:    current,
-		currentValues: fd.DummyData().(map[string]any),
+		currentValues: dummyData,
 	}
 
 	return result, nil
@@ -76,16 +80,16 @@ func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 	ast, issues := ns.currentEnv.Compile(exp)
 	if issues != nil && issues.Err() != nil {
-		return nil, "", fmt.Errorf("%w: CEL expression compile error: %v", ErrInvalidForSnapSQL, issues.Err())
+		return nil, "", fmt.Errorf("%w: CEL expression compile error: %w", ErrInvalidForSnapSQL, issues.Err())
 	}
 	prg, err := ns.currentEnv.Program(ast)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: CEL program creation error: %v", ErrInvalidForSnapSQL, err)
+		return nil, "", fmt.Errorf("%w: CEL program creation error: %w", ErrInvalidForSnapSQL, err)
 	}
 
 	v, _, err := prg.Eval(ns.currentValues)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: CEL program evaluation error: %v", ErrInvalidForSnapSQL, err)
+		return nil, "", fmt.Errorf("%w: CEL program evaluation error: %w", ErrInvalidForSnapSQL, err)
 	}
 	if ns.fd != nil {
 		return v.Value(), InferTypeStringFromDummyValue(v.Value()), nil
@@ -95,7 +99,7 @@ func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 		if len(result) == 16 {
 			uuidObj, err := uuid.FromBytes(result)
 			if err != nil {
-				return nil, "", fmt.Errorf("%w: error converting bytes to UUID: %v", ErrInvalidForSnapSQL, err)
+				return nil, "", fmt.Errorf("%w: error converting bytes to UUID: %w", ErrInvalidForSnapSQL, err)
 			}
 			return uuidObj, "uuid", nil
 		}
@@ -133,7 +137,7 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("%w: error creating new environment for loop variable %s: %v", ErrInvalidForSnapSQL, variableName, err)
+		return fmt.Errorf("%w: error creating new environment for loop variable %s: %w", ErrInvalidForSnapSQL, variableName, err)
 	}
 
 	// Save and update the current frame

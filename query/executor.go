@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -158,7 +159,7 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 			if inst.ExprIndex != nil {
 				program, exists := celPrograms[*inst.ExprIndex]
 				if !exists {
-					return "", nil, fmt.Errorf("expression index %d not found", *inst.ExprIndex)
+					return "", nil, fmt.Errorf("%w: %d", snapsql.ErrExpressionIndexNotFound, *inst.ExprIndex)
 				}
 
 				// Evaluate expression
@@ -226,7 +227,7 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 	rows, err := e.db.QueryContext(queryCtx, sql, args...)
 	duration := time.Since(startTime)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrQueryExecution, err)
+		return nil, fmt.Errorf("%w: %w", ErrQueryExecution, err)
 	}
 	defer rows.Close()
 
@@ -333,7 +334,7 @@ func OpenDatabase(driver, connectionString string, timeout int) (*sql.DB, error)
 	// Open database connection
 	db, err := sql.Open(driver, connectionString)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrDatabaseConnection, err)
+		return nil, fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
 
 	// Set connection parameters
@@ -347,7 +348,7 @@ func OpenDatabase(driver, connectionString string, timeout int) (*sql.DB, error)
 
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("%w: %v", ErrDatabaseConnection, err)
+		return nil, fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
 
 	return db, nil

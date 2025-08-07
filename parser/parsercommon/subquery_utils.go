@@ -1,9 +1,14 @@
 package parsercommon
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
+
+var ErrInvalidTableReferenceType = errors.New("invalid table reference type")
 
 // SubqueryGraphUtils provides utility functions for extracting information from SQDependencyGraph
 // without exposing internal implementation details
@@ -310,7 +315,7 @@ func AddFieldSourceToNodeInGraph(dg *SQDependencyGraph, nodeID string, fieldSour
 	if fs, ok := fieldSource.(*SQFieldSource); ok {
 		return AddFieldSourceToGraphNode(dg, nodeID, fs)
 	}
-	return fmt.Errorf("invalid field source type")
+	return snapsql.ErrInvalidFieldSourceType
 }
 
 // AddTableReferenceToNodeInGraph adds a table reference to a specific node
@@ -318,8 +323,11 @@ func AddTableReferenceToNodeInGraph(dg *SQDependencyGraph, nodeID string, tableR
 	if dg == nil {
 		return ErrNoDependencyGraph
 	}
-	// Delegate to the specific implementation
-	return AddTableReferenceToGraphNode(dg, nodeID, tableRef.(*SQTableReference))
+	// Delegate to the specific implementation with type assertion check
+	if sqTableRef, ok := tableRef.(*SQTableReference); ok {
+		return AddTableReferenceToGraphNode(dg, nodeID, sqTableRef)
+	}
+	return fmt.Errorf("%w: %T", ErrInvalidTableReferenceType, tableRef)
 }
 
 // GetAccessibleFieldsForNodeInGraph returns accessible fields for a node (legacy compatibility)

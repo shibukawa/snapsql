@@ -3,7 +3,6 @@ package snapsql
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 
 	"github.com/goccy/go-yaml"
@@ -444,39 +443,10 @@ func expandConfigEnvVars(config *Config) {
 	}
 }
 
-// ensureDir creates a directory if it doesn't exist
-func ensureDir(path string) error {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return os.MkdirAll(path, 0755)
-	}
-	return nil
-}
-
-// writeFile writes content to a file, creating directories if necessary
-func writeFile(path, content string) error {
-	// Ensure directory exists
-	dir := filepath.Dir(path)
-	if err := ensureDir(dir); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", dir, err)
-	}
-
-	// Write file
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
 // fileExists checks if a file exists
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
-}
-
-// isDirectory checks if a path is a directory
-func isDirectory(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
 }
 
 // IsSystemField checks if a field name is considered a system field

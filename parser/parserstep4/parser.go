@@ -53,9 +53,6 @@ var (
 	// Expression
 	caseKeyword = cmn.WS2(cmn.PrimitiveType("case", tok.CASE))
 	whenKeyword = cmn.WS2(cmn.PrimitiveType("when", tok.WHEN))
-	thenKeyword = cmn.WS2(cmn.PrimitiveType("then", tok.THEN))
-	elseKeyword = cmn.WS2(cmn.PrimitiveType("else", tok.ELSE))
-	endKeyword  = cmn.WS2(cmn.PrimitiveType("end", tok.END))
 	equal       = cmn.WS2(cmn.PrimitiveType("equal", tok.EQUAL))
 )
 

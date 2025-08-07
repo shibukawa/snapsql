@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -21,7 +22,7 @@ type sqlBuilderData struct {
 func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, dialect string) (*sqlBuilderData, error) {
 	// Require dialect to be specified
 	if dialect == "" {
-		return nil, fmt.Errorf("dialect must be specified (postgres, mysql, sqlite)")
+		return nil, snapsql.ErrDialectMustBeSpecified
 	}
 
 	// Use intermediate package's optimization with dialect filtering
@@ -40,16 +41,6 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 
 	// Generate dynamic SQL building code
 	return generateDynamicSQLFromOptimized(optimizedInstructions, format)
-}
-
-// processSQLBuilder processes instructions and generates SQL building code
-// It uses the dialect from the global configuration if available
-func processSQLBuilder(format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
-	// TODO: Get dialect from configuration
-	// For now, use empty string to include all dialects
-	// This should be passed from the generator or configuration
-	dialect := ""
-	return processSQLBuilderWithDialect(format, dialect)
 }
 
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions

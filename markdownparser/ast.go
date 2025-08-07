@@ -1,11 +1,10 @@
 package markdownparser
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/goccy/go-yaml"
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/yuin/goldmark/ast"
 )
 
@@ -172,96 +171,7 @@ func extractParameterTextFromASTNodes(nodes []ast.Node, content []byte) (string,
 			return listContent.String(), "list", nil
 		}
 	}
-	return "", "", fmt.Errorf("no parameter code block or list found")
-}
-func parseParameterSection(nodes []ast.Node, content []byte) (map[string]any, error) {
-	for _, node := range nodes {
-		switch n := node.(type) {
-		case *ast.FencedCodeBlock:
-			info := string(n.Info.Text(content))
-			infoLower := strings.ToLower(strings.TrimSpace(info))
-
-			if infoLower == "yaml" || infoLower == "yml" {
-				// Extract YAML content
-				var yamlContent strings.Builder
-				lines := n.Lines()
-				for i := 0; i < lines.Len(); i++ {
-					line := lines.At(i)
-					yamlContent.Write(line.Value(content))
-					if i < lines.Len()-1 {
-						yamlContent.WriteString("\n")
-					}
-				}
-
-				// Parse YAML
-				var params map[string]any
-				if err := yaml.Unmarshal([]byte(yamlContent.String()), &params); err != nil {
-					return nil, fmt.Errorf("failed to parse YAML parameters: %w", err)
-				}
-				return params, nil
-
-			} else if infoLower == "json" {
-				// Extract JSON content
-				var jsonContent strings.Builder
-				lines := n.Lines()
-				for i := 0; i < lines.Len(); i++ {
-					line := lines.At(i)
-					jsonContent.Write(line.Value(content))
-					if i < lines.Len()-1 {
-						jsonContent.WriteString("\n")
-					}
-				}
-
-				// Parse JSON
-				var params map[string]any
-				if err := json.Unmarshal([]byte(jsonContent.String()), &params); err != nil {
-					return nil, fmt.Errorf("failed to parse JSON parameters: %w", err)
-				}
-				return params, nil
-			}
-		}
-	}
-
-	// No parameter block found
-	return nil, nil
-}
-
-// extractParameterBlock extracts parameter definitions from AST nodes
-func extractParameterBlock(nodes []ast.Node, content []byte) string {
-	var parameterContent strings.Builder
-
-	for _, node := range nodes {
-		switch n := node.(type) {
-		case *ast.FencedCodeBlock:
-			info := string(n.Info.Text(content))
-			if strings.ToLower(strings.TrimSpace(info)) == "yaml" ||
-				strings.ToLower(strings.TrimSpace(info)) == "json" {
-				lines := n.Lines()
-				for i := 0; i < lines.Len(); i++ {
-					line := lines.At(i)
-					parameterContent.Write(line.Value(content))
-					if i < lines.Len()-1 {
-						parameterContent.WriteString("\n")
-					}
-				}
-				return parameterContent.String()
-			}
-		case *ast.List:
-			// Extract parameter definitions from list items
-			ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-				if entering && n.Kind() == ast.KindText {
-					text := string(n.Text(content))
-					if strings.Contains(text, ":") {
-						parameterContent.WriteString(text)
-						parameterContent.WriteString("\n")
-					}
-				}
-				return ast.WalkContinue, nil
-			})
-		}
-	}
-
-	return parameterContent.String()
+	return "", "", snapsql.ErrNoParameterFound
 }
 
 // extractTextFromASTNodes extracts plain text content from AST nodes

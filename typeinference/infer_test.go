@@ -57,12 +57,12 @@ func TestInferFieldTypes_TableDriven(t *testing.T) {
 			name: "simple SELECT with basic columns",
 			sql:  "SELECT id, name FROM users",
 			schema: `
-name: test_db
+name: test_db  # nolint:dupword // YAML field name
 tables:
-- name: users
+- name: users  # nolint:dupword // YAML field name
   columns:
     id:
-      name: id
+      name: id  # nolint:dupword // YAML field name
       dataType: INTEGER
       nullable: false
       isPrimaryKey: true
@@ -209,12 +209,12 @@ func TestSchemaValidation_TableDriven(t *testing.T) {
 			name: "valid schema",
 			sql:  "SELECT id, name FROM users",
 			schema: `
-name: test_db
+name: test_db  # nolint:dupword // YAML field name
 tables:
-  - name: users
+  - name: users  # nolint:dupword // YAML field name
     columns:
       id:
-        name: id
+        name: id  # nolint:dupword // YAML field name
         dataType: INTEGER
         nullable: false
       name:

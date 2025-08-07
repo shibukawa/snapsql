@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -68,7 +69,7 @@ func (p *PullCmd) Run(ctx *Context) error {
 	pullConfig := p.createPullConfig(dbURL, dbType)
 
 	// Execute pull operation
-	result, err := pull.ExecutePull(pullConfig)
+	result, err := pull.ExecutePull(context.Background(), pullConfig)
 	if err != nil {
 		return fmt.Errorf("failed to pull schema: %w", err)
 	}

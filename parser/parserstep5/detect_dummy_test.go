@@ -256,19 +256,3 @@ func getAllTokensFromStatement(stmt cmn.StatementNode) []tokenizer.Token {
 	}
 	return allTokens
 }
-
-// Helper function to get all tokens including directive tokens
-func getAllTokensIncludingDirectives(stmt cmn.StatementNode) []tokenizer.Token {
-	var allTokens []tokenizer.Token
-	for _, clause := range stmt.Clauses() {
-		tokens := clause.ContentTokens()
-		for _, token := range tokens {
-			allTokens = append(allTokens, token)
-			// Check if this is a directive token that might have been processed
-			if token.Directive != nil {
-				// This token has directive information, include it
-			}
-		}
-	}
-	return allTokens
-}

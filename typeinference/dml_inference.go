@@ -3,6 +3,7 @@ package typeinference
 import (
 	"fmt"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 )
 
@@ -32,7 +33,7 @@ func (d *DMLInferenceEngine) InferDMLStatementType(stmt parser.StatementNode) ([
 	case *parser.DeleteFromStatement:
 		return d.inferDeleteStatement(s)
 	default:
-		return nil, fmt.Errorf("unsupported DML statement type: %T", stmt)
+		return nil, fmt.Errorf("%w: %T", snapsql.ErrUnsupportedDMLStatementType, stmt)
 	}
 }
 
@@ -169,7 +170,7 @@ func (d *DMLInferenceEngine) inferReturningClause(returning *parser.ReturningCla
 // getTargetTableFromInsert extracts target table name from INSERT statement
 func (d *DMLInferenceEngine) getTargetTableFromInsert(stmt *parser.InsertIntoStatement) (string, error) {
 	if stmt.Into == nil {
-		return "", fmt.Errorf("INSERT statement missing INTO clause")
+		return "", snapsql.ErrInsertStatementMissingInto
 	}
 
 	// Extract table name from INTO clause
@@ -180,7 +181,7 @@ func (d *DMLInferenceEngine) getTargetTableFromInsert(stmt *parser.InsertIntoSta
 // getTargetTableFromUpdate extracts target table name from UPDATE statement
 func (d *DMLInferenceEngine) getTargetTableFromUpdate(stmt *parser.UpdateStatement) (string, error) {
 	if stmt.Update == nil {
-		return "", fmt.Errorf("UPDATE statement missing UPDATE clause")
+		return "", snapsql.ErrUpdateStatementMissingUpdate
 	}
 
 	// Extract table name from UPDATE clause
@@ -190,7 +191,7 @@ func (d *DMLInferenceEngine) getTargetTableFromUpdate(stmt *parser.UpdateStateme
 // getTargetTableFromDelete extracts target table name from DELETE statement
 func (d *DMLInferenceEngine) getTargetTableFromDelete(stmt *parser.DeleteFromStatement) (string, error) {
 	if stmt.From == nil {
-		return "", fmt.Errorf("DELETE statement missing FROM clause")
+		return "", snapsql.ErrDeleteStatementMissingFrom
 	}
 
 	// Extract table name from FROM clause

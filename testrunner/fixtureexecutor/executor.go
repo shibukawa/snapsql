@@ -1,12 +1,14 @@
 package fixtureexecutor
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 )
 
@@ -80,7 +82,8 @@ func NewExecutor(db *sql.DB, dialect string) *Executor {
 
 // ExecuteTest executes a complete test case within a transaction
 func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, error) {
-	tx, err := e.db.Begin()
+	ctx := context.Background()
+	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -115,7 +118,7 @@ func (e *Executor) executeTestSteps(execution *TestExecution) (*ValidationResult
 	case FullTest:
 		return e.executeFullTest(execution)
 	default:
-		return nil, fmt.Errorf("unsupported execution mode: %s", execution.Options.Mode)
+		return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedExecutionMode, execution.Options.Mode)
 	}
 }
 
@@ -259,13 +262,14 @@ func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[stri
 	case InsertQuery, UpdateQuery, DeleteQuery:
 		return e.executeDMLQuery(tx, sqlQuery, queryType)
 	default:
-		return nil, fmt.Errorf("unsupported query type")
+		return nil, snapsql.ErrUnsupportedQueryType
 	}
 }
 
 // executeSelectQuery executes a SELECT query and returns the data
 func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationResult, error) {
-	rows, err := tx.Query(sqlQuery)
+	ctx := context.Background()
+	rows, err := tx.QueryContext(ctx, sqlQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute SELECT query: %w", err)
 	}
@@ -320,7 +324,8 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 
 // executeDMLQuery executes INSERT/UPDATE/DELETE queries and returns affected rows
 func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryType) (*ValidationResult, error) {
-	result, err := tx.Exec(sqlQuery)
+	ctx := context.Background()
+	result, err := tx.ExecContext(ctx, sqlQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute DML query: %w", err)
 	}
@@ -357,7 +362,7 @@ func (e *Executor) executeTableFixture(tx *sql.Tx, fixture markdownparser.TableF
 	case markdownparser.Delete:
 		return e.executeDelete(tx, fixture)
 	default:
-		return fmt.Errorf("unsupported insert strategy: %s", fixture.Strategy)
+		return fmt.Errorf("%w: %s", snapsql.ErrUnsupportedInsertStrategy, fixture.Strategy)
 	}
 }
 
@@ -388,14 +393,14 @@ func (e *Executor) executeUpsert(tx *sql.Tx, fixture markdownparser.TableFixture
 	case "sqlite":
 		return e.executeSQLiteUpsert(tx, fixture)
 	default:
-		return fmt.Errorf("upsert not supported for dialect: %s", e.dialect)
+		return fmt.Errorf("%w: %s", snapsql.ErrUpsertNotSupported, e.dialect)
 	}
 }
 
 // executeDelete deletes rows that match the dataset's primary keys
 func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	// This requires knowledge of primary keys, which we'll implement later
-	return fmt.Errorf("delete strategy not yet implemented")
+	return snapsql.ErrDeleteStrategyNotImplemented
 }
 
 // truncateTable truncates a table based on database dialect
@@ -409,10 +414,10 @@ func (e *Executor) truncateTable(tx *sql.Tx, tableName string) error {
 	case "sqlite":
 		query = fmt.Sprintf("DELETE FROM %s", e.quoteIdentifier(tableName))
 	default:
-		return fmt.Errorf("truncate not supported for dialect: %s", e.dialect)
+		return fmt.Errorf("%w: %s", snapsql.ErrTruncateNotSupported, e.dialect)
 	}
 
-	_, err := tx.Exec(query)
+	_, err := tx.ExecContext(context.Background(), query)
 	return err
 }
 
@@ -445,7 +450,8 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 		strings.Join(placeholders, ", "))
 
 	// Prepare statement
-	stmt, err := tx.Prepare(query)
+	ctx := context.Background()
+	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insert statement: %w", err)
 	}
@@ -458,7 +464,7 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 			values[i] = row[col]
 		}
 
-		if _, err := stmt.Exec(values...); err != nil {
+		if _, err := stmt.ExecContext(ctx, values...); err != nil {
 			return fmt.Errorf("failed to insert row: %w", err)
 		}
 	}
@@ -470,21 +476,21 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 func (e *Executor) executePostgresUpsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	// This is a simplified implementation
 	// In practice, you'd need to know the primary key columns
-	return fmt.Errorf("postgres upsert not yet implemented")
+	return snapsql.ErrPostgresUpsertNotImplemented
 }
 
 // executeMySQLUpsert implements upsert for MySQL
 func (e *Executor) executeMySQLUpsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	// This is a simplified implementation
 	// In practice, you'd need to know the primary key columns
-	return fmt.Errorf("mysql upsert not yet implemented")
+	return snapsql.ErrMysqlUpsertNotImplemented
 }
 
 // executeSQLiteUpsert implements upsert for SQLite
 func (e *Executor) executeSQLiteUpsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	// This is a simplified implementation
 	// In practice, you'd need to know the primary key columns
-	return fmt.Errorf("sqlite upsert not yet implemented")
+	return snapsql.ErrSqliteUpsertNotImplemented
 }
 
 // quoteIdentifier quotes database identifiers based on dialect
@@ -581,7 +587,7 @@ func (e *Executor) parseMultipleQueries(sql string) []string {
 // validateDirectResults validates direct query results for SELECT queries
 func (e *Executor) validateDirectResults(result *ValidationResult, expectedResults []map[string]any) error {
 	if len(result.Data) != len(expectedResults) {
-		return fmt.Errorf("expected %d result rows, got %d rows", len(expectedResults), len(result.Data))
+		return fmt.Errorf("%w: expected %d result rows, got %d rows", snapsql.ErrResultRowCountMismatch, len(expectedResults), len(result.Data))
 	}
 
 	for i, expectedRow := range expectedResults {
@@ -595,7 +601,7 @@ func (e *Executor) validateDirectResults(result *ValidationResult, expectedResul
 }
 func (e *Executor) validateVerifyResults(result *ValidationResult, expectedResults []map[string]any) error {
 	if len(result.Data) != len(expectedResults) {
-		return fmt.Errorf("expected %d result rows, got %d rows", len(expectedResults), len(result.Data))
+		return fmt.Errorf("%w: expected %d result rows, got %d rows", snapsql.ErrResultRowCountMismatch, len(expectedResults), len(result.Data))
 	}
 
 	for i, expectedRow := range expectedResults {

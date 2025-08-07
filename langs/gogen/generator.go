@@ -7,6 +7,10 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -206,7 +210,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	tmpl, err := template.New("go").Funcs(template.FuncMap{
 		"toLower":  strings.ToLower,
 		"backtick": func() string { return "`" },
-		"title":    strings.Title,
+		"title":    cases.Title(language.English).String,
 		"celTypeConvert": func(typeName string) string {
 			// Handle array types
 			if strings.HasPrefix(typeName, "[]") {
@@ -247,11 +251,12 @@ func (g *Generator) Generate(w io.Writer) error {
 		},
 		"celNameToGoName": func(celName string) string {
 			parts := strings.Split(celName, "_")
+			caser := cases.Title(language.English)
 			for i, part := range parts {
 				if part == "id" {
 					parts[i] = "ID"
 				} else {
-					parts[i] = strings.Title(part)
+					parts[i] = caser.String(part)
 				}
 			}
 			return strings.Join(parts, "")
@@ -443,7 +448,7 @@ func convertToGoType(snapType string) (string, error) {
 	case "any":
 		return "interface{}", nil
 	default:
-		return "", fmt.Errorf("unsupported type: %s", snapType)
+		return "", fmt.Errorf("%w: %s", snapsql.ErrUnsupportedType, snapType)
 	}
 }
 
@@ -524,7 +529,7 @@ type responseFieldData struct {
 // processResponseStruct processes response fields and generates struct data
 func processResponseStruct(format *intermediate.IntermediateFormat) (*responseStructData, error) {
 	if len(format.Responses) == 0 {
-		return nil, nil
+		return nil, snapsql.ErrNoResponseFields
 	}
 
 	// Check for hierarchical structure
@@ -657,7 +662,7 @@ func init() {
 	{{- end }}
 	{{- end }}
 
-	// Create type definitions for local registry
+	// Create type definitions for local type store
 	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
 		{{- range $typeName, $fields := .TypeDefinitions }}
 		"{{ $typeName }}": {
@@ -672,7 +677,7 @@ func init() {
 		{{- end }}
 	}
 
-	// Create and set up local registry
+	// Create and set up local type store
 	registry := snapsqlgo.NewLocalTypeRegistry()
 	for typeName, fields := range typeDefinitions {
 		structInfo := &snapsqlgo.StructInfo{

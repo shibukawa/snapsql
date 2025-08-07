@@ -18,13 +18,18 @@ import (
 
 // Error definitions
 var (
-	ErrTemplateNotFound     = errors.New("template file not found")
-	ErrInvalidParams        = errors.New("invalid parameters")
-	ErrDatabaseConnection   = errors.New("database connection failed")
-	ErrQueryExecution       = errors.New("query execution failed")
-	ErrInvalidOutputFormat  = errors.New("invalid output format")
-	ErrOutputFileCreation   = errors.New("failed to create output file")
-	ErrMissingRequiredParam = errors.New("missing required parameter")
+	ErrTemplateNotFound           = errors.New("template file not found")
+	ErrInvalidParams              = errors.New("invalid parameters")
+	ErrDatabaseConnection         = errors.New("database connection failed")
+	ErrQueryExecution             = errors.New("query execution failed")
+	ErrInvalidOutputFormat        = errors.New("invalid output format")
+	ErrOutputFileCreation         = errors.New("failed to create output file")
+	ErrMissingRequiredParam       = errors.New("missing required parameter")
+	ErrParametersFileNotFound     = errors.New("parameters file not found")
+	ErrUnsupportedParamsFormat    = errors.New("unsupported parameters file format")
+	ErrDefaultEnvironmentNotFound = errors.New("default environment not found in config")
+	ErrNoDatabaseConnection       = errors.New("no database connection specified")
+	ErrExpressionIndexNotFound    = errors.New("expression index not found")
 )
 
 // QueryCmd represents the query command
@@ -116,7 +121,7 @@ func (q *QueryCmd) Run(ctx *Context) error {
 	// Get database connection (only needed for actual execution)
 	driver, connectionString, err := q.getDatabaseConnection(config, ctx)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrDatabaseConnection, err)
+		return fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
 	options.Driver = driver
 	options.ConnectionString = connectionString
@@ -132,7 +137,7 @@ func (q *QueryCmd) loadParameters(ctx *Context) (map[string]any, error) {
 	// Load from file if specified
 	if q.ParamsFile != "" {
 		if !fileExists(q.ParamsFile) {
-			return nil, fmt.Errorf("parameters file not found: %s", q.ParamsFile)
+			return nil, fmt.Errorf("%w: %s", ErrParametersFileNotFound, q.ParamsFile)
 		}
 
 		data, err := os.ReadFile(q.ParamsFile)
@@ -151,7 +156,7 @@ func (q *QueryCmd) loadParameters(ctx *Context) (map[string]any, error) {
 				return nil, fmt.Errorf("failed to parse YAML parameters: %w", err)
 			}
 		} else {
-			return nil, fmt.Errorf("unsupported parameters file format: %s", ext)
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedParamsFormat, ext)
 		}
 
 		if ctx.Verbose {
@@ -261,7 +266,7 @@ func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, 
 		// Get from config
 		dbConfig, exists := config.Databases[q.Environment]
 		if !exists {
-			return "", "", fmt.Errorf("environment not found in config: %s", q.Environment)
+			return "", "", fmt.Errorf("%w: %s", ErrEnvironmentNotFound, q.Environment)
 		}
 		connectionString = dbConfig.Connection
 		driver = dbConfig.Driver
@@ -275,12 +280,12 @@ func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, 
 		if config.Query.DefaultEnvironment != "" {
 			dbConfig, exists := config.Databases[config.Query.DefaultEnvironment]
 			if !exists {
-				return "", "", fmt.Errorf("default environment not found in config: %s", config.Query.DefaultEnvironment)
+				return "", "", fmt.Errorf("%w: %s", ErrDefaultEnvironmentNotFound, config.Query.DefaultEnvironment)
 			}
 			connectionString = dbConfig.Connection
 			driver = dbConfig.Driver
 		} else {
-			return "", "", fmt.Errorf("no database connection specified")
+			return "", "", ErrNoDatabaseConnection
 		}
 	}
 
@@ -365,7 +370,7 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 	// Open database connection
 	db, err := query.OpenDatabase(options.Driver, options.ConnectionString, options.Timeout)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrDatabaseConnection, err)
+		return fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
 	defer db.Close()
 
@@ -384,7 +389,7 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 			}
 			return err
 		}
-		return fmt.Errorf("%w: %v", ErrQueryExecution, err)
+		return fmt.Errorf("%w: %w", ErrQueryExecution, err)
 	}
 
 	// Determine output destination
@@ -393,7 +398,7 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 		// Create output file
 		file, err := os.Create(q.OutputFile)
 		if err != nil {
-			return fmt.Errorf("%w: %s", ErrOutputFileCreation, err)
+			return fmt.Errorf("%w: %w", ErrOutputFileCreation, err)
 		}
 		defer file.Close()
 		output = file
@@ -473,7 +478,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 			if inst.ExprIndex != nil {
 				program, exists := celPrograms[*inst.ExprIndex]
 				if !exists {
-					return "", nil, fmt.Errorf("expression index %d not found", *inst.ExprIndex)
+					return "", nil, fmt.Errorf("%w: %d", ErrExpressionIndexNotFound, *inst.ExprIndex)
 				}
 
 				// Evaluate expression

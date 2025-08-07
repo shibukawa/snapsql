@@ -1,7 +1,6 @@
 package parserstep2_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -90,18 +89,4 @@ func TestClauseContentTokensAndRawTokens(t *testing.T) {
 			assert.Equal(t, tc.wantBodyLen, len(clause.ContentTokens()), "ContentTokens() length unexpected for %s: got=%v", tc.name, clause.ContentTokens())
 		})
 	}
-}
-
-func dumpTokens(t *testing.T, tokens []tokenizer.Token) string {
-	t.Helper()
-	var buffer strings.Builder
-	for i, tok := range tokens {
-		if i > 0 {
-			buffer.WriteString(", ")
-		}
-		buffer.WriteString("'")
-		buffer.WriteString(tok.Value)
-		buffer.WriteString("'")
-	}
-	return buffer.String()
 }

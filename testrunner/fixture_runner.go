@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/testrunner/fixtureexecutor"
 )
@@ -20,7 +21,6 @@ type FixtureTestRunner struct {
 	dialect     string
 	verbose     bool
 	runPattern  string
-	exactMatch  bool
 	options     *fixtureexecutor.ExecutionOptions
 }
 
@@ -93,15 +93,15 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	// For fixture-only mode, ensure exactly one test case or one file with one test case
 	if ftr.options.Mode == fixtureexecutor.FixtureOnly {
 		if len(allTestCases) == 0 {
-			return nil, fmt.Errorf("no test cases found matching pattern '%s'", ftr.runPattern)
+			return nil, fmt.Errorf("%w: '%s'", snapsql.ErrNoTestCasesFound, ftr.runPattern)
 		}
 		if len(allTestCases) > 1 {
 			var names []string
 			for _, tc := range allTestCases {
 				names = append(names, tc.Name)
 			}
-			return nil, fmt.Errorf("fixture-only mode requires exactly one test case, but found %d test cases: %s",
-				len(allTestCases), strings.Join(names, ", "))
+			return nil, fmt.Errorf("%w, but found %d test cases: %s",
+				snapsql.ErrFixtureOnlyModeRequiresOne, len(allTestCases), strings.Join(names, ", "))
 		}
 
 		if ftr.verbose {
@@ -234,42 +234,6 @@ func (ftr *FixtureTestRunner) filterTestFiles(testFiles []string) []string {
 		}
 	}
 	return filtered
-}
-
-// filterTestCases filters test cases by the run pattern
-func (ftr *FixtureTestRunner) filterTestCases(testCases []*markdownparser.TestCase) ([]*markdownparser.TestCase, error) {
-	if ftr.runPattern == "" {
-		return testCases, nil
-	}
-
-	var filtered []*markdownparser.TestCase
-	for _, testCase := range testCases {
-		// Use prefix matching like Go's -run flag
-		if strings.HasPrefix(testCase.Name, ftr.runPattern) {
-			filtered = append(filtered, testCase)
-		}
-	}
-
-	// For fixture-only mode, ensure exactly one test case matches
-	if ftr.options.Mode == fixtureexecutor.FixtureOnly {
-		if len(filtered) == 0 {
-			return nil, fmt.Errorf("no test cases match pattern '%s'", ftr.runPattern)
-		}
-		if len(filtered) > 1 {
-			var names []string
-			for _, tc := range filtered {
-				names = append(names, tc.Name)
-			}
-			return nil, fmt.Errorf("fixture-only mode requires exactly one test case, but pattern '%s' matches %d test cases: %s",
-				ftr.runPattern, len(filtered), strings.Join(names, ", "))
-		}
-
-		if ftr.verbose {
-			fmt.Printf("Selected test case for fixture-only mode: %s\n", filtered[0].Name)
-		}
-	}
-
-	return filtered, nil
 }
 
 // FixtureTestResult represents the result of a fixture test

@@ -67,7 +67,7 @@ func (esr *EnhancedSubqueryResolver) ResolveSubqueryTypesComplete() error {
 func (esr *EnhancedSubqueryResolver) resolveSubqueryNodeComplete(nodeID string, depGraph *parser.SQDependencyGraph) error {
 	node := depGraph.GetNode(nodeID)
 	if node == nil {
-		return fmt.Errorf("dependency node %s not found", nodeID)
+		return fmt.Errorf("%w: %s", snapsql.ErrDependencyNodeNotFound, nodeID)
 	}
 
 	// Skip main query - it's handled by the main inference engine
@@ -77,7 +77,7 @@ func (esr *EnhancedSubqueryResolver) resolveSubqueryNodeComplete(nodeID string, 
 
 	// Get statement from dependency node
 	if node.Statement == nil {
-		return fmt.Errorf("no statement found for subquery node %s", nodeID)
+		return fmt.Errorf("%w: %s", snapsql.ErrNoStatementFoundForSubquery, nodeID)
 	}
 
 	// Create context with proper table resolution
@@ -98,7 +98,7 @@ func (esr *EnhancedSubqueryResolver) resolveSubqueryNodeComplete(nodeID string, 
 		if selectStmt, ok := esr.extractSelectFromStatement(node.Statement); ok {
 			fieldInfos, err = esr.inferSelectSubquery(selectStmt, subEngine, node)
 		} else {
-			return fmt.Errorf("unsupported subquery statement type: %T", stmt)
+			return fmt.Errorf("%w: %T", snapsql.ErrUnsupportedSubqueryStatementType, stmt)
 		}
 	}
 
@@ -180,20 +180,6 @@ func (esr *EnhancedSubqueryResolver) inferSelectSubquery(
 
 	// Perform SELECT type inference
 	return subEngine.inferSelectStatement(stmt)
-}
-
-// inferCTESubquery performs type inference for CTE (WITH clause) subqueries
-func (esr *EnhancedSubqueryResolver) inferCTESubquery(
-	stmt parser.StatementNode,
-	subEngine *TypeInferenceEngine2,
-	node *parser.SQDependencyNode,
-) ([]*InferredFieldInfo, error) {
-	// Try to extract SELECT from CTE using WITH clause if available
-	if selectStmt, ok := esr.extractSelectFromStatement(stmt); ok {
-		return esr.inferSelectSubquery(selectStmt, subEngine, node)
-	}
-
-	return nil, fmt.Errorf("CTE does not contain a valid SELECT statement")
 }
 
 // addDependentSubqueryTables adds tables from dependent subqueries to the engine context

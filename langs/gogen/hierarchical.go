@@ -16,6 +16,9 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -169,11 +172,12 @@ func celNameToGoName(celName string) string {
 
 	// Handle underscore notation (e.g., "user_id" -> "UserID")
 	parts := strings.Split(celName, "_")
+	caser := cases.Title(language.English)
 	for i, part := range parts {
 		if part == "id" {
 			parts[i] = "ID"
 		} else {
-			parts[i] = strings.Title(part)
+			parts[i] = caser.String(part)
 		}
 	}
 	return strings.Join(parts, "")

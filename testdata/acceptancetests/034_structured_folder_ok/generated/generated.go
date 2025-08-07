@@ -28,10 +28,10 @@ import (
 )
 // FindUserByIDResult represents the response structure for FindUserByID
 type FindUserByIDResult struct {
-	ID int `json:"id"`
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Email string `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	Createdat time.Time `json:"created_at"`
 }
 
 // FindUserByID specific CEL programs and mock path
@@ -109,10 +109,10 @@ func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int
 	// Execute query and scan single row
 	row := stmt.QueryRowContext(ctx, args...)
 	err = row.Scan(
-	    &result.ID,
+	    &result.Id,
 	    &result.Name,
 	    &result.Email,
-	    &result.CreatedAt
+	    &result.Createdat
 	)
 	if err != nil {
 	    return result, fmt.Errorf("failed to scan row: %w", err)

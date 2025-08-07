@@ -2,7 +2,6 @@ package parsercommon
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/goccy/go-yaml"
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/tokenizer"
@@ -68,7 +68,7 @@ func ParseFunctionDefinitionFromSQLComment(tokens []tokenizer.Token, basePath st
 			}
 		}
 	}
-	return nil, errors.New("no function definition found in SQL comment")
+	return nil, snapsql.ErrNoFunctionDefinition
 }
 
 // ParseFunctionDefinitionFromSnapSQLDocument creates a FunctionDefinition from a SnapSQLDocument.
@@ -157,7 +157,7 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 			}
 
 		default:
-			return nil, fmt.Errorf("unsupported parameter type: %s", doc.ParametersType)
+			return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedParameterType, doc.ParametersType)
 		}
 
 		def.RawParameters = rawParams
@@ -189,7 +189,7 @@ func parseListFormatParameters(text string) (yaml.MapSlice, error) {
 		// Parse "name: type" format
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid list parameter format: %s", line)
+			return nil, fmt.Errorf("%w: %s", snapsql.ErrInvalidParameterFormat, line)
 		}
 
 		name := strings.TrimSpace(parts[0])
@@ -228,7 +228,7 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 	normalized, order, original, err := f.normalizeAndResolveParameters(f.RawParameters)
 	if err != nil {
 		f.dummyData = nil
-		return fmt.Errorf("%w: %v", ErrParameterValidation, err)
+		return fmt.Errorf("%w: %w", ErrParameterValidation, err)
 	}
 	f.Parameters = normalized
 	f.ParameterOrder = order
@@ -237,7 +237,7 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 	dummy, err := generateDummyData(f.Parameters)
 	if err != nil {
 		f.dummyData = nil
-		return fmt.Errorf("%w: %v", ErrDummyDataGeneration, err)
+		return fmt.Errorf("%w: %w", ErrDummyDataGeneration, err)
 	}
 	f.dummyData = dummy
 	return nil
@@ -373,7 +373,7 @@ func generateDummyData(params map[string]any) (map[string]any, error) {
 				result[k] = []any{}
 			}
 		default:
-			return nil, fmt.Errorf("unsupported parameter type: %T", v)
+			return nil, fmt.Errorf("%w: %T", snapsql.ErrUnsupportedParameterType, v)
 		}
 	}
 	return result, nil

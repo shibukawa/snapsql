@@ -2,20 +2,17 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/markdownparser"
-	"github.com/shibukawa/snapsql/parser"
 )
 
 // GenerateCmd represents the generate command
@@ -210,7 +207,8 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 		}
 
 		// Execute plugin
-		cmd := exec.Command(pluginName, args...)
+		ctx := context.Background()
+		cmd := exec.CommandContext(ctx, pluginName, args...)
 		cmd.Stdin = bytes.NewReader(jsonData)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -396,27 +394,6 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantF
 	color.Green("Generated: %s", outputFile)
 
 	return outputFile, nil
-}
-
-// extractVariableNames extracts variable names from function definition
-func extractVariableNames(schema *parser.FunctionDefinition) []string {
-	if schema == nil || len(schema.Parameters) == 0 {
-		return []string{}
-	}
-
-	names := make([]string, 0, len(schema.Parameters))
-	for name := range schema.Parameters {
-		names = append(names, name)
-	}
-
-	sort.Strings(names)
-	return names
-}
-
-// calculateHash generates SHA-256 hash of content
-func calculateHash(content string) string {
-	hash := sha256.Sum256([]byte(content))
-	return hex.EncodeToString(hash[:])
 }
 
 // loadConstants loads constants from configuration and constant files

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -12,6 +13,11 @@ import (
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/testrunner"
 	"github.com/shibukawa/snapsql/testrunner/fixtureexecutor"
+)
+
+var (
+	ErrFixtureOnlyRequiresRunPattern            = errors.New("--fixture-only mode requires --run pattern to specify which test case to execute")
+	ErrFixtureOnlyAndQueryOnlyMutuallyExclusive = errors.New("--fixture-only and --query-only are mutually exclusive")
 )
 
 // Context represents the global context for commands
@@ -36,12 +42,12 @@ type TestCmd struct {
 func (cmd *TestCmd) Run(ctx *Context) error {
 	// Validate fixture-only mode requirements
 	if cmd.FixtureOnly && cmd.RunPattern == "" {
-		return fmt.Errorf("--fixture-only mode requires --run pattern to specify which test case to execute")
+		return ErrFixtureOnlyRequiresRunPattern
 	}
 
 	// Validate mutually exclusive options
 	if cmd.FixtureOnly && cmd.QueryOnly {
-		return fmt.Errorf("--fixture-only and --query-only are mutually exclusive")
+		return ErrFixtureOnlyAndQueryOnlyMutuallyExclusive
 	}
 
 	// Get current working directory as project root
@@ -122,7 +128,8 @@ func (cmd *TestCmd) runFixtureTests(projectRoot string, config *snapsql.Config, 
 	defer db.Close()
 
 	// Test connection
-	if err := db.Ping(); err != nil {
+	ctx := context.Background()
+	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 

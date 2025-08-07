@@ -1,11 +1,14 @@
 package fixtureexecutor
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // ValidationStrategy represents the validation strategy for DML queries
@@ -55,7 +58,7 @@ func parseValidationSpec(key string, value any) (ValidationSpec, error) {
 		// Extract table name and strategy
 		parts := strings.SplitN(key, "[", 2)
 		if len(parts) != 2 {
-			return ValidationSpec{}, fmt.Errorf("invalid validation spec format: %s", key)
+			return ValidationSpec{}, fmt.Errorf("%w: %s", snapsql.ErrInvalidValidationSpecFormat, key)
 		}
 
 		tableName := parts[0]
@@ -110,7 +113,7 @@ func (e *Executor) validateSingleSpec(tx *sql.Tx, result *ValidationResult, spec
 	case Count:
 		return e.validateCount(tx, spec)
 	default:
-		return fmt.Errorf("unsupported validation strategy: %s", spec.Strategy)
+		return fmt.Errorf("%w: %s", snapsql.ErrUnsupportedValidationStrategy, spec.Strategy)
 	}
 }
 
@@ -118,11 +121,11 @@ func (e *Executor) validateSingleSpec(tx *sql.Tx, result *ValidationResult, spec
 func (e *Executor) validateDirectResult(result *ValidationResult, spec ValidationSpec) error {
 	expected, ok := spec.Expected.([]map[string]any)
 	if !ok {
-		return fmt.Errorf("expected data must be an array of objects for direct result validation")
+		return snapsql.ErrExpectedDataMustBeArray
 	}
 
 	if len(result.Data) != len(expected) {
-		return fmt.Errorf("expected %d rows, got %d rows", len(expected), len(result.Data))
+		return fmt.Errorf("%w: expected %d rows, got %d rows", snapsql.ErrResultRowCountMismatch, len(expected), len(result.Data))
 	}
 
 	for i, expectedRow := range expected {
@@ -139,7 +142,7 @@ func (e *Executor) validateDirectResult(result *ValidationResult, spec Validatio
 func (e *Executor) validateNumericResult(result *ValidationResult, spec ValidationSpec) error {
 	expected, ok := spec.Expected.(map[string]any)
 	if !ok {
-		return fmt.Errorf("expected numeric validation must be a map")
+		return snapsql.ErrExpectedNumericMustBeMap
 	}
 
 	for key, expectedValue := range expected {
@@ -150,14 +153,14 @@ func (e *Executor) validateNumericResult(result *ValidationResult, spec Validati
 				return fmt.Errorf("invalid rows_affected value: %w", err)
 			}
 			if result.RowsAffected != expectedRows {
-				return fmt.Errorf("expected rows_affected %d, got %d", expectedRows, result.RowsAffected)
+				return fmt.Errorf("%w: expected rows_affected %d, got %d", snapsql.ErrResultRowCountMismatch, expectedRows, result.RowsAffected)
 			}
 		case "last_insert_id":
 			// TODO: Implement last_insert_id validation
 			// This requires getting the last insert ID from the database
-			return fmt.Errorf("last_insert_id validation not yet implemented")
+			return snapsql.ErrLastInsertIdNotImplemented
 		default:
-			return fmt.Errorf("unsupported numeric validation key: %s", key)
+			return fmt.Errorf("%w: %s", snapsql.ErrUnsupportedNumericValidationKey, key)
 		}
 	}
 
@@ -178,18 +181,19 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 			if row, ok := item.(map[string]any); ok {
 				expected = append(expected, row)
 			} else {
-				return fmt.Errorf("table state validation item must be an object, got %T", item)
+				return fmt.Errorf("%w, got %T", snapsql.ErrTableStateValidationItemMustBeObject, item)
 			}
 		}
 	case map[string]any:
 		expected = []map[string]any{v}
 	default:
-		return fmt.Errorf("table state validation must be an array of objects or a single object, got %T", spec.Expected)
+		return fmt.Errorf("%w, got %T", snapsql.ErrTableStateValidationMustBeArray, spec.Expected)
 	}
 
 	// Query the table to get current state
 	query := fmt.Sprintf("SELECT * FROM %s", spec.TableName)
-	rows, err := tx.Query(query)
+	ctx := context.Background()
+	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query table %s: %w", spec.TableName, err)
 	}
@@ -226,15 +230,19 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 		actualData = append(actualData, row)
 	}
 
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error during row iteration: %w", err)
+	}
+
 	// Compare expected and actual data
 	if len(expected) != len(actualData) {
-		return fmt.Errorf("expected %d rows in table %s, got %d rows", len(expected), spec.TableName, len(actualData))
+		return fmt.Errorf("%w: expected %d rows in table %s, got %d rows", snapsql.ErrTableRowCountMismatch, len(expected), spec.TableName, len(actualData))
 	}
 
 	// TODO: Implement more sophisticated comparison (order-independent, partial matching)
 	for i, expectedRow := range expected {
 		if i >= len(actualData) {
-			return fmt.Errorf("missing row %d in table %s", i, spec.TableName)
+			return fmt.Errorf("%w %d in table %s", snapsql.ErrMissingRowInTable, i, spec.TableName)
 		}
 		if err := compareRows(expectedRow, actualData[i]); err != nil {
 			return fmt.Errorf("table %s row %d mismatch: %w", spec.TableName, i, err)
@@ -258,19 +266,19 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 			if row, ok := item.(map[string]any); ok {
 				expectedRows = append(expectedRows, row)
 			} else {
-				return fmt.Errorf("existence validation item must be an object, got %T", item)
+				return fmt.Errorf("%w, got %T", snapsql.ErrExistenceValidationItemMustBeObject, item)
 			}
 		}
 	case map[string]any:
 		expectedRows = []map[string]any{v}
 	default:
-		return fmt.Errorf("existence validation must be an array of objects or a single object, got %T", spec.Expected)
+		return fmt.Errorf("%w, got %T", snapsql.ErrExistenceValidationMustBeArray, spec.Expected)
 	}
 
 	for _, expectedRow := range expectedRows {
 		exists, ok := expectedRow["exists"].(bool)
 		if !ok {
-			return fmt.Errorf("existence validation requires 'exists' field with boolean value")
+			return snapsql.ErrExistenceValidationRequiresExists
 		}
 
 		// Build WHERE clause from other fields
@@ -284,20 +292,21 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 		}
 
 		if len(conditions) == 0 {
-			return fmt.Errorf("existence validation requires at least one condition field")
+			return snapsql.ErrExistenceValidationRequiresCondition
 		}
 
 		query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", spec.TableName, strings.Join(conditions, " AND "))
 
 		var count int64
-		err := tx.QueryRow(query, args...).Scan(&count)
+		ctx := context.Background()
+		err := tx.QueryRowContext(ctx, query, args...).Scan(&count)
 		if err != nil {
 			return fmt.Errorf("failed to check existence: %w", err)
 		}
 
 		actualExists := count > 0
 		if actualExists != exists {
-			return fmt.Errorf("expected exists=%t, got exists=%t for conditions %v", exists, actualExists, expectedRow)
+			return fmt.Errorf("%w: expected exists=%t, got exists=%t for conditions %v", snapsql.ErrExistenceValidationMismatch, exists, actualExists, expectedRow)
 		}
 	}
 
@@ -313,13 +322,14 @@ func (e *Executor) validateCount(tx *sql.Tx, spec ValidationSpec) error {
 
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", spec.TableName)
 	var actualCount int64
-	err = tx.QueryRow(query).Scan(&actualCount)
+	ctx := context.Background()
+	err = tx.QueryRowContext(ctx, query).Scan(&actualCount)
 	if err != nil {
 		return fmt.Errorf("failed to count rows in table %s: %w", spec.TableName, err)
 	}
 
 	if actualCount != expectedCount {
-		return fmt.Errorf("expected count %d, got count %d", expectedCount, actualCount)
+		return fmt.Errorf("%w: expected count %d, got count %d", snapsql.ErrCountMismatch, expectedCount, actualCount)
 	}
 
 	return nil
@@ -330,12 +340,12 @@ func compareRows(expected, actual map[string]any) error {
 	for key, expectedValue := range expected {
 		actualValue, exists := actual[key]
 		if !exists {
-			return fmt.Errorf("missing field '%s'", key)
+			return fmt.Errorf("%w '%s'", snapsql.ErrMissingField, key)
 		}
 
 		// Try to normalize numeric types for comparison
 		if !compareValues(expectedValue, actualValue) {
-			return fmt.Errorf("field '%s': expected %v (%T), got %v (%T)", key, expectedValue, expectedValue, actualValue, actualValue)
+			return fmt.Errorf("%w '%s': expected %v (%T), got %v (%T)", snapsql.ErrFieldValueMismatch, key, expectedValue, expectedValue, actualValue, actualValue)
 		}
 	}
 	return nil
@@ -377,6 +387,6 @@ func convertToInt64(value any) (int64, error) {
 	case string:
 		return strconv.ParseInt(v, 10, 64)
 	default:
-		return 0, fmt.Errorf("cannot convert %T to int64", value)
+		return 0, fmt.Errorf("%w: %T", snapsql.ErrCannotConvertToInt64, value)
 	}
 }

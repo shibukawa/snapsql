@@ -58,7 +58,7 @@ func (r *SchemaResolver) ResolveTableColumn(schemaName, tableName, columnName st
 	columnKey := fmt.Sprintf("%s.%s.%s", schemaName, tableName, columnName)
 	column, exists := r.columnIndex[columnKey]
 	if !exists {
-		return nil, fmt.Errorf("column '%s' does not exist in table '%s.%s'", columnName, schemaName, tableName)
+		return nil, fmt.Errorf("%w '%s' in table '%s.%s'", snapsql.ErrColumnDoesNotExist, columnName, schemaName, tableName)
 	}
 
 	return column, nil
@@ -68,11 +68,11 @@ func (r *SchemaResolver) ResolveTableColumn(schemaName, tableName, columnName st
 func (r *SchemaResolver) ValidateTableExists(schemaName, tableName string) error {
 	tables, exists := r.schemaIndex[schemaName]
 	if !exists {
-		return fmt.Errorf("schema '%s' does not exist", schemaName)
+		return fmt.Errorf("%w: %s", snapsql.ErrSchemaDoesNotExist, schemaName)
 	}
 
 	if _, exists := tables[tableName]; !exists {
-		return fmt.Errorf("table '%s' does not exist in schema '%s'", tableName, schemaName)
+		return fmt.Errorf("%w '%s' in schema '%s'", snapsql.ErrTableDoesNotExist, tableName, schemaName)
 	}
 
 	return nil

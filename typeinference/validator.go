@@ -280,7 +280,7 @@ func (v *SchemaValidator) suggestSimilarTables(target string) string {
 	}
 
 	if len(suggestions) > 0 {
-		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:min(3, len(suggestions))], ", "))
+		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:minInt(3, len(suggestions))], ", "))
 	}
 
 	return "No similar tables found"
@@ -304,7 +304,7 @@ func (v *SchemaValidator) suggestSimilarColumns(schemaName, tableName, target st
 	}
 
 	if len(suggestions) > 0 {
-		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:min(3, len(suggestions))], ", "))
+		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:minInt(3, len(suggestions))], ", "))
 	}
 
 	return "No similar columns found"
@@ -333,7 +333,7 @@ func (v *SchemaValidator) suggestSimilarColumnsAcrossTables(target string) strin
 	}
 
 	if len(suggestions) > 0 {
-		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:min(3, len(suggestions))], ", "))
+		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:minInt(3, len(suggestions))], ", "))
 	}
 
 	return "No similar columns found"
@@ -341,8 +341,8 @@ func (v *SchemaValidator) suggestSimilarColumnsAcrossTables(target string) strin
 
 // Helper functions
 
-// min returns the minimum of two integers
-func min(a, b int) int {
+// minInt returns the minimum of two integers
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
@@ -377,9 +377,9 @@ func levenshteinDistance(a, b string) int {
 				cost = 1
 			}
 
-			matrix[i][j] = min(
+			matrix[i][j] = minInt(
 				matrix[i-1][j]+1, // deletion
-				min(
+				minInt(
 					matrix[i][j-1]+1,      // insertion
 					matrix[i-1][j-1]+cost, // substitution
 				),

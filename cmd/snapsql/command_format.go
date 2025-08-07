@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,11 @@ import (
 	"strings"
 
 	"github.com/shibukawa/snapsql/formatter"
+)
+
+var (
+	ErrFileNotFormatted = errors.New("file is not formatted")
+	ErrFormattingErrors = errors.New("some files had formatting errors")
 )
 
 // FormatCmd represents the format command
@@ -78,7 +84,7 @@ func (cmd *FormatCmd) formatFromReader(sqlFormatter *formatter.SQLFormatter, rea
 	if cmd.Check {
 		if strings.TrimSpace(string(input)) != strings.TrimSpace(formatted) {
 			fmt.Fprintf(os.Stderr, "%s is not formatted\n", filename)
-			return fmt.Errorf("file is not formatted")
+			return ErrFileNotFormatted
 		}
 		return nil
 	}
@@ -187,7 +193,7 @@ func (cmd *FormatCmd) formatDirectory(sqlFormatter *formatter.SQLFormatter, dirP
 	}
 
 	if hasErrors {
-		return fmt.Errorf("some files had formatting errors")
+		return ErrFormattingErrors
 	}
 
 	return nil

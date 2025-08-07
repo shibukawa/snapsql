@@ -14,11 +14,9 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
-
 func TestExecute(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	tests := []struct {
 		name           string
 		sql            string

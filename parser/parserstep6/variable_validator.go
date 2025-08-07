@@ -284,22 +284,37 @@ func createValueToken(value any, valueType string, pos tokenizer.Position) token
 		}
 	case "float":
 		// 浮動小数点リテラル
+		floatVal, ok := value.(float64)
+		if !ok {
+			// 型アサーションが失敗した場合はデフォルト値を使用
+			floatVal = 0.0
+		}
 		valueToken = tokenizer.Token{
 			Type:     tokenizer.NUMBER,
-			Value:    strconv.FormatFloat(value.(float64), 'f', -1, 64),
+			Value:    strconv.FormatFloat(floatVal, 'f', -1, 64),
 			Position: pos,
 		}
 	case "string":
 		// 文字列リテラル（シングルクォートで囲む）
+		strVal, ok := value.(string)
+		if !ok {
+			// 型アサーションが失敗した場合はデフォルト値を使用
+			strVal = ""
+		}
 		valueToken = tokenizer.Token{
 			Type:     tokenizer.STRING,
-			Value:    fmt.Sprintf("'%s'", escapeString(value.(string))),
+			Value:    fmt.Sprintf("'%s'", escapeString(strVal)),
 			Position: pos,
 		}
 	case "bool":
 		// 真偽値リテラル
 		var boolStr string
-		if value.(bool) {
+		boolVal, ok := value.(bool)
+		if !ok {
+			// 型アサーションが失敗した場合はデフォルト値を使用
+			boolVal = false
+		}
+		if boolVal {
 			boolStr = "TRUE"
 		} else {
 			boolStr = "FALSE"

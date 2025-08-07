@@ -67,7 +67,7 @@ func TestPostgreSQLIntegration(t *testing.T) {
 			IncludeIndexes: true,
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		if err != nil {
 			t.Logf("Pull operation failed with error: %v", err)
 			t.Logf("Connection string: %s", connStr)
@@ -121,7 +121,7 @@ func TestPostgreSQLIntegration(t *testing.T) {
 			IncludeTables: []string{"users"}, // Only include users table
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result.Schemas))
 
@@ -199,7 +199,7 @@ func TestMySQLIntegration(t *testing.T) {
 			SchemaAware:  false, // MySQL doesn't use schema-aware structure in our test
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		if err != nil {
 			t.Logf("Pull operation failed with error: %v", err)
 		}
@@ -241,7 +241,7 @@ func TestSQLiteIntegration(t *testing.T) {
 			SchemaAware:  true,
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		assert.NoError(t, err)
 		assert.NotZero(t, result)
 		assert.Equal(t, 1, len(result.Schemas))

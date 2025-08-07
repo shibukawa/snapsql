@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/yuin/goldmark/ast"
 )
 
@@ -146,7 +147,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 		for _, err := range errors {
 			errMsg.WriteString(fmt.Sprintf("- %v\n", err))
 		}
-		return nil, fmt.Errorf("%s", errMsg.String())
+		return nil, fmt.Errorf("%w: %s", snapsql.ErrFailedToParse, errMsg.String())
 	}
 
 	return testCases, nil
@@ -157,7 +158,9 @@ func findFirstEmphasis(paragraph *ast.Paragraph) *ast.Emphasis {
 	var emphasis *ast.Emphasis
 	ast.Walk(paragraph, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering && n.Kind() == ast.KindEmphasis {
-			emphasis = n.(*ast.Emphasis)
+			if emp, ok := n.(*ast.Emphasis); ok {
+				emphasis = emp
+			}
 			return ast.WalkStop, nil
 		}
 		return ast.WalkContinue, nil
@@ -181,12 +184,12 @@ func extractTextFromNode(node ast.Node, content []byte) string {
 func validateTestCase(testCase *TestCase) error {
 	// Parameters are required
 	if len(testCase.Parameters) == 0 {
-		return fmt.Errorf("test case %q is missing required parameters", testCase.Name)
+		return fmt.Errorf("%w: %q parameters", snapsql.ErrTestCaseMissingData, testCase.Name)
 	}
 
 	// Expected Results are required
 	if len(testCase.ExpectedResult) == 0 {
-		return fmt.Errorf("test case %q is missing required expected results", testCase.Name)
+		return fmt.Errorf("%w: %q expected results", snapsql.ErrTestCaseMissingData, testCase.Name)
 	}
 
 	return nil
@@ -220,7 +223,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 	case "verify_query":
 		// Verify Queryが既に設定されている場合はエラー
 		if testCase.VerifyQuery != "" {
-			return fmt.Errorf("duplicate verify query in test case %q", testCase.Name)
+			return fmt.Errorf("%w: %q", snapsql.ErrDuplicateVerifyQuery, testCase.Name)
 		}
 
 		// SQLコードブロックの内容をそのまま設定
@@ -230,7 +233,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 		// CSVの場合はテーブル名が必要
 		if format == "csv" {
 			if section.TableName == "" {
-				return fmt.Errorf("table name is required for CSV fixtures in test case %q", testCase.Name)
+				return fmt.Errorf("%w: %q", snapsql.ErrTableNameRequired, testCase.Name)
 			}
 		}
 

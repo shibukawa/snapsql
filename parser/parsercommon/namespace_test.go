@@ -12,11 +12,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
-
 func TestNamespace_Eval(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	type args struct {
 		src string
 		exp string

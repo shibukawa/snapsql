@@ -137,7 +137,8 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 
 		_, match, err = fieldItemStart(pctx, fieldTokens)
 		if err != nil {
-			continue // todo: panic
+			// Skip invalid field tokens and continue processing
+			continue
 		}
 		v := match[0].Val
 		switch match[0].Type {
@@ -210,7 +211,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 				field.Expression = cmn.ToToken(match)
 				clause.Fields = append(clause.Fields, field)
 			} else {
-				// todo: warning
+				// Handle unrecognized field pattern as literal
 				field.FieldKind = cmn.LiteralField
 				field.Expression = cmn.ToToken(match)
 				clause.Fields = append(clause.Fields, field)

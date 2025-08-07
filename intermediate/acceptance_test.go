@@ -35,8 +35,10 @@ func loadConfig(testDir string) (*Config, error) {
 
 	// Check if snapsql.yaml exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// Return nil if file doesn't exist
-		return nil, nil
+		// Return default configuration if file doesn't exist
+		return &Config{
+			Dialect: "postgres", // Default dialect
+		}, nil
 	}
 
 	// Read YAML file

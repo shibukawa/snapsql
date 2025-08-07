@@ -1,6 +1,7 @@
 package pull
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net"
@@ -155,7 +156,8 @@ func (c *DatabaseConnector) Ping(db *sql.DB) error {
 	if db == nil {
 		return ErrConnectionFailed
 	}
-	return db.Ping()
+	ctx := context.Background()
+	return db.PingContext(ctx)
 }
 
 // ParseConnectionInfo parses a database URL into connection information
@@ -270,7 +272,7 @@ func (p *PullOperation) ValidateConfig() error {
 }
 
 // Execute performs the complete pull operation
-func (p *PullOperation) Execute() (*PullResult, error) {
+func (p *PullOperation) Execute(ctx context.Context) (*PullResult, error) {
 	// Validate configuration
 	if err := p.ValidateConfig(); err != nil {
 		return nil, err
@@ -306,7 +308,7 @@ func (p *PullOperation) Execute() (*PullResult, error) {
 	}
 
 	// Extract schemas
-	schemas, err := p.extractor.ExtractSchemas(db, extractConfig)
+	schemas, err := p.extractor.ExtractSchemas(ctx, db, extractConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +452,7 @@ func (c *DatabaseConnector) getDriverName(dbType string) string {
 }
 
 // ExecutePull is a convenience function that performs a complete pull operation
-func ExecutePull(config PullConfig) (*PullResult, error) {
+func ExecutePull(ctx context.Context, config PullConfig) (*PullResult, error) {
 	operation := NewPullOperation(config)
-	return operation.Execute()
+	return operation.Execute(ctx)
 }

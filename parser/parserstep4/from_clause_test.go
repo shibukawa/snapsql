@@ -195,13 +195,13 @@ func TestFinalizeFromClause_InvalidJoinCombinations(t *testing.T) {
 		sql  string
 	}{
 		{"JOIN at start", "SELECT * FROM JOIN users u"},
-		{"Double JOIN", "SELECT * FROM users JOIN JOIN orders"},
-		{"Double INNER", "SELECT * FROM users INNER INNER JOIN orders"},
-		{"Double LEFT", "SELECT * FROM users LEFT LEFT JOIN orders"},
-		{"Double OUTER", "SELECT * FROM users OUTER OUTER JOIN orders"},
+		{"Double JOIN", "SELECT * FROM users JOIN JOIN orders"},         //nolint:dupword // intentional duplicate for testing
+		{"Double INNER", "SELECT * FROM users INNER INNER JOIN orders"}, //nolint:dupword // intentional duplicate for testing
+		{"Double LEFT", "SELECT * FROM users LEFT LEFT JOIN orders"},    //nolint:dupword // intentional duplicate for testing
+		{"Double OUTER", "SELECT * FROM users OUTER OUTER JOIN orders"}, //nolint:dupword // intentional duplicate for testing
 		{"CROSS with INNER", "SELECT * FROM users CROSS INNER JOIN orders"},
 		{"CROSS with LEFT", "SELECT * FROM users CROSS LEFT JOIN orders"},
-		{"Double NATURAL", "SELECT * FROM users NATURAL NATURAL JOIN orders"},
+		{"Double NATURAL", "SELECT * FROM users NATURAL NATURAL JOIN orders"}, //nolint:dupword // intentional duplicate for testing
 		{"NATURAL CROSS", "SELECT * FROM users NATURAL CROSS JOIN orders"},
 		{"OUTER only", "SELECT * FROM users OUTER JOIN orders"},
 		{"INNER only", "SELECT * FROM users INNER orders"},

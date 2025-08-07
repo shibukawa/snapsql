@@ -12,10 +12,6 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-func init() {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-}
-
 type testCase struct {
 	name              string
 	sql               string
@@ -30,6 +26,8 @@ type testCase struct {
 }
 
 func TestFinalizeSelectClause(t *testing.T) {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+
 	tests := []testCase{
 		// --- forbidden literal tests ---
 		{

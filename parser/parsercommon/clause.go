@@ -127,6 +127,7 @@ func (cbn *clauseBaseNode) ReplaceTokens(startIndex, endIndex int, newToken toke
 
 type WithClause struct {
 	clauseBaseNode
+
 	Recursive      bool
 	HeadingTokens  []tokenizer.Token // Leading tokens before the WITH clause
 	CTEs           []CTEDefinition
@@ -146,6 +147,7 @@ var _ ClauseNode = (*WithClause)(nil)
 // SelectClause represents SELECT clause
 type SelectClause struct {
 	clauseBaseNode
+
 	Distinct   bool
 	DistinctOn []FieldName // DISTINCT ON fields
 	Fields     []SelectField
@@ -174,6 +176,7 @@ var _ ClauseNode = (*SelectClause)(nil)
 // FromClause represents FROM clause
 type FromClause struct {
 	clauseBaseNode
+
 	Tables []TableReferenceForFrom
 }
 
@@ -199,6 +202,7 @@ var _ ClauseNode = (*FromClause)(nil)
 // WhereClause represents WHERE clause
 type WhereClause struct {
 	clauseBaseNode
+
 	Condition AstNode // Expression
 }
 
@@ -224,6 +228,7 @@ var _ ClauseNode = (*WhereClause)(nil)
 // GroupByClause represents GROUP BY clause
 type GroupByClause struct {
 	clauseBaseNode
+
 	Null             bool // Indicates if NULL is used in GROUP BY
 	AdvancedGrouping bool // Indicates if advanced grouping features like ROLLUP, CUBE, GROUPING SETS are used
 	Fields           []FieldName
@@ -251,6 +256,7 @@ var _ ClauseNode = (*GroupByClause)(nil)
 // HavingClause represents HAVING clause
 type HavingClause struct {
 	clauseBaseNode
+
 	Condition AstNode // Expression
 }
 
@@ -276,6 +282,7 @@ var _ ClauseNode = (*HavingClause)(nil)
 // OrderByClause represents ORDER BY clause
 type OrderByClause struct {
 	clauseBaseNode
+
 	Fields []OrderByField
 }
 
@@ -301,6 +308,7 @@ var _ ClauseNode = (*OrderByClause)(nil)
 // LimitClause represents LIMIT clause
 type LimitClause struct {
 	clauseBaseNode
+
 	Count int // Expression
 }
 
@@ -326,6 +334,7 @@ var _ ClauseNode = (*LimitClause)(nil)
 // OffsetClause represents OFFSET clause
 type OffsetClause struct {
 	clauseBaseNode
+
 	Count int // Expression
 }
 

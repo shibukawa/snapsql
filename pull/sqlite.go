@@ -1,6 +1,7 @@
 package pull
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -22,9 +23,9 @@ func NewSQLiteExtractor() *SQLiteExtractor {
 }
 
 // ExtractSchemas extracts all schemas from the database
-func (e *SQLiteExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
+func (e *SQLiteExtractor) ExtractSchemas(ctx context.Context, db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
 	// Get database info
-	dbInfo, err := e.GetDatabaseInfo(db)
+	dbInfo, err := e.GetDatabaseInfo(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +37,7 @@ func (e *SQLiteExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sn
 	}
 
 	// Extract tables
-	tables, err := e.ExtractTables(db, "main")
+	tables, err := e.ExtractTables(ctx, db, "main")
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func (e *SQLiteExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sn
 
 	// Extract views if requested
 	if config.IncludeViews {
-		views, err := e.ExtractViews(db, "main")
+		views, err := e.ExtractViews(ctx, db, "main")
 		if err != nil {
 			return nil, err
 		}
@@ -55,9 +56,9 @@ func (e *SQLiteExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sn
 }
 
 // ExtractTables extracts all tables from a specific schema
-func (e *SQLiteExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
+func (e *SQLiteExtractor) ExtractTables(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
 	query := `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -78,21 +79,21 @@ func (e *SQLiteExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snaps
 		}
 
 		// Extract columns
-		columns, err := e.ExtractColumns(db, schemaName, tableName)
+		columns, err := e.ExtractColumns(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Columns = columns
 
 		// Extract constraints
-		constraints, err := e.ExtractConstraints(db, schemaName, tableName)
+		constraints, err := e.ExtractConstraints(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Constraints = constraints
 
 		// Extract indexes
-		indexes, err := e.ExtractIndexes(db, schemaName, tableName)
+		indexes, err := e.ExtractIndexes(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -109,9 +110,9 @@ func (e *SQLiteExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snaps
 }
 
 // ExtractColumns extracts all columns from a specific table
-func (e *SQLiteExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
+func (e *SQLiteExtractor) ExtractColumns(ctx context.Context, db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
 	query := fmt.Sprintf("PRAGMA table_info(%s)", tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +150,13 @@ func (e *SQLiteExtractor) ExtractColumns(db *sql.DB, schemaName, tableName strin
 }
 
 // ExtractConstraints extracts all constraints from a specific table
-func (e *SQLiteExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
+func (e *SQLiteExtractor) ExtractConstraints(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
 	// SQLite constraint extraction is limited, we'll extract what we can from table_info
 	var constraints []snapsql.ConstraintInfo
 
 	// Get primary key constraints from table_info
 	query := fmt.Sprintf("PRAGMA table_info(%s)", tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -195,9 +196,9 @@ func (e *SQLiteExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName s
 }
 
 // ExtractIndexes extracts all indexes from a specific table
-func (e *SQLiteExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
+func (e *SQLiteExtractor) ExtractIndexes(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
 	query := fmt.Sprintf("PRAGMA index_list(%s)", tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +223,8 @@ func (e *SQLiteExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName strin
 
 		// Get index columns
 		columnsQuery := fmt.Sprintf("PRAGMA index_info(%s)", name)
-		colRows, err := db.Query(columnsQuery)
+		ctx := context.Background()
+		colRows, err := db.QueryContext(ctx, columnsQuery)
 		if err != nil {
 			continue
 		}
@@ -261,9 +263,9 @@ func (e *SQLiteExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName strin
 }
 
 // ExtractViews extracts all views from a specific schema
-func (e *SQLiteExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
+func (e *SQLiteExtractor) ExtractViews(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
 	query := `SELECT name, sql FROM sqlite_master WHERE type='view' ORDER BY name`
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -294,9 +296,9 @@ func (e *SQLiteExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*snapsq
 }
 
 // GetDatabaseInfo extracts database information
-func (e *SQLiteExtractor) GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo, error) {
+func (e *SQLiteExtractor) GetDatabaseInfo(ctx context.Context, db *sql.DB) (snapsql.DatabaseInfo, error) {
 	var version string
-	err := db.QueryRow("SELECT sqlite_version()").Scan(&version)
+	err := db.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&version)
 	if err != nil {
 		return snapsql.DatabaseInfo{}, err
 	}

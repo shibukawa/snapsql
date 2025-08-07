@@ -31,7 +31,8 @@ func (e *ParseError) Add(err error) {
 	if err == nil {
 		return
 	}
-	if perr, ok := err.(*ParseError); ok {
+	var perr *ParseError
+	if errors.As(err, &perr) {
 		e.Errors = append(e.Errors, perr.Errors...)
 	} else {
 		e.Errors = append(e.Errors, err)

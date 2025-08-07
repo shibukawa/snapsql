@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -65,7 +66,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported response affinity: %s", format.ResponseAffinity)
+		return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedResponseAffinity, format.ResponseAffinity)
 	}
 
 	return &queryExecutionData{

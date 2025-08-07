@@ -1,6 +1,7 @@
 package pull
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"regexp"
@@ -39,9 +40,9 @@ func (e *PostgreSQLExtractor) GetSystemSchemas() []string {
 }
 
 // ExtractSchemas extracts all schemas from the database
-func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
+func (e *PostgreSQLExtractor) ExtractSchemas(ctx context.Context, db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
 	// Get database info
-	dbInfo, err := e.GetDatabaseInfo(db)
+	dbInfo, err := e.GetDatabaseInfo(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) (
 		}
 
 		// Extract tables
-		tables, err := e.ExtractTables(db, schemaName)
+		tables, err := e.ExtractTables(ctx, db, schemaName)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +78,7 @@ func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) (
 
 		// Extract views if requested
 		if config.IncludeViews {
-			views, err := e.ExtractViews(db, schemaName)
+			views, err := e.ExtractViews(ctx, db, schemaName)
 			if err != nil {
 				return nil, err
 			}
@@ -91,9 +92,9 @@ func (e *PostgreSQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) (
 }
 
 // ExtractTables extracts all tables from a specific schema
-func (e *PostgreSQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
+func (e *PostgreSQLExtractor) ExtractTables(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
 	query := e.BuildTablesQuery(schemaName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -119,21 +120,21 @@ func (e *PostgreSQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*s
 		}
 
 		// Extract columns
-		columns, err := e.ExtractColumns(db, schemaName, tableName)
+		columns, err := e.ExtractColumns(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Columns = columns
 
 		// Extract constraints
-		constraints, err := e.ExtractConstraints(db, schemaName, tableName)
+		constraints, err := e.ExtractConstraints(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Constraints = constraints
 
 		// Extract indexes
-		indexes, err := e.ExtractIndexes(db, schemaName, tableName)
+		indexes, err := e.ExtractIndexes(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -150,9 +151,9 @@ func (e *PostgreSQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*s
 }
 
 // ExtractColumns extracts all columns from a specific table
-func (e *PostgreSQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
+func (e *PostgreSQLExtractor) ExtractColumns(ctx context.Context, db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
 	query := e.BuildColumnsQuery(schemaName, tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -190,9 +191,9 @@ func (e *PostgreSQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName s
 }
 
 // ExtractConstraints extracts all constraints from a specific table
-func (e *PostgreSQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
+func (e *PostgreSQLExtractor) ExtractConstraints(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
 	query := e.BuildConstraintsQuery(schemaName, tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -229,9 +230,9 @@ func (e *PostgreSQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableNa
 }
 
 // ExtractIndexes extracts all indexes from a specific table
-func (e *PostgreSQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
+func (e *PostgreSQLExtractor) ExtractIndexes(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
 	query := e.BuildIndexesQuery(schemaName, tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -270,9 +271,9 @@ func (e *PostgreSQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName s
 }
 
 // ExtractViews extracts all views from a specific schema
-func (e *PostgreSQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
+func (e *PostgreSQLExtractor) ExtractViews(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
 	query := e.BuildViewsQuery(schemaName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -307,9 +308,9 @@ func (e *PostgreSQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*sn
 }
 
 // GetDatabaseInfo extracts database information
-func (e *PostgreSQLExtractor) GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo, error) {
+func (e *PostgreSQLExtractor) GetDatabaseInfo(ctx context.Context, db *sql.DB) (snapsql.DatabaseInfo, error) {
 	query := e.BuildDatabaseInfoQuery()
-	row := db.QueryRow(query)
+	row := db.QueryRowContext(ctx, query)
 
 	var version, dbName string
 
@@ -328,7 +329,8 @@ func (e *PostgreSQLExtractor) GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo,
 // Helper methods
 func (e *PostgreSQLExtractor) getSchemaNames(db *sql.DB) ([]string, error) {
 	query := e.BuildSchemasQuery()
-	rows, err := db.Query(query)
+	ctx := context.Background()
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package pull
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -22,9 +23,9 @@ func NewMySQLExtractor() *MySQLExtractor {
 }
 
 // ExtractSchemas extracts all schemas from the database
-func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
+func (e *MySQLExtractor) ExtractSchemas(ctx context.Context, db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error) {
 	// Get database info
-	dbInfo, err := e.GetDatabaseInfo(db)
+	dbInfo, err := e.GetDatabaseInfo(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +37,7 @@ func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sna
 	}
 
 	// Extract tables
-	tables, err := e.ExtractTables(db, dbInfo.Name)
+	tables, err := e.ExtractTables(ctx, db, dbInfo.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +53,7 @@ func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sna
 
 	// Extract views if requested
 	if config.IncludeViews {
-		views, err := e.ExtractViews(db, dbInfo.Name)
+		views, err := e.ExtractViews(ctx, db, dbInfo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -63,9 +64,9 @@ func (e *MySQLExtractor) ExtractSchemas(db *sql.DB, config ExtractConfig) ([]sna
 }
 
 // ExtractTables extracts all tables from a specific schema
-func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
+func (e *MySQLExtractor) ExtractTables(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error) {
 	query := e.BuildTablesQuery(schemaName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, e.HandleDatabaseError(err)
 	}
@@ -92,21 +93,21 @@ func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snapsq
 		}
 
 		// Extract columns
-		columns, err := e.ExtractColumns(db, schemaName, tableName)
+		columns, err := e.ExtractColumns(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Columns = columns
 
 		// Extract constraints
-		constraints, err := e.ExtractConstraints(db, schemaName, tableName)
+		constraints, err := e.ExtractConstraints(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
 		table.Constraints = constraints
 
 		// Extract indexes
-		indexes, err := e.ExtractIndexes(db, schemaName, tableName)
+		indexes, err := e.ExtractIndexes(ctx, db, schemaName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -123,9 +124,9 @@ func (e *MySQLExtractor) ExtractTables(db *sql.DB, schemaName string) ([]*snapsq
 }
 
 // ExtractColumns extracts all columns from a specific table
-func (e *MySQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
+func (e *MySQLExtractor) ExtractColumns(ctx context.Context, db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error) {
 	query := e.BuildColumnsQuery(schemaName, tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, e.HandleDatabaseError(err)
 	}
@@ -179,9 +180,9 @@ func (e *MySQLExtractor) ExtractColumns(db *sql.DB, schemaName, tableName string
 }
 
 // ExtractConstraints extracts all constraints from a specific table
-func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
+func (e *MySQLExtractor) ExtractConstraints(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error) {
 	query := e.BuildConstraintsQuery(schemaName, tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, e.HandleDatabaseError(err)
 	}
@@ -246,9 +247,9 @@ func (e *MySQLExtractor) ExtractConstraints(db *sql.DB, schemaName, tableName st
 }
 
 // ExtractIndexes extracts all indexes from a specific table
-func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
+func (e *MySQLExtractor) ExtractIndexes(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error) {
 	query := e.BuildIndexesQuery(schemaName, tableName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, e.HandleDatabaseError(err)
 	}
@@ -310,9 +311,9 @@ func (e *MySQLExtractor) ExtractIndexes(db *sql.DB, schemaName, tableName string
 }
 
 // ExtractViews extracts all views from a specific schema
-func (e *MySQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
+func (e *MySQLExtractor) ExtractViews(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error) {
 	query := e.BuildViewsQuery(schemaName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, e.HandleDatabaseError(err)
 	}
@@ -344,23 +345,23 @@ func (e *MySQLExtractor) ExtractViews(db *sql.DB, schemaName string) ([]*snapsql
 }
 
 // GetDatabaseInfo extracts database information
-func (e *MySQLExtractor) GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo, error) {
+func (e *MySQLExtractor) GetDatabaseInfo(ctx context.Context, db *sql.DB) (snapsql.DatabaseInfo, error) {
 	var version, dbName, charset string
 
 	// Get version
-	err := db.QueryRow("SELECT VERSION()").Scan(&version)
+	err := db.QueryRowContext(ctx, "SELECT VERSION()").Scan(&version)
 	if err != nil {
 		return snapsql.DatabaseInfo{}, e.HandleDatabaseError(err)
 	}
 
 	// Get database name
-	err = db.QueryRow("SELECT DATABASE()").Scan(&dbName)
+	err = db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&dbName)
 	if err != nil {
 		return snapsql.DatabaseInfo{}, e.HandleDatabaseError(err)
 	}
 
 	// Get default charset
-	err = db.QueryRow("SELECT @@character_set_database").Scan(&charset)
+	err = db.QueryRowContext(ctx, "SELECT @@character_set_database").Scan(&charset)
 	if err != nil {
 		// If charset query fails, use default
 		charset = "utf8mb4"

@@ -223,7 +223,7 @@ func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) 
 	// Get SELECT statement
 	selectStmt, ok := e.statementNode.(*parser.SelectStatement)
 	if !ok {
-		return nil, fmt.Errorf("statement is not a SELECT statement")
+		return nil, snapsql.ErrStatementIsNotSelect
 	}
 
 	// Phase 5: Resolve subquery types first (if enhanced resolver is available)
@@ -255,7 +255,7 @@ func (e *TypeInferenceEngine2) InferTypes() ([]*InferredFieldInfo, error) {
 		// Phase 6: DML statement inference
 		return e.dmlEngine.InferDMLStatementType(e.statementNode)
 	default:
-		return nil, fmt.Errorf("unsupported statement type: %T", stmt)
+		return nil, fmt.Errorf("%w: %T", snapsql.ErrUnsupportedStatementType, stmt)
 	}
 }
 
@@ -341,7 +341,7 @@ func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectSta
 	for _, err := range validationErrors {
 		// For critical validation errors, return early
 		if strings.Contains(err.ErrorType, "not_found") {
-			return nil, fmt.Errorf("schema validation failed: %s", err.Message)
+			return nil, fmt.Errorf("%w: %s", snapsql.ErrSchemaValidationFailed, err.Message)
 		}
 	}
 
@@ -512,14 +512,14 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 					return subField.Type, fieldSource, nil
 				}
 			}
-			return nil, FieldSource{}, fmt.Errorf("column '%s' not found in subquery '%s'", realColumnName, realTableName)
+			return nil, FieldSource{}, fmt.Errorf("%w '%s' in subquery '%s'", snapsql.ErrColumnNotFoundInSubquery, realColumnName, realTableName)
 		}
 	}
 
 	// Find schema for table
 	schemaName := e.findSchemaForTable(realTableName)
 	if schemaName == "" {
-		return nil, FieldSource{}, fmt.Errorf("table '%s' not found in schema", realTableName)
+		return nil, FieldSource{}, fmt.Errorf("%w: %s", snapsql.ErrTableNotFoundInSchema, realTableName)
 	}
 
 	// Get column information
@@ -571,7 +571,7 @@ func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (
 			}
 			return subqueryFieldInfo.Type, fieldSource, nil
 		} else if len(subqueryMatches) > 1 {
-			return nil, FieldSource{}, fmt.Errorf("column '%s' is ambiguous in subqueries, found in: %v", field.OriginalField, subqueryMatches)
+			return nil, FieldSource{}, fmt.Errorf("%w '%s', found in: %v", snapsql.ErrColumnAmbiguousInSubqueries, field.OriginalField, subqueryMatches)
 		}
 	}
 
@@ -579,17 +579,17 @@ func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (
 	matches := e.schemaResolver.FindColumnInTables(field.OriginalField, e.context.CurrentTables)
 
 	if len(matches) == 0 {
-		return nil, FieldSource{}, fmt.Errorf("column '%s' not found in any available table", field.OriginalField)
+		return nil, FieldSource{}, fmt.Errorf("%w: %s", snapsql.ErrColumnNotFoundInAnyTable, field.OriginalField)
 	}
 
 	if len(matches) > 1 {
-		return nil, FieldSource{}, fmt.Errorf("column '%s' is ambiguous, found in tables: %v", field.OriginalField, matches)
+		return nil, FieldSource{}, fmt.Errorf("%w '%s': %v", snapsql.ErrColumnAmbiguous, field.OriginalField, matches)
 	}
 
 	// Use the single match
 	parts := strings.Split(matches[0], ".")
 	if len(parts) != 2 {
-		return nil, FieldSource{}, fmt.Errorf("invalid table reference: %s", matches[0])
+		return nil, FieldSource{}, fmt.Errorf("%w: %s", snapsql.ErrInvalidTableReference, matches[0])
 	}
 
 	schemaName, tableName := parts[0], parts[1]

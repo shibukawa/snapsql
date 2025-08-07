@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // SQ (SubQuery) prefixed types from parserstep7 for better type organization
@@ -396,10 +398,10 @@ func (pe *SQParseError) Error() string {
 // AddDependency adds a dependency edge from 'from' to 'to'
 func (dg *SQDependencyGraph) AddDependency(from, to string) error {
 	if _, exists := dg.nodes[from]; !exists {
-		return fmt.Errorf("source node not found: %s", from)
+		return fmt.Errorf("%w: source %s", snapsql.ErrNodeNotFound, from)
 	}
 	if _, exists := dg.nodes[to]; !exists {
-		return fmt.Errorf("target node not found: %s", to)
+		return fmt.Errorf("%w: target %s", snapsql.ErrNodeNotFound, to)
 	}
 	if dg.edges == nil {
 		dg.edges = make(map[string][]string)

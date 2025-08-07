@@ -3,6 +3,7 @@ package typeinference
 import (
 	"strings"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -36,12 +37,12 @@ func NewCaseExpressionAnalyzer(tokens []tokenizer.Token, engine *TypeInferenceEn
 // AnalyzeCaseExpression analyzes a CASE expression and infers its type
 func (a *CaseExpressionAnalyzer) AnalyzeCaseExpression() (*CaseAnalysisResult, error) {
 	if len(a.tokens) == 0 {
-		return nil, nil
+		return nil, snapsql.ErrEmptyTokenList
 	}
 
 	// Check if this is a CASE expression
 	if a.tokens[0].Type != tokenizer.IDENTIFIER || strings.ToUpper(a.tokens[0].Value) != "CASE" {
-		return nil, nil
+		return nil, snapsql.ErrNotCaseExpression
 	}
 
 	result := &CaseAnalysisResult{
@@ -69,10 +70,9 @@ func (a *CaseExpressionAnalyzer) AnalyzeCaseExpression() (*CaseAnalysisResult, e
 			}
 		} else if token.Type == tokenizer.IDENTIFIER && strings.ToUpper(token.Value) == "ELSE" {
 			// Parse ELSE clause
-			elseClause, newPos := a.parseElseClause(position)
+			elseClause, _ := a.parseElseClause(position)
 			if elseClause != nil {
 				result.ElseClause = elseClause
-				position = newPos
 			}
 			break
 		} else if token.Type == tokenizer.IDENTIFIER && strings.ToUpper(token.Value) == "END" {

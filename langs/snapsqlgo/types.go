@@ -22,7 +22,10 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shopspring/decimal"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // FieldInfo represents information about a struct field
@@ -102,7 +105,7 @@ func (v *CustomValue) ConvertToNative(typeDesc reflect.Type) (interface{}, error
 	if typeDesc == reflect.TypeOf(v.value) {
 		return v.value, nil
 	}
-	return nil, fmt.Errorf("unsupported type conversion: %v", typeDesc)
+	return nil, fmt.Errorf("%w: %v", snapsql.ErrUnsupportedConversion, typeDesc)
 }
 
 // ConvertToType converts to CEL type
@@ -355,11 +358,12 @@ func GetGlobalRegistry() *LocalTypeRegistry {
 }
 func celNameToGoName(celName string) string {
 	parts := strings.Split(celName, "_")
+	caser := cases.Title(language.English)
 	for i, part := range parts {
 		if part == "id" {
 			parts[i] = "ID"
 		} else {
-			parts[i] = strings.Title(part)
+			parts[i] = caser.String(part)
 		}
 	}
 	return strings.Join(parts, "")

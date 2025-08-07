@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -147,12 +148,12 @@ func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error)
 
 	celType, ok := celTypeMap[strings.ToLower(baseType)]
 	if !ok {
-		return celVariableData{}, fmt.Errorf("unsupported type: %s", v.Type)
+		return celVariableData{}, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedType, v.Type)
 	}
 
 	goType, ok := goTypeMap[strings.ToLower(baseType)]
 	if !ok {
-		return celVariableData{}, fmt.Errorf("unsupported type: %s", v.Type)
+		return celVariableData{}, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedType, v.Type)
 	}
 
 	// Handle arrays and pointers

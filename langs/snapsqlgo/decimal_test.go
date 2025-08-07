@@ -21,11 +21,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
-
 func TestDecimal(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	env, err := cel.NewEnv(
 		DecimalLibrary,
 		cel.Variable("a", DecimalType),

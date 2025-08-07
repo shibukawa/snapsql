@@ -146,27 +146,6 @@ func (g *MockDataGenerator) extractFunctionName(content string) string {
 	return ""
 }
 
-// getMockFilePath generates the mock data file path
-func (g *MockDataGenerator) getMockFilePath(sourceFile string) string {
-	// Convert source file path to mock file path
-	// e.g., queries/users/find.snap.md -> testdata/snapsql_mock/users/find.json
-
-	baseName := filepath.Base(sourceFile)
-	// Remove .snap.md extension and add .json
-	if filepath.Ext(baseName) == ".md" {
-		baseName = baseName[:len(baseName)-3] // Remove .md
-		if filepath.Ext(baseName) == ".snap" {
-			baseName = baseName[:len(baseName)-5] // Remove .snap
-		}
-	}
-	baseName += ".json"
-
-	// Get directory structure
-	dir := filepath.Dir(sourceFile)
-
-	return filepath.Join(g.OutputDir, dir, baseName)
-}
-
 // writeMockDataFile writes mock data to individual JSON files for each test case
 func (g *MockDataGenerator) writeMockDataFile(sourceFile string, testCases []TestCase, functionName string) error {
 	if len(testCases) == 0 {
@@ -340,43 +319,6 @@ func extractSystemFieldsInfo(config *Config, stmt parsercommon.StatementNode) []
 	}
 
 	return systemFields
-}
-
-// addClauseIfConditions adds IF instructions for clause-level conditions
-func addClauseIfConditions(stmt parsercommon.StatementNode, instructions []Instruction) []Instruction {
-	// Process each clause
-	for _, clause := range stmt.Clauses() {
-		// Check if the clause has an IF condition
-		if condition := clause.IfCondition(); condition != "" {
-			// Find the position to insert the IF instruction
-			// This is a simplified approach - in a real implementation, we would need to find the exact position
-			// based on the clause's position in the SQL
-
-			// For now, we'll just add the IF instruction at the beginning of the instructions
-			// and the END instruction at the end
-
-			// Create IF instruction
-			ifInstruction := Instruction{
-				Op:        OpIf,
-				Pos:       "0:0", // Placeholder position
-				Condition: condition,
-			}
-
-			// Create END instruction
-			endInstruction := Instruction{
-				Op:  OpEnd,
-				Pos: "0:0", // Placeholder position
-			}
-
-			// Insert IF instruction at the beginning
-			instructions = append([]Instruction{ifInstruction}, instructions...)
-
-			// Append END instruction at the end
-			instructions = append(instructions, endInstruction)
-		}
-	}
-
-	return instructions
 }
 
 // extractParameterTypeFromOriginal extracts type string from original parameter value (for common types)

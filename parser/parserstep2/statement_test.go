@@ -10,11 +10,9 @@ import (
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
-func init() {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-}
-
 func TestSubQuery(t *testing.T) {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+
 	tests := []struct {
 		name      string
 		src       string

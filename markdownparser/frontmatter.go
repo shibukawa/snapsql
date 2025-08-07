@@ -28,7 +28,7 @@ func parseFrontMatter(content string) (map[string]any, string, error) {
 	// Parse YAML front matter
 	var frontMatter map[string]any
 	if err := yaml.Unmarshal([]byte(frontMatterContent), &frontMatter); err != nil {
-		return nil, "", fmt.Errorf("%w: %v", ErrInvalidFrontMatter, err)
+		return nil, "", fmt.Errorf("%w: %w", ErrInvalidFrontMatter, err)
 	}
 
 	return frontMatter, remainingContent, nil

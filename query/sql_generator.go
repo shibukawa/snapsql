@@ -72,7 +72,7 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			expr := g.expressions[*instr.ExprIndex]
 			value, err := g.evaluateExpression(expr.Expression, params)
 			if err != nil {
-				return "", nil, fmt.Errorf("%w: %v", ErrExpressionEvaluation, err)
+				return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 			}
 
 			result.WriteString("?")
@@ -90,7 +90,7 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			expr := g.expressions[*instr.ExprIndex]
 			condition, err := g.evaluateCondition(expr.Expression, params)
 			if err != nil {
-				return "", nil, fmt.Errorf("%w: %v", ErrExpressionEvaluation, err)
+				return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 			}
 
 			conditionStack = append(conditionStack, condition)
@@ -116,7 +116,7 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 				expr := g.expressions[*instr.ExprIndex]
 				condition, err := g.evaluateCondition(expr.Expression, params)
 				if err != nil {
-					return "", nil, fmt.Errorf("%w: %v", ErrExpressionEvaluation, err)
+					return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 				}
 
 				conditionStack[len(conditionStack)-1] = condition
