@@ -335,7 +335,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 
 	for _, file := range files {
 		// Generate intermediate file
-		outputFile, err := g.processTemplateFile(file, outputDir, constantFiles, config, ctx)
+		outputFile, err := g.processTemplateFile(file, outputDir, inputPath, constantFiles, config, ctx)
 		if err != nil {
 			if ctx.Verbose {
 				color.Red("Failed to process %s: %v", file, err)
@@ -356,7 +356,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 }
 
 // processTemplateFile processes a single template file and generates intermediate JSON
-func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantFiles []string, config *Config, ctx *Context) (string, error) {
+func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string, constantFiles []string, config *Config, ctx *Context) (string, error) {
 	// Load constants
 	constants, err := g.loadConstants(config, ctx)
 	if err != nil {
@@ -396,7 +396,14 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantF
 	}
 
 	// Generate output filename
-	outputFile := g.generateOutputFilename(inputFile, outputDir)
+	jsonGen := config.Generation.Generators["json"]
+	outputFile := g.generateOutputFilename(inputFile, outputDir, inputDir, jsonGen.PreserveHierarchy)
+
+	// Ensure output directory exists (including subdirectories if preserving hierarchy)
+	outputFileDir := filepath.Dir(outputFile)
+	if err := ensureDir(outputFileDir); err != nil {
+		return "", fmt.Errorf("failed to create output directory %s: %w", outputFileDir, err)
+	}
 
 	// Write intermediate format to file
 	outputData, err := format.MarshalJSON()
@@ -439,7 +446,7 @@ func (g *GenerateCmd) loadConstants(config *Config, ctx *Context) (map[string]an
 }
 
 // generateOutputFilename generates output filename for intermediate JSON
-func (g *GenerateCmd) generateOutputFilename(inputFile, outputDir string) string {
+func (g *GenerateCmd) generateOutputFilename(inputFile, outputDir, inputDir string, preserveHierarchy bool) string {
 	// Get base filename without extension
 	base := filepath.Base(inputFile)
 	name := strings.TrimSuffix(base, filepath.Ext(base))
@@ -447,11 +454,31 @@ func (g *GenerateCmd) generateOutputFilename(inputFile, outputDir string) string
 	// Remove .snap suffix if present
 	name = strings.TrimSuffix(name, ".snap")
 
-	// Add .json extension
+	if preserveHierarchy {
+		// Calculate relative path from input directory
+		relPath, err := filepath.Rel(inputDir, inputFile)
+		if err != nil {
+			// Fallback to flat structure if relative path calculation fails
+			return filepath.Join(outputDir, name+".json")
+		}
+
+		// Get directory part of the relative path
+		relDir := filepath.Dir(relPath)
+		if relDir == "." {
+			// File is in the root input directory
+			return filepath.Join(outputDir, name+".json")
+		}
+
+		// Create subdirectory structure in output
+		outputSubDir := filepath.Join(outputDir, relDir)
+		return filepath.Join(outputSubDir, name+".json")
+	}
+
+	// Flat structure (original behavior)
 	return filepath.Join(outputDir, name+".json")
 }
 
-// findTemplateFiles finds all SQL template files in the input directory
+// findTemplateFiles finds all SQL template files in the input directory recursively
 func findTemplateFiles(inputDir string) ([]string, error) {
 	var files []string
 
@@ -464,13 +491,10 @@ func findTemplateFiles(inputDir string) ([]string, error) {
 			return nil
 		}
 
-		// Check for supported extensions
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".sql" || ext == ".md" {
-			// Check for .snap. prefix
-			if strings.Contains(strings.ToLower(filepath.Base(path)), ".snap.") {
-				files = append(files, path)
-			}
+		// Check for .snap.sql or .snap.md files
+		fileName := strings.ToLower(filepath.Base(path))
+		if strings.HasSuffix(fileName, ".snap.sql") || strings.HasSuffix(fileName, ".snap.md") {
+			files = append(files, path)
 		}
 
 		return nil

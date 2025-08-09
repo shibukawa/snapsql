@@ -52,9 +52,10 @@ type GenerationConfig struct {
 
 // GeneratorConfig represents a single generator configuration
 type GeneratorConfig struct {
-	Output   string         `yaml:"output"`
-	Enabled  bool           `yaml:"enabled"`
-	Settings map[string]any `yaml:"settings,omitempty"`
+	Output            string         `yaml:"output"`
+	Enabled           bool           `yaml:"enabled"`
+	PreserveHierarchy bool           `yaml:"preserve_hierarchy"`
+	Settings          map[string]any `yaml:"settings,omitempty"`
 }
 
 // LanguageConfig represents language-specific generation settings (deprecated, kept for backward compatibility)
@@ -195,23 +196,26 @@ func getDefaultConfig() *Config {
 			Validate: true,
 			Generators: map[string]GeneratorConfig{
 				"json": {
-					Output:  "./generated",
-					Enabled: true,
+					Output:            "./generated",
+					Enabled:           true,
+					PreserveHierarchy: true,
 					Settings: map[string]any{
 						"pretty":           true,
 						"include_metadata": true,
 					},
 				},
 				"go": {
-					Output:  "./internal/queries",
-					Enabled: false,
+					Output:            "./internal/queries",
+					Enabled:           false,
+					PreserveHierarchy: true,
 					Settings: map[string]any{
 						"package": "queries",
 					},
 				},
 				"typescript": {
-					Output:  "./src/generated",
-					Enabled: false,
+					Output:            "./src/generated",
+					Enabled:           false,
+					PreserveHierarchy: true,
 					Settings: map[string]any{
 						"types": true,
 					},
@@ -299,22 +303,48 @@ func applyDefaults(config *Config) {
 	}
 
 	// Apply default JSON generator if not configured
-	if _, exists := config.Generation.Generators["json"]; !exists {
-		config.Generation.Generators["json"] = GeneratorConfig{
-			Output:  "./generated",
-			Enabled: true,
+	jsonGen, exists := config.Generation.Generators["json"]
+	if !exists {
+		jsonGen = GeneratorConfig{
+			Output:            "./generated",
+			Enabled:           true,
+			PreserveHierarchy: true,
 			Settings: map[string]any{
 				"pretty":           true,
 				"include_metadata": true,
 			},
 		}
-	}
-
-	// Ensure JSON generator is always enabled (it's required for other generators)
-	if jsonGen, exists := config.Generation.Generators["json"]; exists {
+	} else {
+		// Ensure JSON generator is always enabled
 		jsonGen.Enabled = true
-		config.Generation.Generators["json"] = jsonGen
+		
+		// Apply defaults for missing fields
+		if jsonGen.Output == "" {
+			jsonGen.Output = "./generated"
+		}
+		
+		// For PreserveHierarchy, we'll default to true if not explicitly configured
+		// Since we can't distinguish between false and unset in YAML, we'll use a heuristic:
+		// If the config has no other custom settings, assume it's using defaults
+		if jsonGen.Settings == nil && jsonGen.Output == "" {
+			jsonGen.PreserveHierarchy = true
+		}
+		
+		// Initialize settings if nil
+		if jsonGen.Settings == nil {
+			jsonGen.Settings = make(map[string]any)
+		}
+		
+		// Apply default settings if not present
+		if _, exists := jsonGen.Settings["pretty"]; !exists {
+			jsonGen.Settings["pretty"] = true
+		}
+		if _, exists := jsonGen.Settings["include_metadata"]; !exists {
+			jsonGen.Settings["include_metadata"] = true
+		}
 	}
+	
+	config.Generation.Generators["json"] = jsonGen
 
 	// Apply default schema extraction settings
 	if len(config.Schema.TablePatterns.Include) == 0 {
