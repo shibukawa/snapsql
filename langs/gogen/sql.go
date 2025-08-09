@@ -45,8 +45,10 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions
 func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
-	var sqlParts []string
-	var arguments []int
+	var (
+		sqlParts  []string
+		arguments []int
+	)
 
 	for _, inst := range instructions {
 		switch inst.Op {
@@ -63,6 +65,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 
 	// Convert expression indices to parameter names for static SQL
 	var parameterNames []string
+
 	for _, exprIndex := range arguments {
 		if exprIndex < len(format.CELExpressions) {
 			expr := format.CELExpressions[exprIndex]
@@ -84,6 +87,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 // generateDynamicSQLFromOptimized generates dynamic SQL building code from optimized instructions
 func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var code []string
+
 	hasArguments := false
 
 	// Track control flow stack
@@ -97,6 +101,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	for _, param := range format.Parameters {
 		code = append(code, fmt.Sprintf("    %q: %s,", param.Name, snakeToCamelLower(param.Name)))
 	}
+
 	code = append(code, "}")
 
 	for _, inst := range instructions {
@@ -168,15 +173,18 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "for" {
 				// Find the corresponding LOOP_START to get the variable name
 				var loopVar string
+
 				for i := len(instructions) - 1; i >= 0; i-- {
 					if instructions[i].Op == "LOOP_START" && instructions[i].EnvIndex == inst.EnvIndex {
 						loopVar = instructions[i].Variable
 						break
 					}
 				}
+
 				if loopVar != "" {
 					code = append(code, fmt.Sprintf("    delete(paramMap, %q)", loopVar))
 				}
+
 				code = append(code, "}")
 				controlStack = controlStack[:len(controlStack)-1]
 			}

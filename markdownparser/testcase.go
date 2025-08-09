@@ -49,19 +49,23 @@ type TestSection struct {
 
 // parseTestCasesFromAST parses test cases from AST nodes
 func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error) {
-	var testCases []TestCase
-	var currentTestCase *TestCase
-	var errors []error
-	var currentSection TestSection
+	var (
+		testCases       []TestCase
+		currentTestCase *TestCase
+		errors          []error
+		currentSection  TestSection
+	)
 
 	for _, node := range nodes {
 		switch n := node.(type) {
 		case *ast.Heading:
 			// Save previous test case if exists
 			if currentTestCase != nil {
-				if err := validateTestCase(currentTestCase); err != nil {
+				err := validateTestCase(currentTestCase)
+				if err != nil {
 					errors = append(errors, err)
 				}
+
 				testCases = append(testCases, *currentTestCase)
 			}
 
@@ -108,21 +112,27 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 		case *ast.FencedCodeBlock:
 			if currentTestCase != nil && currentSection.Type != "" {
 				// Get code block info
-				info := strings.ToLower(strings.TrimSpace(string(n.Info.Text(content))))
+				var info string
+				if n.Info != nil {
+					info = strings.ToLower(strings.TrimSpace(string(n.Info.Value(content))))
+				}
 
 				// Get code block content
 				var codeContent strings.Builder
+
 				lines := n.Lines()
-				for i := 0; i < lines.Len(); i++ {
+				for i := range lines.Len() {
 					line := lines.At(i)
 					codeContent.Write(line.Value(content))
+
 					if i < lines.Len()-1 {
 						codeContent.WriteString("\n")
 					}
 				}
 
 				// Process the section
-				if err := processTestSection(currentTestCase, currentSection, info, []byte(codeContent.String())); err != nil {
+				err := processTestSection(currentTestCase, currentSection, info, []byte(codeContent.String()))
+				if err != nil {
 					errors = append(errors, fmt.Errorf("in test case %q: %w", currentTestCase.Name, err))
 				}
 
@@ -134,9 +144,11 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 
 	// Handle last test case
 	if currentTestCase != nil {
-		if err := validateTestCase(currentTestCase); err != nil {
+		err := validateTestCase(currentTestCase)
+		if err != nil {
 			errors = append(errors, err)
 		}
+
 		testCases = append(testCases, *currentTestCase)
 	}
 
@@ -144,9 +156,11 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 	if len(errors) > 0 {
 		var errMsg strings.Builder
 		errMsg.WriteString("errors in test cases:\n")
+
 		for _, err := range errors {
 			errMsg.WriteString(fmt.Sprintf("- %v\n", err))
 		}
+
 		return nil, fmt.Errorf("%w: %s", snapsql.ErrFailedToParse, errMsg.String())
 	}
 
@@ -161,22 +175,30 @@ func findFirstEmphasis(paragraph *ast.Paragraph) *ast.Emphasis {
 			if emp, ok := n.(*ast.Emphasis); ok {
 				emphasis = emp
 			}
+
 			return ast.WalkStop, nil
 		}
+
 		return ast.WalkContinue, nil
 	})
+
 	return emphasis
 }
 
 // extractTextFromNode extracts all text content from a node and its children
 func extractTextFromNode(node ast.Node, content []byte) string {
 	var text strings.Builder
+
 	ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering && n.Kind() == ast.KindText {
-			text.Write(n.Text(content))
+			if textNode, ok := n.(*ast.Text); ok {
+				text.Write(textNode.Value(content))
+			}
 		}
+
 		return ast.WalkContinue, nil
 	})
+
 	return text.String()
 }
 
@@ -203,10 +225,12 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 		if len(testCase.Parameters) > 0 {
 			return fmt.Errorf("%w in test case %q", ErrDuplicateParameters, testCase.Name)
 		}
+
 		params, err := parseParameters(content)
 		if err != nil {
 			return fmt.Errorf("failed to parse parameters in test case %q: %w", testCase.Name, err)
 		}
+
 		testCase.Parameters = params
 
 	case "expected", "expected results", "results":
@@ -214,10 +238,12 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 		if len(testCase.ExpectedResult) > 0 {
 			return fmt.Errorf("%w in test case %q", ErrDuplicateExpectedResults, testCase.Name)
 		}
+
 		results, err := parseExpectedResults(content)
 		if err != nil {
 			return fmt.Errorf("failed to parse expected results in test case %q: %w", testCase.Name, err)
 		}
+
 		testCase.ExpectedResult = results
 
 	case "verify_query":
@@ -255,7 +281,9 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 				// テーブル名が指定されている場合（例: "Fixtures: users[insert]"）
 				// データを直接そのテーブルに割り当て
 				var rows []map[string]any
-				if err := parseYAMLData(content, &rows); err != nil {
+
+				err := parseYAMLData(content, &rows)
+				if err != nil {
 					return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
 				}
 
@@ -270,6 +298,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 				if err != nil {
 					return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
 				}
+
 				for tableName, rows := range tableData {
 					// 後方互換性のため既存のFixtureフィールドにも追加
 					testCase.Fixture[tableName] = append(testCase.Fixture[tableName], rows...)

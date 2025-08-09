@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
@@ -82,9 +83,11 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 	// If specific language is requested, generate only that language
 	if g.Lang != "" && g.Lang != "json" {
 		if generator, exists := config.Generation.Generators[g.Lang]; exists && generator.Enabled {
-			if err := generateForLanguage(g.Lang, generator, intermediateFiles, ctx); err != nil {
+			err := generateForLanguage(g.Lang, generator, intermediateFiles, ctx)
+			if err != nil {
 				return fmt.Errorf("failed to generate %s files: %w", g.Lang, err)
 			}
+
 			generatedLanguages++
 		} else {
 			return fmt.Errorf("%w: '%s'", ErrGeneratorNotConfigured, g.Lang)
@@ -93,10 +96,12 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 		// Generate all other enabled generators
 		for lang, generator := range config.Generation.Generators {
 			if lang != "json" && generator.Enabled {
-				if err := generateForLanguage(lang, generator, intermediateFiles, ctx); err != nil {
+				err := generateForLanguage(lang, generator, intermediateFiles, ctx)
+				if err != nil {
 					color.Red("Failed to generate %s files: %v", lang, err)
 					continue
 				}
+
 				generatedLanguages++
 			}
 		}
@@ -109,34 +114,39 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 
 // generateForLanguage generates files for a specific language/generator
 func generateForLanguage(lang string, generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
-
 	switch lang {
 	case "json":
 		// JSON generation is handled in the main loop, nothing to do here
 		return nil
 	case "go":
 		// Use external plugin if available, otherwise show not implemented message
-		if _, err := exec.LookPath("snapsql-gen-go"); err == nil {
+		_, err := exec.LookPath("snapsql-gen-go")
+		if err == nil {
 			return generateWithExternalPlugin(lang, generator, intermediateFiles, ctx)
 		}
+
 		return nil
 	case "typescript":
 		// Use external plugin if available, otherwise show not implemented message
-		if _, err := exec.LookPath("snapsql-gen-typescript"); err == nil {
+		_, err := exec.LookPath("snapsql-gen-typescript")
+		if err == nil {
 			return generateWithExternalPlugin(lang, generator, intermediateFiles, ctx)
 		}
+
 		return nil
 	case "java":
 		// Use external plugin if available, otherwise show not implemented message
 		if _, err := exec.LookPath("snapsql-gen-java"); err == nil {
 			return generateWithExternalPlugin(lang, generator, intermediateFiles, ctx)
 		}
+
 		return nil
 	case "python":
 		// Use external plugin if available, otherwise show not implemented message
 		if _, err := exec.LookPath("snapsql-gen-python"); err == nil {
 			return generateWithExternalPlugin(lang, generator, intermediateFiles, ctx)
 		}
+
 		return nil
 	default:
 		// Try to find external generator plugin
@@ -146,7 +156,7 @@ func generateForLanguage(lang string, generator GeneratorConfig, intermediateFil
 
 // generateWithExternalPlugin attempts to use an external generator plugin
 func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
-	pluginName := fmt.Sprintf("snapsql-gen-%s", lang)
+	pluginName := "snapsql-gen-" + lang
 
 	// Check if plugin exists in PATH
 	if _, err := exec.LookPath(pluginName); err != nil {
@@ -156,10 +166,11 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 	// Prepare output directory
 	outputDir := generator.Output
 	if outputDir == "" {
-		outputDir = fmt.Sprintf("./generated/%s", lang)
+		outputDir = "./generated/" + lang
 	}
 
-	if err := ensureDir(outputDir); err != nil {
+	err := ensureDir(outputDir)
+	if err != nil {
 		return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 	}
 
@@ -195,7 +206,7 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 			case string:
 				strValue = v
 			case bool:
-				strValue = fmt.Sprintf("%t", v)
+				strValue = strconv.FormatBool(v)
 			case int, int64, float64:
 				strValue = fmt.Sprintf("%v", v)
 			default:
@@ -203,7 +214,7 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 				continue
 			}
 
-			args = append(args, fmt.Sprintf("--%s", key), strValue)
+			args = append(args, "--"+key, strValue)
 		}
 
 		// Execute plugin
@@ -240,7 +251,7 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 		if !exists || !generator.Enabled {
 			// Use default config
 			generator = GeneratorConfig{
-				Output:   fmt.Sprintf("./generated/%s", g.Lang),
+				Output:   "./generated/" + g.Lang,
 				Enabled:  true,
 				Settings: map[string]any{},
 			}
@@ -251,6 +262,7 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 			if generator.Settings == nil {
 				generator.Settings = make(map[string]any)
 			}
+
 			generator.Settings["package"] = g.Package
 		}
 
@@ -268,7 +280,7 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 		if !exists {
 			// Use default config
 			generator = GeneratorConfig{
-				Output:   fmt.Sprintf("./generated/%s", g.Lang),
+				Output:   "./generated/" + g.Lang,
 				Enabled:  true,
 				Settings: map[string]any{},
 			}
@@ -293,8 +305,10 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 	}
 
 	// Check if input is a file or directory
-	var files []string
-	var err error
+	var (
+		files []string
+		err   error
+	)
 
 	if isDirectory(inputPath) {
 		// Find all SQL template files in directory
@@ -307,6 +321,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 		if !fileExists(inputPath) {
 			return nil, fmt.Errorf("%w: %s", ErrInputFileNotExist, inputPath)
 		}
+
 		files = []string{inputPath}
 	}
 
@@ -325,6 +340,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 			if ctx.Verbose {
 				color.Red("Failed to process %s: %v", file, err)
 			}
+
 			continue
 		}
 
@@ -372,6 +388,7 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir string, constantF
 	} else {
 		// Process SQL file
 		reader := strings.NewReader(string(content))
+
 		format, err = intermediate.GenerateFromSQL(reader, constants, inputFile, ".", nil, config)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate from SQL: %w", err)

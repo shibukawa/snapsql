@@ -133,6 +133,7 @@ func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error)
 			goType = "[]" + goType
 			celType = "ListType(" + celType + ")"
 		}
+
 		if strings.HasSuffix(v.Type, "*") {
 			goType = "*" + goType
 		}
@@ -162,6 +163,7 @@ func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error)
 		goType = "[]" + goType
 		celType = "ListType(cel." + celType + ")"
 	}
+
 	if strings.HasSuffix(v.Type, "*") {
 		goType = "*" + goType
 	}

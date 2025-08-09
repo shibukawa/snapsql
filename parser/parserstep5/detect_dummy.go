@@ -110,6 +110,7 @@ func findParenthesesRange(tokens []tokenizer.Token, startIndex int) []int {
 	}
 
 	parenLevel := 0
+
 	for i := startIndex; i < len(tokens); i++ {
 		switch tokens[i].Type {
 		case tokenizer.OPENED_PARENS:
@@ -122,6 +123,7 @@ func findParenthesesRange(tokens []tokenizer.Token, startIndex int) []int {
 				for j := 0; j < len(result); j++ {
 					result[j] = startIndex + j
 				}
+
 				return result
 			}
 		}

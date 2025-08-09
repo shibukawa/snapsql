@@ -15,6 +15,7 @@ func LoadTableFromYAMLFile(path string) (*snapsql.TableInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var wrapper struct {
 		Metadata YAMLSchema `yaml:"metadata"`
 		Table    YAMLTable  `yaml:"table"`
@@ -22,6 +23,7 @@ func LoadTableFromYAMLFile(path string) (*snapsql.TableInfo, error) {
 	if err := yaml.Unmarshal(data, &wrapper); err != nil {
 		return nil, err
 	}
+
 	return yamlTableToTableInfo(&wrapper.Table), nil
 }
 
@@ -31,26 +33,33 @@ func LoadDatabaseSchemaFromDir(dir string) (*snapsql.DatabaseSchema, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	dbSchema := &snapsql.DatabaseSchema{}
 	tables := []*snapsql.TableInfo{}
+
 	for _, f := range files {
 		if f.IsDir() || filepath.Ext(f.Name()) != ".yaml" {
 			continue
 		}
+
 		table, err := LoadTableFromYAMLFile(filepath.Join(dir, f.Name()))
 		if err != nil {
 			return nil, err
 		}
+
 		tables = append(tables, table)
 	}
 	// テーブル名でソート
 	sort.Slice(tables, func(i, j int) bool {
 		return tables[i].Name < tables[j].Name
 	})
+
 	if len(tables) > 0 {
 		dbSchema.Name = tables[0].Schema
 	}
+
 	dbSchema.Tables = tables
+
 	return dbSchema, nil
 }
 
@@ -70,6 +79,7 @@ func yamlTableToTableInfo(y *YAMLTable) *snapsql.TableInfo {
 			Scale:        c.Scale,
 		}
 	}
+
 	constraints := []snapsql.ConstraintInfo{}
 	for _, c := range y.Constraints {
 		constraints = append(constraints, snapsql.ConstraintInfo{
@@ -81,6 +91,7 @@ func yamlTableToTableInfo(y *YAMLTable) *snapsql.TableInfo {
 			Definition:        c.Definition,
 		})
 	}
+
 	indexes := []snapsql.IndexInfo{}
 	for _, i := range y.Indexes {
 		indexes = append(indexes, snapsql.IndexInfo{
@@ -90,6 +101,7 @@ func yamlTableToTableInfo(y *YAMLTable) *snapsql.TableInfo {
 			Type:     i.Type,
 		})
 	}
+
 	return &snapsql.TableInfo{
 		Name:        y.Name,
 		Schema:      y.Schema,

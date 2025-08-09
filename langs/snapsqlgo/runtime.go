@@ -65,6 +65,7 @@ func LoadMockDataFromFile(mockPath, testCaseName string) (any, error) {
 	}
 
 	var result any
+
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse mock JSON %s: %w", filePath, err)
@@ -85,6 +86,7 @@ func GetMockDataFromFiles(mockPath string, dataNames []string) (any, error) {
 
 	// Combine multiple test cases
 	var combinedData []any
+
 	for _, dataName := range dataNames {
 		data, err := LoadMockDataFromFile(mockPath, dataName)
 		if err != nil {
@@ -158,6 +160,7 @@ func WithConfig(ctx context.Context, funcPattern string, opts ...FuncOpt) contex
 	if !ok {
 		configMap = make(map[string]*FuncConfig)
 	}
+
 	config := &FuncConfig{}
 
 	// Apply function options
@@ -166,6 +169,7 @@ func WithConfig(ctx context.Context, funcPattern string, opts ...FuncOpt) contex
 	}
 
 	configMap[funcPattern] = config
+
 	return context.WithValue(ctx, funcConfigKey{}, configMap)
 }
 
@@ -195,6 +199,7 @@ func ExtractImplicitParams(ctx context.Context, specs []ImplicitParamSpec) map[s
 				panic(fmt.Sprintf("implementation error: required implicit parameter '%s' not found in context - WithSystemColumnValues() not called", spec.Name))
 			}
 		}
+
 		return make(map[string]any)
 	}
 
@@ -212,9 +217,11 @@ func ExtractImplicitParams(ctx context.Context, specs []ImplicitParamSpec) map[s
 			if spec.Required {
 				panic(fmt.Sprintf("implementation error: required implicit parameter '%s' (%s) not found in context", spec.Name, spec.Type))
 			}
+
 			if spec.DefaultValue != nil {
 				result[spec.Name] = spec.DefaultValue
 			}
+
 			continue
 		}
 
@@ -389,6 +396,7 @@ func MapMockDataToSlice[T any](mockData any) ([]T, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to map single mock data item: %w", err)
 		}
+
 		return []T{item}, nil
 	}
 

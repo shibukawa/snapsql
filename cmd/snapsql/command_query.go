@@ -123,6 +123,7 @@ func (q *QueryCmd) Run(ctx *Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrDatabaseConnection, err)
 	}
+
 	options.Driver = driver
 	options.ConnectionString = connectionString
 
@@ -147,15 +148,18 @@ func (q *QueryCmd) loadParameters(ctx *Context) (map[string]any, error) {
 
 		// Determine format based on extension
 		ext := strings.ToLower(filepath.Ext(q.ParamsFile))
-		if ext == ".json" {
-			if err := json.Unmarshal(data, &params); err != nil {
+		switch ext {
+		case ".json":
+			err := json.Unmarshal(data, &params)
+			if err != nil {
 				return nil, fmt.Errorf("failed to parse JSON parameters: %w", err)
 			}
-		} else if ext == ".yaml" || ext == ".yml" {
-			if err := yaml.Unmarshal(data, &params); err != nil {
+		case ".yaml", ".yml":
+			err := yaml.Unmarshal(data, &params)
+			if err != nil {
 				return nil, fmt.Errorf("failed to parse YAML parameters: %w", err)
 			}
-		} else {
+		default:
 			return nil, fmt.Errorf("%w: %s", ErrUnsupportedParamsFormat, ext)
 		}
 
@@ -178,7 +182,9 @@ func (q *QueryCmd) loadParameters(ctx *Context) (map[string]any, error) {
 		if (strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}")) ||
 			(strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]")) {
 			var jsonValue any
-			if err := json.Unmarshal([]byte(value), &jsonValue); err == nil {
+
+			err := json.Unmarshal([]byte(value), &jsonValue)
+			if err == nil {
 				params[key] = jsonValue
 				continue
 			}
@@ -189,6 +195,7 @@ func (q *QueryCmd) loadParameters(ctx *Context) (map[string]any, error) {
 			params[key] = true
 			continue
 		}
+
 		if value == "false" {
 			params[key] = false
 			continue
@@ -230,6 +237,7 @@ func (q *QueryCmd) loadConstants(config *Config, ctx *Context) (map[string]any, 
 			if ctx.Verbose {
 				color.Yellow("Constant file not found: %s", file)
 			}
+
 			continue
 		}
 
@@ -258,16 +266,20 @@ func (q *QueryCmd) loadConstants(config *Config, ctx *Context) (map[string]any, 
 
 // getDatabaseConnection gets database connection information
 func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, string, error) {
-	var connectionString string
-	var driver string
+	var (
+		connectionString string
+		driver           string
+	)
 
 	// Get connection string from environment or direct specification
+
 	if q.Environment != "" {
 		// Get from config
 		dbConfig, exists := config.Databases[q.Environment]
 		if !exists {
 			return "", "", fmt.Errorf("%w: %s", ErrEnvironmentNotFound, q.Environment)
 		}
+
 		connectionString = dbConfig.Connection
 		driver = dbConfig.Driver
 	} else if q.DBConnection != "" {
@@ -282,6 +294,7 @@ func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, 
 			if !exists {
 				return "", "", fmt.Errorf("%w: %s", ErrDefaultEnvironmentNotFound, config.Query.DefaultEnvironment)
 			}
+
 			connectionString = dbConfig.Connection
 			driver = dbConfig.Driver
 		} else {
@@ -301,9 +314,11 @@ func determineDriver(connectionString string) string {
 	if strings.HasPrefix(connectionString, "postgres://") {
 		return "postgres"
 	}
+
 	if strings.HasPrefix(connectionString, "mysql://") {
 		return "mysql"
 	}
+
 	if strings.HasPrefix(connectionString, "sqlite://") || strings.HasSuffix(connectionString, ".db") {
 		return "sqlite3"
 	}
@@ -321,6 +336,7 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 
 	// Generate SQL using the same logic as actual execution
 	dialect := q.getDialectFromOptions(options)
+
 	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {
 		return fmt.Errorf("failed to optimize instructions: %w", err)
@@ -343,9 +359,11 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 
 		if len(args) > 0 {
 			color.Blue("Parameters:")
+
 			for i, arg := range args {
 				fmt.Printf("  $%d: %v (%T)\n", i+1, arg, arg)
 			}
+
 			fmt.Println()
 		}
 
@@ -387,8 +405,10 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 				color.Red("\nThis query contains DELETE or UPDATE without a WHERE clause, which could affect all rows in the table.")
 				color.Red("To execute this query anyway, use the --execute-dangerous-query flag.")
 			}
+
 			return err
 		}
+
 		return fmt.Errorf("%w: %w", ErrQueryExecution, err)
 	}
 
@@ -401,6 +421,7 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 			return fmt.Errorf("%w: %w", ErrOutputFileCreation, err)
 		}
 		defer file.Close()
+
 		output = file
 	} else {
 		// Use stdout
@@ -412,11 +433,13 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 
 	// Format and output results
 	if options.Explain {
-		if err := formatter.FormatExplain(result, output); err != nil {
+		err := formatter.FormatExplain(result, output)
+		if err != nil {
 			return fmt.Errorf("failed to format explain results: %w", err)
 		}
 	} else {
-		if err := formatter.Format(result, output); err != nil {
+		err := formatter.Format(result, output)
+		if err != nil {
 			return fmt.Errorf("failed to format results: %w", err)
 		}
 	}
@@ -440,8 +463,10 @@ func (q *QueryCmd) getDialectFromOptions(options query.QueryOptions) string {
 
 // buildSQLFromOptimized builds SQL from optimized instructions (for dry-run)
 func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]any) (string, []any, error) {
-	var builder strings.Builder
-	var args []any
+	var (
+		builder strings.Builder
+		args    []any
+	)
 
 	// Create parameter map for evaluation
 	paramMap := make(map[string]any)
@@ -451,6 +476,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 
 	// Create CEL programs for expressions
 	celPrograms := make(map[int]*cel.Program)
+
 	env, err := cel.NewEnv()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create CEL environment: %w", err)
@@ -461,10 +487,12 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 		if issues.Err() != nil {
 			return "", nil, fmt.Errorf("failed to compile expression %d (%s): %w", i, expr.Expression, issues.Err())
 		}
+
 		program, err := env.Program(ast)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to create program for expression %d: %w", i, err)
 		}
+
 		celPrograms[i] = &program
 	}
 
@@ -488,6 +516,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 				}
 
 				builder.WriteString("?")
+
 				args = append(args, result.Value())
 			}
 
@@ -519,14 +548,18 @@ func (q *QueryCmd) isDangerousQuery(sql string) bool {
 // parseInt parses a string as an integer
 func parseInt(s string) (int, error) {
 	var i int
+
 	_, err := fmt.Sscanf(s, "%d", &i)
+
 	return i, err
 }
 
 // parseFloat parses a string as a float
 func parseFloat(s string) (float64, error) {
 	var f float64
+
 	_, err := fmt.Sscanf(s, "%f", &f)
+
 	return f, err
 }
 
@@ -539,12 +572,15 @@ func (q *QueryCmd) printParameters(params map[string]any, indent string) {
 			q.printParameters(v, indent+"  ")
 		case []any:
 			fmt.Printf("%s%s: [", indent, key)
+
 			for i, item := range v {
 				if i > 0 {
 					fmt.Print(", ")
 				}
+
 				fmt.Printf("%v", item)
 			}
+
 			fmt.Println("]")
 		default:
 			fmt.Printf("%s%s: %v\n", indent, key, value)

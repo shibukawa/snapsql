@@ -31,12 +31,15 @@ func TestCheckClauseDuplicates(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clauses := parseClausesFromSQL(t, tt.sql)
+
 			var perr cmn.ParseError
 			ValidateClauseDuplicates(clauses, &perr)
+
 			if tt.wantErr {
 				if len(perr.Errors) == 0 {
 					t.Errorf("%s: want error but got none", tt.msg)
 				}
+
 				assert.Contains(t, perr.Error(), "duplicate clause")
 			} else {
 				if len(perr.Errors) != 0 {

@@ -55,7 +55,8 @@ func (esr *EnhancedSubqueryResolver) ResolveSubqueryTypesComplete() error {
 
 	// Process each subquery in dependency order
 	for _, nodeID := range processingOrder {
-		if err := esr.resolveSubqueryNodeComplete(nodeID, depGraph); err != nil {
+		err := esr.resolveSubqueryNodeComplete(nodeID, depGraph)
+		if err != nil {
 			return fmt.Errorf("failed to resolve subquery node %s: %w", nodeID, err)
 		}
 	}
@@ -87,8 +88,10 @@ func (esr *EnhancedSubqueryResolver) resolveSubqueryNodeComplete(nodeID string, 
 	subEngine := esr.createEnhancedSubEngine(node, context)
 
 	// Perform type inference based on statement type
-	var fieldInfos []*InferredFieldInfo
-	var err error
+	var (
+		fieldInfos []*InferredFieldInfo
+		err        error
+	)
 
 	switch stmt := node.Statement.(type) {
 	case *parser.SelectStatement:
@@ -213,6 +216,7 @@ func (esr *EnhancedSubqueryResolver) calculateDepthWithDependencies(
 	}
 
 	visited[nodeID] = true
+
 	node := depGraph.GetNode(nodeID)
 	if node == nil {
 		return currentDepth
@@ -247,9 +251,11 @@ func (esr *EnhancedSubqueryResolver) extractCTENameFromNodeID(nodeID string) str
 	if strings.HasPrefix(nodeID, "cte_") {
 		return strings.TrimPrefix(nodeID, "cte_")
 	}
+
 	if strings.HasPrefix(nodeID, "with_") {
 		return strings.TrimPrefix(nodeID, "with_")
 	}
+
 	return nodeID
 }
 
@@ -262,6 +268,7 @@ func (esr *EnhancedSubqueryResolver) cacheFieldMapping(nodeID string, fieldInfos
 			fieldMap[fieldInfo.Alias] = fieldInfo
 		}
 	}
+
 	esr.fieldResolverCache[nodeID] = fieldMap
 }
 

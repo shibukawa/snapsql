@@ -90,6 +90,7 @@ func TestConfigurationExamples(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var output strings.Builder
+
 			generator := New(format,
 				WithConfig(tt.config, tt.outputPath),
 				WithDialect("postgresql"),
@@ -134,7 +135,6 @@ func TestSimplifiedConfigStructure(t *testing.T) {
 	//     preserve_hierarchy: true        # Optional: default true
 	//     mock_path: "./testdata/mocks"   # Optional
 	//     generate_tests: false           # Optional: default false
-
 	config := Config{
 		Package:           "",   // Auto-infer from output path
 		PreserveHierarchy: true, // Maintain directory structure

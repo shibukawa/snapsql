@@ -27,6 +27,7 @@ func hasCELExpression(tokens []tok.Token) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -38,16 +39,20 @@ func finalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.O
 		return
 	}
 
-	var inputs [][]pc.Token[tok.Token]
-	var labels []string
+	var (
+		inputs [][]pc.Token[tok.Token]
+		labels []string
+	)
 
 	// Add LIMIT clause if present
+
 	if limitClause != nil {
 		inputs = append(inputs, cmn.ToParserToken(limitClause.ContentTokens()))
 		labels = append(labels, "LIMIT")
 
 		// Check for comma-separated LIMIT/OFFSET (not supported)
 		pctx := pc.NewParseContext[tok.Token]()
+
 		_, _, err := commaSeparatedNumber(pctx, inputs[0])
 		if err == nil {
 			perr.Add(fmt.Errorf("%w at %s: comma-separated LIMIT/OFFSET is not supported by SnapSQL", cmn.ErrInvalidForSnapSQL, inputs[0][0].Val.Position.String()))
@@ -85,6 +90,7 @@ func finalizeLimitOffsetClause(limitClause *cmn.LimitClause, offsetClause *cmn.O
 			} else {
 				perr.Add(fmt.Errorf("%w: %s clause requires number for its content", cmn.ErrInvalidSQL, labels[i]))
 			}
+
 			return
 		}
 
@@ -124,6 +130,7 @@ func finalizeOffsetClause(offsetClause *cmn.OffsetClause, perr *cmn.ParseError) 
 		} else {
 			perr.Add(fmt.Errorf("%w: OFFSET clause requires number for its content", cmn.ErrInvalidSQL))
 		}
+
 		return
 	}
 

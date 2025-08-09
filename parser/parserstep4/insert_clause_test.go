@@ -96,26 +96,32 @@ func TestInsertWithoutColumnList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, _ := tok.Tokenize(tt.sql)
+
 			stmt, err := parserstep2.Execute(tokens)
 			if err != nil {
 				panic("unexpected error: " + err.Error())
 			}
+
 			err = parserstep3.Execute(stmt)
 			if err != nil {
 				panic("unexpected error: " + err.Error())
 			}
+
 			insertStmt, ok := stmt.(*cmn.InsertIntoStatement)
 			if !ok {
 				panic("cast should be success")
 			}
+
 			perr := &cmn.ParseError{}
 			finalizeInsertIntoClause(insertStmt.Into, insertStmt.Select, perr)
+
 			if tt.wantErr {
 				assert.NotEqual(t, 0, len(perr.Errors))
 			} else {
 				for _, e := range perr.Errors {
 					t.Logf("Error: %s", e.Error())
 				}
+
 				assert.Equal(t, 0, len(perr.Errors))
 				assert.Equal(t, tt.wantTable, insertStmt.Into.Table)
 				assert.Equal(t, tt.wantColumns, insertStmt.Into.Columns)

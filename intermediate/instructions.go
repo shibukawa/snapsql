@@ -46,6 +46,7 @@ func isSelectStatement(tokens []tokenizer.Token) bool {
 			return false
 		}
 	}
+
 	return false
 }
 
@@ -104,15 +105,18 @@ func checkForCondition(tokens []tokenizer.Token, keywordIndex, valueIndex int, c
 			if endIndex == 0 {
 				endIndex = keywordIndex + 1
 			}
+
 			for k := endIndex + 1; k < len(tokens); k++ {
 				if tokens[k].Directive != nil && tokens[k].Directive.Type == "end" {
 					*conditionStart = j
 					*conditionEnd = k
+
 					return true
 				}
 			}
 		}
 	}
+
 	return false
 }
 
@@ -151,6 +155,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 				return i
 			}
 		}
+
 		return -1 // Should not happen if expressions are properly extracted
 	}
 
@@ -166,7 +171,9 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 					Value: content,
 				})
 			}
+
 			staticBuffer.Reset()
+
 			needSpace = false
 			currentInstructionPos = "" // Reset position for next instruction
 		}
@@ -178,7 +185,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 	}
 
 	// Process tokens
-	for i := 0; i < len(tokens); i++ {
+	for i := range tokens {
 		token := tokens[i]
 
 		// Skip header comments
@@ -191,6 +198,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 			inDummyBlock = true
 			continue
 		}
+
 		if token.Type == tokenizer.DUMMY_END {
 			inDummyBlock = false
 			continue
@@ -237,6 +245,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 
 			// Handle different LIMIT clause patterns
 			instructions = append(instructions, handleLimitClause(token, limitOffsetInfo)...)
+
 			continue
 		}
 
@@ -247,6 +256,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 
 			// Handle different OFFSET clause patterns
 			instructions = append(instructions, handleOffsetClause(token, limitOffsetInfo)...)
+
 			continue
 		}
 
@@ -260,8 +270,10 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 				// Add the value as static content first
 				if needSpace {
 					staticBuffer.WriteString(" ")
+
 					needSpace = false
 				}
+
 				staticBuffer.WriteString(token.Value)
 
 				// Set the current instruction position to the value token position
@@ -276,6 +288,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 					Op:  OpEnd,
 					Pos: keywordPos,
 				})
+
 				continue
 			}
 		}
@@ -290,8 +303,10 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 				// Add the value as static content first
 				if needSpace {
 					staticBuffer.WriteString(" ")
+
 					needSpace = false
 				}
+
 				staticBuffer.WriteString(token.Value)
 
 				// Set the current instruction position to the value token position
@@ -306,6 +321,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 					Op:  OpEnd,
 					Pos: keywordPos,
 				})
+
 				continue
 			}
 		}
@@ -332,6 +348,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 					Pos:         getPos(token),
 					SystemField: token.Directive.SystemField,
 				})
+
 				continue
 			}
 
@@ -353,6 +370,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 						SystemField: fieldName,
 					})
 				}
+
 				continue
 			}
 
@@ -512,6 +530,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 						} else {
 							keywordPos = fmt.Sprintf("%d:%d", tokens[limitOffsetInfo.OffsetTokenIndex].Position.Line, tokens[limitOffsetInfo.OffsetTokenIndex].Position.Column)
 						}
+
 						instructions = append(instructions, Instruction{
 							Op:  OpEnd,
 							Pos: keywordPos,
@@ -525,6 +544,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 				// Regular comment - add a space if needed
 				if needSpace {
 					staticBuffer.WriteString(" ")
+
 					needSpace = false
 				}
 				// Append comment to buffer
@@ -557,6 +577,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 				// Add a space if needed
 				if needSpace {
 					staticBuffer.WriteString(" ")
+
 					needSpace = false
 				}
 				// Append token value to buffer
@@ -644,6 +665,7 @@ func normalizeWhitespace(s string) string {
 		if isNewline {
 			// Always keep newlines
 			result.WriteRune(r)
+
 			prevIsSpace = false
 			prevIsNewline = true
 		} else if isSpace {
@@ -651,11 +673,13 @@ func normalizeWhitespace(s string) string {
 			if !prevIsSpace && !prevIsNewline {
 				result.WriteRune(' ')
 			}
+
 			prevIsSpace = true
 			prevIsNewline = false
 		} else {
 			// Non-whitespace character
 			result.WriteRune(r)
+
 			prevIsSpace = false
 			prevIsNewline = false
 		}
@@ -721,9 +745,11 @@ func handleLimitOffsetClause(token tokenizer.Token, limitOffsetInfo *LimitOffset
 		return fmt.Sprintf("%d:%d", token.Position.Line, token.Position.Column)
 	}
 
-	var hasCondition bool
-	var opIfSystem, opEmitSystem string
-	var staticValue string
+	var (
+		hasCondition             bool
+		opIfSystem, opEmitSystem string
+		staticValue              string
+	)
 
 	if isLimit {
 		hasCondition = limitOffsetInfo.HasLimitCondition

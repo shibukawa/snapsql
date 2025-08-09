@@ -54,8 +54,10 @@ func TestValidateClauseOrder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clauses := parseClausesFromSQL(t, tt.sql)
+
 			var perr cmn.ParseError
 			ValidateClauseOrder(tt.statement, clauses, &perr)
+
 			if tt.wantErr {
 				assert.Equal(t, 1, len(perr.Errors), "expected 1 error, got %d: %v", len(perr.Errors), perr.Errors)
 				assert.Equal(t, tt.wantMsg, perr.Errors[0].Error())

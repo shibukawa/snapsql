@@ -79,6 +79,7 @@ func (dg *SQDependencyGraph) ResolveFieldInNode(nodeID, fieldName string) ([]*SQ
 	}
 
 	var matches []*SQFieldSource
+
 	for _, field := range fields {
 		if field.Name == fieldName || field.Alias == fieldName {
 			matches = append(matches, field)
@@ -127,6 +128,7 @@ func (dg *SQDependencyGraph) AddFieldSourceToNode(nodeID string, fieldSource *SQ
 	}
 
 	node.FieldSources = append(node.FieldSources, fieldSource)
+
 	return nil
 }
 
@@ -135,6 +137,7 @@ func (dg *SQDependencyGraph) AddNode(node *SQDependencyNode) {
 	if dg.nodes == nil {
 		dg.nodes = make(map[string]*SQDependencyNode)
 	}
+
 	dg.nodes[node.ID] = node
 }
 
@@ -233,6 +236,7 @@ func (tr *SQTableReference) GetField(fieldName string) *SQFieldSource {
 			return field
 		}
 	}
+
 	return nil
 }
 
@@ -284,6 +288,7 @@ func (sm *SQScopeManager) CreateScope(id string) *SQScope {
 
 	sm.currentScope.ChildScopes = append(sm.currentScope.ChildScopes, newScope)
 	sm.scopes[id] = newScope
+
 	return newScope
 }
 
@@ -293,7 +298,9 @@ func (sm *SQScopeManager) EnterScope(scopeID string) error {
 	if !exists {
 		return fmt.Errorf("%w: %s", ErrScopeNotFound, scopeID)
 	}
+
 	sm.currentScope = scope
+
 	return nil
 }
 
@@ -354,6 +361,7 @@ func (p SQPosition) String() string {
 	if p.File != "" {
 		return fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
 	}
+
 	return fmt.Sprintf("%d:%d", p.Line, p.Column)
 }
 
@@ -374,22 +382,23 @@ func (pe *SQParseError) Error() string {
 	sb.WriteString(fmt.Sprintf("[%s] %s", pe.Type.String(), pe.Message))
 
 	if pe.Position.Line > 0 {
-		sb.WriteString(fmt.Sprintf(" at %s", pe.Position.String()))
+		sb.WriteString(" at " + pe.Position.String())
 	}
 
 	if pe.Context != "" {
-		sb.WriteString(fmt.Sprintf("\nContext: %s", pe.Context))
+		sb.WriteString("\nContext: " + pe.Context)
 	}
 
 	if len(pe.Suggestions) > 0 {
 		sb.WriteString("\nSuggestions:")
+
 		for _, suggestion := range pe.Suggestions {
-			sb.WriteString(fmt.Sprintf("\n  - %s", suggestion))
+			sb.WriteString("\n  - " + suggestion)
 		}
 	}
 
 	if len(pe.RelatedIDs) > 0 {
-		sb.WriteString(fmt.Sprintf("\nRelated: %s", strings.Join(pe.RelatedIDs, ", ")))
+		sb.WriteString("\nRelated: " + strings.Join(pe.RelatedIDs, ", "))
 	}
 
 	return sb.String()
@@ -400,13 +409,17 @@ func (dg *SQDependencyGraph) AddDependency(from, to string) error {
 	if _, exists := dg.nodes[from]; !exists {
 		return fmt.Errorf("%w: source %s", snapsql.ErrNodeNotFound, from)
 	}
+
 	if _, exists := dg.nodes[to]; !exists {
 		return fmt.Errorf("%w: target %s", snapsql.ErrNodeNotFound, to)
 	}
+
 	if dg.edges == nil {
 		dg.edges = make(map[string][]string)
 	}
+
 	dg.edges[from] = append(dg.edges[from], to)
+
 	return nil
 }
 
@@ -419,6 +432,7 @@ func (dg *SQDependencyGraph) GetProcessingOrder() ([]string, error) {
 	for nodeID := range dg.nodes {
 		inDegree[nodeID] = 0
 	}
+
 	for _, edges := range dg.edges {
 		for _, to := range edges {
 			inDegree[to]++
@@ -427,6 +441,7 @@ func (dg *SQDependencyGraph) GetProcessingOrder() ([]string, error) {
 
 	// Add nodes with in-degree 0 to queue
 	queue := []string{}
+
 	for nodeID, degree := range inDegree {
 		if degree == 0 {
 			queue = append(queue, nodeID)
@@ -434,9 +449,11 @@ func (dg *SQDependencyGraph) GetProcessingOrder() ([]string, error) {
 	}
 
 	result := []string{}
+
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
+
 		result = append(result, current)
 
 		// Reduce in-degree of neighboring nodes
@@ -476,6 +493,7 @@ func (dg *SQDependencyGraph) GetEdges(nodeID string) []string {
 	if edges, exists := dg.edges[nodeID]; exists {
 		return edges
 	}
+
 	return []string{}
 }
 

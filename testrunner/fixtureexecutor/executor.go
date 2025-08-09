@@ -83,6 +83,7 @@ func NewExecutor(db *sql.DB, dialect string) *Executor {
 // ExecuteTest executes a complete test case within a transaction
 func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, error) {
 	ctx := context.Background()
+
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -124,7 +125,8 @@ func (e *Executor) executeTestSteps(execution *TestExecution) (*ValidationResult
 
 // executeFixtureOnly executes only fixture insertion
 func (e *Executor) executeFixtureOnly(execution *TestExecution) (*ValidationResult, error) {
-	if err := e.executeFixtures(execution.Transaction, execution.TestCase.Fixtures); err != nil {
+	err := e.executeFixtures(execution.Transaction, execution.TestCase.Fixtures)
+	if err != nil {
 		return nil, err
 	}
 
@@ -180,7 +182,8 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 
 		// 4. Validate verify query results
 		if len(execution.TestCase.ExpectedResult) > 0 {
-			if err := e.validateVerifyResults(verifyResult, execution.TestCase.ExpectedResult); err != nil {
+			err := e.validateVerifyResults(verifyResult, execution.TestCase.ExpectedResult)
+			if err != nil {
 				return nil, fmt.Errorf("verify query validation failed: %w", err)
 			}
 		}
@@ -192,7 +195,8 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 	if len(execution.TestCase.ExpectedResult) > 0 {
 		// For SELECT queries or DML queries with RETURNING clause, do direct result comparison
 		if result.QueryType == SelectQuery || hasReturningClause(execution.SQL) {
-			if err := e.validateDirectResults(result, execution.TestCase.ExpectedResult); err != nil {
+			err := e.validateDirectResults(result, execution.TestCase.ExpectedResult)
+			if err != nil {
 				return nil, fmt.Errorf("direct result validation failed: %w", err)
 			}
 		} else {
@@ -253,6 +257,7 @@ func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[stri
 		}
 		// Keep the original query type for validation logic
 		result.QueryType = queryType
+
 		return result, nil
 	}
 
@@ -269,6 +274,7 @@ func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[stri
 // executeSelectQuery executes a SELECT query and returns the data
 func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationResult, error) {
 	ctx := context.Background()
+
 	rows, err := tx.QueryContext(ctx, sqlQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute SELECT query: %w", err)
@@ -287,18 +293,21 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 	for rows.Next() {
 		// Create slice of interface{} for scanning
 		values := make([]interface{}, len(columns))
+
 		valuePtrs := make([]interface{}, len(columns))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
 
 		// Scan the row
-		if err := rows.Scan(valuePtrs...); err != nil {
+		err := rows.Scan(valuePtrs...)
+		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
 		// Convert to map
 		row := make(map[string]any)
+
 		for i, col := range columns {
 			val := values[i]
 			if b, ok := val.([]byte); ok {
@@ -308,6 +317,7 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 				row[col] = val
 			}
 		}
+
 		data = append(data, row)
 	}
 
@@ -325,6 +335,7 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 // executeDMLQuery executes INSERT/UPDATE/DELETE queries and returns affected rows
 func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryType) (*ValidationResult, error) {
 	ctx := context.Background()
+
 	result, err := tx.ExecContext(ctx, sqlQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute DML query: %w", err)
@@ -343,10 +354,12 @@ func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryT
 }
 func (e *Executor) executeFixtures(tx *sql.Tx, fixtures []markdownparser.TableFixture) error {
 	for _, fixture := range fixtures {
-		if err := e.executeTableFixture(tx, fixture); err != nil {
+		err := e.executeTableFixture(tx, fixture)
+		if err != nil {
 			return fmt.Errorf("failed to execute fixture for table %s: %w", fixture.TableName, err)
 		}
 	}
+
 	return nil
 }
 
@@ -369,7 +382,8 @@ func (e *Executor) executeTableFixture(tx *sql.Tx, fixture markdownparser.TableF
 // executeClearInsert truncates the table and inserts data
 func (e *Executor) executeClearInsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	// Truncate table
-	if err := e.truncateTable(tx, fixture.TableName); err != nil {
+	err := e.truncateTable(tx, fixture.TableName)
+	if err != nil {
 		return fmt.Errorf("failed to truncate table: %w", err)
 	}
 
@@ -406,18 +420,20 @@ func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture
 // truncateTable truncates a table based on database dialect
 func (e *Executor) truncateTable(tx *sql.Tx, tableName string) error {
 	var query string
+
 	switch e.dialect {
 	case "postgres":
 		query = fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", e.quoteIdentifier(tableName))
 	case "mysql":
-		query = fmt.Sprintf("TRUNCATE TABLE %s", e.quoteIdentifier(tableName))
+		query = "TRUNCATE TABLE " + e.quoteIdentifier(tableName)
 	case "sqlite":
-		query = fmt.Sprintf("DELETE FROM %s", e.quoteIdentifier(tableName))
+		query = "DELETE FROM " + e.quoteIdentifier(tableName)
 	default:
 		return fmt.Errorf("%w: %s", snapsql.ErrTruncateNotSupported, e.dialect)
 	}
 
 	_, err := tx.ExecContext(context.Background(), query)
+
 	return err
 }
 
@@ -451,6 +467,7 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 
 	// Prepare statement
 	ctx := context.Background()
+
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insert statement: %w", err)
@@ -549,8 +566,11 @@ func (e *Executor) executeVerifyQuery(tx *sql.Tx, verifyQuery string) (*Validati
 // parseMultipleQueries splits SQL string into individual queries
 func (e *Executor) parseMultipleQueries(sql string) []string {
 	lines := strings.Split(sql, "\n")
-	var currentQuery strings.Builder
-	var queries []string
+
+	var (
+		currentQuery strings.Builder
+		queries      []string
+	)
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -569,6 +589,7 @@ func (e *Executor) parseMultipleQueries(sql string) []string {
 			if query != "" {
 				queries = append(queries, query)
 			}
+
 			currentQuery.Reset()
 		}
 	}
@@ -592,7 +613,9 @@ func (e *Executor) validateDirectResults(result *ValidationResult, expectedResul
 
 	for i, expectedRow := range expectedResults {
 		actualRow := result.Data[i]
-		if err := compareRows(expectedRow, actualRow); err != nil {
+
+		err := compareRows(expectedRow, actualRow)
+		if err != nil {
 			return fmt.Errorf("result row %d mismatch: %w", i, err)
 		}
 	}
@@ -606,7 +629,9 @@ func (e *Executor) validateVerifyResults(result *ValidationResult, expectedResul
 
 	for i, expectedRow := range expectedResults {
 		actualRow := result.Data[i]
-		if err := compareRows(expectedRow, actualRow); err != nil {
+
+		err := compareRows(expectedRow, actualRow)
+		if err != nil {
 			return fmt.Errorf("verify query result row %d mismatch: %w", i, err)
 		}
 	}

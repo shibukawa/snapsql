@@ -23,9 +23,10 @@ import (
 
 // setupPostgreSQLContainer starts a PostgreSQL container and returns the database connection
 func setupPostgreSQLContainer(ctx context.Context, t *testing.T) (*sql.DB, func()) {
+	t.Helper()
 	// Start PostgreSQL container
-	postgresContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage("postgres:15-alpine"),
+	postgresContainer, err := postgres.Run(ctx,
+		"postgres:15-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
@@ -79,7 +80,9 @@ func setupPostgreSQLContainer(ctx context.Context, t *testing.T) (*sql.DB, func(
 
 	cleanup := func() {
 		db.Close()
-		if err := postgresContainer.Terminate(ctx); err != nil {
+
+		err := postgresContainer.Terminate(ctx)
+		if err != nil {
 			t.Logf("Failed to terminate PostgreSQL container: %v", err)
 		}
 	}
@@ -89,9 +92,10 @@ func setupPostgreSQLContainer(ctx context.Context, t *testing.T) (*sql.DB, func(
 
 // setupMySQLContainer starts a MySQL container and returns the database connection
 func setupMySQLContainer(ctx context.Context, t *testing.T) (*sql.DB, func()) {
+	t.Helper()
 	// Start MySQL container
-	mysqlContainer, err := mysql.RunContainer(ctx,
-		testcontainers.WithImage("mysql:8.0"),
+	mysqlContainer, err := mysql.Run(ctx,
+		"mysql:8.0",
 		mysql.WithDatabase("testdb"),
 		mysql.WithUsername("testuser"),
 		mysql.WithPassword("testpass"),
@@ -116,11 +120,14 @@ func setupMySQLContainer(ctx context.Context, t *testing.T) (*sql.DB, func()) {
 	}
 
 	// Wait for connection to be ready
-	for i := 0; i < 30; i++ {
-		if err := db.Ping(); err == nil {
+	for i := range 30 {
+		err := db.Ping()
+		if err == nil {
 			break
 		}
+
 		time.Sleep(time.Second)
+
 		if i == 29 {
 			t.Fatalf("Failed to ping MySQL after 30 seconds")
 		}
@@ -155,7 +162,9 @@ func setupMySQLContainer(ctx context.Context, t *testing.T) (*sql.DB, func()) {
 
 	cleanup := func() {
 		db.Close()
-		if err := mysqlContainer.Terminate(ctx); err != nil {
+
+		err := mysqlContainer.Terminate(ctx)
+		if err != nil {
 			t.Logf("Failed to terminate MySQL container: %v", err)
 		}
 	}
@@ -168,7 +177,7 @@ func runTestCaseWithDB(t *testing.T, db *sql.DB, dialect, driver, connStr, testC
 	t.Helper()
 
 	// Find the test file (look in testdata/testrunner/markdown directory)
-	testFile := filepath.Join("..", "testdata", "testrunner", "markdown", fmt.Sprintf("%s.md", testCaseName))
+	testFile := filepath.Join("..", "testdata", "testrunner", "markdown", testCaseName+".md")
 	if _, err := os.Stat(testFile); os.IsNotExist(err) {
 		t.Fatalf("Test file not found: %s", testFile)
 	}
@@ -211,6 +220,7 @@ func runTestCaseWithDB(t *testing.T, db *sql.DB, dialect, driver, connStr, testC
 
 	// Execute all test cases in the file
 	ctx := context.Background()
+
 	testCases := make([]*markdownparser.TestCase, len(doc.TestCases))
 	for i := range doc.TestCases {
 		testCases[i] = &doc.TestCases[i]
@@ -224,6 +234,7 @@ func runTestCaseWithDB(t *testing.T, db *sql.DB, dialect, driver, connStr, testC
 	// Check results
 	if summary.FailedTests > 0 {
 		t.Errorf("Test case %s failed:", testCaseName)
+
 		for _, result := range summary.Results {
 			if !result.Success {
 				t.Errorf("  - %s: %v", result.TestCase.Name, result.Error)
@@ -240,6 +251,7 @@ func TestPostgreSQLBasic(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	db, cleanup := setupPostgreSQLContainer(ctx, t)
 	defer cleanup()
 
@@ -256,6 +268,7 @@ func TestMySQLBasic(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	db, cleanup := setupMySQLContainer(ctx, t)
 	defer cleanup()
 

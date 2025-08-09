@@ -44,6 +44,7 @@ func parseValidationSpecs(expectedResults []map[string]any) ([]ValidationSpec, e
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse validation spec for key '%s': %w", key, err)
 			}
+
 			specs = append(specs, spec)
 		}
 	}
@@ -92,10 +93,12 @@ func parseValidationSpec(key string, value any) (ValidationSpec, error) {
 // validateResult validates the query result against the expected specifications
 func (e *Executor) validateResult(tx *sql.Tx, result *ValidationResult, specs []ValidationSpec) error {
 	for _, spec := range specs {
-		if err := e.validateSingleSpec(tx, result, spec); err != nil {
+		err := e.validateSingleSpec(tx, result, spec)
+		if err != nil {
 			return fmt.Errorf("validation failed for %s[%s]: %w", spec.TableName, spec.Strategy, err)
 		}
 	}
+
 	return nil
 }
 
@@ -130,7 +133,9 @@ func (e *Executor) validateDirectResult(result *ValidationResult, spec Validatio
 
 	for i, expectedRow := range expected {
 		actualRow := result.Data[i]
-		if err := compareRows(expectedRow, actualRow); err != nil {
+
+		err := compareRows(expectedRow, actualRow)
+		if err != nil {
 			return fmt.Errorf("row %d mismatch: %w", i, err)
 		}
 	}
@@ -152,6 +157,7 @@ func (e *Executor) validateNumericResult(result *ValidationResult, spec Validati
 			if err != nil {
 				return fmt.Errorf("invalid rows_affected value: %w", err)
 			}
+
 			if result.RowsAffected != expectedRows {
 				return fmt.Errorf("%w: expected rows_affected %d, got %d", snapsql.ErrResultRowCountMismatch, expectedRows, result.RowsAffected)
 			}
@@ -191,8 +197,9 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 	}
 
 	// Query the table to get current state
-	query := fmt.Sprintf("SELECT * FROM %s", spec.TableName)
+	query := "SELECT * FROM " + spec.TableName
 	ctx := context.Background()
+
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query table %s: %w", spec.TableName, err)
@@ -207,18 +214,22 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 
 	// Read actual data
 	var actualData []map[string]any
+
 	for rows.Next() {
 		values := make([]interface{}, len(columns))
+
 		valuePtrs := make([]interface{}, len(columns))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
 
-		if err := rows.Scan(valuePtrs...); err != nil {
+		err := rows.Scan(valuePtrs...)
+		if err != nil {
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
 
 		row := make(map[string]any)
+
 		for i, col := range columns {
 			val := values[i]
 			if b, ok := val.([]byte); ok {
@@ -227,6 +238,7 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 				row[col] = val
 			}
 		}
+
 		actualData = append(actualData, row)
 	}
 
@@ -244,7 +256,9 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 		if i >= len(actualData) {
 			return fmt.Errorf("%w %d in table %s", snapsql.ErrMissingRowInTable, i, spec.TableName)
 		}
-		if err := compareRows(expectedRow, actualData[i]); err != nil {
+
+		err := compareRows(expectedRow, actualData[i])
+		if err != nil {
 			return fmt.Errorf("table %s row %d mismatch: %w", spec.TableName, i, err)
 		}
 	}
@@ -282,11 +296,14 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 		}
 
 		// Build WHERE clause from other fields
-		var conditions []string
-		var args []interface{}
+		var (
+			conditions []string
+			args       []interface{}
+		)
+
 		for key, value := range expectedRow {
 			if key != "exists" {
-				conditions = append(conditions, fmt.Sprintf("%s = ?", key))
+				conditions = append(conditions, key+" = ?")
 				args = append(args, value)
 			}
 		}
@@ -298,7 +315,9 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 		query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", spec.TableName, strings.Join(conditions, " AND "))
 
 		var count int64
+
 		ctx := context.Background()
+
 		err := tx.QueryRowContext(ctx, query, args...).Scan(&count)
 		if err != nil {
 			return fmt.Errorf("failed to check existence: %w", err)
@@ -320,9 +339,12 @@ func (e *Executor) validateCount(tx *sql.Tx, spec ValidationSpec) error {
 		return fmt.Errorf("invalid count value: %w", err)
 	}
 
-	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", spec.TableName)
+	query := "SELECT COUNT(*) FROM " + spec.TableName
+
 	var actualCount int64
+
 	ctx := context.Background()
+
 	err = tx.QueryRowContext(ctx, query).Scan(&actualCount)
 	if err != nil {
 		return fmt.Errorf("failed to count rows in table %s: %w", spec.TableName, err)
@@ -348,6 +370,7 @@ func compareRows(expected, actual map[string]any) error {
 			return fmt.Errorf("%w '%s': expected %v (%T), got %v (%T)", snapsql.ErrFieldValueMismatch, key, expectedValue, expectedValue, actualValue, actualValue)
 		}
 	}
+
 	return nil
 }
 
@@ -360,6 +383,7 @@ func compareValues(expected, actual any) bool {
 
 	// Try numeric conversion
 	expectedInt, expectedErr := convertToInt64(expected)
+
 	actualInt, actualErr := convertToInt64(actual)
 	if expectedErr == nil && actualErr == nil {
 		return expectedInt == actualInt
@@ -368,6 +392,7 @@ func compareValues(expected, actual any) bool {
 	// Try string conversion
 	expectedStr := fmt.Sprintf("%v", expected)
 	actualStr := fmt.Sprintf("%v", actual)
+
 	return expectedStr == actualStr
 }
 

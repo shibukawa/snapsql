@@ -281,7 +281,8 @@ select date_trunc('day',created_at) as date,count(*) as post_count,count(distinc
 ` + "```"
 
 	t.ResetTimer()
-	for i := 0; i < t.N; i++ {
+
+	for range t.N {
 		_, err := formatter.Format(complexMarkdown)
 		if err != nil {
 			t.Fatal(err)

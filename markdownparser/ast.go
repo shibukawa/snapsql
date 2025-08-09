@@ -19,8 +19,11 @@ type ASTSection struct {
 // extractSectionsFromAST extracts sections and title from AST
 func extractSectionsFromAST(doc ast.Node, content []byte) (string, map[string]ASTSection) {
 	sections := make(map[string]ASTSection)
-	var title string
-	var currentSection *ASTSection
+
+	var (
+		title          string
+		currentSection *ASTSection
+	)
 
 	// Walk through the AST
 	err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -48,6 +51,7 @@ func extractSectionsFromAST(doc ast.Node, content []byte) (string, map[string]AS
 					Content:     make([]ast.Node, 0),
 				}
 				sections[sectionName] = *currentSection
+
 				return ast.WalkContinue, nil
 			}
 
@@ -67,7 +71,6 @@ func extractSectionsFromAST(doc ast.Node, content []byte) (string, map[string]AS
 
 		return ast.WalkContinue, nil
 	})
-
 	if err != nil {
 		return "", nil
 	}
@@ -78,15 +81,20 @@ func extractSectionsFromAST(doc ast.Node, content []byte) (string, map[string]AS
 // extractTextFromHeadingNode extracts text content from a heading node
 func extractTextFromHeadingNode(n ast.Node, content []byte) string {
 	var text strings.Builder
+
 	err := ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering && n.Kind() == ast.KindText {
-			text.Write(n.Text(content))
+			if textNode, ok := n.(*ast.Text); ok {
+				text.Write(textNode.Value(content))
+			}
 		}
+
 		return ast.WalkContinue, nil
 	})
 	if err != nil {
 		return ""
 	}
+
 	return strings.TrimSpace(text.String())
 }
 
@@ -94,12 +102,14 @@ func extractTextFromHeadingNode(n ast.Node, content []byte) string {
 func validateRequiredSections(sections map[string]ASTSection) error {
 	// Description or Overview is required
 	descriptionFound := false
+
 	for sectionName := range sections {
 		if sectionName == "description" || sectionName == "overview" {
 			descriptionFound = true
 			break
 		}
 	}
+
 	if !descriptionFound {
 		return fmt.Errorf("%w: description or overview", ErrMissingRequiredSection)
 	}
@@ -116,21 +126,29 @@ func validateRequiredSections(sections map[string]ASTSection) error {
 func extractSQLFromASTNodes(nodes []ast.Node, content []byte) (string, int) {
 	for _, node := range nodes {
 		if codeBlock, ok := node.(*ast.FencedCodeBlock); ok {
-			info := string(codeBlock.Info.Text(content))
+			var info string
+			if codeBlock.Info != nil {
+				info = string(codeBlock.Info.Value(content))
+			}
+
 			if strings.ToLower(strings.TrimSpace(info)) == "sql" {
 				var sql strings.Builder
+
 				lines := codeBlock.Lines()
-				for i := 0; i < lines.Len(); i++ {
+				for i := range lines.Len() {
 					line := lines.At(i)
 					sql.Write(line.Value(content))
+
 					if i < lines.Len()-1 {
 						sql.WriteString("\n")
 					}
 				}
+
 				return sql.String(), codeBlock.Lines().At(0).Start
 			}
 		}
 	}
+
 	return "", 0
 }
 
@@ -139,38 +157,51 @@ func extractParameterTextFromASTNodes(nodes []ast.Node, content []byte) (string,
 	for _, node := range nodes {
 		switch n := node.(type) {
 		case *ast.FencedCodeBlock:
-			info := string(n.Info.Text(content))
+			var info string
+			if n.Info != nil {
+				info = string(n.Info.Value(content))
+			}
+
 			infoLower := strings.ToLower(strings.TrimSpace(info))
 
 			// Extract content
 			var textContent strings.Builder
+
 			lines := n.Lines()
-			for i := 0; i < lines.Len(); i++ {
+			for i := range lines.Len() {
 				line := lines.At(i)
 				textContent.Write(line.Value(content))
+
 				if i < lines.Len()-1 {
 					textContent.WriteString("\n")
 				}
 			}
 
-			if infoLower == "yaml" || infoLower == "yml" {
+			switch infoLower {
+			case "yaml", "yml":
 				return textContent.String(), "yaml", nil
-			} else if infoLower == "json" {
+			case "json":
 				return textContent.String(), "json", nil
 			}
 
 		case *ast.List:
 			// Extract parameter definitions from list items
 			var listContent strings.Builder
+
 			ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 				if entering && n.Kind() == ast.KindText {
-					listContent.Write(n.Text(content))
+					if textNode, ok := n.(*ast.Text); ok {
+						listContent.Write(textNode.Value(content))
+					}
 				}
+
 				return ast.WalkContinue, nil
 			})
+
 			return listContent.String(), "list", nil
 		}
 	}
+
 	return "", "", snapsql.ErrNoParameterFound
 }
 
@@ -183,7 +214,9 @@ func extractTextFromASTNodes(nodes []ast.Node, content []byte) (string, error) {
 			if entering {
 				switch n.Kind() {
 				case ast.KindText:
-					textContent.Write(n.Text(content))
+					if textNode, ok := n.(*ast.Text); ok {
+						textContent.Write(textNode.Value(content))
+					}
 				case ast.KindParagraph:
 					// Add space between paragraphs
 					if textContent.Len() > 0 {
@@ -191,6 +224,7 @@ func extractTextFromASTNodes(nodes []ast.Node, content []byte) (string, error) {
 					}
 				}
 			}
+
 			return ast.WalkContinue, nil
 		})
 	}

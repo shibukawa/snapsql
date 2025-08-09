@@ -45,12 +45,16 @@ func TestDetermineResponseType(t *testing.T) {
 		assert.Equal(t, 2, len(schemas[0].Tables))
 
 		// Find users table
-		var usersTable *TableInfo
-		var ordersTable *TableInfo
+		var (
+			usersTable  *TableInfo
+			ordersTable *TableInfo
+		)
+
 		for _, table := range schemas[0].Tables {
-			if table.Name == "users" {
+			switch table.Name {
+			case "users":
 				usersTable = table
-			} else if table.Name == "orders" {
+			case "orders":
 				ordersTable = table
 			}
 		}

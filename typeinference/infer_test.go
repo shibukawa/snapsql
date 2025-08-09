@@ -13,10 +13,12 @@ import (
 // Helper function to load schema from YAML
 func loadSchemaFromYAML(yamlContent string) ([]snapsql.DatabaseSchema, error) {
 	var schema snapsql.DatabaseSchema
+
 	err := yaml.Unmarshal([]byte(yamlContent), &schema)
 	if err != nil {
 		return nil, err
 	}
+
 	return []snapsql.DatabaseSchema{schema}, nil
 }
 
@@ -170,9 +172,11 @@ databaseInfo:
 
 			if tc.expectErr {
 				assert.True(t, err != nil, "Expected error or validation errors but got none")
+
 				if tc.errMsg != "" {
 					assert.Contains(t, err.Error(), tc.errMsg, "Error message doesn't match")
 				}
+
 				return
 			}
 
@@ -184,10 +188,12 @@ databaseInfo:
 					actual := results[i]
 					assert.Equal(t, expected.Name, actual.Name, "Name mismatch at index %d", i)
 					assert.Equal(t, expected.OriginalName, actual.OriginalName, "OriginalName mismatch at index %d", i)
+
 					if expected.Type != nil && actual.Type != nil {
 						assert.Equal(t, expected.Type.BaseType, actual.Type.BaseType, "BaseType mismatch at index %d", i)
 						assert.Equal(t, expected.Type.IsNullable, actual.Type.IsNullable, "IsNullable mismatch at index %d", i)
 					}
+
 					assert.Equal(t, expected.Source.Type, actual.Source.Type, "Source.Type mismatch at index %d", i)
 					assert.Equal(t, expected.Source.Table, actual.Source.Table, "Source.Table mismatch at index %d", i)
 					assert.Equal(t, expected.Source.Column, actual.Source.Column, "Source.Column mismatch at index %d", i)

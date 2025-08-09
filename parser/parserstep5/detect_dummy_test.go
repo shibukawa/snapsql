@@ -67,8 +67,10 @@ func TestDetectDummyRanges(t *testing.T) {
 			// Debug: Print all tokens
 			t.Logf("SQL: %s", tc.sql)
 			t.Logf("Total tokens: %d", len(allTokens))
+
 			for i, token := range allTokens {
 				t.Logf("Token[%d]: %s = %q (Directive: %v)", i, token.Type, token.Value, token.Directive != nil)
+
 				if token.Directive != nil {
 					t.Logf("  Directive Type: %s", token.Directive.Type)
 				}
@@ -79,7 +81,9 @@ func TestDetectDummyRanges(t *testing.T) {
 
 			// Re-check tokens after dummy detection
 			allTokensAfter := getAllTokensFromStatement(stmt)
+
 			t.Logf("After dummy detection:")
+
 			for i, token := range allTokensAfter {
 				if token.Directive != nil && len(token.Directive.DummyRange) > 0 {
 					t.Logf("Token[%d]: %s with DummyRange: %v", i, token.Type, token.Directive.DummyRange)
@@ -88,9 +92,11 @@ func TestDetectDummyRanges(t *testing.T) {
 
 			// For now, just check if any dummy ranges were detected
 			foundDummy := false
+
 			for _, token := range allTokensAfter {
 				if token.Directive != nil && len(token.Directive.DummyRange) > 0 {
 					foundDummy = true
+
 					t.Logf("Found dummy range: %v", token.Directive.DummyRange)
 				}
 			}
@@ -105,16 +111,20 @@ func TestDetectDummyRanges(t *testing.T) {
 			// Test for expected dummy ranges
 			for expectedIndex, expectedRange := range tc.expectedDummies {
 				found := false
+
 				for i, token := range allTokensAfter {
 					if token.Directive != nil && len(token.Directive.DummyRange) > 0 {
 						// Check if this token is at the expected position
 						// Note: The expectedIndex is the original expectation based on minimal token set
 						// We need to map this to the actual RawTokens index
 						t.Logf("Found directive at index %d with range %v", i, token.Directive.DummyRange)
+
 						found = true
+
 						break
 					}
 				}
+
 				if !found {
 					t.Logf("Expected dummy at index %d with range %v but not found", expectedIndex, expectedRange)
 				}
@@ -254,5 +264,6 @@ func getAllTokensFromStatement(stmt cmn.StatementNode) []tokenizer.Token {
 		// Use RawTokens() which includes directive tokens
 		allTokens = append(allTokens, clause.RawTokens()...)
 	}
+
 	return allTokens
 }

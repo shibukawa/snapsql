@@ -148,6 +148,7 @@ limit: 10
 
 	// Find each fixture by table name
 	var usersFixture, profilesFixture, logsFixture *TableFixture
+
 	for i := range testCase.Fixtures {
 		switch testCase.Fixtures[i].TableName {
 		case "users":

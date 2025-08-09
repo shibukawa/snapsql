@@ -42,18 +42,21 @@ func TestSubQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.src)
 			assert.NoError(t, err)
+
 			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
 			pctx.TraceEnable = true
 			pctx.OrMode = pc.OrModeTryFast
 			pctx.CheckTransformSafety = true
+
 			consumed, _, err := subQuery(pctx, pcTokens)
 			if tt.wantErr != nil {
 				assert.IsError(t, err, tt.wantErr)
 			} else {
 				assert.NoError(t, err)
 			}
+
 			assert.Equal(t, tt.wantCount, consumed)
 		})
 	}
@@ -146,6 +149,7 @@ func TestParseStatementWithAllClauses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
+
 			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
@@ -201,6 +205,7 @@ func TestClauseSourceText(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
+
 			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
@@ -217,6 +222,7 @@ func TestClauseSourceText(t *testing.T) {
 			assert.Equal(t, 1, len(got), "should return exactly one statement")
 			stmt, ok := got[0].Val.NewValue.(cmn.StatementNode)
 			assert.True(t, ok, "should be StatementNode")
+
 			for i, clause := range stmt.Clauses() {
 				assert.Equal(t, tt.wantSrcTexts[i], clause.SourceText(), "should return correct source text for clause %d", i)
 			}
@@ -332,6 +338,7 @@ func TestParseStatementWithCTE(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.args.src)
 			assert.NoError(t, err)
+
 			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
@@ -431,6 +438,7 @@ tmp);`,
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.args.src)
 			assert.NoError(t, err)
+
 			pcTokens := tokenToEntity(tokens)
 			pctx := &pc.ParseContext[Entity]{}
 			pctx.MaxDepth = 30
@@ -496,25 +504,30 @@ func TestExtractIfConditionUnit(t *testing.T) {
 			// Tokenize previous clause
 			prevTokens, err := tok.Tokenize(tt.prevClauseSQL)
 			assert.NoError(t, err)
+
 			prevEntityTokens := tokenToEntity(prevTokens)
 
 			// Tokenize current clause
 			currentTokens, err := tok.Tokenize(tt.currentClauseSQL)
 			assert.NoError(t, err)
+
 			currentEntityTokens := tokenToEntity(currentTokens)
 
 			// Find WHERE clause head and body
 			var clauseHead, clauseBody []pc.Token[Entity]
+
 			for i, token := range currentEntityTokens {
 				if token.Val.Original.Type == tok.WHERE {
 					clauseHead = currentEntityTokens[i : i+1]
 					clauseBody = currentEntityTokens[i+1:]
+
 					break
 				}
 			}
 
 			// Extract previous clause body (everything after FROM)
 			var prevClauseBody []pc.Token[Entity]
+
 			for i, token := range prevEntityTokens {
 				if token.Val.Original.Type == tok.FROM {
 					prevClauseBody = prevEntityTokens[i+1:]
@@ -599,6 +612,7 @@ WHERE active = true`,
 
 			// Find the clause of the specified type
 			var foundClause cmn.ClauseNode
+
 			for _, clause := range stmt.Clauses() {
 				if clause.Type() == tt.clauseType {
 					foundClause = clause
@@ -653,9 +667,11 @@ LIMIT /*= page_size */10
 
 	// デバッグ情報を出力
 	t.Log("Statement clauses:")
+
 	for i, clause := range stmt.Clauses() {
 		t.Logf("Clause[%d]: Type=%s", i, clause.Type())
 		t.Logf("  Content tokens:")
+
 		for j, token := range clause.ContentTokens() {
 			if token.Directive != nil {
 				t.Logf("    Token[%d]: Type=%s, Value=%s, Directive.Type=%s",
@@ -678,6 +694,7 @@ LIMIT /*= page_size */10
 
 	for _, check := range clauseChecks {
 		var foundClause cmn.ClauseNode
+
 		for _, clause := range stmt.Clauses() {
 			if clause.Type() == check.clauseType {
 				foundClause = clause

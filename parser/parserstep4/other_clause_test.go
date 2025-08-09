@@ -16,6 +16,8 @@ func testClauseFinalization(t *testing.T, tests []struct {
 	sql       string
 	wantError bool
 }, statementType string, finalizeFunc func(interface{}, *cmn.ParseError)) {
+	t.Helper()
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tokens, err := tokenizer.Tokenize(tc.sql)
@@ -95,10 +97,13 @@ func TestFinalizeSetClause(t *testing.T) {
 			assert.NoError(t, err)
 			err = parserstep3.Execute(ast)
 			assert.NoError(t, err)
+
 			selectStmt, ok := ast.(*cmn.UpdateStatement)
 			assert.True(t, ok)
+
 			perr := &cmn.ParseError{}
 			finalizeSetClause(selectStmt.Set, perr)
+
 			if tc.wantError {
 				assert.NotEqual(t, 0, len(perr.Errors))
 			} else {
@@ -158,10 +163,13 @@ func TestFinalizeReturningClause(t *testing.T) {
 			assert.NoError(t, err)
 			err = parserstep3.Execute(ast)
 			assert.NoError(t, err)
+
 			selectStmt, ok := ast.(*cmn.UpdateStatement)
 			assert.True(t, ok)
+
 			perr := &cmn.ParseError{}
 			finalizeReturningClause(selectStmt.Returning, perr)
+
 			if tc.wantError {
 				assert.NotEqual(t, 0, len(perr.Errors))
 			} else {

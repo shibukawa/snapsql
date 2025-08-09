@@ -106,6 +106,7 @@ func (jt JoinType) String() string {
 // TableReferenceForFrom represents a table or join in FROM clause
 type TableReferenceForFrom struct {
 	TableReference
+
 	JoinType      JoinType    // Join type (see constants)
 	JoinCondition []tok.Token // ON/USING clause tokens
 	IsSubquery    bool        // true if this is a subquery

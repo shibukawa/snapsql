@@ -17,6 +17,7 @@ func TestParseFullPipelineTokens(t *testing.T) {
 
 		tokens := clause.ContentTokens()
 		t.Logf("  ContentTokens count: %d", len(tokens))
+
 		for j, token := range tokens {
 			if token.Directive != nil {
 				t.Logf("  Token[%d]: %s = %q (Directive: %s)",
@@ -29,6 +30,7 @@ func TestParseFullPipelineTokens(t *testing.T) {
 		// Also check raw tokens if available
 		rawTokens := clause.RawTokens()
 		t.Logf("  RawTokens count: %d", len(rawTokens))
+
 		for j, token := range rawTokens {
 			if token.Directive != nil {
 				t.Logf("  RawToken[%d]: %s = %q (Directive: %s)",
@@ -41,6 +43,7 @@ func TestParseFullPipelineTokens(t *testing.T) {
 
 	// Check if any directive tokens exist
 	foundDirective := false
+
 	for _, clause := range stmt.Clauses() {
 		for _, token := range clause.ContentTokens() {
 			if token.Directive != nil {

@@ -68,9 +68,11 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	}
 
 	// Parse test cases from filtered markdown files
-	var allTestCases []*markdownparser.TestCase
-	var documentSQL string
-	var documentParameters map[string]any
+	var (
+		allTestCases       []*markdownparser.TestCase
+		documentSQL        string
+		documentParameters map[string]any
+	)
 
 	for _, file := range testFiles {
 		fileInfo, err := ftr.parseTestFile(file)
@@ -78,6 +80,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 			if ftr.verbose {
 				fmt.Printf("Warning: failed to parse %s: %v\n", file, err)
 			}
+
 			continue
 		}
 
@@ -95,11 +98,13 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 		if len(allTestCases) == 0 {
 			return nil, fmt.Errorf("%w: '%s'", snapsql.ErrNoTestCasesFound, ftr.runPattern)
 		}
+
 		if len(allTestCases) > 1 {
 			var names []string
 			for _, tc := range allTestCases {
 				names = append(names, tc.Name)
 			}
+
 			return nil, fmt.Errorf("%w, but found %d test cases: %s",
 				snapsql.ErrFixtureOnlyModeRequiresOne, len(allTestCases), strings.Join(names, ", "))
 		}
@@ -164,6 +169,7 @@ func (ftr *FixtureTestRunner) findMarkdownTestFiles() ([]string, error) {
 				strings.HasPrefix(name, ".") {
 				return filepath.SkipDir
 			}
+
 			return nil
 		}
 
@@ -208,6 +214,7 @@ func (ftr *FixtureTestRunner) parseTestFile(filePath string) (*TestFileInfo, err
 
 	// Parse parameters from parameter block if present
 	parameters := make(map[string]any)
+
 	if doc.ParametersText != "" {
 		// TODO: Parse YAML parameters from ParametersText
 		// For now, leave empty
@@ -223,6 +230,7 @@ func (ftr *FixtureTestRunner) parseTestFile(filePath string) (*TestFileInfo, err
 // filterTestFiles filters test files by the run pattern (filename without extension)
 func (ftr *FixtureTestRunner) filterTestFiles(testFiles []string) []string {
 	var filtered []string
+
 	for _, file := range testFiles {
 		// Get filename without extension
 		filename := filepath.Base(file)
@@ -233,6 +241,7 @@ func (ftr *FixtureTestRunner) filterTestFiles(testFiles []string) []string {
 			filtered = append(filtered, file)
 		}
 	}
+
 	return filtered
 }
 
@@ -263,9 +272,11 @@ func (ftr *FixtureTestRunner) PrintSummary(summary *FixtureTestSummary) {
 
 	if summary.FailedTests > 0 {
 		fmt.Printf("\nFailed tests:\n")
+
 		for _, result := range summary.Results {
 			if !result.Success {
 				fmt.Printf("  %s\n", result.TestName)
+
 				if result.Error != nil {
 					fmt.Printf("    Error: %v\n", result.Error)
 				}

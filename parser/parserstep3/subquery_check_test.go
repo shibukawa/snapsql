@@ -58,6 +58,7 @@ func TestCheckSubqueryUsage(t *testing.T) {
 			clauses := parseClausesFromSQL(t, tt.sql)
 			perr := &cmn.ParseError{}
 			CheckSubqueryUsage(clauses, perr)
+
 			if tt.wantErr {
 				assert.Equal(t, 1, len(perr.Errors))
 			} else {

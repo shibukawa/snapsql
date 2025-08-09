@@ -75,6 +75,7 @@ func tag(typeStr string, p ...pc.Parser[tok.Token]) pc.Parser[tok.Token] {
 		if len(src) > 0 {
 			src[0].Type = typeStr
 		}
+
 		return src, nil
 	})
 }
@@ -84,11 +85,13 @@ func parseTableName(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Toke
 	if err != nil {
 		return 0, cmn.TableReference{}, err
 	}
+
 	if len(match) == 0 {
 		return 0, cmn.TableReference{}, fmt.Errorf("%w: table name is required", cmn.ErrInvalidSQL)
 	}
 
 	tableRef := cmn.TableReference{}
+
 	switch len(match) {
 	case 1:
 		tableRef.Name = match[0].Val.Value
@@ -96,6 +99,7 @@ func parseTableName(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Toke
 		tableRef.SchemaName = match[0].Val.Value
 		tableRef.Name = match[2].Val.Value
 	}
+
 	return consume, tableRef, nil
 }
 
@@ -105,6 +109,7 @@ func fieldIter(tokens []pc.Token[tok.Token]) iter.Seq2[int, pc.Consume[tok.Token
 	return func(yield func(index int, consume pc.Consume[tok.Token]) bool) {
 		count := 0
 		nest := 0
+
 		var skipped []pc.Token[tok.Token]
 		for _, part := range pc.FindIter(pc.NewParseContext[tok.Token](), splitter, tokens) {
 			if part.Last {
@@ -121,6 +126,7 @@ func fieldIter(tokens []pc.Token[tok.Token]) iter.Seq2[int, pc.Consume[tok.Token
 				case tok.CLOSED_PARENS:
 					nest--
 				}
+
 				skipped = append(skipped, part.Skipped...)
 				skipped = append(skipped, part.Match...)
 			} else {

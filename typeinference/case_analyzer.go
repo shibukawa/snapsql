@@ -74,6 +74,7 @@ func (a *CaseExpressionAnalyzer) AnalyzeCaseExpression() (*CaseAnalysisResult, e
 			if elseClause != nil {
 				result.ElseClause = elseClause
 			}
+
 			break
 		} else if token.Type == tokenizer.IDENTIFIER && strings.ToUpper(token.Value) == "END" {
 			// End of CASE expression
@@ -101,18 +102,21 @@ func (a *CaseExpressionAnalyzer) parseWhenClause(startPos int) (*CaseWhenClause,
 
 	// Parse condition until THEN
 	var condition []tokenizer.Token
+
 	for position < len(a.tokens) {
 		token := a.tokens[position]
 		if token.Type == tokenizer.IDENTIFIER && strings.ToUpper(token.Value) == "THEN" {
 			position++ // Skip THEN
 			break
 		}
+
 		condition = append(condition, token)
 		position++
 	}
 
 	// Parse result until next WHEN, ELSE, or END
 	var result []tokenizer.Token
+
 	for position < len(a.tokens) {
 		token := a.tokens[position]
 		if token.Type == tokenizer.IDENTIFIER {
@@ -121,6 +125,7 @@ func (a *CaseExpressionAnalyzer) parseWhenClause(startPos int) (*CaseWhenClause,
 				break
 			}
 		}
+
 		result = append(result, token)
 		position++
 	}
@@ -143,11 +148,13 @@ func (a *CaseExpressionAnalyzer) parseElseClause(startPos int) ([]tokenizer.Toke
 
 	// Parse result until END
 	var result []tokenizer.Token
+
 	for position < len(a.tokens) {
 		token := a.tokens[position]
 		if token.Type == tokenizer.IDENTIFIER && strings.ToUpper(token.Value) == "END" {
 			break
 		}
+
 		result = append(result, token)
 		position++
 	}
@@ -226,6 +233,7 @@ func (a *CaseExpressionAnalyzer) promoteTypePair(type1, type2 *TypeInfo) *TypeIn
 	// Numeric type promotion rules
 	if isNumericType(type1.BaseType) && isNumericType(type2.BaseType) {
 		promotedType := promoteNumericTypes(type1.BaseType, type2.BaseType)
+
 		return &TypeInfo{
 			BaseType:   promotedType,
 			IsNullable: isNullable,

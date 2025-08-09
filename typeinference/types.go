@@ -136,6 +136,7 @@ func NewTypeInferenceEngine2(
 
 	// Determine dialect from first schema (if available)
 	dialect := snapsql.DialectPostgres // default
+
 	if len(databaseSchemas) > 0 {
 		switch databaseSchemas[0].DatabaseInfo.Type {
 		case "postgres", "postgresql":
@@ -228,7 +229,8 @@ func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) 
 
 	// Phase 5: Resolve subquery types first (if enhanced resolver is available)
 	if e.enhancedResolver != nil {
-		if err := e.enhancedResolver.ResolveSubqueryTypesComplete(); err != nil {
+		err := e.enhancedResolver.ResolveSubqueryTypesComplete()
+		if err != nil {
 			// Don't fail completely - log warning and continue with degraded mode
 			fmt.Printf("Warning: enhanced subquery type resolution failed: %v\n", err)
 		}
@@ -323,7 +325,6 @@ func (e *TypeInferenceEngine2) performTypeInference() ([]*InferredFieldInfo, err
 
 // inferSelectStatement handles the core SELECT statement inference logic
 func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectStatement) ([]*InferredFieldInfo, error) {
-
 	// Create schema validator
 	validator := NewSchemaValidator(e.schemaResolver)
 	validator.SetTableAliases(e.context.TableAliases)
@@ -347,6 +348,7 @@ func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectSta
 
 	// Perform type inference on each field
 	var inferredFields []*InferredFieldInfo
+
 	for i, field := range selectStmt.Select.Fields {
 		inferredField, err := e.inferFieldType(&field, i)
 		if err != nil {
@@ -359,6 +361,7 @@ func (e *TypeInferenceEngine2) inferSelectStatement(selectStmt *parser.SelectSta
 				IsGenerated:  true,
 			}
 		}
+
 		inferredFields = append(inferredFields, inferredField)
 	}
 
@@ -392,11 +395,14 @@ func (e *TypeInferenceEngine2) extractTableAliases(selectStmt *parser.SelectStat
 
 // inferFieldType performs type inference on a single SELECT field
 func (e *TypeInferenceEngine2) inferFieldType(field *parser.SelectField, fieldIndex int) (*InferredFieldInfo, error) {
-	var fieldType *TypeInfo
-	var fieldSource FieldSource
-	var err error
+	var (
+		fieldType   *TypeInfo
+		fieldSource FieldSource
+		err         error
+	)
 
 	// Check if explicit type is available (from CAST)
+
 	if field.ExplicitType && field.TypeName != "" {
 		fieldType = &TypeInfo{
 			BaseType:   normalizeType(field.TypeName),
@@ -446,6 +452,7 @@ func (e *TypeInferenceEngine2) inferFieldType(field *parser.SelectField, fieldIn
 			} else {
 				// Use basic generator for simple fields
 				var fieldKindString string
+
 				switch field.FieldKind {
 				case parser.FunctionField:
 					fieldKindString = "function"
@@ -509,9 +516,11 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 						Table:  realTableName,
 						Column: realColumnName,
 					}
+
 					return subField.Type, fieldSource, nil
 				}
 			}
+
 			return nil, FieldSource{}, fmt.Errorf("%w '%s' in subquery '%s'", snapsql.ErrColumnNotFoundInSubquery, realColumnName, realTableName)
 		}
 	}
@@ -543,8 +552,10 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (*TypeInfo, FieldSource, error) {
 	// Phase 5: First check subqueries for this column
 	if e.enhancedResolver != nil {
-		var subqueryMatches []string
-		var subqueryFieldInfo *InferredFieldInfo
+		var (
+			subqueryMatches   []string
+			subqueryFieldInfo *InferredFieldInfo
+		)
 
 		// Check all resolved subqueries
 		subqueryTables := e.enhancedResolver.GetAvailableSubqueryTables()
@@ -556,6 +567,7 @@ func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (
 						subField.Alias == field.OriginalField {
 						subqueryMatches = append(subqueryMatches, tableName)
 						subqueryFieldInfo = subField
+
 						break
 					}
 				}
@@ -569,6 +581,7 @@ func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (
 				Table:  subqueryMatches[0],
 				Column: field.OriginalField,
 			}
+
 			return subqueryFieldInfo.Type, fieldSource, nil
 		} else if len(subqueryMatches) > 1 {
 			return nil, FieldSource{}, fmt.Errorf("%w '%s', found in: %v", snapsql.ErrColumnAmbiguousInSubqueries, field.OriginalField, subqueryMatches)
@@ -593,6 +606,7 @@ func (e *TypeInferenceEngine2) inferSingleFieldType(field *parser.SelectField) (
 	}
 
 	schemaName, tableName := parts[0], parts[1]
+
 	column, err := e.schemaResolver.ResolveTableColumn(schemaName, tableName, field.OriginalField)
 	if err != nil {
 		return nil, FieldSource{}, err
@@ -656,7 +670,6 @@ func (e *TypeInferenceEngine2) inferComplexFieldType(field *parser.SelectField) 
 	if len(field.Expression) > 0 &&
 		field.Expression[0].Type == tokenizer.IDENTIFIER &&
 		strings.ToUpper(field.Expression[0].Value) == "CASE" {
-
 		fieldType, err := e.InferCaseExpression(field.Expression)
 		if err != nil {
 			fieldType = &TypeInfo{BaseType: "any", IsNullable: true}
@@ -697,6 +710,7 @@ func (e *TypeInferenceEngine2) findSchemaForTable(tableName string) string {
 			}
 		}
 	}
+
 	return ""
 }
 
@@ -722,6 +736,7 @@ func (e *TypeInferenceEngine2) extractFunctionArguments(tokens []tokenizer.Token
 
 	// Find opening parenthesis
 	openParenPos := -1
+
 	for i, token := range tokens {
 		if token.Type == tokenizer.OPENED_PARENS {
 			openParenPos = i
@@ -736,6 +751,7 @@ func (e *TypeInferenceEngine2) extractFunctionArguments(tokens []tokenizer.Token
 	// Find matching closing parenthesis
 	closeParenPos := -1
 	parenLevel := 0
+
 	for i := openParenPos; i < len(tokens); i++ {
 		if tokens[i].Type == tokenizer.OPENED_PARENS {
 			parenLevel++
@@ -760,6 +776,7 @@ func (e *TypeInferenceEngine2) extractFunctionArguments(tokens []tokenizer.Token
 
 	// Split arguments by commas (at top level)
 	var currentArg []tokenizer.Token
+
 	parenLevel = 0
 
 	for _, token := range argTokens {
@@ -773,6 +790,7 @@ func (e *TypeInferenceEngine2) extractFunctionArguments(tokens []tokenizer.Token
 				args = append(args, currentArg)
 				currentArg = nil
 			}
+
 			continue
 		}
 
@@ -843,6 +861,7 @@ func (e *TypeInferenceEngine2) inferLiteralType(literal string) *TypeInfo {
 		if strings.Contains(literal, ".") {
 			return &TypeInfo{BaseType: "decimal", IsNullable: false}
 		}
+
 		return &TypeInfo{BaseType: "float", IsNullable: false}
 	}
 
@@ -856,6 +875,7 @@ func normalizeType(typeName string) string {
 	if normalized, exists := TypeMappings[upper]; exists {
 		return normalized
 	}
+
 	return strings.ToLower(typeName)
 }
 
@@ -883,6 +903,7 @@ func (e *TypeInferenceEngine2) InferFunctionWithCasts(
 				// Default to any type on error
 				argType = &TypeInfo{BaseType: "any", IsNullable: true}
 			}
+
 			argTypes = append(argTypes, argType)
 		}
 	}
@@ -906,8 +927,10 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 			if baseType == "int" {
 				return &TypeInfo{BaseType: "decimal", IsNullable: true}, nil // Prevent overflow
 			}
+
 			return &TypeInfo{BaseType: baseType, IsNullable: true}, nil
 		}
+
 		return &TypeInfo{BaseType: "decimal", IsNullable: true}, nil
 
 	case "AVG":
@@ -921,6 +944,7 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 				IsNullable: true, // MIN/MAX can return NULL on empty sets
 			}, nil
 		}
+
 		return &TypeInfo{BaseType: "any", IsNullable: true}, nil
 
 	case "LENGTH", "CHAR_LENGTH", "CHARACTER_LENGTH":
@@ -949,8 +973,10 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 					}
 				}
 			}
+
 			return &TypeInfo{BaseType: baseType, IsNullable: false}, nil
 		}
+
 		return &TypeInfo{BaseType: "any", IsNullable: false}, nil
 
 	case "CAST":
@@ -958,6 +984,7 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 		if len(argTypes) > 0 {
 			return argTypes[0], nil
 		}
+
 		return &TypeInfo{BaseType: "any", IsNullable: true}, nil
 
 	// Window functions
@@ -971,6 +998,7 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 				IsNullable: true, // Window functions can return NULL
 			}, nil
 		}
+
 		return &TypeInfo{BaseType: "any", IsNullable: true}, nil
 
 	// Date/Time functions
@@ -994,6 +1022,7 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 				IsNullable: argTypes[0].IsNullable,
 			}, nil
 		}
+
 		return &TypeInfo{BaseType: "decimal", IsNullable: true}, nil
 
 	case "ROUND", "CEIL", "CEILING", "FLOOR":
@@ -1003,6 +1032,7 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 				return &TypeInfo{BaseType: baseType, IsNullable: argTypes[0].IsNullable}, nil
 			}
 		}
+
 		return &TypeInfo{BaseType: "decimal", IsNullable: true}, nil
 
 	case "SQRT", "POWER", "POW", "EXP", "LN", "LOG":
@@ -1024,6 +1054,7 @@ func (e *TypeInferenceEngine2) applyAdvancedFunctionRule(funcName string, argTyp
 // InferCaseExpression infers type for CASE expressions
 func (e *TypeInferenceEngine2) InferCaseExpression(tokens []tokenizer.Token) (*TypeInfo, error) {
 	analyzer := NewCaseExpressionAnalyzer(tokens, e)
+
 	result, err := analyzer.AnalyzeCaseExpression()
 	if err != nil {
 		return &TypeInfo{BaseType: "any", IsNullable: true}, err

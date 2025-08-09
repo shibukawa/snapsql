@@ -15,14 +15,17 @@ func (e *ParseError) Error() string {
 	if len(e.Errors) == 0 {
 		return "no parse errors"
 	}
+
 	var sb strings.Builder
 	sb.WriteString("Multiple parse errors:")
+
 	for i, err := range e.Errors {
 		sb.WriteString("\n  [")
-		sb.WriteString(string(rune('1' + i)))
+		sb.WriteRune(rune('1' + i))
 		sb.WriteString("] ")
 		sb.WriteString(err.Error())
 	}
+
 	return sb.String()
 }
 
@@ -31,6 +34,7 @@ func (e *ParseError) Add(err error) {
 	if err == nil {
 		return
 	}
+
 	var perr *ParseError
 	if errors.As(err, &perr) {
 		e.Errors = append(e.Errors, perr.Errors...)
@@ -45,5 +49,6 @@ func AsParseError(err error) (*ParseError, bool) {
 	if errors.As(err, &perr) {
 		return perr, true
 	}
+
 	return nil, false
 }

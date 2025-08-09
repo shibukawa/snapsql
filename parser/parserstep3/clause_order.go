@@ -1,6 +1,7 @@
 package parserstep3
 
 import (
+	"errors"
 	"fmt"
 
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -35,6 +36,7 @@ func clauseKeywordFromTokens(node cmn.ClauseNode) string {
 		// fallback: use NodeType string
 		return node.Type().String()
 	}
+
 	tokens := node.RawTokens()
 	for _, typ := range types {
 		// Search from the end for multi-keyword (e.g. INTO)
@@ -49,7 +51,7 @@ func clauseKeywordFromTokens(node cmn.ClauseNode) string {
 }
 
 // ErrClauseOrderViolation is returned when clause order is invalid
-var ErrClauseOrderViolation = fmt.Errorf("clause order violation")
+var ErrClauseOrderViolation = errors.New("clause order violation")
 
 func toPosText(node cmn.ClauseNode) string {
 	return fmt.Sprintf("%d:%d", node.Position().Line, node.Position().Column)
@@ -59,6 +61,7 @@ func toPosText(node cmn.ClauseNode) string {
 // It appends errors to the provided ParseError pointer, does not return error.
 func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode, perr *cmn.ParseError) {
 	var key string
+
 	switch stmtType {
 	case cmn.SELECT_STATEMENT:
 		key = "SELECT"
@@ -75,35 +78,44 @@ func ValidateClauseOrder(stmtType cmn.NodeType, clauses []cmn.ClauseNode, perr *
 	default:
 		return // No order check for other types
 	}
+
 	allowed, ok := clauseOrder[key]
 	if !ok {
 		return
 	}
+
 	prevOrder := -1
+
 	for i, clause := range clauses {
 		order, ok := allowed[clause.Type()]
 		if !ok {
 			continue // skip unknown clauses (should be filtered before)
 		}
+
 		if order < prevOrder {
 			minJ := -1
 			minOrder := 9999
-			for j := 0; j < i; j++ {
+
+			for j := range i {
 				prevOrderJ, ok2 := allowed[clauses[j].Type()]
 				if ok2 && prevOrderJ > order && prevOrderJ < minOrder {
 					minOrder = prevOrderJ
 					minJ = j
 				}
 			}
+
 			var target cmn.ClauseNode
 			if minJ != -1 {
 				target = clauses[minJ]
 			} else {
 				target = clauses[i+1]
 			}
+
 			perr.Add(fmt.Errorf("%w: Please move '%s' at %s clause before '%s' clause at %s", ErrClauseOrderViolation, clause.SourceText(), toPosText(clause), target.SourceText(), toPosText(target)))
+
 			return
 		}
+
 		prevOrder = order
 	}
 }

@@ -360,6 +360,7 @@ var _ ClauseNode = (*OffsetClause)(nil)
 // ReturningClause represents RETURNING clause
 type ReturningClause struct {
 	clauseBaseNode
+
 	Fields []SelectField
 }
 
@@ -397,6 +398,7 @@ func (n CTEDefinition) String() string {
 
 type ForClause struct {
 	clauseBaseNode
+
 	TableName TableReference
 }
 
@@ -424,6 +426,7 @@ var _ ClauseNode = (*ForClause)(nil)
 
 type InsertIntoClause struct {
 	clauseBaseNode
+
 	Table   TableReference
 	Columns []string
 }
@@ -452,6 +455,7 @@ var _ ClauseNode = (*InsertIntoClause)(nil)
 
 type OnConflictClause struct {
 	clauseBaseNode
+
 	Target []FieldName
 	Action []SetClause
 }
@@ -479,6 +483,7 @@ var _ ClauseNode = (*OnConflictClause)(nil)
 
 type ValuesClause struct {
 	clauseBaseNode
+
 	Rows [][]AstNode // Expression
 }
 
@@ -505,6 +510,7 @@ var _ ClauseNode = (*ValuesClause)(nil)
 
 type UpdateClause struct {
 	clauseBaseNode
+
 	Table TableReference
 }
 
@@ -533,6 +539,7 @@ var _ ClauseNode = (*UpdateClause)(nil)
 // SetClause represents a SET clause in UPDATE statement
 type SetClause struct {
 	clauseBaseNode
+
 	Assigns []SetAssign // List of field assignments
 }
 
@@ -559,6 +566,7 @@ var _ ClauseNode = (*SetClause)(nil)
 
 type DeleteFromClause struct {
 	clauseBaseNode
+
 	Table TableReference
 }
 

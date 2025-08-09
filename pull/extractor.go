@@ -80,6 +80,7 @@ func ShouldIncludeSchema(schemaName string, includeSchemas, excludeSchemas []str
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -103,6 +104,7 @@ func ShouldIncludeTable(tableName string, includeTables, excludeTables []string)
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -123,6 +125,7 @@ func MatchWildcard(pattern, text string) bool {
 		// If pattern is invalid, fall back to exact match
 		return pattern == text
 	}
+
 	return matched
 }
 
@@ -151,22 +154,26 @@ func (e *BaseExtractor) MapColumnType(dbType string) string {
 // FilterSchemas filters schemas based on the configuration
 func (e *BaseExtractor) FilterSchemas(schemas []string, config ExtractConfig) []string {
 	var filtered []string
+
 	for _, schema := range schemas {
 		if ShouldIncludeSchema(schema, config.IncludeSchemas, config.ExcludeSchemas) {
 			filtered = append(filtered, schema)
 		}
 	}
+
 	return filtered
 }
 
 // FilterTables filters tables based on the configuration
 func (e *BaseExtractor) FilterTables(tables []string, config ExtractConfig) []string {
 	var filtered []string
+
 	for _, table := range tables {
 		if ShouldIncludeTable(table, config.IncludeTables, config.ExcludeTables) {
 			filtered = append(filtered, table)
 		}
 	}
+
 	return filtered
 }
 

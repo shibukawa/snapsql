@@ -33,6 +33,7 @@ func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 	}
 
 	root := cel.VariableDecls(vars...)
+
 	current, err := cel.NewEnv(
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
@@ -42,10 +43,12 @@ func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	dummyData, ok := fd.DummyData().(map[string]any)
 	if !ok {
 		dummyData = make(map[string]any)
 	}
+
 	result := &Namespace{
 		fd:            fd,
 		currentEnv:    current,
@@ -60,7 +63,9 @@ func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 	for key, val := range constants {
 		consts = append(consts, decls.NewVariable(key, snapSqlToCel(inferTypeStringFromActualValues(val, nil))))
 	}
+
 	root := cel.VariableDecls(consts...)
+
 	current, err := cel.NewEnv(
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
@@ -70,10 +75,12 @@ func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	result := &Namespace{
 		currentEnv:    current,
 		currentValues: constants,
 	}
+
 	return result, nil
 }
 
@@ -82,6 +89,7 @@ func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 	if issues != nil && issues.Err() != nil {
 		return nil, "", fmt.Errorf("%w: CEL expression compile error: %w", ErrInvalidForSnapSQL, issues.Err())
 	}
+
 	prg, err := ns.currentEnv.Program(ast)
 	if err != nil {
 		return nil, "", fmt.Errorf("%w: CEL program creation error: %w", ErrInvalidForSnapSQL, err)
@@ -91,9 +99,11 @@ func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("%w: CEL program evaluation error: %w", ErrInvalidForSnapSQL, err)
 	}
+
 	if ns.fd != nil {
 		return v.Value(), InferTypeStringFromDummyValue(v.Value()), nil
 	}
+
 	if v.Type() == cel.BytesType {
 		var result, _ = v.Value().([]byte)
 		if len(result) == 16 {
@@ -101,10 +111,13 @@ func (ns *Namespace) Eval(exp string) (value any, tp string, err error) {
 			if err != nil {
 				return nil, "", fmt.Errorf("%w: error converting bytes to UUID: %w", ErrInvalidForSnapSQL, err)
 			}
+
 			return uuidObj, "uuid", nil
 		}
 	}
+
 	result := v.Value()
+
 	return result, inferTypeStringFromActualValues(result, v.Type()), nil
 }
 
@@ -135,7 +148,6 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 	newEnv, err := ns.currentEnv.Extend(
 		cel.Variable(variableName, snapSqlToCel(InferTypeStringFromDummyValue(a[0]))),
 	)
-
 	if err != nil {
 		return fmt.Errorf("%w: error creating new environment for loop variable %s: %w", ErrInvalidForSnapSQL, variableName, err)
 	}
@@ -164,6 +176,7 @@ func (ns *Namespace) ExitLoop() error {
 
 	ns.currentValues = frame.values
 	ns.currentEnv = frame.env
+
 	return nil
 }
 
@@ -179,6 +192,7 @@ func snapSqlToCel(val any) *cel.Type {
 			}
 		}
 	}
+
 	return cel.DynType
 }
 
@@ -225,6 +239,7 @@ func snapSqlTypeToCel(val any) *cel.Type {
 			}
 		}
 	}
+
 	panic(fmt.Sprintf("Unsupported type for CEL conversion: %T of %v", val, val))
 }
 
@@ -246,6 +261,7 @@ func inferTypeStringFromActualValues(v any, rt ref.Type) string {
 				return "uuid"
 			}
 		}
+
 		return "string"
 	case []any:
 		return inferTypeStringFromActualValues(v2[0], nil) + "[]"
@@ -265,5 +281,6 @@ func (ns *Namespace) GetLoopVariableType(variableName string) (string, bool) {
 	if val, ok := ns.currentValues[variableName]; ok {
 		return inferTypeStringFromActualValues(val, nil), true
 	}
+
 	return "", false
 }

@@ -9,6 +9,7 @@ func hasSelectClause(clauses []cmn.ClauseNode) bool {
 			return true
 		}
 	}
+
 	return false
 }
 

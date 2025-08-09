@@ -19,6 +19,7 @@ func (r *ResponseAffinityDetector) Process(ctx *ProcessingContext) error {
 	// Use existing DetermineResponseAffinity function
 	affinity := determineResponseAffinity(ctx.Statement, ctx.TableInfo)
 	ctx.ResponseAffinity = string(affinity)
+
 	return nil
 }
 
@@ -141,6 +142,7 @@ func hasJoinTables(fromClause *parser.FromClause) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -207,6 +209,7 @@ func getDrivingTable(fromClause *parser.FromClause) string {
 	if firstTable.TableName != "" {
 		return firstTable.TableName
 	}
+
 	return firstTable.Name
 }
 
@@ -218,6 +221,7 @@ func getDrivingTableAlias(fromClause *parser.FromClause) string {
 
 	// The first table is the driving table
 	firstTable := fromClause.Tables[0]
+
 	return firstTable.Name // This is the alias if present, otherwise the table name
 }
 
@@ -235,6 +239,7 @@ func areJoinsAllowedForOne(fromClause *parser.FromClause) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -312,6 +317,7 @@ func areAllPrimaryKeysInWhereForTableWithAlias(primaryKeys []string, whereText s
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -320,6 +326,7 @@ func getFieldOutputName(field parser.SelectField) string {
 	if field.ExplicitName && field.FieldName != "" {
 		return field.FieldName
 	}
+
 	return field.OriginalField
 }
 
@@ -353,17 +360,20 @@ func getMainTableName(fromClause *parser.FromClause) string {
 	if firstTable.Name != "" {
 		return firstTable.Name
 	}
+
 	return ""
 }
 
 // getPrimaryKeyColumns returns the list of primary key column names
 func getPrimaryKeyColumns(table *TableInfo) []string {
 	var primaryKeys []string
+
 	for _, column := range table.Columns {
 		if column.IsPrimaryKey {
 			primaryKeys = append(primaryKeys, column.Name)
 		}
 	}
+
 	return primaryKeys
 }
 
@@ -398,12 +408,15 @@ func getWhereClauseText(whereClause *parser.WhereClause) string {
 	if sourceText == "WHERE" {
 		// Try to get the raw tokens and reconstruct the text
 		tokens := whereClause.RawTokens()
+
 		var parts []string
+
 		for _, token := range tokens {
 			if token.Type != tok.WHITESPACE {
 				parts = append(parts, token.Value)
 			}
 		}
+
 		if len(parts) > 1 { // Skip the "WHERE" token itself
 			reconstructed := strings.Join(parts[1:], " ")
 			if reconstructed != "" {
@@ -464,6 +477,7 @@ func hasAggregateFunctions(stmt *parser.SelectStatement) bool {
 			for _, aggFunc := range aggregateFunctions {
 				// Check for function name followed by optional spaces and opening parenthesis
 				pattern := aggFunc + "("
+
 				spacePattern := aggFunc + " ("
 				if strings.Contains(fieldText, pattern) || strings.Contains(fieldText, spacePattern) {
 					return true
@@ -480,11 +494,13 @@ func hasAggregateFunctions(stmt *parser.SelectStatement) bool {
 			bodyText.WriteString(token.Value)
 			bodyText.WriteString(" ")
 		}
+
 		selectText := strings.ToUpper(bodyText.String())
 
 		for _, aggFunc := range aggregateFunctions {
 			// Check for function name followed by optional spaces and opening parenthesis
 			pattern := aggFunc + "("
+
 			spacePattern := aggFunc + " ("
 			if strings.Contains(selectText, pattern) || strings.Contains(selectText, spacePattern) {
 				return true
@@ -556,6 +572,7 @@ func getUpdateTableName(stmt *parser.UpdateStatement) string {
 	if stmt.Update == nil {
 		return ""
 	}
+
 	return stmt.Update.Table.TableName
 }
 
@@ -564,6 +581,7 @@ func getDeleteTableName(stmt *parser.DeleteFromStatement) string {
 	if stmt.From == nil {
 		return ""
 	}
+
 	return stmt.From.Table.TableName
 }
 

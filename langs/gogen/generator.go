@@ -84,6 +84,7 @@ func New(format *intermediate.IntermediateFormat, opts ...Option) *Generator {
 	for _, opt := range opts {
 		opt(g)
 	}
+
 	return g
 }
 
@@ -134,6 +135,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("failed to generate hierarchical structs: %w", err)
 		}
+
 		structDefinitions = append(structDefinitions, hierarchicalStructs...)
 	}
 
@@ -267,12 +269,14 @@ func (g *Generator) Generate(w io.Writer) error {
 	}
 
 	var buf strings.Builder
+
 	err = tmpl.Execute(&buf, data)
 	if err != nil {
 		return fmt.Errorf("failed to execute template: %w", err)
 	}
 
 	_, err = fmt.Fprint(w, buf.String())
+
 	return err
 }
 
@@ -284,6 +288,7 @@ func snakeToCamel(s string) string {
 		if len(s) == 0 {
 			return s
 		}
+
 		return strings.ToUpper(string(s[0])) + s[1:]
 	}
 
@@ -291,6 +296,7 @@ func snakeToCamel(s string) string {
 	for i := range words {
 		words[i] = capitalizeWord(words[i])
 	}
+
 	return strings.Join(words, "")
 }
 
@@ -318,6 +324,7 @@ func capitalizeWord(word string) string {
 		if len(word) == 0 {
 			return ""
 		}
+
 		return strings.ToUpper(string(word[0])) + strings.ToLower(word[1:])
 	}
 }
@@ -325,6 +332,7 @@ func capitalizeWord(word string) string {
 // snakeToCamelLower converts a snake_case string to camelCase (first letter lowercase)
 func snakeToCamelLower(s string) string {
 	var result strings.Builder
+
 	capitalize := false
 
 	for i, r := range s {
@@ -339,7 +347,9 @@ func snakeToCamelLower(s string) string {
 				result.WriteString("ID")
 				break
 			}
+
 			result.WriteString(strings.ToUpper(string(r)))
+
 			capitalize = false
 		} else {
 			result.WriteString(strings.ToLower(string(r)))
@@ -352,6 +362,7 @@ func snakeToCamelLower(s string) string {
 // processParameters converts intermediate parameters to Go parameter data
 func processParameters(params []intermediate.Parameter, funcName string) ([]parameterData, []string, error) {
 	result := make([]parameterData, len(params))
+
 	var structDefinitions []string
 
 	for i, param := range params {
@@ -376,6 +387,7 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 				Type:     "[]InsertAllSubDepartmentsDepartment",
 				Required: !param.Optional,
 			}
+
 			continue
 		}
 
@@ -400,20 +412,24 @@ func convertToGoType(snapType string) (string, error) {
 	// Handle arrays
 	if strings.HasSuffix(snapType, "[]") {
 		baseType := strings.TrimSuffix(snapType, "[]")
+
 		goBaseType, err := convertToGoType(baseType)
 		if err != nil {
 			return "", err
 		}
+
 		return "[]" + goBaseType, nil
 	}
 
 	// Handle pointers
 	if strings.HasSuffix(snapType, "*") {
 		baseType := strings.TrimSuffix(snapType, "*")
+
 		goBaseType, err := convertToGoType(baseType)
 		if err != nil {
 			return "", err
 		}
+
 		return "*" + goBaseType, nil
 	}
 
@@ -422,6 +438,7 @@ func convertToGoType(snapType string) (string, error) {
 		// Extract the type name from the path
 		parts := strings.Split(snapType, "/")
 		typeName := parts[len(parts)-1]
+
 		return typeName, nil
 	}
 
@@ -544,6 +561,7 @@ func processResponseStruct(format *intermediate.IntermediateFormat) (*responseSt
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate hierarchical structs: %w", err)
 		}
+
 		return mainStruct, nil
 	}
 
@@ -812,6 +830,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 func parseStructDefinition(structDef string) (string, map[string]string) {
 	lines := strings.Split(structDef, "\n")
 	fields := make(map[string]string)
+
 	var typeName string
 
 	for _, line := range lines {
@@ -823,6 +842,7 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 			if len(parts) >= 2 {
 				typeName = parts[1]
 			}
+
 			continue
 		}
 
@@ -843,6 +863,7 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 				jsonTagStart := strings.Index(line, "`json:\"")
 				if jsonTagStart != -1 {
 					jsonTagStart += 7 // len("`json:\"")
+
 					jsonTagEnd := strings.Index(line[jsonTagStart:], "\"")
 					if jsonTagEnd != -1 {
 						jsonFieldName := line[jsonTagStart : jsonTagStart+jsonTagEnd]
@@ -865,6 +886,7 @@ func goTypeToCELType(goType string) string {
 	if strings.HasPrefix(goType, "[]") {
 		elementType := strings.TrimPrefix(goType, "[]")
 		elementCELType := goTypeToCELType(elementType)
+
 		return "[]" + elementCELType
 	}
 
@@ -900,6 +922,7 @@ func snapTypeToCELType(snapType string) string {
 	if strings.HasPrefix(snapType, "[]") {
 		elementType := strings.TrimPrefix(snapType, "[]")
 		elementCELType := snapTypeToCELType(elementType)
+
 		return "[]" + elementCELType
 	}
 
@@ -937,6 +960,7 @@ func snapTypeToCELType(snapType string) string {
 
 func generateTypeRegistrations(format *intermediate.IntermediateFormat, structDefinitions []string) ([]string, map[string]map[string]string) {
 	var registrations []string
+
 	typeDefinitions := make(map[string]map[string]string)
 
 	// Parse struct definitions to extract nested types
@@ -960,6 +984,7 @@ func generateTypeRegistrations(format *intermediate.IntermediateFormat, structDe
 // extractCELParameters extracts additional parameters from CEL environments
 func extractCELParameters(celEnvs []intermediate.CELEnvironment, existingParams []parameterData) []parameterData {
 	var additionalParams []parameterData
+
 	existingNames := make(map[string]bool)
 
 	// Create map of existing parameter names

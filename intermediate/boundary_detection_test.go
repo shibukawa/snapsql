@@ -111,6 +111,7 @@ SELECT id
 /*# end */
 FROM users`,
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Find EMIT_UNLESS_BOUNDARY instruction
 				var boundaryInstr *Instruction
 				for i := range instructions {
@@ -136,6 +137,7 @@ SELECT id, name
 /*# end */
 FROM users`,
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Count BOUNDARY instructions
 				boundaryCount := 0
 				for _, instr := range instructions {
@@ -168,6 +170,7 @@ UPDATE users SET
     /*# end */
 WHERE id = 1`,
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Count EMIT_UNLESS_BOUNDARY instructions
 				boundaryCount := 0
 				for _, instr := range instructions {
@@ -193,7 +196,6 @@ WHERE id = 1`,
 
 // TestBoundaryInstructionsImplementation tests the implementation of EMIT_UNLESS_BOUNDARY and BOUNDARY instructions
 func TestBoundaryInstructionsImplementation(t *testing.T) {
-
 	tests := []struct {
 		name        string
 		sql         string
@@ -298,6 +300,7 @@ WHERE id = 1`,
 
 			// Extract operation names from instructions (excluding system-generated ones for simplicity)
 			actualOps := make([]string, 0)
+
 			for _, instruction := range format.Instructions {
 				// Skip system-generated instructions for this test
 				if !strings.Contains(instruction.Op, "SYSTEM") &&
@@ -314,7 +317,6 @@ WHERE id = 1`,
 
 // TestBoundaryInstructionDetection tests the detection logic for when to use EMIT_UNLESS_BOUNDARY
 func TestBoundaryInstructionDetection(t *testing.T) {
-
 	tests := []struct {
 		name        string
 		sql         string
@@ -336,6 +338,7 @@ UPDATE users SET name = /*= name */'John'
 WHERE id = 1`,
 			description: "Should detect comma at start of conditional block in SET clause",
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Should find EMIT_UNLESS_BOUNDARY for the comma
 				found := false
 				for _, instr := range instructions {
@@ -360,6 +363,7 @@ AND name = /*= name */'John'
 /*# end */`,
 			description: "Should detect AND at start of conditional block in WHERE clause",
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Should find EMIT_UNLESS_BOUNDARY for the AND
 				found := false
 				for _, instr := range instructions {
@@ -385,6 +389,7 @@ OR name = /*= name */'John'
 )`,
 			description: "Should detect OR at start of conditional block in WHERE clause",
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Should find EMIT_UNLESS_BOUNDARY for the OR
 				found := false
 				for _, instr := range instructions {
@@ -411,7 +416,6 @@ OR name = /*= name */'John'
 
 // TestBoundaryPlacement tests the placement of BOUNDARY instructions
 func TestBoundaryPlacement(t *testing.T) {
-
 	tests := []struct {
 		name        string
 		sql         string
@@ -432,6 +436,7 @@ UPDATE users SET name = 'John'
 WHERE id = 1`,
 			description: "Should place BOUNDARY before WHERE clause",
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Find WHERE clause and check if BOUNDARY is placed before it
 				for i, instr := range instructions {
 					if instr.Op == "EMIT_STATIC" && strings.Contains(instr.Value, "WHERE") {
@@ -467,6 +472,7 @@ SELECT id, name
 FROM users`,
 			description: "Should place BOUNDARY before FROM clause",
 			checkFunc: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
 				// Find FROM clause and check if BOUNDARY is placed before it
 				for i, instr := range instructions {
 					if instr.Op == "EMIT_STATIC" && strings.Contains(instr.Value, "FROM") {

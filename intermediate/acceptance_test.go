@@ -124,8 +124,10 @@ func TestAcceptance(t *testing.T) {
 			isErrorTest := strings.HasSuffix(testName, "_err")
 
 			// Try to read SQL file first, then markdown file
-			var format *IntermediateFormat
-			var err, genErr error
+			var (
+				format      *IntermediateFormat
+				err, genErr error
+			)
 
 			markdownPath := filepath.Join(testDir, "input.snap.md")
 			sqlPath := filepath.Join(testDir, "input.snap.sql")
@@ -184,6 +186,7 @@ func TestAcceptance(t *testing.T) {
 						fileExistsHelper(sqlPath),
 						fileExistsHelper(markdownPath))
 				}
+
 				return
 			}
 
@@ -200,6 +203,7 @@ func TestAcceptance(t *testing.T) {
 
 			// Write actual JSON for debugging
 			actualPath := filepath.Join(testDir, "actual.json")
+
 			err = os.WriteFile(actualPath, actualJSON, 0644)
 			if err != nil {
 				t.Fatalf("Failed to write actual JSON: %v", err)
@@ -207,6 +211,7 @@ func TestAcceptance(t *testing.T) {
 
 			// Read expected JSON
 			expectedPath := filepath.Join(testDir, "expected.json")
+
 			expectedJSON, err := os.ReadFile(expectedPath)
 			if err != nil {
 				t.Fatalf("Failed to read expected JSON file: %v", err)
@@ -214,6 +219,7 @@ func TestAcceptance(t *testing.T) {
 
 			// Parse both JSON for comparison
 			var actual, expected interface{}
+
 			err = json.Unmarshal(actualJSON, &actual)
 			if err != nil {
 				t.Fatalf("Failed to parse actual JSON: %v", err)

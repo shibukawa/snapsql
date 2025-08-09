@@ -41,6 +41,7 @@ func NewDecimalFromString(s string) (*Decimal, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", snapsql.ErrInvalidDecimalString, s)
 	}
+
 	return &Decimal{d}, nil
 }
 
@@ -73,12 +74,14 @@ func (d *Decimal) ConvertToNative(typeDesc reflect.Type) (interface{}, error) {
 	}
 	// Handle conversion to other common types like float64, string, etc.
 	if typeDesc == reflect.TypeOf(float64(0)) {
-		f, _ := d.Decimal.Float64()
+		f, _ := d.Float64()
 		return f, nil
 	}
+
 	if typeDesc == reflect.TypeOf("") {
-		return d.Decimal.String(), nil
+		return d.String(), nil
 	}
+
 	return nil, fmt.Errorf("%w: to %v for Decimal", snapsql.ErrUnsupportedConversion, typeDesc)
 }
 
@@ -93,6 +96,7 @@ func (d *Decimal) ConvertToType(typeVal ref.Type) ref.Val {
 	case d.Type(): // Self conversion
 		return d
 	}
+
 	return types.NewErr("type conversion error from Decimal to %s", typeVal)
 }
 
@@ -105,10 +109,12 @@ func (d *Decimal) Equal(other ref.Val) ref.Val {
 		if err == nil {
 			o, ok = converted.(*Decimal)
 		}
+
 		if !ok {
 			return types.NewErr("type conversion error during comparison")
 		}
 	}
+
 	return types.Bool(d.Decimal.Equal(o.Decimal))
 }
 
@@ -173,6 +179,7 @@ func (p *customDecimalTypeProvider) FindType(typeName string) (*cel.Type, bool) 
 	if typeName == DecimalTypeName {
 		return DecimalType, true
 	}
+
 	return nil, false
 }
 

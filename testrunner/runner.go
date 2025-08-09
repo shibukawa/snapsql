@@ -63,6 +63,7 @@ func (tr *TestRunner) SetRunPattern(pattern string) error {
 	}
 
 	tr.runPattern = regex
+
 	return nil
 }
 
@@ -94,13 +95,16 @@ func (tr *TestRunner) RunAllTests(ctx context.Context) (*TestSummary, error) {
 
 		if result.Success {
 			summary.PassedPackages++
+
 			if tr.verbose {
 				fmt.Printf("--- PASS: %s (%.3fs)\n", pkg, result.Duration.Seconds())
 			}
 		} else {
 			summary.FailedPackages++
+
 			if tr.verbose {
 				fmt.Printf("--- FAIL: %s (%.3fs)\n", pkg, result.Duration.Seconds())
+
 				if result.Error != nil {
 					fmt.Printf("    Error: %v\n", result.Error)
 				}
@@ -109,6 +113,7 @@ func (tr *TestRunner) RunAllTests(ctx context.Context) (*TestSummary, error) {
 	}
 
 	summary.TotalDuration = time.Since(startTime)
+
 	return summary, nil
 }
 
@@ -128,12 +133,14 @@ func (tr *TestRunner) findTestPackages() ([]string, error) {
 				strings.HasPrefix(name, ".") {
 				return filepath.SkipDir
 			}
+
 			return nil
 		}
 
 		// Look for test files
 		if strings.HasSuffix(info.Name(), "_test.go") {
 			dir := filepath.Dir(path)
+
 			relDir, err := filepath.Rel(tr.projectRoot, dir)
 			if err != nil {
 				return err
@@ -144,12 +151,14 @@ func (tr *TestRunner) findTestPackages() ([]string, error) {
 
 			// Add to packages if not already present
 			found := false
+
 			for _, existing := range packages {
 				if existing == pkgPath {
 					found = true
 					break
 				}
 			}
+
 			if !found {
 				packages = append(packages, pkgPath)
 			}
@@ -203,9 +212,11 @@ func (tr *TestRunner) PrintSummary(summary *TestSummary) {
 
 	if summary.FailedPackages > 0 {
 		fmt.Printf("\nFailed packages:\n")
+
 		for _, result := range summary.Results {
 			if !result.Success {
 				fmt.Printf("  %s\n", result.Package)
+
 				if result.Error != nil {
 					fmt.Printf("    Error: %v\n", result.Error)
 				}

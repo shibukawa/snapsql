@@ -380,9 +380,11 @@ func TestFinalizeSelectClause(t *testing.T) {
 
 			selectStmt, ok := ast.(*parsercommon.SelectStatement)
 			assert.True(t, ok)
+
 			selectClause := selectStmt.Select
 			perr := &parsercommon.ParseError{}
 			finalizeSelectClause(selectClause, perr)
+
 			if tc.wantError {
 				assert.True(t, len(perr.Errors) > 0, "should return error")
 			} else {
@@ -394,6 +396,7 @@ func TestFinalizeSelectClause(t *testing.T) {
 				gotFieldNames := make([]string, 0, len(selectClause.Fields))
 				gotImplicitNames := make([]bool, 0, len(selectClause.Fields))
 				gotTypeNames := make([]string, 0, len(selectClause.Fields))
+
 				gotImplicitTypes := make([]bool, 0, len(selectClause.Fields))
 				for _, field := range selectClause.Fields {
 					gotFieldTypes = append(gotFieldTypes, field.FieldKind)
@@ -402,6 +405,7 @@ func TestFinalizeSelectClause(t *testing.T) {
 					gotTypeNames = append(gotTypeNames, field.TypeName)
 					gotImplicitTypes = append(gotImplicitTypes, field.ExplicitType)
 				}
+
 				assert.Equal(t, tc.wantFieldTypes, gotFieldTypes, "Field types do not match")
 				assert.Equal(t, tc.wantFieldNames, gotFieldNames, "Field names do not match")
 				assert.Equal(t, tc.wantExplicitNames, gotImplicitNames, "Implicit names do not match")

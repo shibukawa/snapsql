@@ -1,6 +1,7 @@
 package typeinference
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/shibukawa/snapsql"
@@ -53,6 +54,7 @@ func (d *DMLInferenceEngine) inferInsertStatement(stmt *parser.InsertIntoStateme
 		if err != nil {
 			return nil, fmt.Errorf("failed to infer RETURNING clause: %w", err)
 		}
+
 		fields = append(fields, returningFields...)
 	}
 
@@ -91,6 +93,7 @@ func (d *DMLInferenceEngine) inferUpdateStatement(stmt *parser.UpdateStatement) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to infer RETURNING clause: %w", err)
 		}
+
 		fields = append(fields, returningFields...)
 	}
 
@@ -129,6 +132,7 @@ func (d *DMLInferenceEngine) inferDeleteStatement(stmt *parser.DeleteFromStateme
 		if err != nil {
 			return nil, fmt.Errorf("failed to infer RETURNING clause: %w", err)
 		}
+
 		fields = append(fields, returningFields...)
 	}
 
@@ -161,6 +165,7 @@ func (d *DMLInferenceEngine) inferReturningClause(returning *parser.ReturningCla
 		if err != nil {
 			return nil, fmt.Errorf("failed to infer RETURNING field: %w", err)
 		}
+
 		fields = append(fields, fieldInfo)
 	}
 
@@ -218,7 +223,7 @@ func (d *DMLInferenceEngine) extractTableNameFromClause(clause parser.ClauseNode
 
 // Sentinel errors for DML inference
 var (
-	ErrUnsupportedDMLStatement = fmt.Errorf("unsupported DML statement type")
-	ErrMissingTargetTable      = fmt.Errorf("missing target table in DML statement")
-	ErrInvalidReturningClause  = fmt.Errorf("invalid RETURNING clause")
+	ErrUnsupportedDMLStatement = errors.New("unsupported DML statement type")
+	ErrMissingTargetTable      = errors.New("missing target table in DML statement")
+	ErrInvalidReturningClause  = errors.New("invalid RETURNING clause")
 )

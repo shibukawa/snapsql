@@ -66,6 +66,7 @@ func NewSchemaValidator(schemaResolver *SchemaResolver) *SchemaValidator {
 	if schemaResolver == nil {
 		return nil
 	}
+
 	return &SchemaValidator{
 		schemaResolver:  schemaResolver,
 		tableAliases:    make(map[string]string),
@@ -90,12 +91,14 @@ func (v *SchemaValidator) ValidateSelectFields(selectFields []parser.SelectField
 	for i, field := range selectFields {
 		switch field.FieldKind {
 		case parser.TableField:
-			if err := v.validateTableColumn(i, field.TableName, field.OriginalField); err != nil {
+			err := v.validateTableColumn(i, field.TableName, field.OriginalField)
+			if err != nil {
 				errors = append(errors, *err)
 			}
 
 		case parser.SingleField:
-			if err := v.validateSingleColumn(i, field.OriginalField); err != nil {
+			err := v.validateSingleColumn(i, field.OriginalField)
+			if err != nil {
 				errors = append(errors, *err)
 			}
 
@@ -183,6 +186,7 @@ func (v *SchemaValidator) resolveTableAlias(tableName string) string {
 	if realName, exists := v.tableAliases[tableName]; exists {
 		return realName
 	}
+
 	return tableName
 }
 
@@ -196,6 +200,7 @@ func (v *SchemaValidator) findSchemaForTable(tableName string) string {
 			}
 		}
 	}
+
 	return ""
 }
 
@@ -267,6 +272,7 @@ func (v *SchemaValidator) areTypesCompatible(inferredType, schemaType string) bo
 // suggestSimilarTables suggests similar table names
 func (v *SchemaValidator) suggestSimilarTables(target string) string {
 	var suggestions []string
+
 	minDistance := 3
 
 	for _, schemaName := range v.schemaResolver.GetAllSchemas() {
@@ -280,7 +286,7 @@ func (v *SchemaValidator) suggestSimilarTables(target string) string {
 	}
 
 	if len(suggestions) > 0 {
-		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:minInt(3, len(suggestions))], ", "))
+		return "Did you mean: " + strings.Join(suggestions[:minInt(3, len(suggestions))], ", ")
 	}
 
 	return "No similar tables found"
@@ -294,6 +300,7 @@ func (v *SchemaValidator) suggestSimilarColumns(schemaName, tableName, target st
 	}
 
 	var suggestions []string
+
 	minDistance := 3
 
 	for _, column := range columns {
@@ -304,7 +311,7 @@ func (v *SchemaValidator) suggestSimilarColumns(schemaName, tableName, target st
 	}
 
 	if len(suggestions) > 0 {
-		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:minInt(3, len(suggestions))], ", "))
+		return "Did you mean: " + strings.Join(suggestions[:minInt(3, len(suggestions))], ", ")
 	}
 
 	return "No similar columns found"
@@ -313,6 +320,7 @@ func (v *SchemaValidator) suggestSimilarColumns(schemaName, tableName, target st
 // suggestSimilarColumnsAcrossTables suggests similar column names across all available tables
 func (v *SchemaValidator) suggestSimilarColumnsAcrossTables(target string) string {
 	var suggestions []string
+
 	minDistance := 3
 
 	for _, schemaName := range v.schemaResolver.GetAllSchemas() {
@@ -333,7 +341,7 @@ func (v *SchemaValidator) suggestSimilarColumnsAcrossTables(target string) strin
 	}
 
 	if len(suggestions) > 0 {
-		return fmt.Sprintf("Did you mean: %s", strings.Join(suggestions[:minInt(3, len(suggestions))], ", "))
+		return "Did you mean: " + strings.Join(suggestions[:minInt(3, len(suggestions))], ", ")
 	}
 
 	return "No similar columns found"
@@ -346,6 +354,7 @@ func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
@@ -354,6 +363,7 @@ func levenshteinDistance(a, b string) int {
 	if len(a) == 0 {
 		return len(b)
 	}
+
 	if len(b) == 0 {
 		return len(a)
 	}
@@ -366,6 +376,7 @@ func levenshteinDistance(a, b string) int {
 	for i := 0; i <= len(a); i++ {
 		matrix[i][0] = i
 	}
+
 	for j := 0; j <= len(b); j++ {
 		matrix[0][j] = j
 	}

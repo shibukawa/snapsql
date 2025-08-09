@@ -77,7 +77,8 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 
 	// Execute each processor in order
 	for _, processor := range p.processors {
-		if err := processor.Process(ctx); err != nil {
+		err := processor.Process(ctx)
+		if err != nil {
 			return nil, fmt.Errorf("processor %s failed: %w", processor.Name(), err)
 		}
 	}
@@ -122,6 +123,7 @@ func convertEnvironmentsToEnvs(environments []string) [][]EnvVar {
 				Type: "any", // Default type for environment variables
 			})
 		}
+
 		envs = append(envs, envLevel)
 	}
 

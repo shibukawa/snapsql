@@ -47,12 +47,14 @@ func InferPackageNameFromPath(outputPath string) string {
 	// Handle hyphens: split by '-' and take the longest part
 	if strings.Contains(dir, "-") {
 		parts := strings.Split(dir, "-")
+
 		longest := ""
 		for _, part := range parts {
 			if len(part) > len(longest) {
 				longest = part
 			}
 		}
+
 		if longest != "" {
 			dir = longest
 		}

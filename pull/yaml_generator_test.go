@@ -83,6 +83,7 @@ func TestYAMLGeneration(t *testing.T) {
 		// Check that table files were created
 		usersFile := filepath.Join(schemaDir, "users.yaml")
 		postsFile := filepath.Join(schemaDir, "posts.yaml")
+
 		fileExists(t, usersFile)
 		fileExists(t, postsFile)
 
@@ -186,12 +187,14 @@ func TestYAMLFileNaming(t *testing.T) {
 // Helper functions to check if file/directory exists
 func fileExists(t *testing.T, filename string) {
 	t.Helper()
+
 	_, err := os.Stat(filename)
 	assert.NoError(t, err, "File should exist: %s", filename)
 }
 
 func dirExists(t *testing.T, dirname string) {
 	t.Helper()
+
 	info, err := os.Stat(dirname)
 	assert.NoError(t, err, "Directory should exist: %s", dirname)
 	assert.True(t, info.IsDir(), "Path should be a directory: %s", dirname)

@@ -24,6 +24,7 @@ func NewSchemaResolver(schemas []snapsql.DatabaseSchema) *SchemaResolver {
 
 	// Build indexes for fast lookup
 	resolver.buildIndexes()
+
 	return resolver
 }
 
@@ -50,12 +51,14 @@ func (r *SchemaResolver) buildIndexes() {
 // ResolveTableColumn resolves a table column and returns column information
 func (r *SchemaResolver) ResolveTableColumn(schemaName, tableName, columnName string) (*snapsql.ColumnInfo, error) {
 	// Check if table exists
-	if err := r.ValidateTableExists(schemaName, tableName); err != nil {
+	err := r.ValidateTableExists(schemaName, tableName)
+	if err != nil {
 		return nil, err
 	}
 
 	// Look up column
 	columnKey := fmt.Sprintf("%s.%s.%s", schemaName, tableName, columnName)
+
 	column, exists := r.columnIndex[columnKey]
 	if !exists {
 		return nil, fmt.Errorf("%w '%s' in table '%s.%s'", snapsql.ErrColumnDoesNotExist, columnName, schemaName, tableName)
@@ -80,11 +83,13 @@ func (r *SchemaResolver) ValidateTableExists(schemaName, tableName string) error
 
 // GetTableColumns returns all columns for a given table
 func (r *SchemaResolver) GetTableColumns(schemaName, tableName string) ([]*snapsql.ColumnInfo, error) {
-	if err := r.ValidateTableExists(schemaName, tableName); err != nil {
+	err := r.ValidateTableExists(schemaName, tableName)
+	if err != nil {
 		return nil, err
 	}
 
 	table := r.schemaIndex[schemaName][tableName]
+
 	columns := make([]*snapsql.ColumnInfo, 0, len(table.Columns))
 	for _, column := range table.Columns {
 		columns = append(columns, column)
@@ -110,6 +115,7 @@ func (r *SchemaResolver) FindColumnInTables(columnName string, availableTables [
 
 	for _, tableRef := range availableTables {
 		parts := strings.Split(tableRef, ".")
+
 		var schemaName, tableName string
 
 		if len(parts) == 2 {
@@ -146,16 +152,19 @@ func (r *SchemaResolver) GetAllSchemas() []string {
 	for schemaName := range r.schemaIndex {
 		schemas = append(schemas, schemaName)
 	}
+
 	return schemas
 }
 
 // GetTablesInSchema returns all table names in a given schema
 func (r *SchemaResolver) GetTablesInSchema(schemaName string) []string {
 	var tables []string
+
 	if schemaMap, exists := r.schemaIndex[schemaName]; exists {
 		for tableName := range schemaMap {
 			tables = append(tables, tableName)
 		}
 	}
+
 	return tables
 }

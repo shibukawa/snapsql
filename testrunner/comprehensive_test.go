@@ -19,9 +19,11 @@ const testDBPath = "test_comprehensive_go.db"
 
 // setupTestDatabase initializes a clean test database with required tables
 func setupTestDatabase(t *testing.T) *sql.DB {
+	t.Helper()
 	// Remove existing database
 	if _, err := os.Stat(testDBPath); err == nil {
-		if err := os.Remove(testDBPath); err != nil {
+		err := os.Remove(testDBPath)
+		if err != nil {
 			t.Fatalf("Failed to remove existing test database: %v", err)
 		}
 	}
@@ -67,7 +69,10 @@ func setupTestDatabase(t *testing.T) *sql.DB {
 
 // cleanupTestDatabase removes the test database
 func cleanupTestDatabase(t *testing.T) {
-	if err := os.Remove(testDBPath); err != nil && !os.IsNotExist(err) {
+	t.Helper()
+
+	err := os.Remove(testDBPath)
+	if err != nil && !os.IsNotExist(err) {
 		t.Logf("Warning: Failed to cleanup test database: %v", err)
 	}
 }
@@ -77,7 +82,7 @@ func runTestCase(t *testing.T, db *sql.DB, testCaseName string) {
 	t.Helper()
 
 	// Find the test file (look in testdata/testrunner/markdown directory)
-	testFile := filepath.Join("..", "testdata", "testrunner", "markdown", fmt.Sprintf("%s.md", testCaseName))
+	testFile := filepath.Join("..", "testdata", "testrunner", "markdown", testCaseName+".md")
 	if _, err := os.Stat(testFile); os.IsNotExist(err) {
 		t.Fatalf("Test file not found: %s", testFile)
 	}
@@ -112,6 +117,7 @@ func runTestCase(t *testing.T, db *sql.DB, testCaseName string) {
 
 	// Execute all test cases in the file
 	ctx := context.Background()
+
 	testCases := make([]*markdownparser.TestCase, len(doc.TestCases))
 	for i := range doc.TestCases {
 		testCases[i] = &doc.TestCases[i]
@@ -125,6 +131,7 @@ func runTestCase(t *testing.T, db *sql.DB, testCaseName string) {
 	// Check results
 	if summary.FailedTests > 0 {
 		t.Errorf("Test case %s failed:", testCaseName)
+
 		for _, result := range summary.Results {
 			if !result.Success {
 				t.Errorf("  - %s: %v", result.TestCase.Name, result.Error)
@@ -235,6 +242,7 @@ func TestComprehensiveSQLiteTestSuite(t *testing.T) {
 			defer cleanupTestDatabase(t)
 
 			runTestCase(t, db, testCase)
+
 			passedTests++
 		})
 	}
@@ -258,7 +266,7 @@ func BenchmarkComprehensiveTestSuite(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		for _, testCase := range testCases {
 			func() {
 				// Create a temporary test database for benchmarking
@@ -296,7 +304,8 @@ func BenchmarkComprehensiveTestSuite(b *testing.B) {
 				}
 
 				// Find the test file
-				testFile := filepath.Join("..", "testdata", "testrunner", "markdown", fmt.Sprintf("%s.md", testCase))
+				testFile := filepath.Join("..", "testdata", "testrunner", "markdown", testCase+".md")
+
 				file, err := os.Open(testFile)
 				if err != nil {
 					b.Fatalf("Failed to open test file %s: %v", testFile, err)
@@ -322,6 +331,7 @@ func BenchmarkComprehensiveTestSuite(b *testing.B) {
 
 				// Execute test cases
 				ctx := context.Background()
+
 				testCases := make([]*markdownparser.TestCase, len(doc.TestCases))
 				for i := range doc.TestCases {
 					testCases[i] = &doc.TestCases[i]

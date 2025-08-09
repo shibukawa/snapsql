@@ -14,6 +14,7 @@ import (
 
 func TestParseBasic(t *testing.T) {
 	t.Log("Running TestParseBasic with debug output enabled")
+
 	input := `---
 function_name: "get_user_data"
 description: "Get user data"
@@ -245,11 +246,14 @@ id,name
 
 	// Verify fixtures content
 	var foundDepartments, foundUsers, foundRoles bool
+
 	for tableName, rows := range testCase.Fixture {
 		switch tableName {
 		case "departments":
 			foundDepartments = true
+
 			assert.Equal(t, 2, len(rows), "departments should have 2 rows")
+
 			for _, row := range rows {
 				name, ok := row["name"].(string)
 				assert.True(t, ok, "name should be string")
@@ -257,12 +261,15 @@ id,name
 			}
 		case "users":
 			foundUsers = true
+
 			assert.Equal(t, 1, len(rows), "users should have 1 row")
 			assert.Equal(t, "John Doe", rows[0]["name"])
 			assert.Equal(t, "john@example.com", rows[0]["email"])
 		case "roles":
 			foundRoles = true
+
 			assert.Equal(t, 2, len(rows), "roles should have 2 rows")
+
 			for _, row := range rows {
 				name, ok := row["name"].(string)
 				assert.True(t, ok, "name should be string")
@@ -272,6 +279,7 @@ id,name
 			t.Errorf("unexpected table name: %s", tableName)
 		}
 	}
+
 	assert.True(t, foundDepartments, "Should have departments fixtures")
 	assert.True(t, foundUsers, "Should have users fixtures")
 	assert.True(t, foundRoles, "Should have roles fixtures")
@@ -536,20 +544,31 @@ param1: value1
 	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering {
 			t.Logf("Node type: %T, Kind: %v", n, n.Kind())
+
 			if n.Kind() == ast.KindText {
-				t.Logf("  Text content: %q", string(n.Text([]byte(input))))
+				if textNode, ok := n.(*ast.Text); ok {
+					t.Logf("  Text content: %q", string(textNode.Value([]byte(input))))
+				}
 			}
+
 			if n.Kind() == ast.KindFencedCodeBlock {
 				if cb, ok := n.(*ast.FencedCodeBlock); ok {
-					t.Logf("  Code block info: %q", string(cb.Info.Text([]byte(input))))
+					var info string
+					if cb.Info != nil {
+						info = string(cb.Info.Value([]byte(input)))
+					}
+
+					t.Logf("  Code block info: %q", info)
+
 					lines := cb.Lines()
-					for i := 0; i < lines.Len(); i++ {
+					for i := range lines.Len() {
 						line := lines.At(i)
 						t.Logf("  Line %d: %q", i, string(line.Value([]byte(input))))
 					}
 				}
 			}
 		}
+
 		return ast.WalkContinue, nil
 	})
 }

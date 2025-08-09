@@ -56,6 +56,7 @@ func TestHierarchicalGeneration(t *testing.T) {
 
 	// Create generator with hierarchy support
 	var output strings.Builder
+
 	generator := New(format,
 		WithHierarchy(hierarchy),
 		WithDialect("postgresql"),

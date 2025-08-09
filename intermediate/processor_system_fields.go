@@ -53,6 +53,7 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 
 	// For INSERT statements, extract existing column names for explicit field validation
 	var existingColumns map[string]bool
+
 	if stmt.Type() == parser.SELECT_STATEMENT {
 		if insertStmt, ok := stmt.(*parser.InsertIntoStatement); ok {
 			existingColumns = extractInsertColumnNames(insertStmt)
@@ -170,15 +171,18 @@ func extractInsertColumnNames(stmt *parser.InsertIntoStatement) map[string]bool 
 				// Extract column names from INSERT INTO clause tokens
 				tokens := clause.RawTokens()
 				inParentheses := false
+
 				for _, token := range tokens {
 					if token.Type == tok.OPENED_PARENS {
 						inParentheses = true
 						continue
 					}
+
 					if token.Type == tok.CLOSED_PARENS {
 						inParentheses = false
 						continue
 					}
+
 					if inParentheses && token.Type == tok.IDENTIFIER {
 						// All IDENTIFIER tokens in column list are column names
 						columns[token.Value] = true
@@ -217,6 +221,7 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 
 	// Determine which implicit parameters need to be added
 	var columnsToAdd []string
+
 	for _, param := range implicitParams {
 		if !existingColumns[param.Name] {
 			columnsToAdd = append(columnsToAdd, param.Name)
@@ -234,14 +239,16 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 
 	// Update InsertIntoClause tokens to include new columns
 	if insertStmt.Into != nil {
-		if err := addSystemColumnsToInsertIntoClause(insertStmt.Into, columnsToAdd); err != nil {
+		err := addSystemColumnsToInsertIntoClause(insertStmt.Into, columnsToAdd)
+		if err != nil {
 			return fmt.Errorf("failed to add system columns to InsertIntoClause: %w", err)
 		}
 	}
 
 	// Add EMIT_SYSTEM_VALUE tokens to VALUES clause
 	if insertStmt.ValuesList != nil {
-		if err := addSystemValuesToValuesClause(insertStmt.ValuesList, columnsToAdd); err != nil {
+		err := addSystemValuesToValuesClause(insertStmt.ValuesList, columnsToAdd)
+		if err != nil {
 			return fmt.Errorf("failed to add system values to VALUES clause: %w", err)
 		}
 	}
@@ -254,7 +261,8 @@ func addSystemValuesToValuesClause(valuesClause *parser.ValuesClause, columnsToA
 	tokens := valuesClause.RawTokens()
 
 	// Find the position to insert new values (before the closing parenthesis)
-	var insertPosition int = -1
+	var insertPosition = -1
+
 	for i := len(tokens) - 1; i >= 0; i-- {
 		if tokens[i].Type == tok.CLOSED_PARENS {
 			insertPosition = i
@@ -301,7 +309,8 @@ func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClaus
 	tokens := insertIntoClause.RawTokens()
 
 	// Find the position to insert new columns (before the closing parenthesis)
-	var insertPosition int = -1
+	var insertPosition = -1
+
 	for i := len(tokens) - 1; i >= 0; i-- {
 		if tokens[i].Type == tok.CLOSED_PARENS {
 			insertPosition = i
@@ -346,9 +355,8 @@ func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClaus
 	// insertIntoClause.SetRawTokens(updatedTokens)
 
 	// Also update the Columns field in InsertIntoClause
-	for _, column := range columnsToAdd {
-		insertIntoClause.Columns = append(insertIntoClause.Columns, column)
-	}
+	insertIntoClause.Columns = append(insertIntoClause.Columns, columnsToAdd...)
+
 	return nil
 }
 

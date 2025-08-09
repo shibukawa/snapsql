@@ -2,6 +2,7 @@ package parsercommon
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,14 +19,14 @@ import (
 
 // Sentinel errors
 var (
-	ErrParameterNotFound       = fmt.Errorf("parameter not found")
-	ErrInvalidParameterName    = fmt.Errorf("invalid parameter name")
-	ErrInvalidParameterValue   = fmt.Errorf("invalid parameter value for type")
-	ErrInvalidNamingConvention = fmt.Errorf("parameter name does not follow naming convention")
-	ErrDummyDataGeneration     = fmt.Errorf("failed to generate dummy data")
-	ErrParameterValidation     = fmt.Errorf("parameter validation failed")
-	ErrCommonTypeNotFound      = fmt.Errorf("common type not found")
-	ErrCommonTypeFileNotFound  = fmt.Errorf("common type file not found")
+	ErrParameterNotFound       = errors.New("parameter not found")
+	ErrInvalidParameterName    = errors.New("invalid parameter name")
+	ErrInvalidParameterValue   = errors.New("invalid parameter value for type")
+	ErrInvalidNamingConvention = errors.New("parameter name does not follow naming convention")
+	ErrDummyDataGeneration     = errors.New("failed to generate dummy data")
+	ErrParameterValidation     = errors.New("parameter validation failed")
+	ErrCommonTypeNotFound      = errors.New("common type not found")
+	ErrCommonTypeFileNotFound  = errors.New("common type file not found")
 )
 
 // Regular expression for valid parameter names
@@ -68,6 +69,7 @@ func ParseFunctionDefinitionFromSQLComment(tokens []tokenizer.Token, basePath st
 			}
 		}
 	}
+
 	return nil, snapsql.ErrNoFunctionDefinition
 }
 
@@ -108,6 +110,7 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 								langConfig[key] = valAny
 							}
 						}
+
 						def.Generators[lang] = langConfig
 					} else if config, ok := configAny.(map[string]any); ok {
 						def.Generators[lang] = config
@@ -120,8 +123,10 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 	// Parse parameters from the parameter text
 	if doc.ParametersText != "" {
 		// Parse the raw parameter text to yaml.MapSlice to preserve order
-		var rawParams yaml.MapSlice
-		var err error
+		var (
+			rawParams yaml.MapSlice
+			err       error
+		)
 
 		switch doc.ParametersType {
 		case "yaml", "yml":
@@ -168,7 +173,8 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 	def.projectRootPath = projectRootPath
 
 	// Finalize the function definition to process parameters and resolve common types
-	if err := def.Finalize(basePath, projectRootPath); err != nil {
+	err := def.Finalize(basePath, projectRootPath)
+	if err != nil {
 		return nil, fmt.Errorf("failed to finalize function definition: %w", err)
 	}
 
@@ -207,12 +213,17 @@ func parseListFormatParameters(text string) (yaml.MapSlice, error) {
 // parseFunctionDefinitionFromYAML parses a YAML string into a FunctionDefinition and calls Finalize.
 func parseFunctionDefinitionFromYAML(yamlStr string, basePath string, projectRootPath string) (*FunctionDefinition, error) {
 	var def FunctionDefinition
-	if err := yaml.Unmarshal([]byte(yamlStr), &def); err != nil {
+
+	err := yaml.Unmarshal([]byte(yamlStr), &def)
+	if err != nil {
 		return nil, err
 	}
-	if err := def.Finalize(basePath, projectRootPath); err != nil {
+
+	err = def.Finalize(basePath, projectRootPath)
+	if err != nil {
 		return nil, err
 	}
+
 	return &def, nil
 }
 
@@ -230,6 +241,7 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 		f.dummyData = nil
 		return fmt.Errorf("%w: %w", ErrParameterValidation, err)
 	}
+
 	f.Parameters = normalized
 	f.ParameterOrder = order
 	f.OriginalParameters = original
@@ -239,7 +251,9 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 		f.dummyData = nil
 		return fmt.Errorf("%w: %w", ErrDummyDataGeneration, err)
 	}
+
 	f.dummyData = dummy
+
 	return nil
 }
 
@@ -261,6 +275,7 @@ func (f *FunctionDefinition) DummyData(path ...string) any {
 			return nil
 		}
 	}
+
 	return current
 }
 
@@ -290,6 +305,7 @@ func normalizeTypeString(typeStr string) string {
 		base := normalizeTypeString(t[:len(t)-2])
 		return base + "[]"
 	}
+
 	return t
 }
 
@@ -316,6 +332,7 @@ func inferTypeFromValue(val any) string {
 		if len(v) > 0 {
 			return inferTypeFromValue(v[0]) + "[]"
 		}
+
 		return "any[]"
 	case yaml.MapSlice, map[string]any:
 		return "object"
@@ -345,6 +362,7 @@ func generateDummyData(params map[string]any) (map[string]any, error) {
 				if err != nil {
 					return nil, err
 				}
+
 				result[k] = d
 			}
 		case []any:
@@ -365,6 +383,7 @@ func generateDummyData(params map[string]any) (map[string]any, error) {
 					if err != nil {
 						return nil, err
 					}
+
 					result[k] = []any{d}
 				default:
 					result[k] = []any{elem}
@@ -376,6 +395,7 @@ func generateDummyData(params map[string]any) (map[string]any, error) {
 			return nil, fmt.Errorf("%w: %T", snapsql.ErrUnsupportedParameterType, v)
 		}
 	}
+
 	return result, nil
 }
 
@@ -429,6 +449,7 @@ func generateDummyValueFromString(typeStr string) any {
 		// This will be handled by the type system later
 		return t
 	}
+
 	return ""
 }
 
@@ -487,6 +508,7 @@ func InferTypeStringFromDummyValue(val any) string {
 			if strings.HasPrefix(v, "./") {
 				return v
 			}
+
 			return "string"
 		}
 	case map[string]any:
@@ -501,6 +523,7 @@ func InferTypeStringFromDummyValue(val any) string {
 			}
 		}
 	}
+
 	return "any"
 }
 
@@ -509,6 +532,7 @@ func (f *FunctionDefinition) loadCommonTypesFile(absTargetDirPath string, target
 	if _, ok := f.commonTypes[targetDirKey]; ok {
 		return nil
 	}
+
 	filePath := filepath.Join(absTargetDirPath, "_common.yaml")
 
 	// Check if file exists
@@ -531,6 +555,7 @@ func (f *FunctionDefinition) loadCommonTypesFile(absTargetDirPath string, target
 	if err := yaml.Unmarshal(data, &commonTypes); err != nil {
 		return err
 	}
+
 	f.commonTypes[targetDirKey] = make(map[string]map[string]any)
 
 	// Extract only type definitions that start with uppercase letter
@@ -565,6 +590,7 @@ func (f *FunctionDefinition) normalizeAndResolveParameters(params yaml.MapSlice)
 			errs.Add(fmt.Errorf("%w: invalid parameter name: %s", ErrInvalidForSnapSQL, key))
 			continue
 		}
+
 		order = append(order, key)
 		detail, original := f.normalizeAndResolveAny(item.Value, key, errs)
 		resultParams[key] = detail
@@ -574,6 +600,7 @@ func (f *FunctionDefinition) normalizeAndResolveParameters(params yaml.MapSlice)
 	if len(errs.Errors) > 0 {
 		return resultParams, order, originalParams, errs
 	}
+
 	return resultParams, order, originalParams, nil
 }
 
@@ -593,6 +620,7 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 					// Return array of common type
 					return []any{resolvedType}, commonTypeName + "[]"
 				}
+
 				return elemType + "[]", elemType + "[]"
 			case map[string]any:
 				detail, original := f.normalizeAndResolveAny(elemType, fullName+"[]", errs)
@@ -604,12 +632,14 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 		} else {
 			// Recursively normalize each element of the array
 			detailResult := make([]any, len(val))
+
 			originalResult := make([]any, len(val))
 			for i, e := range val {
 				detail, original := f.normalizeAndResolveAny(e, fullName+fmt.Sprintf("[%d]", i), errs)
 				detailResult[i] = detail
 				originalResult[i] = original
 			}
+
 			return detailResult, originalResult
 		}
 	case map[string]any:
@@ -630,21 +660,25 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 
 			// Return the normalized type string, but preserve original structure
 			normalizedType := normalizeTypeString(typeStr)
+
 			return normalizedType, val // Return original structure for OriginalParameters
 		}
 
 		// Regular map processing (for nested objects)
 		detailResult := make(map[string]any)
 		originalResult := make(map[string]any)
+
 		for k, v := range val {
 			if !validParameterNameRegex.MatchString(k) {
 				errs.Add(fmt.Errorf("%w: invalid parameter name: %s", ErrInvalidForSnapSQL, fullName+"."+k))
 				continue
 			}
+
 			detail, original := f.normalizeAndResolveAny(v, fullName+"."+k, errs)
 			detailResult[k] = detail
 			originalResult[k] = original
 		}
+
 		return detailResult, originalResult
 	case string:
 		// If string, check if it's a common type reference
@@ -652,7 +686,9 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 		if resolvedType != nil {
 			return resolvedType, commonTypeName
 		}
+
 		v := normalizeTypeString(val)
+
 		return v, v
 	default:
 		v := inferTypeFromValue(val)
@@ -684,8 +720,10 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) 
 	}
 
 	// If path is specified, load _common.yaml from the corresponding directory
-	var targetPath string
-	var absTargetPath string
+	var (
+		targetPath    string
+		absTargetPath string
+	)
 
 	if strings.HasPrefix(path, ".") {
 		absTargetPath = filepath.Clean(filepath.Join(baseDir, path))
@@ -697,20 +735,24 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) 
 		targetPath = filepath.Clean(filepath.Join(f.projectRootPath, path))
 		absTargetPath = filepath.Clean(filepath.Join(f.projectRootPath, targetPath))
 	}
+
 	targetPathKey := filepath.ToSlash(targetPath)
 	f.loadCommonTypesFile(absTargetPath, targetPathKey)
 
 	typeDef, found := f.commonTypes[targetPathKey][typeName]
+
 	var typeKey string
 	if targetPathKey == "" {
 		typeKey = typeName
 	} else {
 		typeKey = targetPathKey + "/" + typeName
 	}
+
 	if found {
 		if isArray {
 			return []any{typeDef}, typeKey + "[]"
 		}
+
 		return typeDef, typeKey
 	}
 
@@ -720,6 +762,7 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) 
 // searchCommonTypeInAncestors searches for a common type by traversing from basePath up to projectRootPath
 func (f *FunctionDefinition) searchCommonTypeInAncestors(typeName string, isArray bool, startDir string) (any, string) {
 	currentDir := startDir
+
 	projectRootAbs, err := filepath.Abs(f.projectRootPath)
 	if err != nil {
 		return nil, ""
@@ -756,9 +799,11 @@ func (f *FunctionDefinition) searchCommonTypeInAncestors(typeName string, isArra
 					} else {
 						typeKey = targetPathKey + "/" + typeName
 					}
+
 					if isArray {
 						return []any{typeDef}, typeKey + "[]"
 					}
+
 					return typeDef, typeKey
 				}
 			}
@@ -775,6 +820,7 @@ func (f *FunctionDefinition) searchCommonTypeInAncestors(typeName string, isArra
 			// Reached filesystem root
 			break
 		}
+
 		currentDir = parentDir
 	}
 
@@ -788,5 +834,6 @@ func getStringFromMap(m map[string]any, key string, defaultValue string) string 
 			return strVal
 		}
 	}
+
 	return defaultValue
 }

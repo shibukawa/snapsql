@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,11 +13,11 @@ import (
 
 // Error definitions for template loading
 var (
-	ErrUnsupportedFileFormat = fmt.Errorf("unsupported template file format")
-	ErrFileNotFound          = fmt.Errorf("template file not found")
-	ErrFileRead              = fmt.Errorf("failed to read template file")
-	ErrTemplateGeneration    = fmt.Errorf("failed to generate intermediate format")
-	ErrParameterParsing      = fmt.Errorf("failed to parse parameters")
+	ErrUnsupportedFileFormat = errors.New("unsupported template file format")
+	ErrFileNotFound          = errors.New("template file not found")
+	ErrFileRead              = errors.New("failed to read template file")
+	ErrTemplateGeneration    = errors.New("failed to generate intermediate format")
+	ErrParameterParsing      = errors.New("failed to parse parameters")
 )
 
 // LoadIntermediateFormat loads an intermediate format from various file types

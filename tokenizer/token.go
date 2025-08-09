@@ -433,6 +433,7 @@ func (t Token) String() string {
 	if t.Directive != nil {
 		return t.Type.String() + "(" + t.Directive.Type + "): " + t.Value
 	}
+
 	return t.Type.String() + ": " + t.Value
 }
 

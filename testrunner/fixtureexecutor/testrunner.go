@@ -72,13 +72,16 @@ func (tr *TestRunner) RunTests(ctx context.Context, testCases []*markdownparser.
 
 	// Results channel
 	results := make(chan TestResult, len(testCases))
+
 	var wg sync.WaitGroup
 
 	// Execute tests in parallel
 	for _, testCase := range testCases {
 		wg.Add(1)
+
 		go func(tc *markdownparser.TestCase) {
 			defer wg.Done()
+
 			result := tr.executeTestWithTimeout(ctx, tc)
 			results <- result
 		}(testCase)
@@ -101,6 +104,7 @@ func (tr *TestRunner) RunTests(ctx context.Context, testCases []*markdownparser.
 	}
 
 	summary.TotalDuration = time.Since(startTime)
+
 	return summary, nil
 }
 
@@ -150,6 +154,7 @@ func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *mark
 	for k, v := range tr.parameters {
 		parameters[k] = v
 	}
+
 	for k, v := range testCase.Parameters {
 		parameters[k] = v
 	}
@@ -174,9 +179,11 @@ func (tr *TestRunner) PrintSummary(summary *TestSummary) {
 
 	if summary.FailedTests > 0 {
 		fmt.Printf("\nFailed tests:\n")
+
 		for _, result := range summary.Results {
 			if !result.Success {
 				fmt.Printf("  %s\n", result.TestCase.Name)
+
 				if result.Error != nil {
 					fmt.Printf("    Error: %v\n", result.Error)
 				}

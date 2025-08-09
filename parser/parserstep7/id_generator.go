@@ -24,6 +24,7 @@ func (ig *IDGenerator) Generate(prefix string) string {
 	defer ig.mutex.Unlock()
 
 	ig.counter[prefix]++
+
 	return fmt.Sprintf("%s_%d", prefix, ig.counter[prefix])
 }
 

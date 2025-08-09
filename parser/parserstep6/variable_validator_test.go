@@ -80,6 +80,7 @@ SELECT id, name FROM users LIMIT /*= limit */10`,
 			if err != nil {
 				t.Fatalf("Failed to create namespace from schema: %v", err)
 			}
+
 			constNs, err := cmn.NewNamespaceFromConstants(tt.environment)
 			if err != nil {
 				t.Fatalf("Failed to create namespace from environment: %v", err)
@@ -91,6 +92,7 @@ SELECT id, name FROM users LIMIT /*= limit */10`,
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))
+
 				for i, err := range perr.Errors {
 					t.Errorf("  [%d] %v", i, err)
 				}
@@ -216,6 +218,7 @@ func TestValidateVariableDirective(t *testing.T) {
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))
+
 				for i, err := range perr.Errors {
 					t.Errorf("  [%d] %v", i, err)
 				}
@@ -279,6 +282,7 @@ func TestValidateConstDirective(t *testing.T) {
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))
+
 				for i, err := range perr.Errors {
 					t.Errorf("  [%d] %v", i, err)
 				}

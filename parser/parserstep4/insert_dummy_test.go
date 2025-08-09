@@ -59,6 +59,7 @@ func TestInsertWithDummyTokensFromSource(t *testing.T) {
 
 			// デバッグ用：トークンを表示
 			t.Log("Original Tokens:")
+
 			for i, token := range tokens {
 				t.Logf("[%d] %s: %s", i, token.Type, token.Value)
 			}
@@ -69,6 +70,7 @@ func TestInsertWithDummyTokensFromSource(t *testing.T) {
 
 			// デバッグ用：処理後のトークンを表示
 			t.Log("Processed Tokens after parserstep1:")
+
 			for i, token := range processedTokens {
 				t.Logf("[%d] %s: %s", i, token.Type, token.Value)
 			}
@@ -102,6 +104,7 @@ func TestInsertWithDummyTokensFromSource(t *testing.T) {
 				for _, e := range perr.Errors {
 					t.Logf("Error: %s", e.Error())
 				}
+
 				assert.Equal(t, 0, len(perr.Errors))
 				assert.Equal(t, tt.wantTable, insertStmt.Into.Table)
 				assert.Equal(t, tt.wantColumns, insertStmt.Into.Columns)

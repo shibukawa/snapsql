@@ -30,30 +30,32 @@ func TestDecimal(t *testing.T) {
 		cel.Variable("b", DecimalType),
 	)
 	if err != nil {
-		log.Fatalf("CEL環境の作成に失敗しました: %v", err)
+		log.Fatalf("Failed to create CEL environment: %v", err)
 	}
 
 	// CEL式をパース
 	// price と limit がカスタムのDecimal型として扱われるため、直接比較可能
 	expression := `a` // double() などの変換なしで直接比較
+
 	ast, issues := env.Parse(expression)
 	if issues != nil && issues.Err() != nil {
-		log.Fatalf("CEL式のパースに失敗しました: %v", issues.Err())
+		log.Fatalf("Failed to parse CEL expression: %v", issues.Err())
 	}
 
 	// 型チェック
 	checkedAST, issues := env.Check(ast)
 	if issues != nil && issues.Err() != nil {
-		log.Fatalf("CEL式のチェックに失敗しました: %v", issues.Err())
+		log.Fatalf("Failed to check CEL expression: %v", issues.Err())
 	}
+
 	if checkedAST.OutputType() != DecimalType {
-		log.Fatalf("CEL式の戻り値の型が期待されるDecimalではありません: %v", checkedAST.OutputType())
+		log.Fatalf("CEL expression output type is not expected Decimal: %v", checkedAST.OutputType())
 	}
 
 	// プログラムを作成
 	program, err := env.Program(checkedAST)
 	if err != nil {
-		log.Fatalf("CELプログラムの作成に失敗しました: %v", err)
+		log.Fatalf("Failed to create CEL program: %v", err)
 	}
 
 	// decimal.Decimal 型の値を準備
@@ -69,8 +71,9 @@ func TestDecimal(t *testing.T) {
 
 	result, _, err := program.Eval(vars)
 	if err != nil {
-		log.Fatalf("CEL式の評価に失敗しました: %v", err)
+		log.Fatalf("Failed to evaluate CEL expression: %v", err)
 	}
-	fmt.Printf("取得結果: %v\n", result)                                          // false
-	fmt.Printf("評価結果: %v\n", result.(*Decimal).Equal(&Decimal{productPrice})) // true
+
+	fmt.Printf("Result: %v\n", result)                                                     // false
+	fmt.Printf("Evaluation result: %v\n", result.(*Decimal).Equal(&Decimal{productPrice})) // true
 }

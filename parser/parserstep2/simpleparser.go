@@ -14,6 +14,7 @@ func when(flag bool, parser pc.Parser[Entity]) pc.Parser[Entity] {
 		if !flag {
 			return 0, nil, pc.ErrNotMatch
 		}
+
 		return parser(pctx, tokens)
 	}
 }
@@ -34,6 +35,7 @@ func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
 			}
 
 			tokens[spaceStart-1].Val.spaces = entityToToken(tokens[spaceStart:])
+
 			return tokens[:spaceStart], nil
 		})
 }
@@ -83,6 +85,7 @@ func primitiveType(typeName string, types ...tokenizer.TokenType) pc.Parser[Enti
 				}, nil
 			}
 		}
+
 		return 0, nil, pc.ErrNotMatch
 	})
 }

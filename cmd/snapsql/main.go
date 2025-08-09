@@ -69,7 +69,7 @@ func (cmd *TestCmd) Run(ctx *Context) error {
 	}
 
 	// Determine execution mode
-	var mode fixtureexecutor.ExecutionMode = fixtureexecutor.FullTest
+	var mode = fixtureexecutor.FullTest
 	if cmd.FixtureOnly {
 		mode = fixtureexecutor.FixtureOnly
 	} else if cmd.QueryOnly {
@@ -99,9 +99,11 @@ func (cmd *TestCmd) Run(ctx *Context) error {
 		fmt.Printf("Parallel workers: %d\n", parallel)
 		fmt.Printf("Commit after test: %t\n", cmd.Commit)
 		fmt.Printf("Environment: %s\n", cmd.Environment)
+
 		if cmd.RunPattern != "" {
 			fmt.Printf("Test pattern: %s\n", cmd.RunPattern)
 		}
+
 		fmt.Println()
 	}
 
@@ -146,6 +148,7 @@ func (cmd *TestCmd) runFixtureTests(projectRoot string, config *snapsql.Config, 
 
 	if cmd.RunPattern != "" {
 		runner.SetRunPattern(cmd.RunPattern)
+
 		if verbose {
 			fmt.Printf("Running tests matching pattern: %s\n", cmd.RunPattern)
 		}
@@ -180,9 +183,11 @@ func (cmd *TestCmd) runGoTests(projectRoot string, options *fixtureexecutor.Exec
 
 	// Set run pattern if specified
 	if cmd.RunPattern != "" {
-		if err := runner.SetRunPattern(cmd.RunPattern); err != nil {
+		err := runner.SetRunPattern(cmd.RunPattern)
+		if err != nil {
 			return fmt.Errorf("invalid run pattern: %w", err)
 		}
+
 		if verbose {
 			fmt.Printf("Running tests matching pattern: %s\n", cmd.RunPattern)
 		}

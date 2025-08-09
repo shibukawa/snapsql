@@ -45,7 +45,8 @@ func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
 
 	// 5. Parse subqueries in dependency order
 	for _, nodeID := range processingOrder {
-		if err := sp.parseSubqueryNode(nodeID); err != nil {
+		err := sp.parseSubqueryNode(nodeID)
+		if err != nil {
 			return err
 		}
 	}
@@ -83,7 +84,8 @@ func (sp *SubqueryParser) buildDependencyGraph(stmt cmn.StatementNode) error {
 				sp.dependencies.AddNode(cteNode)
 
 				// Recursively analyze dependencies in CTE subquery
-				if err := sp.analyzeDependenciesInStatement(cteStmt, cteID); err != nil {
+				err := sp.analyzeDependenciesInStatement(cteStmt, cteID)
+				if err != nil {
 					return err
 				}
 			}
@@ -92,7 +94,8 @@ func (sp *SubqueryParser) buildDependencyGraph(stmt cmn.StatementNode) error {
 
 	// Build dependencies for each clause
 	for _, clause := range stmt.Clauses() {
-		if err := sp.buildClauseDependencies(clause, mainID); err != nil {
+		err := sp.buildClauseDependencies(clause, mainID)
+		if err != nil {
 			return err
 		}
 	}
@@ -109,6 +112,7 @@ func (sp *SubqueryParser) buildClauseDependencies(clause cmn.ClauseNode, parentI
 		return sp.buildFromDependencies(c.Tables, parentID)
 		// Note: WHERE and HAVING clauses are excluded (no impact on type inference)
 	}
+
 	return nil
 }
 
@@ -130,6 +134,7 @@ func (sp *SubqueryParser) buildFromDependencies(tables []cmn.TableReferenceForFr
 			_ = subqueryID
 		}
 	}
+
 	return nil
 }
 
@@ -158,12 +163,14 @@ func (sp *SubqueryParser) buildFieldSources(stmt cmn.StatementNode) error {
 	tableReferences := make(map[string]*TableReference)
 
 	// 1. Build table references
-	if err := sp.buildTableReferences(stmt, tableReferences); err != nil {
+	err := sp.buildTableReferences(stmt, tableReferences)
+	if err != nil {
 		return err
 	}
 
 	// 2. Build field sources
-	if err := sp.buildSelectFieldSources(stmt, fieldSources, tableReferences); err != nil {
+	err = sp.buildSelectFieldSources(stmt, fieldSources, tableReferences)
+	if err != nil {
 		return err
 	}
 
@@ -217,10 +224,12 @@ func (sp *SubqueryParser) buildSelectFieldSources(stmt cmn.StatementNode, fieldS
 				if fieldKey == "" {
 					fieldKey = field.OriginalField
 				}
+
 				fieldSources[fieldKey] = source
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -238,5 +247,6 @@ func (sp *SubqueryParser) resolveTableSource(tableName, fieldName string, tableR
 		Fields:   []*FieldSource{},
 	}
 	tableRefs[tableName] = tableRef
+
 	return tableRef
 }

@@ -185,6 +185,7 @@ func TestPullOperation(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				operation := NewPullOperation(tc.config)
+
 				err := operation.ValidateConfig()
 				if tc.shouldError {
 					assert.Error(t, err)

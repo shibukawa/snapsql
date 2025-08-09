@@ -36,18 +36,23 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 		var nest []bool
 
 		// replace dummy literal tokens with actual values
-		var insertions []tokenInsertion
-		var replacements []tokenReplacement
+		var (
+			insertions   []tokenInsertion
+			replacements []tokenReplacement
+		)
 
 		for i, token := range tokens {
 			if token.Directive != nil {
 				switch token.Directive.Type {
 				case "variable", "const":
-					var value any
-					var valueType string
-					var ok bool
+					var (
+						value     any
+						valueType string
+						ok        bool
+					)
 
 					// 値の取得（ソースが異なるだけ）
+
 					if token.Directive.Type == "variable" {
 						value, valueType, ok = validateVariableDirective(token, paramNs, perr)
 					} else {
@@ -77,10 +82,12 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 					}
 				case "if":
 					validateIfDirective(token, paramNs, constNs, perr)
+
 					nest = append(nest, false)
 				case "for":
 					// Handle for loop - process the loop body with extended namespace
 					processForLoop(token, paramNs, constNs, perr)
+
 					nest = append(nest, true)
 				case "elseif":
 					validateElseIfDirective(token, paramNs, constNs, perr)
@@ -90,6 +97,7 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 					if nest[len(nest)-1] {
 						paramNs.ExitLoop()
 					}
+
 					nest = nest[:len(nest)-1]
 				}
 			}
@@ -211,6 +219,7 @@ func processForLoop(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.
 		perr.Add(fmt.Errorf("error entering loop: %w at %s", err, token.Position.String()))
 		return false
 	}
+
 	return true
 }
 
@@ -219,6 +228,7 @@ func extractExpressionFromDirective(value string, prefix string, suffix string) 
 	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
 		return ""
 	}
+
 	return strings.TrimSpace(value[len(prefix) : len(value)-len(suffix)])
 }
 
@@ -289,6 +299,7 @@ func createValueToken(value any, valueType string, pos tokenizer.Position) token
 			// 型アサーションが失敗した場合はデフォルト値を使用
 			floatVal = 0.0
 		}
+
 		valueToken = tokenizer.Token{
 			Type:     tokenizer.NUMBER,
 			Value:    strconv.FormatFloat(floatVal, 'f', -1, 64),
@@ -301,6 +312,7 @@ func createValueToken(value any, valueType string, pos tokenizer.Position) token
 			// 型アサーションが失敗した場合はデフォルト値を使用
 			strVal = ""
 		}
+
 		valueToken = tokenizer.Token{
 			Type:     tokenizer.STRING,
 			Value:    fmt.Sprintf("'%s'", escapeString(strVal)),
@@ -309,16 +321,19 @@ func createValueToken(value any, valueType string, pos tokenizer.Position) token
 	case "bool":
 		// 真偽値リテラル
 		var boolStr string
+
 		boolVal, ok := value.(bool)
 		if !ok {
 			// 型アサーションが失敗した場合はデフォルト値を使用
 			boolVal = false
 		}
+
 		if boolVal {
 			boolStr = "TRUE"
 		} else {
 			boolStr = "FALSE"
 		}
+
 		valueToken = tokenizer.Token{
 			Type:     tokenizer.BOOLEAN,
 			Value:    boolStr,

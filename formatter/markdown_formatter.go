@@ -24,11 +24,14 @@ func NewMarkdownFormatter() *MarkdownFormatter {
 // Format formats SQL code blocks within a Markdown file
 func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 	var result strings.Builder
+
 	scanner := bufio.NewScanner(strings.NewReader(markdown))
 
-	var inSQLBlock bool
-	var sqlBlockContent strings.Builder
-	var blockIndent string
+	var (
+		inSQLBlock      bool
+		sqlBlockContent strings.Builder
+		blockIndent     string
+	)
 
 	// Regular expressions for SQL code blocks
 	sqlBlockStartRe := regexp.MustCompile(`^(\s*)\x60{3}sql\s*$`)
@@ -42,9 +45,11 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 			if match := sqlBlockStartRe.FindStringSubmatch(line); match != nil {
 				inSQLBlock = true
 				blockIndent = match[1] // Capture the indentation
+
 				sqlBlockContent.Reset()
 				result.WriteString(line)
 				result.WriteString("\n")
+
 				continue
 			}
 
@@ -73,6 +78,7 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 							result.WriteString(blockIndent)
 							result.WriteString(sqlLine)
 						}
+
 						result.WriteString("\n")
 					}
 				}
@@ -86,13 +92,15 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 				if strings.HasPrefix(line, blockIndent) {
 					sqlLine = line[len(blockIndent):]
 				}
+
 				sqlBlockContent.WriteString(sqlLine)
 				sqlBlockContent.WriteString("\n")
 			}
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
+	err := scanner.Err()
+	if err != nil {
 		return "", fmt.Errorf("error reading markdown: %w", err)
 	}
 
@@ -115,6 +123,7 @@ func (f *MarkdownFormatter) FormatFromReader(reader io.Reader, writer io.Writer)
 
 	// Write formatted output
 	_, err = writer.Write([]byte(formatted))
+
 	return err
 }
 
@@ -130,12 +139,15 @@ func IsMarkdownFile(filename string) bool {
 // FormatSnapSQLMarkdown formats SnapSQL Markdown files with special handling
 func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, error) {
 	var result strings.Builder
+
 	scanner := bufio.NewScanner(strings.NewReader(markdown))
 
-	var inSQLSection bool
-	var inCodeBlock bool
-	var sqlContent strings.Builder
-	var sectionIndent string
+	var (
+		inSQLSection  bool
+		inCodeBlock   bool
+		sqlContent    strings.Builder
+		sectionIndent string
+	)
 
 	// Regular expressions for SnapSQL Markdown sections
 	sqlSectionRe := regexp.MustCompile(`^(\s*)##\s+SQL\s*$`)
@@ -150,8 +162,10 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 			if match := sqlSectionRe.FindStringSubmatch(line); match != nil {
 				inSQLSection = true
 				sectionIndent = match[1]
+
 				result.WriteString(line)
 				result.WriteString("\n")
+
 				continue
 			}
 
@@ -173,6 +187,7 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 
 				result.WriteString(line)
 				result.WriteString("\n")
+
 				continue
 			}
 
@@ -180,9 +195,11 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 				// Check if this line starts a code block
 				if match := codeBlockRe.FindStringSubmatch(line); match != nil {
 					inCodeBlock = true
+
 					sqlContent.Reset()
 					result.WriteString(line)
 					result.WriteString("\n")
+
 					continue
 				}
 
@@ -217,7 +234,8 @@ func (f *MarkdownFormatter) FormatSnapSQLMarkdown(markdown string) (string, erro
 		f.processSQLContent(&result, sqlContent.String(), sectionIndent)
 	}
 
-	if err := scanner.Err(); err != nil {
+	err := scanner.Err()
+	if err != nil {
 		return "", fmt.Errorf("error reading markdown: %w", err)
 	}
 
@@ -243,6 +261,7 @@ func (f *MarkdownFormatter) processSQLContent(result *strings.Builder, sqlConten
 			result.WriteString(indent)
 			result.WriteString(sqlLine)
 		}
+
 		result.WriteString("\n")
 	}
 }

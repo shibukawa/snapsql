@@ -46,6 +46,7 @@ func TestAsTypeInferenceErrors_SingleError(t *testing.T) {
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result, got %d", len(results))
 	}
+
 	if results[0] != originalErr {
 		t.Errorf("Expected original error, got different error")
 	}
@@ -63,6 +64,7 @@ func TestAsValidationErrors_SingleError(t *testing.T) {
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result, got %d", len(results))
 	}
+
 	if results[0] != originalErr {
 		t.Errorf("Expected original error, got different error")
 	}
@@ -92,9 +94,11 @@ func TestAsTypeInferenceErrors_JoinedErrors(t *testing.T) {
 	if len(results) != 2 {
 		t.Errorf("Expected 2 results, got %d", len(results))
 	}
+
 	if results[0] != inferenceErr1 {
 		t.Errorf("Expected first inference error")
 	}
+
 	if results[1] != inferenceErr2 {
 		t.Errorf("Expected second inference error")
 	}

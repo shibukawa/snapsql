@@ -19,7 +19,8 @@ func (e *TypeInferenceError) Error() string {
 	if e.FieldName != "" {
 		return fmt.Sprintf("type inference error in field '%s': %s", e.FieldName, e.Message)
 	}
-	return fmt.Sprintf("type inference error: %s", e.Message)
+
+	return "type inference error: " + e.Message
 }
 
 // ValidationError represents an error that occurred during schema validation
@@ -39,7 +40,8 @@ func (e *ValidationError) Error() string {
 	} else if e.FieldName != "" {
 		return fmt.Sprintf("validation error in field '%s': %s", e.FieldName, e.Message)
 	}
-	return fmt.Sprintf("validation error: %s", e.Message)
+
+	return "validation error: " + e.Message
 }
 
 // AsTypeInferenceErrors extracts TypeInferenceError instances from a joined error
@@ -58,6 +60,7 @@ func AsTypeInferenceErrors(err error) []*TypeInferenceError {
 				inferenceErrors = append(inferenceErrors, subErrors...)
 			}
 		}
+
 		return inferenceErrors
 	}
 
@@ -86,6 +89,7 @@ func AsValidationErrors(err error) []*ValidationError {
 				validationErrors = append(validationErrors, subErrors...)
 			}
 		}
+
 		return validationErrors
 	}
 

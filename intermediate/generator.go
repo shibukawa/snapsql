@@ -61,6 +61,7 @@ func (g *MockDataGenerator) GenerateMockFiles(markdownFile string, markdownConte
 	}
 
 	fmt.Printf("Generated %d mock data files for function: %s\n", len(testCases), functionName)
+
 	return nil
 }
 
@@ -87,6 +88,7 @@ func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCa
 
 		// Find the section content for this test case
 		startPos := strings.Index(content, match[0])
+
 		var endPos int
 		if i+1 < len(testCaseMatches) {
 			endPos = strings.Index(content, testCaseMatches[i+1][0])
@@ -104,7 +106,9 @@ func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCa
 		paramMatches := parametersRegex.FindStringSubmatch(sectionContent)
 		if len(paramMatches) >= 2 {
 			var params map[string]interface{}
-			if err := json.Unmarshal([]byte(paramMatches[1]), &params); err == nil {
+
+			err := json.Unmarshal([]byte(paramMatches[1]), &params)
+			if err == nil {
 				testCase.Parameters = params
 			}
 		}
@@ -139,10 +143,12 @@ func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCa
 func (g *MockDataGenerator) extractFunctionName(content string) string {
 	// Look for @name: directive in SQL code blocks
 	nameRegex := regexp.MustCompile(`--\s*@name:\s*([^\s\n]+)`)
+
 	matches := nameRegex.FindStringSubmatch(content)
 	if len(matches) >= 2 {
 		return strings.TrimSpace(matches[1])
 	}
+
 	return ""
 }
 
@@ -169,6 +175,7 @@ func (g *MockDataGenerator) writeMockDataFile(sourceFile string, testCases []Tes
 	}
 
 	baseDir := filepath.Join(g.OutputDir, dirName)
+
 	err := os.MkdirAll(baseDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create output directory %s: %w", baseDir, err)
@@ -226,6 +233,7 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 		}
 
 		mockGenerator := NewMockDataGenerator(projectRootPath)
+
 		err = mockGenerator.GenerateMockFiles(basePath, string(markdownContent))
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate mock data: %w", err)
@@ -365,6 +373,7 @@ func setEnvIndexInInstructions(envs [][]EnvVar, instructions []Instruction) {
 					// Exiting the outermost loop, return to base environment (index 0)
 					envIndex = 0
 				}
+
 				instruction.EnvIndex = &envIndex
 			}
 		}
@@ -373,19 +382,21 @@ func setEnvIndexInInstructions(envs [][]EnvVar, instructions []Instruction) {
 
 // findVariableEnvironmentIndex finds the environment index where the variable is first introduced
 func findVariableEnvironmentIndex(envs [][]EnvVar, variable string) int {
-	for i := 0; i < len(envs); i++ {
+	for i := range envs {
 		// Check if this variable is in this environment level
 		for _, envVar := range envs[i] {
 			if envVar.Name == variable {
 				// Check if it was also in the previous environment level
 				if i > 0 {
 					found := false
+
 					for _, prevEnvVar := range envs[i-1] {
 						if prevEnvVar.Name == variable {
 							found = true
 							break
 						}
 					}
+
 					if !found {
 						// This is where the variable was introduced
 						return i + 1 // Convert to 1-based index
@@ -397,5 +408,6 @@ func findVariableEnvironmentIndex(envs [][]EnvVar, variable string) int {
 			}
 		}
 	}
+
 	return 0 // Default to base environment
 }

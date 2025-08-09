@@ -274,22 +274,28 @@ func TestFinalizeOrderByClause(t *testing.T) {
 			assert.NoError(t, err)
 			err = parserstep3.Execute(stmt)
 			assert.NoError(t, err)
+
 			selectStmt, ok := stmt.(*cmn.SelectStatement)
 			assert.True(t, ok)
+
 			orderByClause := selectStmt.OrderBy
 			perr := &cmn.ParseError{}
 
 			finalizeOrderByClause(orderByClause, perr)
+
 			if tt.wantErr {
 				assert.NotEqual(t, 0, len(perr.Errors), "should have errors")
 			} else {
 				assert.Equal(t, 0, len(perr.Errors), "should not have errors: %s", perr.Error())
+
 				gotFieldNames := []cmn.FieldName{}
 				gotDescs := []bool{}
+
 				for _, item := range orderByClause.Fields {
 					gotFieldNames = append(gotFieldNames, item.Field)
 					gotDescs = append(gotDescs, item.Desc)
 				}
+
 				assert.Equal(t, tt.wantFieldNames, gotFieldNames, "field names should match")
 				assert.Equal(t, tt.wantDescs, gotDescs, "descs should match")
 			}

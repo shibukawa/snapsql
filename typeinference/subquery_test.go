@@ -353,6 +353,7 @@ func parseWithSubqueryAnalysis(sqlText string) (stmt parser.StatementNode, err e
 	}
 
 	stmt, err = parser.RawParse(tokens, emptyFuncDef, nil)
+
 	return stmt, err
 }
 
@@ -483,6 +484,7 @@ func TestRealSubqueryParsing(t *testing.T) {
 					t.Logf("Type inference failed (may be expected): %v", err)
 				} else if results != nil {
 					t.Logf("Successfully inferred %d field types", len(results))
+
 					for i, result := range results {
 						if result != nil && result.Type != nil {
 							t.Logf("Field %d: %s (%s)", i+1, result.Name, result.Type.BaseType)

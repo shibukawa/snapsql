@@ -13,9 +13,11 @@ func Execute(stmt cmn.StatementNode) error {
 	ValidateClauseOrder(stmt.Type(), clauses, perr)
 	// フィールド割り当て
 	assignStatementFields(stmt, clauses)
+
 	if len(perr.Errors) > 0 {
 		return perr
 	}
+
 	return nil
 }
 

@@ -121,8 +121,10 @@ func IsDangerousQuery(sql string) bool {
 
 // buildSQLFromOptimized builds SQL from optimized instructions
 func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]interface{}) (string, []interface{}, error) {
-	var builder strings.Builder
-	var args []interface{}
+	var (
+		builder strings.Builder
+		args    []interface{}
+	)
 
 	// Create parameter map for evaluation
 	paramMap := make(map[string]interface{})
@@ -132,6 +134,7 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 
 	// Create CEL programs for expressions
 	celPrograms := make(map[int]*cel.Program)
+
 	env, err := cel.NewEnv()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create CEL environment: %w", err)
@@ -142,10 +145,12 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 		if issues.Err() != nil {
 			return "", nil, fmt.Errorf("failed to compile expression %d (%s): %w", i, expr.Expression, issues.Err())
 		}
+
 		program, err := env.Program(ast)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to create program for expression %d: %w", i, err)
 		}
+
 		celPrograms[i] = &program
 	}
 
@@ -169,6 +174,7 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 				}
 
 				builder.WriteString("?")
+
 				args = append(args, result.Value())
 			}
 
@@ -198,6 +204,7 @@ func getDialectFromDriver(driver string) string {
 func (e *Executor) Execute(ctx context.Context, format *intermediate.IntermediateFormat, params map[string]interface{}, options QueryOptions) (*QueryResult, error) {
 	// Generate SQL from intermediate format using optimized instructions
 	dialect := getDialectFromDriver(options.Driver)
+
 	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {
 		return nil, fmt.Errorf("failed to optimize instructions: %w", err)
@@ -216,8 +223,10 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 
 	// Create query context with timeout
 	queryCtx := ctx
+
 	if options.Timeout > 0 {
 		var cancel context.CancelFunc
+
 		queryCtx, cancel = context.WithTimeout(ctx, time.Duration(options.Timeout)*time.Second)
 		defer cancel()
 	}
@@ -226,9 +235,11 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 	startTime := time.Now()
 	rows, err := e.db.QueryContext(queryCtx, sql, args...)
 	duration := time.Since(startTime)
+
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrQueryExecution, err)
 	}
+
 	defer rows.Close()
 
 	// Process results
@@ -243,22 +254,28 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column names: %w", err)
 	}
+
 	result.Columns = columns
 
 	// For EXPLAIN queries, handle differently
 	if options.Explain {
 		// For EXPLAIN queries, we expect a single column with the plan
-		var plan string
-		var plans []string
+		var (
+			plan  string
+			plans []string
+		)
 
 		for rows.Next() {
-			if err := rows.Scan(&plan); err != nil {
+			err := rows.Scan(&plan)
+			if err != nil {
 				return nil, fmt.Errorf("failed to scan explain plan: %w", err)
 			}
+
 			plans = append(plans, plan)
 		}
 
-		if err := rows.Err(); err != nil {
+		err := rows.Err()
+		if err != nil {
 			return nil, fmt.Errorf("error during row iteration: %w", err)
 		}
 
@@ -273,7 +290,9 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 
 	// For regular queries, process all rows
 	var resultRows [][]interface{}
+
 	values := make([]interface{}, len(columns))
+
 	scanArgs := make([]interface{}, len(columns))
 	for i := range values {
 		scanArgs[i] = &values[i]
@@ -281,7 +300,8 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 
 	for rows.Next() {
 		// Scan row values
-		if err := rows.Scan(scanArgs...); err != nil {
+		err := rows.Scan(scanArgs...)
+		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
@@ -318,7 +338,9 @@ func convertSQLValue(v interface{}) interface{} {
 		// Check if it's a JSON object or array
 		if (str[0] == '{' && str[len(str)-1] == '}') || (str[0] == '[' && str[len(str)-1] == ']') {
 			var jsonValue interface{}
-			if err := json.Unmarshal(value, &jsonValue); err == nil {
+
+			err := json.Unmarshal(value, &jsonValue)
+			if err == nil {
 				return jsonValue
 			}
 		}
