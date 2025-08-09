@@ -102,9 +102,11 @@ SELECT id, TRUE as is_active FROM users`,
 
 			// Check that dialect instructions are generated
 			hasDialectInstructions := false
+
 			for _, instruction := range result.Instructions {
 				if instruction.Op == OpEmitIfDialect {
 					hasDialectInstructions = true
+
 					t.Logf("Found dialect instruction: %s for dialects %v",
 						instruction.SqlFragment, instruction.Dialects)
 				}
@@ -112,6 +114,7 @@ SELECT id, TRUE as is_active FROM users`,
 
 			if !hasDialectInstructions {
 				t.Log("No dialect instructions found. All instructions:")
+
 				for i, instruction := range result.Instructions {
 					t.Logf("  %d: %s - %s", i, instruction.Op, instruction.Value)
 				}
@@ -224,6 +227,7 @@ func TestDetectDialectPatterns(t *testing.T) {
 				originalText := buildSQLFromTokens(conversion.OriginalTokens)
 				t.Logf("Conversion %d: %s -> %d variants",
 					i, originalText, len(conversion.Variants))
+
 				for j, variant := range conversion.Variants {
 					t.Logf("  Variant %d: %s for %v",
 						j, variant.SqlFragment, variant.Dialects)
@@ -300,6 +304,7 @@ func TestDetectLimitOffsetClause(t *testing.T) {
 			if tt.expected.HasLimit {
 				assert.True(t, result.LimitTokenIndex >= 0, "LimitTokenIndex should be set")
 			}
+
 			if tt.expected.HasOffset {
 				assert.True(t, result.OffsetTokenIndex >= 0, "OffsetTokenIndex should be set")
 			}
@@ -382,12 +387,14 @@ func TestGenerateInstructionsWithLimitOffset(t *testing.T) {
 			// Check that we have the expected operations (order may vary)
 			for _, expectedOp := range tt.expected {
 				found := false
+
 				for _, actualOp := range ops {
 					if actualOp == expectedOp {
 						found = true
 						break
 					}
 				}
+
 				assert.True(t, found, "Expected operation %s not found in %v", expectedOp, ops)
 			}
 		})

@@ -177,6 +177,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result["parameters"] = params
 	}
 
@@ -186,6 +187,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result["instructions"] = instructions
 	}
 
@@ -195,6 +197,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result["responses"] = responses
 	}
 
@@ -204,6 +207,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result["envs"] = envs
 	}
 
@@ -213,6 +217,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result["cel_expressions"] = celExpressions
 	}
 
@@ -222,6 +227,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result["cel_environments"] = celEnvironments
 	}
 
@@ -251,12 +257,14 @@ func (f *IntermediateFormat) ToJSON() ([]byte, error) {
 
 	// Apply custom formatting to make arrays more compact
 	formatted := compactArraysInJSON(string(data))
+
 	return []byte(formatted), nil
 }
 
 // compactArraysInJSON makes simple objects in arrays more compact
 func compactArraysInJSON(jsonStr string) string {
 	lines := strings.Split(jsonStr, "\n")
+
 	var result []string
 
 	for i := 0; i < len(lines); i++ {
@@ -270,7 +278,9 @@ func compactArraysInJSON(jsonStr string) string {
 
 			// Process array elements
 			j := i + 1
+
 			var arrayElements []string
+
 			currentElement := []string{}
 
 			for j < len(lines) {
@@ -289,11 +299,11 @@ func compactArraysInJSON(jsonStr string) string {
 
 					// Reconstruct the array
 					result = append(result, line)
-					for _, element := range arrayElements {
-						result = append(result, element)
-					}
+					result = append(result, arrayElements...)
+
 					result = append(result, currentLine)
 					i = j
+
 					break
 				}
 
@@ -306,6 +316,7 @@ func compactArraysInJSON(jsonStr string) string {
 							arrayElements = append(arrayElements, strings.Join(currentElement, "\n"))
 						}
 					}
+
 					currentElement = []string{currentLine}
 				} else {
 					currentElement = append(currentElement, currentLine)
@@ -319,6 +330,7 @@ func compactArraysInJSON(jsonStr string) string {
 				for k := arrayStart; k < len(lines); k++ {
 					result = append(result, lines[k])
 				}
+
 				break
 			}
 		} else {
@@ -332,15 +344,18 @@ func compactArraysInJSON(jsonStr string) string {
 // getIndentLevel returns the indentation level of a line
 func getIndentLevel(line string) int {
 	count := 0
+
 	for _, char := range line {
-		if char == ' ' {
+		switch char {
+		case ' ':
 			count++
-		} else if char == '\t' {
+		case '\t':
 			count += 4 // Treat tab as 4 spaces
-		} else {
+		default:
 			break
 		}
 	}
+
 	return count
 }
 
@@ -356,16 +371,19 @@ func isSimpleObject(lines []string) bool {
 		if strings.Contains(trimmed, "{") && trimmed != "{" && trimmed != "}," && trimmed != "}" {
 			return false
 		}
+
 		if strings.Contains(trimmed, "[") && trimmed != "[]" {
 			return false
 		}
 	}
+
 	return true
 }
 
 // compactObject converts a multi-line object to a single line
 func compactObject(lines []string, indent int) string {
 	var parts []string
+
 	indentStr := strings.Repeat(" ", indent)
 
 	for _, line := range lines {
@@ -391,10 +409,12 @@ func compactObject(lines []string, indent int) string {
 // FromJSON deserializes the intermediate format from JSON
 func FromJSON(data []byte) (*IntermediateFormat, error) {
 	var format IntermediateFormat
+
 	err := json.Unmarshal(data, &format)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse intermediate format: %w", err)
 	}
+
 	return &format, nil
 }
 

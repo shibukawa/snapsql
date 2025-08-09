@@ -61,6 +61,7 @@ func (g *MockDataGenerator) GenerateMockFiles(markdownFile string, markdownConte
 	}
 
 	fmt.Printf("Generated %d mock data files for function: %s\n", len(testCases), functionName)
+
 	return nil
 }
 
@@ -87,6 +88,7 @@ func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCa
 
 		// Find the section content for this test case
 		startPos := strings.Index(content, match[0])
+
 		var endPos int
 		if i+1 < len(testCaseMatches) {
 			endPos = strings.Index(content, testCaseMatches[i+1][0])
@@ -104,7 +106,9 @@ func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCa
 		paramMatches := parametersRegex.FindStringSubmatch(sectionContent)
 		if len(paramMatches) >= 2 {
 			var params map[string]interface{}
-			if err := json.Unmarshal([]byte(paramMatches[1]), &params); err == nil {
+
+			err := json.Unmarshal([]byte(paramMatches[1]), &params)
+			if err == nil {
 				testCase.Parameters = params
 			}
 		}
@@ -139,32 +143,13 @@ func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCa
 func (g *MockDataGenerator) extractFunctionName(content string) string {
 	// Look for @name: directive in SQL code blocks
 	nameRegex := regexp.MustCompile(`--\s*@name:\s*([^\s\n]+)`)
+
 	matches := nameRegex.FindStringSubmatch(content)
 	if len(matches) >= 2 {
 		return strings.TrimSpace(matches[1])
 	}
+
 	return ""
-}
-
-// getMockFilePath generates the mock data file path
-func (g *MockDataGenerator) getMockFilePath(sourceFile string) string {
-	// Convert source file path to mock file path
-	// e.g., queries/users/find.snap.md -> testdata/snapsql_mock/users/find.json
-
-	baseName := filepath.Base(sourceFile)
-	// Remove .snap.md extension and add .json
-	if filepath.Ext(baseName) == ".md" {
-		baseName = baseName[:len(baseName)-3] // Remove .md
-		if filepath.Ext(baseName) == ".snap" {
-			baseName = baseName[:len(baseName)-5] // Remove .snap
-		}
-	}
-	baseName += ".json"
-
-	// Get directory structure
-	dir := filepath.Dir(sourceFile)
-
-	return filepath.Join(g.OutputDir, dir, baseName)
 }
 
 // writeMockDataFile writes mock data to individual JSON files for each test case
@@ -190,6 +175,7 @@ func (g *MockDataGenerator) writeMockDataFile(sourceFile string, testCases []Tes
 	}
 
 	baseDir := filepath.Join(g.OutputDir, dirName)
+
 	err := os.MkdirAll(baseDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create output directory %s: %w", baseDir, err)
@@ -247,6 +233,7 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 		}
 
 		mockGenerator := NewMockDataGenerator(projectRootPath)
+
 		err = mockGenerator.GenerateMockFiles(basePath, string(markdownContent))
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate mock data: %w", err)
@@ -342,43 +329,6 @@ func extractSystemFieldsInfo(config *Config, stmt parsercommon.StatementNode) []
 	return systemFields
 }
 
-// addClauseIfConditions adds IF instructions for clause-level conditions
-func addClauseIfConditions(stmt parsercommon.StatementNode, instructions []Instruction) []Instruction {
-	// Process each clause
-	for _, clause := range stmt.Clauses() {
-		// Check if the clause has an IF condition
-		if condition := clause.IfCondition(); condition != "" {
-			// Find the position to insert the IF instruction
-			// This is a simplified approach - in a real implementation, we would need to find the exact position
-			// based on the clause's position in the SQL
-
-			// For now, we'll just add the IF instruction at the beginning of the instructions
-			// and the END instruction at the end
-
-			// Create IF instruction
-			ifInstruction := Instruction{
-				Op:        OpIf,
-				Pos:       "0:0", // Placeholder position
-				Condition: condition,
-			}
-
-			// Create END instruction
-			endInstruction := Instruction{
-				Op:  OpEnd,
-				Pos: "0:0", // Placeholder position
-			}
-
-			// Insert IF instruction at the beginning
-			instructions = append([]Instruction{ifInstruction}, instructions...)
-
-			// Append END instruction at the end
-			instructions = append(instructions, endInstruction)
-		}
-	}
-
-	return instructions
-}
-
 // extractParameterTypeFromOriginal extracts type string from original parameter value (for common types)
 func extractParameterTypeFromOriginal(value any) string {
 	switch v := value.(type) {
@@ -423,6 +373,7 @@ func setEnvIndexInInstructions(envs [][]EnvVar, instructions []Instruction) {
 					// Exiting the outermost loop, return to base environment (index 0)
 					envIndex = 0
 				}
+
 				instruction.EnvIndex = &envIndex
 			}
 		}
@@ -431,19 +382,21 @@ func setEnvIndexInInstructions(envs [][]EnvVar, instructions []Instruction) {
 
 // findVariableEnvironmentIndex finds the environment index where the variable is first introduced
 func findVariableEnvironmentIndex(envs [][]EnvVar, variable string) int {
-	for i := 0; i < len(envs); i++ {
+	for i := range envs {
 		// Check if this variable is in this environment level
 		for _, envVar := range envs[i] {
 			if envVar.Name == variable {
 				// Check if it was also in the previous environment level
 				if i > 0 {
 					found := false
+
 					for _, prevEnvVar := range envs[i-1] {
 						if prevEnvVar.Name == variable {
 							found = true
 							break
 						}
 					}
+
 					if !found {
 						// This is where the variable was introduced
 						return i + 1 // Convert to 1-based index
@@ -455,5 +408,6 @@ func findVariableEnvironmentIndex(envs [][]EnvVar, variable string) int {
 			}
 		}
 	}
+
 	return 0 // Default to base environment
 }

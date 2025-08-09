@@ -28,7 +28,7 @@ import (
 )
 // GetComplexDataResult represents the response structure for GetComplexData
 type GetComplexDataResult struct {
-	ID int `json:"id"`
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Field interface{} `json:"field"`
 }
@@ -255,7 +255,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	for rows.Next() {
 	    var item GetComplexDataResult
 	    err := rows.Scan(
-	        &item.ID,
+	        &item.Id,
 	        &item.Name,
 	        &item.Field
 	    )

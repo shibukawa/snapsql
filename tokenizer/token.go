@@ -1,17 +1,18 @@
 package tokenizer
 
 import (
-	"errors"
 	"strconv"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // Sentinel errors
 var (
-	ErrUnexpectedCharacter = errors.New("unexpected character")
-	ErrUnterminatedString  = errors.New("unterminated string literal")
-	ErrUnterminatedComment = errors.New("unterminated block comment")
-	ErrInvalidNumber       = errors.New("invalid number format")
-	ErrInvalidSingleColon  = errors.New("invalid single colon")
+	ErrUnexpectedCharacter = snapsql.ErrUnexpectedCharacter
+	ErrUnterminatedString  = snapsql.ErrUnterminatedString
+	ErrUnterminatedComment = snapsql.ErrUnterminatedComment
+	ErrInvalidNumber       = snapsql.ErrInvalidNumber
+	ErrInvalidSingleColon  = snapsql.ErrInvalidSingleColon
 )
 
 // TokenType represents the type of a token
@@ -432,6 +433,7 @@ func (t Token) String() string {
 	if t.Directive != nil {
 		return t.Type.String() + "(" + t.Directive.Type + "): " + t.Value
 	}
+
 	return t.Type.String() + ": " + t.Value
 }
 

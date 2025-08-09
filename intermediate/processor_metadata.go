@@ -19,9 +19,11 @@ func (m *MetadataExtractor) Process(ctx *ProcessingContext) error {
 			// Use OriginalParameters for parameter type names (preserves common type names)
 			originalParamValue := ctx.FunctionDef.OriginalParameters[paramName]
 
-			var paramType string
-			var description string
-			var optional bool
+			var (
+				paramType   string
+				description string
+				optional    bool
+			)
 
 			if originalParamValue != nil {
 				// Check if this is a JSON parameter structure (has "type" field)
@@ -31,11 +33,13 @@ func (m *MetadataExtractor) Process(ctx *ProcessingContext) error {
 						if typeStr, ok := typeVal.(string); ok {
 							paramType = typeStr
 						}
+
 						if descVal, hasDesc := paramMap["description"]; hasDesc {
 							if descStr, ok := descVal.(string); ok {
 								description = descStr
 							}
 						}
+
 						if optVal, hasOpt := paramMap["optional"]; hasOpt {
 							if optBool, ok := optVal.(bool); ok {
 								optional = optBool

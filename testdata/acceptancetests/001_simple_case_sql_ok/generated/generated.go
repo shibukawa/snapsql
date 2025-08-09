@@ -28,7 +28,7 @@ import (
 )
 // FindUserResult represents the response structure for FindUser
 type FindUserResult struct {
-	ID int `json:"id"`
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Age int `json:"age"`
 }
@@ -108,7 +108,7 @@ func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, op
 	// Execute query and scan single row
 	row := stmt.QueryRowContext(ctx, args...)
 	err = row.Scan(
-	    &result.ID,
+	    &result.Id,
 	    &result.Name,
 	    &result.Age
 	)

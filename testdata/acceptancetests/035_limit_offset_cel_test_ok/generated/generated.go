@@ -28,7 +28,7 @@ import (
 )
 // GetUsersWithCelLimitOffsetResult represents the response structure for GetUsersWithCelLimitOffset
 type GetUsersWithCelLimitOffsetResult struct {
-	ID int `json:"id"`
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Age int `json:"age"`
 }
@@ -141,7 +141,7 @@ func GetUsersWithCelLimitOffset(ctx context.Context, executor snapsqlgo.DBExecut
 	for rows.Next() {
 	    var item GetUsersWithCelLimitOffsetResult
 	    err := rows.Scan(
-	        &item.ID,
+	        &item.Id,
 	        &item.Name,
 	        &item.Age
 	    )

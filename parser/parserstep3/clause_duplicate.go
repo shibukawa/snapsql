@@ -20,6 +20,7 @@ func ValidateClauseDuplicates(clauses []cmn.ClauseNode, perr *cmn.ParseError) {
 			if perr != nil {
 				perr.Add(fmt.Errorf("%w: %s", ErrDuplicateClause, clauseKeywordFromTokens(clause)))
 			}
+
 			return
 		}
 	}

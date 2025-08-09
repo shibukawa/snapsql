@@ -51,6 +51,7 @@ func (bs *baseStatement) GetFieldSources() map[string]*SQFieldSource {
 	if bs.fieldSources == nil {
 		bs.fieldSources = make(map[string]*SQFieldSource)
 	}
+
 	return bs.fieldSources
 }
 
@@ -59,6 +60,7 @@ func (bs *baseStatement) GetTableReferences() map[string]*SQTableReference {
 	if bs.tableReferences == nil {
 		bs.tableReferences = make(map[string]*SQTableReference)
 	}
+
 	return bs.tableReferences
 }
 
@@ -110,12 +112,14 @@ func (bs *baseStatement) FindTableReference(tableOrAlias string) *SQTableReferen
 	if ref, exists := bs.tableReferences[tableOrAlias]; exists {
 		return ref
 	}
+
 	return nil
 }
 
 // SelectStatement represents SELECT statement
 type SelectStatement struct {
 	baseStatement
+
 	With    *WithClause
 	Select  *SelectClause
 	From    *FromClause
@@ -172,6 +176,7 @@ func (s *SelectStatement) String() string {
 // InsertStatement represents INSERT statement
 type InsertIntoStatement struct {
 	baseStatement
+
 	With       *WithClause
 	Into       *InsertIntoClause
 	Columns    []FieldName
@@ -244,6 +249,7 @@ var _ StatementNode = (*InsertIntoStatement)(nil)
 // UpdateStatement represents UPDATE statement
 type UpdateStatement struct {
 	baseStatement
+
 	With      *WithClause
 	Update    *UpdateClause
 	Set       *SetClause
@@ -296,6 +302,7 @@ var _ StatementNode = (*UpdateStatement)(nil)
 // DeleteStatement represents DELETE statement
 type DeleteFromStatement struct {
 	baseStatement
+
 	With      *WithClause
 	From      *DeleteFromClause
 	Where     *WhereClause

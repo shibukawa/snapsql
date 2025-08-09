@@ -1,7 +1,6 @@
 package pull
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,13 +30,17 @@ func (g *YAMLGenerator) Generate(schemas []snapsql.DatabaseSchema, outputPath st
 func (g *YAMLGenerator) generatePerTable(schemas []snapsql.DatabaseSchema, outputPath string) error {
 	for _, schema := range schemas {
 		yamlSchema := toYAMLSchema(schema)
+
 		schemaPath := g.getSchemaPath(outputPath, schema.Name)
-		if err := os.MkdirAll(schemaPath, 0755); err != nil {
+
+		err := os.MkdirAll(schemaPath, 0755)
+		if err != nil {
 			return ErrDirectoryCreateFailed
 		}
 
 		for _, table := range yamlSchema.Tables {
 			filename := filepath.Join(schemaPath, g.getTableFileName(table.Name))
+
 			file, err := os.Create(filename)
 			if err != nil {
 				return ErrFileWriteFailed
@@ -52,6 +55,7 @@ func (g *YAMLGenerator) generatePerTable(schemas []snapsql.DatabaseSchema, outpu
 				file.Close()
 				return err
 			}
+
 			file.Close()
 		}
 	}
@@ -71,10 +75,12 @@ func (g *YAMLGenerator) writeYAML(writer io.Writer, data interface{}) error {
 	case YAMLSchema:
 		return encoder.Encode(map[string]interface{}{"metadata": v})
 	default:
-		if err := encoder.Encode(data); err != nil {
+		err := encoder.Encode(data)
+		if err != nil {
 			return ErrYAMLGenerationFailed
 		}
 	}
+
 	return nil
 }
 
@@ -94,7 +100,7 @@ func (g *YAMLGenerator) getSchemaPath(outputPath, schemaName string) string {
 
 // getTableFileName returns the filename for a table YAML file
 func (g *YAMLGenerator) getTableFileName(tableName string) string {
-	return fmt.Sprintf("%s.yaml", tableName)
+	return tableName + ".yaml"
 }
 
 // getSchemaFileName returns the filename for a schema YAML file
@@ -102,7 +108,8 @@ func (g *YAMLGenerator) getSchemaFileName(schemaName string) string {
 	if schemaName == "" || schemaName == "main" {
 		schemaName = "global"
 	}
-	return fmt.Sprintf("%s.yaml", schemaName)
+
+	return schemaName + ".yaml"
 }
 
 // --- 変換関数 ---
@@ -111,10 +118,12 @@ func toYAMLSchema(s snapsql.DatabaseSchema) YAMLSchema {
 	for i, t := range s.Tables {
 		tables[i] = toYAMLTable(t, s.DatabaseInfo.Type)
 	}
+
 	views := make([]YAMLView, len(s.Views))
 	for i, v := range s.Views {
 		views[i] = toYAMLView(v)
 	}
+
 	return YAMLSchema{
 		Name:         s.Name,
 		Tables:       tables,
@@ -128,14 +137,17 @@ func toYAMLTable(t *snapsql.TableInfo, dbType string) YAMLTable {
 	for _, c := range t.Columns {
 		columns = append(columns, toYAMLColumn(c, dbType))
 	}
+
 	constraints := make([]YAMLConstraint, len(t.Constraints))
 	for i, c := range t.Constraints {
 		constraints[i] = toYAMLConstraint(c)
 	}
+
 	indexes := make([]YAMLIndex, len(t.Indexes))
 	for i, idx := range t.Indexes {
 		indexes[i] = toYAMLIndex(idx)
 	}
+
 	return YAMLTable{
 		Name:        t.Name,
 		Schema:      t.Schema,
@@ -148,12 +160,14 @@ func toYAMLTable(t *snapsql.TableInfo, dbType string) YAMLTable {
 
 func toYAMLColumn(c *snapsql.ColumnInfo, dbType string) YAMLColumn {
 	mapper, err := NewTypeMapper(dbType)
+
 	var snapType string
 	if err == nil {
 		snapType = mapper.GetSnapSQLType(c.DataType)
 	} else {
 		snapType = "string"
 	}
+
 	return YAMLColumn{
 		Name:         c.Name,
 		DataType:     c.DataType,

@@ -18,16 +18,19 @@ type OptimizedInstruction struct {
 // OptimizeInstructions filters and optimizes instructions for a specific dialect
 func OptimizeInstructions(instructions []Instruction, dialect string) ([]OptimizedInstruction, error) {
 	var result []OptimizedInstruction
+
 	skipUntilEnd := 0
 
 	for i, inst := range instructions {
 		// Skip instructions if we're inside a system directive block
 		if skipUntilEnd > 0 {
-			if inst.Op == OpEnd {
+			switch inst.Op {
+			case OpEnd:
 				skipUntilEnd--
-			} else if inst.Op == OpIfSystemLimit || inst.Op == OpIfSystemOffset {
+			case OpIfSystemLimit, OpIfSystemOffset:
 				skipUntilEnd++
 			}
+
 			continue
 		}
 
@@ -157,6 +160,7 @@ func containsDialect(dialects []string, target string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -166,8 +170,11 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 		return instructions
 	}
 
-	var result []OptimizedInstruction
-	var currentStatic strings.Builder
+	var (
+		result        []OptimizedInstruction
+		currentStatic strings.Builder
+	)
+
 	hasStatic := false
 
 	flushStatic := func() {
@@ -177,6 +184,7 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 				Value: currentStatic.String(),
 			})
 			currentStatic.Reset()
+
 			hasStatic = false
 		}
 	}
@@ -184,14 +192,17 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 	for _, inst := range instructions {
 		if inst.Op == "EMIT_STATIC" {
 			currentStatic.WriteString(inst.Value)
+
 			hasStatic = true
 		} else {
 			flushStatic()
+
 			result = append(result, inst)
 		}
 	}
 
 	flushStatic()
+
 	return result
 }
 
@@ -203,5 +214,6 @@ func HasDynamicInstructions(instructions []OptimizedInstruction) bool {
 			return true
 		}
 	}
+
 	return false
 }

@@ -1,7 +1,6 @@
 package intermediate
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -32,10 +31,12 @@ func (ge *GenerateError) Error() string {
 	if len(ge.Errors) == 0 {
 		return ""
 	}
+
 	if len(ge.Errors) == 1 {
 		return ge.Errors[0]
 	}
-	return fmt.Sprintf("Multiple generation errors:\n- %s", strings.Join(ge.Errors, "\n- "))
+
+	return "Multiple generation errors:\n- " + strings.Join(ge.Errors, "\n- ")
 }
 
 // Clear clears all errors

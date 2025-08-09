@@ -1,7 +1,6 @@
 package parserstep2_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -11,8 +10,8 @@ import (
 )
 
 func TestClauseContentTokensAndRawTokens(t *testing.T) {
-
 	t.Parallel()
+
 	testCases := []struct {
 		name        string
 		input       string
@@ -81,27 +80,15 @@ func TestClauseContentTokensAndRawTokens(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			tokens, err := tokenizer.Tokenize(tc.input)
 			assert.NoError(t, err)
 			stmt, err := parserstep2.Execute(tokens)
 			assert.NoError(t, err)
+
 			clause := stmt.Clauses()[len(stmt.Clauses())-1] // Get the last clause
 			assert.Equal(t, tc.wantRawLen, len(clause.RawTokens()), "RawTokens() length unexpected for %s: got=%v", tc.name, clause.RawTokens())
 			assert.Equal(t, tc.wantBodyLen, len(clause.ContentTokens()), "ContentTokens() length unexpected for %s: got=%v", tc.name, clause.ContentTokens())
 		})
 	}
-}
-
-func dumpTokens(t *testing.T, tokens []tokenizer.Token) string {
-	t.Helper()
-	var buffer strings.Builder
-	for i, tok := range tokens {
-		if i > 0 {
-			buffer.WriteString(", ")
-		}
-		buffer.WriteString("'")
-		buffer.WriteString(tok.Value)
-		buffer.WriteString("'")
-	}
-	return buffer.String()
 }

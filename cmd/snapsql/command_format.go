@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,11 @@ import (
 	"strings"
 
 	"github.com/shibukawa/snapsql/formatter"
+)
+
+var (
+	ErrFileNotFormatted = errors.New("file is not formatted")
+	ErrFormattingErrors = errors.New("some files had formatting errors")
 )
 
 // FormatCmd represents the format command
@@ -78,8 +84,9 @@ func (cmd *FormatCmd) formatFromReader(sqlFormatter *formatter.SQLFormatter, rea
 	if cmd.Check {
 		if strings.TrimSpace(string(input)) != strings.TrimSpace(formatted) {
 			fmt.Fprintf(os.Stderr, "%s is not formatted\n", filename)
-			return fmt.Errorf("file is not formatted")
+			return ErrFileNotFormatted
 		}
+
 		return nil
 	}
 
@@ -90,6 +97,7 @@ func (cmd *FormatCmd) formatFromReader(sqlFormatter *formatter.SQLFormatter, rea
 
 	// Write formatted output
 	_, err = writer.Write([]byte(formatted))
+
 	return err
 }
 
@@ -100,6 +108,7 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 		if !cmd.Check {
 			fmt.Fprintf(os.Stderr, "Skipping non-SnapSQL file: %s\n", filename)
 		}
+
 		return nil
 	}
 
@@ -111,8 +120,10 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 	defer file.Close()
 
 	// Determine output destination
-	var writer io.Writer
-	var outputFile *os.File
+	var (
+		writer     io.Writer
+		outputFile *os.File
+	)
 
 	if cmd.Write || cmd.Output == filename {
 		// Write to temporary file first
@@ -120,8 +131,10 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 		if err != nil {
 			return fmt.Errorf("failed to create temp file: %w", err)
 		}
+
 		defer func() {
 			tempFile.Close()
+
 			if err == nil {
 				// Replace original file with formatted version
 				os.Rename(tempFile.Name(), filename)
@@ -130,6 +143,7 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 				os.Remove(tempFile.Name())
 			}
 		}()
+
 		writer = tempFile
 		outputFile = tempFile
 	} else if cmd.Output != "" {
@@ -139,6 +153,7 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 			return fmt.Errorf("failed to create output file %s: %w", cmd.Output, err)
 		}
 		defer outputFile.Close()
+
 		writer = outputFile
 	} else {
 		// Write to stdout
@@ -168,8 +183,10 @@ func (cmd *FormatCmd) formatDirectory(sqlFormatter *formatter.SQLFormatter, dirP
 		}
 
 		// Format the file
-		if err := cmd.formatFile(sqlFormatter, path); err != nil {
+		err = cmd.formatFile(sqlFormatter, path)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting %s: %v\n", path, err)
+
 			hasErrors = true
 			// Continue processing other files
 			return nil
@@ -181,13 +198,12 @@ func (cmd *FormatCmd) formatDirectory(sqlFormatter *formatter.SQLFormatter, dirP
 
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to walk directory: %w", err)
 	}
 
 	if hasErrors {
-		return fmt.Errorf("some files had formatting errors")
+		return ErrFormattingErrors
 	}
 
 	return nil
@@ -235,12 +251,13 @@ func (cmd *FormatCmd) showDiff(original, formatted, filename string) error {
 		maxLines = len(formattedLines)
 	}
 
-	for i := 0; i < maxLines; i++ {
+	for i := range maxLines {
 		var origLine, formLine string
 
 		if i < len(originalLines) {
 			origLine = originalLines[i]
 		}
+
 		if i < len(formattedLines) {
 			formLine = formattedLines[i]
 		}
@@ -249,6 +266,7 @@ func (cmd *FormatCmd) showDiff(original, formatted, filename string) error {
 			if origLine != "" {
 				fmt.Printf("-%s\n", origLine)
 			}
+
 			if formLine != "" {
 				fmt.Printf("+%s\n", formLine)
 			}

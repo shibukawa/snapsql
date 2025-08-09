@@ -153,6 +153,7 @@ SELECT /*= user_id */123, name FROM users WHERE status = /*= status */'active'`,
 			assert.True(t, funcDef != nil, "Function definition should not be nil")
 
 			clauses := stmt.Clauses()
+
 			t.Logf("Description: %s", tt.description)
 			t.Logf("Found %d clauses", len(clauses))
 
@@ -162,6 +163,7 @@ SELECT /*= user_id */123, name FROM users WHERE status = /*= status */'active'`,
 
 				// 句の種類を推定
 				clauseType := "UNKNOWN"
+
 				if len(tokens) > 0 {
 					switch tokens[0].Type {
 					case tokenizer.SELECT:
@@ -183,11 +185,13 @@ SELECT /*= user_id */123, name FROM users WHERE status = /*= status */'active'`,
 
 				t.Logf("\nClause %d (%s):", clauseIdx, clauseType)
 				t.Log("Token sequence:")
+
 				for i, token := range tokens {
 					directive := ""
 					if token.Directive != nil {
 						directive = " (directive: " + token.Directive.Type + ")"
 					}
+
 					t.Logf("  %d: Type=%-15s Value='%s'%s", i, token.Type, token.Value, directive)
 				}
 
@@ -207,6 +211,8 @@ SELECT /*= user_id */123, name FROM users WHERE status = /*= status */'active'`,
 
 // analyzeDuplicationInClause は句内の重複問題を分析する
 func analyzeDuplicationInClause(t *testing.T, clauseType string, tokens []tokenizer.Token) bool {
+	t.Helper()
+
 	valueCount := make(map[string]int)
 	duplicationsFound := false
 
@@ -219,6 +225,7 @@ func analyzeDuplicationInClause(t *testing.T, clauseType string, tokens []tokeni
 	for value, count := range valueCount {
 		if count > 1 {
 			t.Logf("  DUPLICATE in %s: '%s' appears %d times", clauseType, value, count)
+
 			duplicationsFound = true
 		}
 	}
@@ -228,6 +235,8 @@ func analyzeDuplicationInClause(t *testing.T, clauseType string, tokens []tokeni
 
 // analyzeDirectiveBehavior はディレクティブの動作を分析する
 func analyzeDirectiveBehavior(t *testing.T, clauseType string, tokens []tokenizer.Token) {
+	t.Helper()
+
 	directiveCount := 0
 	dummyStartCount := 0
 	dummyEndCount := 0
@@ -236,14 +245,18 @@ func analyzeDirectiveBehavior(t *testing.T, clauseType string, tokens []tokenize
 	for _, token := range tokens {
 		if token.Directive != nil {
 			directiveCount++
+
 			t.Logf("  DIRECTIVE in %s: %s", clauseType, token.Directive.Type)
 		}
+
 		if token.Type == tokenizer.DUMMY_START {
 			dummyStartCount++
 		}
+
 		if token.Type == tokenizer.DUMMY_END {
 			dummyEndCount++
 		}
+
 		if token.Type == tokenizer.DUMMY_LITERAL {
 			dummyLiteralCount++
 		}
@@ -262,6 +275,7 @@ func analyzeDirectiveBehavior(t *testing.T, clauseType string, tokens []tokenize
 		if directiveCount > 0 && dummyStartCount == 0 && dummyEndCount == 0 {
 			// Const directive の場合、挿入されるが置換されない可能性
 			valueCount := make(map[string]int)
+
 			for _, token := range tokens {
 				if token.Type == tokenizer.STRING || token.Type == tokenizer.IDENTIFIER {
 					valueCount[token.Value]++
@@ -269,6 +283,7 @@ func analyzeDirectiveBehavior(t *testing.T, clauseType string, tokens []tokenize
 			}
 
 			duplicateValues := 0
+
 			for _, count := range valueCount {
 				if count > 1 {
 					duplicateValues++
@@ -310,6 +325,7 @@ SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status =
 
 		// 句の種類を推定
 		clauseType := "UNKNOWN"
+
 		if len(tokens) > 0 {
 			switch tokens[0].Type {
 			case tokenizer.SELECT:
@@ -332,9 +348,11 @@ SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status =
 			if token.Type == tokenizer.NUMBER || token.Type == tokenizer.STRING || token.Type == tokenizer.IDENTIFIER {
 				valueCount[token.Value]++
 			}
+
 			if token.Directive != nil {
 				directiveCount++
 			}
+
 			if token.Type == tokenizer.DUMMY_START || token.Type == tokenizer.DUMMY_END || token.Type == tokenizer.DUMMY_LITERAL {
 				dummyTokenCount++
 			}
@@ -344,9 +362,11 @@ SELECT /*= user_id */123, name FROM users_/*$ table_suffix */test WHERE status =
 		t.Logf("  Dummy tokens: %d", dummyTokenCount)
 
 		duplicatesFound := false
+
 		for value, count := range valueCount {
 			if count > 1 {
 				t.Logf("  DUPLICATE: '%s' appears %d times", value, count)
+
 				duplicatesFound = true
 			}
 		}

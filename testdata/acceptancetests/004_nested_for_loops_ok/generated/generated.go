@@ -37,7 +37,7 @@ type InsertAllSubDepartmentsDepartment struct {
 }
 // InsertAllSubDepartmentsResult represents the response structure for InsertAllSubDepartments
 type InsertAllSubDepartmentsResult struct {
-	AffectedRows int `json:"affected_rows"`
+	Affectedrows int `json:"affected_rows"`
 }
 
 // InsertAllSubDepartments specific CEL programs and mock path
@@ -70,7 +70,7 @@ func init() {
 		return snapsqlgo.ConvertGoValueToCEL(v.Name)
 	}
 
-	// Create type definitions for local registry
+	// Create type definitions for local type store
 	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
 		"InsertAllSubDepartmentsDepartment": {
 			"department_code": snapsqlgo.CreateFieldInfo(
@@ -103,7 +103,7 @@ func init() {
 		},
 	}
 
-	// Create and set up local registry
+	// Create and set up local type store
 	registry := snapsqlgo.NewLocalTypeRegistry()
 	for typeName, fields := range typeDefinitions {
 		structInfo := &snapsqlgo.StructInfo{

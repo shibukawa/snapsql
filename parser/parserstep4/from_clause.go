@@ -53,12 +53,14 @@ func finalizeFromClause(clause *cmn.FromClause, perr *cmn.ParseError) {
 
 	for _, part := range pc.FindIter(pctx, fromClauseSplitter, pTokens) {
 		joinBody := part.Skipped
+
 		tableRef, err := parseTableReference(pctx, joinHead, joinBody)
 		if err != nil {
 			perr.Add(err)
 		} else {
 			clause.Tables = append(clause.Tables, tableRef)
 		}
+
 		joinHead = part.Match
 	}
 
@@ -78,6 +80,7 @@ func parseJoin(pToken []pc.Token[tok.Token]) (cmn.JoinType, error) {
 		// comma means INNER JOIN, but explicit JOIN is required from snapsql
 		return cmn.JoinInvalid, fmt.Errorf("%w: %s", ErrImplicitInnerJoin, pos.String())
 	}
+
 	joinTokens := make([]tok.TokenType, len(pToken))
 	for i, m := range pToken {
 		joinTokens[i] = m.Val.Type
@@ -90,6 +93,7 @@ func parseJoin(pToken []pc.Token[tok.Token]) (cmn.JoinType, error) {
 	if !slices.Contains(joinTokens, tok.JOIN) && joinTokens[len(joinTokens)-1] != tok.JOIN {
 		return cmn.JoinInvalid, fmt.Errorf("%w JOIN should be last: %s", ErrInvalidJoinType, pos.String())
 	}
+
 	joinTokens = joinTokens[:len(joinTokens)-1] // remove JOIN
 
 	switch slices.Index(joinTokens, tok.NATURAL) {
@@ -122,6 +126,7 @@ func parseJoin(pToken []pc.Token[tok.Token]) (cmn.JoinType, error) {
 		if joinTokens[0] == tok.INNER {
 			return cmn.JoinInvalid, fmt.Errorf("%w at %s: can't use INNER and OUTER at the same time", ErrInvalidJoinType, pos.String())
 		}
+
 		if joinTokens[0] == tok.INNER {
 			return cmn.JoinInvalid, fmt.Errorf("%w at %s: can't use CROSS and OUTER at the same time", ErrInvalidJoinType, pos.String())
 		}
@@ -139,6 +144,7 @@ func parseJoin(pToken []pc.Token[tok.Token]) (cmn.JoinType, error) {
 	case tok.CROSS:
 		return cmn.JoinCross, nil
 	}
+
 	panic("should not reach here")
 }
 
@@ -152,23 +158,29 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 		if len(body) == 0 {
 			return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: at %s", ErrTargetTableIsEmpty, head[0].Val.Position.String())
 		}
+
 		joinType, err := parseJoin(head)
 		if err != nil {
 			return cmn.TableReferenceForFrom{}, err
 		}
+
 		result.JoinType = joinType
+
 		skipped, matched, _, remained, ok := pc.Find(pctx, pc.Or(on, using), body)
 		if ok {
 			if joinType == cmn.JoinCross {
 				cond := skipped[0].Val
 				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: CROSS JOIN can't have '%s' condition at %s", cmn.ErrInvalidSQL, cond.Value, cond.Position.String())
 			}
+
 			body = skipped
 		} else if joinType != cmn.JoinCross {
 			return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: %s should have condition at %s", cmn.ErrInvalidSQL, joinType, head[0].Val.Position.String())
 		}
+
 		result.JoinCondition = cmn.ToToken(append(matched, remained...))
 	}
+
 	if len(head) == 0 && len(body) == 0 {
 		return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: JOIN can't be use for first table reference", ErrInvalidJoinType)
 	}
@@ -182,11 +194,13 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 				result.Name = alias[0].Val.Value
 				result.ExplicitName = true
 				result.Expression = cmn.ToToken(beforeAlias)
+
 				_, match, err := fromClauseTableName(pctx, beforeAlias)
 				if err != nil {
 					v := beforeAlias[0].Val
 					return cmn.TableReferenceForFrom{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
 				}
+
 				switch match[0].Type {
 				case "table":
 					result.Name = alias[0].Val.Value
@@ -211,6 +225,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 				v := body[0].Val
 				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w at %s: '%s' is invalid name for table", cmn.ErrInvalidSQL, v.Position.String(), v.Value)
 			}
+
 			switch len(match) {
 			case 1: // id as alias
 				result.Name = alias[1].Val.Value
@@ -222,6 +237,7 @@ func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token
 				result.SchemaName = match[0].Val.Value
 				result.TableName = match[1].Val.Value
 			}
+
 			result.Name = alias[1].Val.Value
 			result.ExplicitName = true
 		}

@@ -29,10 +29,12 @@ func finalizeDeleteFromClause(clause *cmn.DeleteFromClause, perr *cmn.ParseError
 
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
+
 	_, tableName, err := parseTableName(pctx, pTokens, false)
 	if err != nil {
 		perr.Add(err)
 	}
+
 	clause.Table = tableName
 	// ダミートークンを許容するために、余分なトークンのチェックを無効化
 	/*
@@ -48,10 +50,12 @@ func finalizeUpdateClause(clause *cmn.UpdateClause, perr *cmn.ParseError) {
 
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
+
 	_, tableName, err := parseTableName(pctx, pTokens, false)
 	if err != nil {
 		perr.Add(err)
 	}
+
 	clause.Table = tableName
 	// ダミートークンを許容するために、余分なトークンのチェックを無効化
 	/*
@@ -68,21 +72,26 @@ func finalizeSetClause(clause *cmn.SetClause, perr *cmn.ParseError) {
 		perr.Add(fmt.Errorf("%w: SET clause must not be empty", cmn.ErrInvalidSQL))
 		return
 	}
+
 	pTokens := cmn.ToParserToken(tokens)
 
 	nameToPos := make(map[string][]string)
+
 	for _, part := range fieldIter(pTokens) {
 		pctx := pc.NewParseContext[tok.Token]()
+
 		consume, name, err := assign(pctx, part.Skipped)
 		if err != nil {
 			perr.Add(fmt.Errorf("%w at %s: invalid SET clause", cmn.ErrInvalidSQL, tokens[0].Position.String()))
 			continue
 		}
+
 		value := part.Skipped[consume:]
 		if len(value) == 0 {
 			perr.Add(fmt.Errorf("%w at %s: SET clause must have value", cmn.ErrInvalidSQL, tokens[0].Position.String()))
 			continue
 		}
+
 		field := cmn.SetAssign{
 			FieldName: name[0].Val.Value,
 			Value:     cmn.ToToken(value),
@@ -90,6 +99,7 @@ func finalizeSetClause(clause *cmn.SetClause, perr *cmn.ParseError) {
 		clause.Assigns = append(clause.Assigns, field)
 		nameToPos[field.FieldName] = append(nameToPos[field.FieldName], name[0].Val.Position.String())
 	}
+
 	for name, pos := range nameToPos {
 		if len(pos) > 1 {
 			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))
@@ -109,19 +119,23 @@ func finalizeReturningClause(clause *cmn.ReturningClause, perr *cmn.ParseError) 
 		perr.Add(fmt.Errorf("%w: RETURNING clause must not be empty", cmn.ErrInvalidSQL))
 		return
 	}
+
 	pTokens := cmn.ToParserToken(tokens)
 	nameToPos := make(map[string][]string)
 	pctx := pc.NewParseContext[tok.Token]()
+
 	for _, part := range fieldIter(pTokens) {
 		if len(part.Skipped) == 0 {
 			continue
 		}
+
 		field, fieldTokens := parseFieldQualifier(part.Skipped)
 		// standard single field
 		if _, match, err := singleField(pctx, fieldTokens); err == nil {
 			if field.FieldName == "" {
 				field.FieldName = match[0].Val.Value // use identity as alias
 			}
+
 			field.FieldKind = cmn.SingleField
 			field.OriginalField = match[0].Val.Value
 			nameToPos[field.FieldName] = append(nameToPos[field.FieldName], field.Pos.String())
@@ -130,8 +144,10 @@ func finalizeReturningClause(clause *cmn.ReturningClause, perr *cmn.ParseError) 
 			field.FieldKind = cmn.ComplexField
 			field.Expression = cmn.ToToken(fieldTokens)
 		}
+
 		clause.Fields = append(clause.Fields, field)
 	}
+
 	for name, pos := range nameToPos {
 		if len(pos) > 1 {
 			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))

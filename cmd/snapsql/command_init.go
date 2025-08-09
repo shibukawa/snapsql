@@ -25,21 +25,25 @@ func (i *InitCmd) Run(ctx *Context) error {
 	}
 
 	for _, dir := range dirs {
-		if err := createDir(dir); err != nil {
+		err := createDir(dir)
+		if err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
+
 		if ctx.Verbose {
 			color.Green("Created directory: %s", dir)
 		}
 	}
 
 	// Create sample configuration file
-	if err := createSampleConfig(); err != nil {
+	err := createSampleConfig()
+	if err != nil {
 		return fmt.Errorf("failed to create sample configuration: %w", err)
 	}
 
 	// Create sample files
-	if err := createSampleFiles(); err != nil {
+	err = createSampleFiles()
+	if err != nil {
 		return fmt.Errorf("failed to create sample files: %w", err)
 	}
 
@@ -137,7 +141,8 @@ LIMIT /*= pagination.limit */10
 OFFSET /*= pagination.offset */0;
 `
 
-	if err := writeFile(filepath.Join("queries", "users.snap.sql"), sampleSQL); err != nil {
+	err := writeFile(filepath.Join("queries", "users.snap.sql"), sampleSQL)
+	if err != nil {
 		return err
 	}
 
@@ -159,7 +164,9 @@ environments:
 func writeFile(path, content string) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
 		return err
 	}
 

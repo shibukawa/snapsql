@@ -61,6 +61,7 @@ func FilterSpace(tokens []pc.Token[tok.Token]) []pc.Token[tok.Token] {
 			results = append(results, token)
 		}
 	}
+
 	return results
 }
 
@@ -69,6 +70,7 @@ func PrimitiveType(typeName string, types ...tok.TokenType) pc.Parser[tok.Token]
 		if len(tokens) > 0 && slices.Contains(types, tokens[0].Val.Type) {
 			return 1, tokens[:1], nil
 		}
+
 		return 0, nil, pc.ErrNotMatch
 	}
 }
@@ -83,6 +85,7 @@ func KeywordType(typeName string, word ...string) pc.Parser[tok.Token] {
 				}
 			}
 		}
+
 		return 0, nil, pc.ErrNotMatch
 	}
 }
@@ -102,6 +105,7 @@ func ToParserToken(tokens []tok.Token) []pc.Token[tok.Token] {
 		}
 		results[i] = pcToken
 	}
+
 	return results
 }
 
@@ -110,6 +114,7 @@ func ToToken(entities []pc.Token[tok.Token]) []tok.Token {
 	for _, entity := range entities {
 		results = append(results, entity.Val)
 	}
+
 	return results
 }
 
@@ -118,5 +123,6 @@ func ToSrc(entities []pc.Token[tok.Token]) string {
 	for _, entity := range entities {
 		src = append(src, entity.Raw...)
 	}
+
 	return string(src)
 }

@@ -37,6 +37,7 @@ func TestPostgreSQLIntegration(t *testing.T) {
 				WithStartupTimeout(30*time.Second)),
 	)
 	assert.NoError(t, err)
+
 	defer func() {
 		assert.NoError(t, postgresContainer.Terminate(ctx))
 	}()
@@ -48,6 +49,7 @@ func TestPostgreSQLIntegration(t *testing.T) {
 	// Connect and set up test data
 	db, err := sql.Open("pgx", connStr)
 	assert.NoError(t, err)
+
 	defer db.Close()
 
 	// Create test schema and tables
@@ -67,7 +69,7 @@ func TestPostgreSQLIntegration(t *testing.T) {
 			IncludeIndexes: true,
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		if err != nil {
 			t.Logf("Pull operation failed with error: %v", err)
 			t.Logf("Connection string: %s", connStr)
@@ -78,7 +80,9 @@ func TestPostgreSQLIntegration(t *testing.T) {
 				t.Logf("Direct connection failed: %v", dbErr)
 			} else {
 				defer testDB.Close()
+
 				var count int
+
 				countErr := testDB.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 				if countErr != nil {
 					t.Logf("Query test failed: %v", countErr)
@@ -87,6 +91,7 @@ func TestPostgreSQLIntegration(t *testing.T) {
 				}
 			}
 		}
+
 		assert.NoError(t, err)
 		assert.NotZero(t, result)
 		assert.Equal(t, 1, len(result.Schemas))
@@ -102,6 +107,7 @@ func TestPostgreSQLIntegration(t *testing.T) {
 		// Verify YAML content
 		usersContent, err := os.ReadFile(filepath.Join(publicDir, "users.yaml"))
 		assert.NoError(t, err)
+
 		usersYAML := string(usersContent)
 		assert.Contains(t, usersYAML, "name: users")
 		assert.Contains(t, usersYAML, "name: id")
@@ -121,17 +127,19 @@ func TestPostgreSQLIntegration(t *testing.T) {
 			IncludeTables: []string{"users"}, // Only include users table
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(result.Schemas))
 
 		// Should only have users table
 		usersTables := 0
+
 		for _, table := range result.Schemas[0].Tables {
 			if table.Name == "users" {
 				usersTables++
 			}
 		}
+
 		assert.Equal(t, 1, usersTables)
 
 		// Verify only users.yaml was created
@@ -163,6 +171,7 @@ func TestMySQLIntegration(t *testing.T) {
 				WithStartupTimeout(120*time.Second)),
 	)
 	assert.NoError(t, err)
+
 	defer func() {
 		assert.NoError(t, mysqlContainer.Terminate(ctx))
 	}()
@@ -174,6 +183,7 @@ func TestMySQLIntegration(t *testing.T) {
 	// Connect and set up test data
 	db, err := sql.Open("mysql", connStr)
 	assert.NoError(t, err)
+
 	defer db.Close()
 
 	// Wait for MySQL to be ready
@@ -199,10 +209,11 @@ func TestMySQLIntegration(t *testing.T) {
 			SchemaAware:  false, // MySQL doesn't use schema-aware structure in our test
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		if err != nil {
 			t.Logf("Pull operation failed with error: %v", err)
 		}
+
 		assert.NoError(t, err)
 		assert.NotZero(t, result)
 		assert.Equal(t, 1, len(result.Schemas))
@@ -224,6 +235,7 @@ func TestSQLiteIntegration(t *testing.T) {
 	// Connect and set up test data
 	db, err := sql.Open("sqlite3", dbPath)
 	assert.NoError(t, err)
+
 	defer db.Close()
 
 	// Create test schema and tables
@@ -235,13 +247,13 @@ func TestSQLiteIntegration(t *testing.T) {
 		outputDir := filepath.Join(tempDir, "output")
 
 		config := PullConfig{
-			DatabaseURL:  fmt.Sprintf("sqlite://%s", dbPath),
+			DatabaseURL:  "sqlite://" + dbPath,
 			DatabaseType: "sqlite",
 			OutputPath:   outputDir,
 			SchemaAware:  true,
 		}
 
-		result, err := ExecutePull(config)
+		result, err := ExecutePull(t.Context(), config)
 		assert.NoError(t, err)
 		assert.NotZero(t, result)
 		assert.Equal(t, 1, len(result.Schemas))
@@ -257,6 +269,7 @@ func TestSQLiteIntegration(t *testing.T) {
 		// Verify YAML content
 		usersContent, err := os.ReadFile(filepath.Join(globalDir, "users.yaml"))
 		assert.NoError(t, err)
+
 		usersYAML := string(usersContent)
 		assert.Contains(t, usersYAML, "name: users")
 		assert.Contains(t, usersYAML, "name: id")
@@ -384,7 +397,6 @@ func setupSQLiteTestData(db *sql.DB) error {
 func convertMySQLConnStrToURL(connStr string) string {
 	// connStr format: "user:password@tcp(host:port)/database"
 	// Convert to: "mysql://user:password@host:port/database"
-
 	if strings.Contains(connStr, "@tcp(") {
 		parts := strings.Split(connStr, "@tcp(")
 		if len(parts) == 2 {
@@ -423,6 +435,7 @@ func TestDatabaseConnectorWithRealDatabases(t *testing.T) {
 					WithStartupTimeout(30*time.Second)),
 		)
 		assert.NoError(t, err)
+
 		defer func() {
 			assert.NoError(t, postgresContainer.Terminate(ctx))
 		}()
@@ -440,6 +453,7 @@ func TestDatabaseConnectorWithRealDatabases(t *testing.T) {
 		// Test connection
 		db, err := connector.Connect(connStr)
 		assert.NoError(t, err)
+
 		defer connector.Close(db)
 
 		// Test ping
@@ -448,6 +462,7 @@ func TestDatabaseConnectorWithRealDatabases(t *testing.T) {
 
 		// Test query execution
 		var version string
+
 		err = db.QueryRow("SELECT version()").Scan(&version)
 		assert.NoError(t, err)
 		assert.Contains(t, version, "PostgreSQL")
@@ -457,7 +472,7 @@ func TestDatabaseConnectorWithRealDatabases(t *testing.T) {
 		tempDir := t.TempDir()
 
 		dbPath := filepath.Join(tempDir, "test.db")
-		sqliteURL := fmt.Sprintf("sqlite://%s", dbPath)
+		sqliteURL := "sqlite://" + dbPath
 
 		connector := NewDatabaseConnector()
 
@@ -469,6 +484,7 @@ func TestDatabaseConnectorWithRealDatabases(t *testing.T) {
 		// Test connection
 		db, err := connector.Connect(sqliteURL)
 		assert.NoError(t, err)
+
 		defer connector.Close(db)
 
 		// Test ping
@@ -477,6 +493,7 @@ func TestDatabaseConnectorWithRealDatabases(t *testing.T) {
 
 		// Test query execution
 		var version string
+
 		err = db.QueryRow("SELECT sqlite_version()").Scan(&version)
 		assert.NoError(t, err)
 		assert.True(t, len(version) > 0)

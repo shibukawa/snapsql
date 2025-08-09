@@ -14,11 +14,9 @@ import (
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
-
 func TestExecute(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	tests := []struct {
 		name           string
 		sql            string
@@ -115,6 +113,7 @@ SELECT name FROM users LIMIT /*= limit */10`,
 					if len(parseErr.Errors) != tt.expectedErrors {
 						t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(parseErr.Errors))
 						t.Logf("Validation errors:")
+
 						for i, err := range parseErr.Errors {
 							t.Logf("  [%d] %v", i, err)
 						}
@@ -193,6 +192,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create namespace from schema: %v", err)
 			}
+
 			constNs, err := cmn.NewNamespaceFromConstants(nil)
 			if err != nil {
 				t.Fatalf("Failed to create namespace from environment: %v", err)
@@ -213,6 +213,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 					for _, token := range tokens {
 						if token.Type == tokenizer.DUMMY_LITERAL {
 							dummyLiteralFound = true
+
 							t.Logf("Found unreplaced DUMMY_LITERAL token: %s", token.Value)
 						}
 					}

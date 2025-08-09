@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -68,7 +69,7 @@ func (p *PullCmd) Run(ctx *Context) error {
 	pullConfig := p.createPullConfig(dbURL, dbType)
 
 	// Execute pull operation
-	result, err := pull.ExecutePull(pullConfig)
+	result, err := pull.ExecutePull(context.Background(), pullConfig)
 	if err != nil {
 		return fmt.Errorf("failed to pull schema: %w", err)
 	}
@@ -94,10 +95,12 @@ func (p *PullCmd) resolveDatabaseConnection(config *Config) (string, string, err
 		} else {
 			// Try to detect database type from URL
 			connector := pull.NewDatabaseConnector()
+
 			detectedType, err := connector.ParseDatabaseURL(dbURL)
 			if err != nil {
 				return "", "", fmt.Errorf("failed to detect database type from URL: %w", err)
 			}
+
 			dbType = detectedType
 		}
 	} else if p.Env != "" {
@@ -123,6 +126,7 @@ func (p *PullCmd) resolveDatabaseConnection(config *Config) (string, string, err
 	if dbURL == "" {
 		return "", "", ErrEmptyConnectionString
 	}
+
 	if dbType == "" {
 		return "", "", ErrEmptyDatabaseType
 	}
@@ -152,6 +156,7 @@ func (p *PullCmd) displayResults(result *pull.PullResult) {
 
 	totalTables := 0
 	totalViews := 0
+
 	for _, schema := range result.Schemas {
 		totalTables += len(schema.Tables)
 		totalViews += len(schema.Views)
@@ -159,14 +164,17 @@ func (p *PullCmd) displayResults(result *pull.PullResult) {
 
 	color.Green("  Schemas: %d", len(result.Schemas))
 	color.Green("  Tables: %d", totalTables)
+
 	if p.IncludeViews && totalViews > 0 {
 		color.Green("  Views: %d", totalViews)
 	}
+
 	color.Green("  Output: %s", p.Output)
 
 	// Show schema details if verbose
 	for _, schema := range result.Schemas {
 		color.Cyan("  Schema '%s': %d tables", schema.Name, len(schema.Tables))
+
 		if p.IncludeViews && len(schema.Views) > 0 {
 			color.Cyan("    Views: %d", len(schema.Views))
 		}

@@ -81,12 +81,15 @@ func TestCheckClauseRequired(t *testing.T) {
 			} else {
 				clauses = []cmn.ClauseNode{}
 			}
+
 			var perr cmn.ParseError
 			ValidateClauseRequired(tt.statement, clauses, &perr)
+
 			if tt.wantErr {
 				if len(perr.Errors) == 0 {
 					t.Errorf("%s: want error but got none", tt.msg)
 				}
+
 				assert.Contains(t, perr.Error(), "required clause")
 			} else {
 				if len(perr.Errors) != 0 {

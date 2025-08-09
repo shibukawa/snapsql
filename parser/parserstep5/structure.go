@@ -18,6 +18,7 @@ func validateAndLinkDirectives(stmt cmn.StatementNode, parseErr *cmn.ParseError)
 // validateClause validates directives within a single clause
 func validateClause(tokens []tokenizer.Token, parseErr *cmn.ParseError) {
 	var stack []DirectiveStackItem
+
 	parenLevel := 0
 
 	for i, token := range tokens {
@@ -49,6 +50,7 @@ func validateClause(tokens []tokenizer.Token, parseErr *cmn.ParseError) {
 			if len(stack) == 0 {
 				parseErr.Add(fmt.Errorf("%w: unexpected directive '%s' at line %d, column %d", cmn.ErrInvalidForSnapSQL,
 					token.Directive.Type, token.Position.Line, token.Position.Column))
+
 				continue
 			}
 
@@ -57,6 +59,7 @@ func validateClause(tokens []tokenizer.Token, parseErr *cmn.ParseError) {
 			if stackTop.Type != "if" && stackTop.Type != "elseif" {
 				parseErr.Add(fmt.Errorf("%w: unexpected directive '%s' at line %d, column %d", cmn.ErrInvalidForSnapSQL,
 					token.Directive.Type, token.Position.Line, token.Position.Column))
+
 				continue
 			}
 
@@ -64,6 +67,7 @@ func validateClause(tokens []tokenizer.Token, parseErr *cmn.ParseError) {
 			if stackTop.ParenLevel != parenLevel {
 				parseErr.Add(fmt.Errorf("%w: directive '%s' at line %d, column %d crosses parentheses boundary (started at level %d, now at level %d)", cmn.ErrInvalidForSnapSQL,
 					token.Directive.Type, token.Position.Line, token.Position.Column, stackTop.ParenLevel, parenLevel))
+
 				continue
 			}
 
@@ -79,6 +83,7 @@ func validateClause(tokens []tokenizer.Token, parseErr *cmn.ParseError) {
 			if len(stack) == 0 {
 				parseErr.Add(fmt.Errorf("%w: unexpected 'end' directive at line %d, column %d", cmn.ErrInvalidForSnapSQL,
 					token.Position.Line, token.Position.Column))
+
 				continue
 			}
 
@@ -87,6 +92,7 @@ func validateClause(tokens []tokenizer.Token, parseErr *cmn.ParseError) {
 			if stackTop.ParenLevel != parenLevel {
 				parseErr.Add(fmt.Errorf("%w: directive 'end' at line %d, column %d crosses parentheses boundary (started at level %d, now at level %d)", cmn.ErrInvalidForSnapSQL,
 					token.Position.Line, token.Position.Column, stackTop.ParenLevel, parenLevel))
+
 				continue
 			}
 

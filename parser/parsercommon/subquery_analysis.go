@@ -26,6 +26,7 @@ func (sai *SubqueryAnalysisResult) GetSubqueryTables() []string {
 	if sai == nil {
 		return []string{}
 	}
+
 	return sai.SubqueryTables
 }
 
@@ -39,6 +40,7 @@ func (sai *SubqueryAnalysisResult) GetProcessingOrder() []string {
 	if sai == nil {
 		return []string{}
 	}
+
 	return sai.ProcessingOrder
 }
 
@@ -47,6 +49,7 @@ func (sai *SubqueryAnalysisResult) GetValidationErrors() []ValidationError {
 	if sai == nil {
 		return []ValidationError{}
 	}
+
 	return sai.ValidationErrors
 }
 

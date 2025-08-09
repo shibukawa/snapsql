@@ -19,6 +19,7 @@ func parseFrontMatter(content string) (map[string]any, string, error) {
 	if endIndex == -1 {
 		return nil, "", ErrInvalidFrontMatter
 	}
+
 	endIndex += 4 // Adjust for the initial slice
 
 	// Extract front matter content
@@ -27,8 +28,10 @@ func parseFrontMatter(content string) (map[string]any, string, error) {
 
 	// Parse YAML front matter
 	var frontMatter map[string]any
-	if err := yaml.Unmarshal([]byte(frontMatterContent), &frontMatter); err != nil {
-		return nil, "", fmt.Errorf("%w: %v", ErrInvalidFrontMatter, err)
+
+	err := yaml.Unmarshal([]byte(frontMatterContent), &frontMatter)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %w", ErrInvalidFrontMatter, err)
 	}
 
 	return frontMatter, remainingContent, nil
@@ -40,5 +43,6 @@ func generateFunctionNameFromTitle(title string) string {
 	if len(words) == 0 {
 		return "query"
 	}
+
 	return strings.Join(words, "_")
 }

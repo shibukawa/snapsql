@@ -12,16 +12,20 @@ func Execute(tokens []tok.Token) (cmn.StatementNode, error) {
 	entityTokens := tokenToEntity(tokens)
 	pctx := pc.NewParseContext[Entity]()
 	perr := &cmn.ParseError{}
+
 	_, parsed, err := ParseStatement(perr)(pctx, entityTokens)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(parsed) == 0 || parsed[0].Val.NewValue == nil {
 		return nil, pc.ErrNotMatch
 	}
+
 	node, ok := parsed[0].Val.NewValue.(cmn.StatementNode)
 	if !ok {
 		return nil, pc.ErrNotMatch
 	}
+
 	return node, nil
 }

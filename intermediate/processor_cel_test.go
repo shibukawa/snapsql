@@ -143,7 +143,7 @@ func extractFromTestStatement(stmt testStatementNode) (expressions []string, env
 		processTokens(cte.RawTokens())
 	}
 
-	return
+	return expressions, envs
 }
 
 func TestCELExtractor(t *testing.T) {
@@ -244,11 +244,13 @@ OFFSET /*= (page - 1) * page_size || 0 */0`,
 
 			// Debug output
 			t.Logf("Extracted expressions (%d):", len(expressions))
+
 			for i, expr := range expressions {
 				t.Logf("  %d: %s", i, expr)
 			}
 
 			t.Logf("Expected expressions (%d):", len(tt.expectedExpressions))
+
 			for i, expr := range tt.expectedExpressions {
 				t.Logf("  %d: %s", i, expr)
 			}
@@ -260,9 +262,11 @@ OFFSET /*= (page - 1) * page_size || 0 */0`,
 
 			// Verify environments
 			assert.Equal(t, len(tt.expectedEnvs), len(envs), "Number of environment levels should match")
+
 			for i, expectedLevel := range tt.expectedEnvs {
 				if i < len(envs) {
 					assert.Equal(t, len(expectedLevel), len(envs[i]), "Number of variables in environment level should match")
+
 					for j, expectedVar := range expectedLevel {
 						if j < len(envs[i]) {
 							assert.Equal(t, expectedVar.Name, envs[i][j].Name, "Variable name should match")

@@ -1,15 +1,15 @@
 package parserstep7
 
 import (
-	"errors"
 	"fmt"
 
+	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Sentinel errors
 var (
-	ErrSubqueryExtraction = errors.New("failed to extract subqueries")
+	ErrSubqueryExtraction = snapsql.ErrSubqueryExtraction
 )
 
 // ASTIntegrator integrates with actual SQL AST structures to detect and parse subqueries
@@ -31,7 +31,8 @@ func (ai *ASTIntegrator) ExtractSubqueries(stmt cmn.StatementNode) error {
 	ai.errorHandler.Clear()
 
 	// Process different types of subqueries
-	if err := ai.extractCTEDependencies(stmt); err != nil {
+	err := ai.extractCTEDependencies(stmt)
+	if err != nil {
 		ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
 	}
 
@@ -96,7 +97,8 @@ func (ai *ASTIntegrator) BuildFieldSources() error {
 			continue
 		}
 
-		if err := ai.buildNodeFieldSources(node); err != nil {
+		err := ai.buildNodeFieldSources(node)
+		if err != nil {
 			return fmt.Errorf("failed to build field sources for node %s: %w", nodeID, err)
 		}
 	}

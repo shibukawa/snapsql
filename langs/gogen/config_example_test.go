@@ -26,6 +26,10 @@ func TestConfigurationExamples(t *testing.T) {
 		Parameters: []intermediate.Parameter{
 			{Name: "id", Type: "int"},
 		},
+		Responses: []intermediate.Response{
+			{Name: "id", Type: "int"},
+			{Name: "name", Type: "string"},
+		},
 		Instructions: []intermediate.Instruction{
 			{Op: "EMIT_STATIC", Value: "SELECT * FROM users WHERE id = "},
 			{Op: "EMIT_EVAL", ExprIndex: &[]int{0}[0]},
@@ -86,6 +90,7 @@ func TestConfigurationExamples(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var output strings.Builder
+
 			generator := New(format,
 				WithConfig(tt.config, tt.outputPath),
 				WithDialect("postgresql"),
@@ -130,7 +135,6 @@ func TestSimplifiedConfigStructure(t *testing.T) {
 	//     preserve_hierarchy: true        # Optional: default true
 	//     mock_path: "./testdata/mocks"   # Optional
 	//     generate_tests: false           # Optional: default false
-
 	config := Config{
 		Package:           "",   // Auto-infer from output path
 		PreserveHierarchy: true, // Maintain directory structure

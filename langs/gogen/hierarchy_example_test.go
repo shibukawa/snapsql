@@ -29,6 +29,12 @@ func TestHierarchicalGeneration(t *testing.T) {
 			{Name: "year", Type: "int"},
 			{Name: "month", Type: "int"},
 		},
+		Responses: []intermediate.Response{
+			{Name: "order_id", Type: "int"},
+			{Name: "total", Type: "decimal"},
+			{Name: "customer__name", Type: "string"},
+			{Name: "customer__email", Type: "string"},
+		},
 		Instructions: []intermediate.Instruction{
 			{Op: "EMIT_STATIC", Value: "SELECT * FROM orders WHERE year = "},
 			{Op: "EMIT_EVAL", ExprIndex: &[]int{0}[0]},
@@ -50,6 +56,7 @@ func TestHierarchicalGeneration(t *testing.T) {
 
 	// Create generator with hierarchy support
 	var output strings.Builder
+
 	generator := New(format,
 		WithHierarchy(hierarchy),
 		WithDialect("postgresql"),

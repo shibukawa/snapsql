@@ -15,6 +15,7 @@ func TestTokenizerDirectives(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Logf("Raw tokenizer output for: %s", sql)
+
 	for i, token := range tokens {
 		if token.Directive != nil {
 			t.Logf("Token[%d]: %s = %q (Directive: %s, Condition: %q)",
@@ -26,6 +27,7 @@ func TestTokenizerDirectives(t *testing.T) {
 
 	// Check if directive token is present
 	foundDirective := false
+
 	for _, token := range tokens {
 		if token.Directive != nil && token.Directive.Type == "variable" {
 			foundDirective = true

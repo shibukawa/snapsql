@@ -38,6 +38,7 @@ func (e IncompleteSubQueryError) Error() string {
 	if e.MissingParent == 0 {
 		return fmt.Sprintf("Incomplete subquery at %d:%d: %s", e.Pos.Line, e.Pos.Column, e.Reason)
 	}
+
 	return fmt.Sprintf("Incomplete subquery at %d:%d (%d close parens are missing): %s", e.Pos.Line, e.Pos.Column, e.MissingParent, e.Reason)
 }
 
@@ -52,23 +53,29 @@ var (
 
 func subQuery(pctx *pc.ParseContext[Entity], t []pc.Token[Entity]) (consumed int, newTokens []pc.Token[Entity], err error) {
 	current := 0
-	var selectOffset int
-	var parseStart int
+
+	var (
+		selectOffset int
+		parseStart   int
+	)
 
 	consumed, _, err = startSubquery(pctx, t)
 	if err != nil {
 		return 0, nil, err
 	}
+
 	selectOffset = consumed - 1
 	parseStart = consumed
 
 	// Start parsing the subquery
 	stack := 1
+
 	current = parseStart
 	for _, part := range pc.FindIter(pctx, parens, t[current:]) {
 		if part.Last { // not found
 			break
 		}
+
 		current += len(part.Skipped) + part.Consume
 		switch part.Match[0].Val.Original.Type {
 		case tok.OPENED_PARENS:
@@ -90,6 +97,7 @@ func subQuery(pctx *pc.ParseContext[Entity], t []pc.Token[Entity]) (consumed int
 			}
 		}
 	}
+
 	return 0, nil, &IncompleteSubQueryError{
 		Pos:           t[0].Val.Original.Position,
 		MissingParent: stack,
@@ -116,10 +124,12 @@ func parseCTE() pc.Parser[Entity] {
 		if err != nil {
 			return 0, nil, err
 		}
+
 		var result = &cmn.WithClause{
 			Recursive:     heading[len(heading)-1].Val.Original.Type == tok.RECURSIVE,
 			HeadingTokens: entityToToken(heading),
 		}
+
 		offset := consume
 
 		// first CTE
@@ -128,10 +138,14 @@ func parseCTE() pc.Parser[Entity] {
 			if len(tokens) < offset {
 				return 0, nil, fmt.Errorf("%w: sub query is missing at last", pc.ErrCritical)
 			}
+
 			p := tokens[offset].Val.Original.Position
+
 			return 0, nil, fmt.Errorf("%w: can't parse subquery at %d:%d", pc.ErrCritical, p.Line, p.Column)
 		}
+
 		offset += consume
+
 		result.CTEs = append(result.CTEs, cmn.CTEDefinition{
 			Name:   match[0].Val.Original.Value,
 			Select: match[2].Val.NewValue,
@@ -146,10 +160,14 @@ func parseCTE() pc.Parser[Entity] {
 				if len(tokens) < offset {
 					return 0, nil, fmt.Errorf("%w: sub query is missing at last", pc.ErrCritical)
 				}
+
 				p := tokens[offset].Val.Original.Position
+
 				return 0, nil, fmt.Errorf("%w: can't parse subquery at %d:%d", pc.ErrCritical, p.Line, p.Column)
 			}
+
 			offset += consume
+
 			result.CTEs = append(result.CTEs, cmn.CTEDefinition{
 				Name:   match[1].Val.Original.Value,
 				Select: match[3].Val.NewValue,
@@ -183,35 +201,43 @@ var statementStart = pc.Or(
 
 func DumpStatement(tokens []pc.Token[Entity]) string {
 	var sb strings.Builder
+
 	for i, token := range tokens {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
+
 		sb.WriteString("'")
 		sb.WriteString(token.Val.Original.Value)
 		sb.WriteString("'")
 	}
+
 	return sb.String()
 }
 
 func ParseStatement(perr *cmn.ParseError) pc.Parser[Entity] {
 	return pc.Trace("statement", func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) (int, []pc.Token[Entity], error) {
 		consumeForCTE, cte, _ := ws(parseCTE())(pctx, tokens)
+
 		var withClause *cmn.WithClause
 		if len(cte) > 0 {
 			if wc, ok := cte[0].Val.NewValue.(*cmn.WithClause); ok {
 				withClause = wc
 			}
 		}
+
 		offset := consumeForCTE
+
 		skipped, match, _, _, found := pc.Find(pctx, statementStart, tokens[offset:])
 		if !found {
 			return 0, nil, pc.ErrNotMatch
 		}
+
 		offset += len(skipped)
 		tokenType := match[0].Val.Original.Type
 		consume, clauses := parseClauses(pctx, tokenType, withClause, tokens[offset:], perr)
 		offset += consume
+
 		switch tokenType {
 		case tok.SELECT:
 			return offset, []pc.Token[Entity]{
@@ -252,6 +278,7 @@ func ParseStatement(perr *cmn.ParseError) pc.Parser[Entity] {
 				skipped[0].Val.Original.Position.String(),
 			))
 		}
+
 		return 0, nil, pc.ErrNotMatch
 	})
 }
@@ -261,6 +288,7 @@ func clauseTokenSourceText(start, last int, tokens []pc.Token[Entity]) string {
 	for i := start; i <= last; i++ {
 		result = append(result, tokens[i].Val.Original.Value)
 	}
+
 	return strings.Join(result, " ")
 }
 
@@ -269,9 +297,11 @@ func clauseTokenSourceText(start, last int, tokens []pc.Token[Entity]) string {
 func detectWrappedIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Token[Entity], prevClauseBody []pc.Token[Entity]) (ifCondition string, ifIndex, endIndex int, err error) {
 	// Detect end directive in the current clause body
 	endIndex = -1
+
 	for i := len(clauseBody) - 1; i >= 0; i-- {
 		t := clauseBody[i]
 		found := false
+
 		switch t.Val.Original.Type {
 		case tok.LINE_COMMENT, tok.WHITESPACE:
 			continue
@@ -283,6 +313,7 @@ func detectWrappedIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Tok
 		default:
 			found = true
 		}
+
 		if found {
 			break
 		}
@@ -290,8 +321,10 @@ func detectWrappedIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Tok
 
 	// Find if directive at the end of previous clause
 	ifIndex = -1
+
 	for i := len(prevClauseBody) - 1; i >= 0; i-- {
 		found := false
+
 		t := prevClauseBody[i]
 		switch t.Val.Original.Type {
 		case tok.LINE_COMMENT, tok.WHITESPACE:
@@ -305,10 +338,12 @@ func detectWrappedIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Tok
 		default:
 			found = true
 		}
+
 		if found {
 			break
 		}
 	}
+
 	if ifIndex < 0 && endIndex < 0 {
 		return "", -1, -1, nil
 	} else if ifIndex < 0 {
@@ -332,6 +367,7 @@ func detectWrappedIfCondition(clauseHead []pc.Token[Entity], clauseBody []pc.Tok
 			prevClauseBody[ifIndex].Val.Original.Position.String(),
 			clauseHead[0].Val.Original.Type)
 	}
+
 	return ifCondition, ifIndex, endIndex, nil
 }
 
@@ -373,6 +409,7 @@ func clauseIter(pctx *pc.ParseContext[Entity], tt tok.TokenType, tokens []pc.Tok
 		count := 0
 		consume := 0
 		nest := 0
+
 		var skipped []pc.Token[Entity]
 		for _, part := range pc.FindIter(pctx, splitter(tt), tokens) {
 			if part.Last {
@@ -389,10 +426,12 @@ func clauseIter(pctx *pc.ParseContext[Entity], tt tok.TokenType, tokens []pc.Tok
 				case tok.CLOSED_PARENS:
 					nest--
 				}
+
 				skipped = append(skipped, part.Skipped...)
 				for _, m := range part.Match {
 					skipped = append(skipped, tokenToEntity(m.Val.RawTokens())...)
 				}
+
 				consume += part.Consume
 			} else {
 				if part.Match[0].Val.Original.Type == tok.OPENED_PARENS {
@@ -400,6 +439,7 @@ func clauseIter(pctx *pc.ParseContext[Entity], tt tok.TokenType, tokens []pc.Tok
 					for _, m := range part.Match {
 						skipped = append(skipped, tokenToEntity(m.Val.RawTokens())...)
 					}
+
 					consume += part.Consume + len(part.Skipped)
 					nest = 1
 				} else {
@@ -419,10 +459,12 @@ func clauseIter(pctx *pc.ParseContext[Entity], tt tok.TokenType, tokens []pc.Tok
 }
 
 func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *cmn.WithClause, tokens []pc.Token[Entity], perr *cmn.ParseError) (int, []cmn.ClauseNode) {
-	var clauseHead []pc.Token[Entity]
-	var prevClauseBody []pc.Token[Entity]
-	var clauses []cmn.ClauseNode
-	var prevClause cmn.ClauseNode
+	var (
+		clauseHead     []pc.Token[Entity]
+		prevClauseBody []pc.Token[Entity]
+		clauses        []cmn.ClauseNode
+		prevClause     cmn.ClauseNode
+	)
 
 	if withClause != nil {
 		clauses = append(clauses, withClause)
@@ -432,6 +474,7 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 	var consumes int
 	for i, clause := range clauseIter(pctx, tt, tokens) {
 		consumes += clause.Consume + len(clause.Skipped)
+
 		clauseBody := clause.Skipped
 		if i == 0 {
 			clauseHead = clause.Match
@@ -448,18 +491,22 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 				if err != nil {
 					perr.Add(err)
 				}
+
 				if ifIndex != -1 && endIndex != -1 {
 					newClause.SetIfCondition(ifCondition, ifIndex, endIndex, prevClause)
 				}
+
 				clauses = append(clauses, newClause)
 				prevClause = newClause
 				prevClauseBody = clauseBody
 			} else {
 				prevClauseBody = clauseBody
 			}
+
 			clauseHead = clause.Match
 		}
 	}
+
 	return consumes, clauses
 }
 
@@ -558,5 +605,6 @@ func newClauseNode(clauseHead []pc.Token[Entity], clauseBody []pc.Token[Entity],
 	default:
 		panic("unknown clause type")
 	}
+
 	return clauseNode
 }

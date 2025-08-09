@@ -40,6 +40,7 @@ func TestValidateParentheses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tokenizer.Tokenize(tt.input)
 			assert.NoError(t, err)
+
 			err = validateParentheses(tokens)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -138,6 +139,7 @@ func TestValidateSnapSQLDirectives(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := tokenizer.Tokenize(tt.input)
 			assert.NoError(t, err)
+
 			err = validateSnapSQLDirectives(tokens)
 			if tt.wantErr {
 				assert.Error(t, err)

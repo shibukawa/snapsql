@@ -1,6 +1,7 @@
 package pull
 
 import (
+	"context"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -184,6 +185,7 @@ func TestPullOperation(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				operation := NewPullOperation(tc.config)
+
 				err := operation.ValidateConfig()
 				if tc.shouldError {
 					assert.Error(t, err)
@@ -208,7 +210,7 @@ func TestPullExecution(t *testing.T) {
 
 		// This will fail because we don't have a real database connection
 		// but it tests the execution flow
-		result, err := operation.Execute()
+		result, err := operation.Execute(context.Background())
 		assert.Error(t, err) // Expected to fail without real DB
 		assert.Zero(t, result)
 	})

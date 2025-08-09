@@ -209,6 +209,7 @@ func createTestTableInfo() *snapsql.TableInfo {
 			Nullable: true,
 		},
 	}
+
 	return &snapsql.TableInfo{
 		Name:    "users",
 		Schema:  "public",
@@ -289,6 +290,7 @@ func createTestDatabaseSchema() snapsql.DatabaseSchema {
 		},
 		createTestTableInfo(),
 	}
+
 	return snapsql.DatabaseSchema{
 		Name:   "public",
 		Tables: tables,

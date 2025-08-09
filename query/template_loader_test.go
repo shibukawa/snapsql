@@ -43,8 +43,9 @@ LIMIT 10
 `
 
 	// Create temporary file
-	tmpFile, err := os.CreateTemp("", "test_simple_*.snap.md")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "test_simple_*.snap.md")
 	assert.NoError(t, err)
+
 	defer os.Remove(tmpFile.Name())
 
 	_, err = tmpFile.WriteString(markdownContent)
@@ -54,6 +55,7 @@ LIMIT 10
 	// Test loading
 	format, err := LoadIntermediateFormat(tmpFile.Name())
 	assert.NoError(t, err)
+
 	if format == nil {
 		t.Fatal("format should not be nil")
 	}
@@ -61,6 +63,7 @@ LIMIT 10
 	// Verify basic properties
 	assert.Equal(t, "get_user_simple", format.FunctionName)
 	assert.Equal(t, "Get user information by ID (simple)", format.Description)
+
 	if len(format.Parameters) == 0 {
 		t.Error("Parameters should not be empty")
 	}
@@ -497,6 +500,7 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 	// Parse markdown document first
 	file, err := os.Open(tmpFile)
 	assert.NoError(t, err)
+
 	defer file.Close()
 
 	doc, err := markdownparser.Parse(file)
@@ -519,16 +523,19 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 
 	// Look for the LIMIT CEL expression
 	var limitExprFound bool
+
 	for _, expr := range format.CELExpressions {
 		if expr.Expression == "limit != 0 ? limit : 10" {
 			limitExprFound = true
 			break
 		}
 	}
+
 	assert.True(t, limitExprFound, "Should find LIMIT CEL expression")
 
 	// Check instructions for proper LIMIT handling
 	var limitInstructionFound bool
+
 	for _, instr := range format.Instructions {
 		if instr.Op == "EMIT_EVAL" && instr.ExprIndex != nil && *instr.ExprIndex >= 0 {
 			// Find the corresponding expression
@@ -541,5 +548,6 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 			}
 		}
 	}
+
 	assert.True(t, limitInstructionFound, "Should find LIMIT instruction with proper expression index")
 }

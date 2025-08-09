@@ -39,6 +39,7 @@ func (g *EnhancedFieldNameGenerator) GenerateComplexFieldName(selectField *parse
 		if selectField.TableName != "" && selectField.OriginalField != "" {
 			return g.makeUnique(selectField.OriginalField)
 		}
+
 		return g.makeUnique("table_field")
 	case parser.FunctionField:
 		return g.generateFunctionFieldName(selectField.OriginalField)
@@ -78,14 +79,17 @@ func (g *EnhancedFieldNameGenerator) generateFunctionFieldName(content string) s
 		if strings.Contains(upper, fnName+"(") {
 			// Try to extract the argument
 			start := strings.Index(upper, fnName+"(") + len(fnName) + 1
+
 			end := strings.LastIndex(content, ")")
 			if end > start {
 				arg := strings.TrimSpace(content[start:end])
+
 				argName := g.extractMainIdentifier(arg)
 				if argName != "" {
 					return g.makeUnique(baseName + "_" + argName)
 				}
 			}
+
 			return g.makeUnique(baseName + "_value")
 		}
 	}
@@ -182,21 +186,27 @@ func (g *EnhancedFieldNameGenerator) parseCaseExpression(content string) string 
 	if strings.Contains(upper, "STATUS") {
 		return "status_category"
 	}
+
 	if strings.Contains(upper, "SCORE") || strings.Contains(upper, "GRADE") {
 		return "grade_level"
 	}
+
 	if strings.Contains(upper, "AMOUNT") {
 		return "price_range"
 	}
+
 	if strings.Contains(upper, "PRICE") {
 		return "price_range"
 	}
+
 	if strings.Contains(upper, "AGE") {
 		return "age_group"
 	}
+
 	if strings.Contains(upper, "'HIGH'") && strings.Contains(upper, "'LOW'") {
 		return "priority_level"
 	}
+
 	if strings.Contains(upper, "'ACTIVE'") || strings.Contains(upper, "'INACTIVE'") {
 		return "status_flag"
 	}
@@ -211,6 +221,7 @@ func (g *EnhancedFieldNameGenerator) parseCastExpression(content string) string 
 	// Handle CAST(expr AS type) syntax
 	if strings.Contains(upper, "CAST(") && strings.Contains(upper, " AS ") {
 		start := strings.Index(upper, "CAST(") + 5
+
 		asIndex := strings.Index(upper, " AS ")
 		if asIndex > start {
 			expr := strings.TrimSpace(content[start:asIndex])
@@ -218,12 +229,14 @@ func (g *EnhancedFieldNameGenerator) parseCastExpression(content string) string 
 
 			// Extract target type
 			typeStart := asIndex + 4
+
 			parenIndex := strings.Index(content[typeStart:], ")")
 			if parenIndex > 0 {
 				targetType := strings.TrimSpace(strings.ToLower(content[typeStart : typeStart+parenIndex]))
 				if baseName != "" {
 					return baseName + "_as_" + targetType
 				}
+
 				return "value_as_" + targetType
 			}
 		}
@@ -235,10 +248,12 @@ func (g *EnhancedFieldNameGenerator) parseCastExpression(content string) string 
 		if len(parts) == 2 {
 			expr := strings.TrimSpace(parts[0])
 			targetType := strings.TrimSpace(strings.ToLower(parts[1]))
+
 			baseName := g.extractMainIdentifier(expr)
 			if baseName != "" {
 				return baseName + "_as_" + targetType
 			}
+
 			return "value_as_" + targetType
 		}
 	}
@@ -263,10 +278,12 @@ func (g *EnhancedFieldNameGenerator) parseArithmeticExpression(content string) s
 			parts := strings.Split(content, op.symbol)
 			if len(parts) == 2 {
 				left := g.extractMainIdentifier(strings.TrimSpace(parts[0]))
+
 				right := g.extractMainIdentifier(strings.TrimSpace(parts[1]))
 				if left != "" && right != "" {
 					return left + "_" + op.word + "_" + right
 				}
+
 				if left != "" {
 					return left + "_" + op.word + "_value"
 				}
@@ -298,11 +315,13 @@ func (g *EnhancedFieldNameGenerator) parseJSONExpression(content string) string 
 				right = strings.ToLower(strings.ReplaceAll(right, " ", "_"))
 				right = strings.ReplaceAll(right, "{", "")
 				right = strings.ReplaceAll(right, "}", "")
+
 				right = strings.ReplaceAll(right, ",", "_")
 				if left != "" && right != "" && !strings.Contains(right, "_") {
 					// Only use right part if it's a simple key name
 					return left + "_" + right + op.suffix
 				}
+
 				if left != "" {
 					return left + "_json" + op.suffix
 				}
@@ -322,18 +341,22 @@ func (g *EnhancedFieldNameGenerator) parseStringExpression(content string) strin
 		parts := strings.Split(content, "||")
 		if len(parts) >= 2 {
 			var identifiers []string
+
 			for _, part := range parts {
 				if id := g.extractMainIdentifier(strings.TrimSpace(part)); id != "" {
 					identifiers = append(identifiers, id)
 				}
 			}
+
 			if len(identifiers) >= 2 {
 				return strings.Join(identifiers[:2], "_") + "_concat"
 			}
+
 			if len(identifiers) == 1 {
 				return identifiers[0] + "_concat"
 			}
 		}
+
 		return "string_concat"
 	}
 

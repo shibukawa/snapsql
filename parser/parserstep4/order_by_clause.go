@@ -47,6 +47,7 @@ func finalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 	pTokens := cmn.ToParserToken(tokens)
 
 	nameToPos := make(map[string][]string)
+
 	for _, part := range fieldIter(pTokens) {
 		field := cmn.OrderByField{
 			Expression: cmn.ToToken(part.Skipped),
@@ -59,14 +60,17 @@ func finalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 				field.Desc = q.Val.Type == tok.DESC
 			}
 		}
+
 		tokens = tokens[:len(tokens)-consume]
 
 		consume, match, err := orderByFieldPrefix(pctx, tokens)
+
 		tokens = tokens[consume:]
 		if err != nil {
 			perr.Add(fmt.Errorf("%w at %s: invalid ORDER BY field", cmn.ErrInvalidSQL, tokens[0].Val.Position.String()))
 			continue
 		}
+
 		switch match[0].Type {
 		case "invalid-position-index":
 			pos := match[0].Val.Position
@@ -80,11 +84,14 @@ func finalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 				fi := match[0]
 				pos := fi.Val.Position
 				perr.Add(fmt.Errorf("%w at %s: ORDER BY function should be 'FIELD()' but %s", cmn.ErrInvalidForSnapSQL, pos.String(), fi.Val.Value))
+
 				continue
 			}
+
 			_, fieldIdentifier, err := fieldNamePattern(pctx, tokens)
 			if err == nil {
 				var fieldName string
+
 				switch len(fieldIdentifier) {
 				case 1: // single field
 					fieldName = fieldIdentifier[0].Val.Value
@@ -95,6 +102,7 @@ func finalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 					fullName := tableName + "." + fieldName
 					nameToPos[fullName] = append(nameToPos[fullName], fieldIdentifier[0].Pos.String())
 				}
+
 				field.Field.Name = fieldName
 				clause.Fields = append(clause.Fields, field)
 			} else if len(fieldIdentifier) > 0 {
@@ -108,6 +116,7 @@ func finalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 		case "field":
 			// with table name
 			var fieldName string
+
 			if len(match) > 2 && match[1].Val.Type == tok.DOT {
 				tableName := match[0].Val.Value
 				fieldName = match[2].Val.Value
@@ -118,10 +127,12 @@ func finalizeOrderByClause(clause *cmn.OrderByClause, perr *cmn.ParseError) {
 				fieldName = match[0].Val.Value
 				nameToPos[fieldName] = append(nameToPos[fieldName], match[0].Pos.String())
 			}
+
 			field.Field.Name = fieldName
 			clause.Fields = append(clause.Fields, field)
 		}
 	}
+
 	for name, pos := range nameToPos {
 		if len(pos) > 1 {
 			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))

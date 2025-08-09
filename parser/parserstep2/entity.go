@@ -15,10 +15,10 @@ type Entity struct {
 
 func (e *Entity) RawTokens() []tok.Token {
 	result := make([]tok.Token, 0, len(e.rawTokens))
-	for _, t := range e.rawTokens {
-		result = append(result, t)
-	}
+	result = append(result, e.rawTokens...)
+
 	result = append(result, e.spaces...)
+
 	return result
 }
 
@@ -28,6 +28,7 @@ func tokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
 		if token.Type == tok.EOF {
 			continue
 		}
+
 		entity := Entity{
 			Original:  token,
 			rawTokens: []tok.Token{token},
@@ -44,6 +45,7 @@ func tokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
 		}
 		results = append(results, pcToken)
 	}
+
 	return results
 }
 
@@ -52,5 +54,6 @@ func entityToToken(entities []pc.Token[Entity]) []tok.Token {
 	for _, entity := range entities {
 		results = append(results, entity.Val.RawTokens()...)
 	}
+
 	return results
 }

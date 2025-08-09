@@ -37,14 +37,17 @@ func TestExecuteParserStep4(t *testing.T) {
 			if err != nil {
 				t.Fatalf("tokenize error: %v", err)
 			}
+
 			ast, err := parserstep2.Execute(tokens)
 			if err != nil {
 				t.Fatalf("parserstep2 error: %v", err)
 			}
+
 			err = parserstep3.Execute(ast)
 			if err != nil {
 				t.Fatalf("parserstep3 error: %v", err)
 			}
+
 			err = Execute(ast)
 			if tc.wantError {
 				perr, ok := cmn.AsParseError(err)
@@ -117,13 +120,17 @@ func TestExecuteParserStep4WithDummyLiterals(t *testing.T) {
 
 			// Verify DUMMY_LITERAL tokens were inserted
 			hasDummyLiteral := false
+
 			for _, token := range processedTokens {
 				if token.Type == tokenizer.DUMMY_LITERAL {
 					hasDummyLiteral = true
+
 					assert.True(t, len(token.Value) > 0, "DUMMY_LITERAL should have variable name in Value")
+
 					break
 				}
 			}
+
 			assert.True(t, hasDummyLiteral, "should contain DUMMY_LITERAL tokens")
 
 			// Step 3: Run parserstep2

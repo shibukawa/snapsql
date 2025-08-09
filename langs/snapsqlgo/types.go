@@ -22,7 +22,10 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shopspring/decimal"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // FieldInfo represents information about a struct field
@@ -92,8 +95,10 @@ func (v *CustomValue) Get(index ref.Val) ref.Val {
 			// 静的アクセサー関数を使用（リフレクション不要）
 			return fieldInfo.Accessor(v.value)
 		}
+
 		return types.NewErr("unknown field: %s", fieldName)
 	}
+
 	return types.NewErr("index must be a string, got: %s", index.Type())
 }
 
@@ -102,14 +107,16 @@ func (v *CustomValue) ConvertToNative(typeDesc reflect.Type) (interface{}, error
 	if typeDesc == reflect.TypeOf(v.value) {
 		return v.value, nil
 	}
-	return nil, fmt.Errorf("unsupported type conversion: %v", typeDesc)
+
+	return nil, fmt.Errorf("%w: %v", snapsql.ErrUnsupportedConversion, typeDesc)
 }
 
 // ConvertToType converts to CEL type
 func (v *CustomValue) ConvertToType(typeVal ref.Type) ref.Val {
 	if typeVal == types.TypeType {
-		return types.NewObjectTypeValue(v.structInfo.Name)
+		return cel.ObjectType(v.structInfo.Name)
 	}
+
 	return types.NewErr("type conversion not supported")
 }
 
@@ -120,12 +127,13 @@ func (v *CustomValue) Equal(other ref.Val) ref.Val {
 			return types.Bool(reflect.DeepEqual(v.value, otherCustom.value))
 		}
 	}
+
 	return types.False
 }
 
 // Type returns CEL type
 func (v *CustomValue) Type() ref.Type {
-	return types.NewObjectTypeValue(v.structInfo.Name)
+	return cel.ObjectType(v.structInfo.Name)
 }
 
 // Value returns Go value
@@ -200,8 +208,10 @@ func (p *LocalTypeProvider) FindStructFieldNames(structType string) ([]string, b
 		for fieldName := range structInfo.Fields {
 			fieldNames = append(fieldNames, fieldName)
 		}
+
 		return fieldNames, true
 	}
+
 	return nil, false
 }
 
@@ -214,6 +224,7 @@ func (p *LocalTypeProvider) FindStructFieldType(structType string, fieldName str
 			}, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -222,6 +233,7 @@ func (p *LocalTypeProvider) FindStructType(structType string) (*types.Type, bool
 	if structInfo, exists := p.registry.GetStructInfo(structType); exists {
 		return structInfo.CelType, true
 	}
+
 	return nil, false
 }
 
@@ -259,6 +271,7 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 		if v == nil {
 			return types.NullValue
 		}
+
 		return types.DefaultTypeAdapter.NativeToValue(*v)
 	case decimal.Decimal:
 		// Use existing CEL wrapper to preserve precision
@@ -267,6 +280,7 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 		if v == nil {
 			return types.NullValue
 		}
+
 		return NewDecimal(*v)
 	default:
 		// Handle slices and arrays
@@ -280,6 +294,7 @@ func ConvertGoValueToCEL(value interface{}) ref.Val {
 			if rv.IsNil() {
 				return types.NullValue
 			}
+
 			rv = rv.Elem()
 		}
 
@@ -303,7 +318,7 @@ func convertSliceToCEL(rv reflect.Value) ref.Val {
 	length := rv.Len()
 	celValues := make([]ref.Val, length)
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		element := rv.Index(i).Interface()
 		celValues[i] = ConvertGoValueToCEL(element)
 	}
@@ -355,12 +370,15 @@ func GetGlobalRegistry() *LocalTypeRegistry {
 }
 func celNameToGoName(celName string) string {
 	parts := strings.Split(celName, "_")
+	caser := cases.Title(language.English)
+
 	for i, part := range parts {
 		if part == "id" {
 			parts[i] = "ID"
 		} else {
-			parts[i] = strings.Title(part)
+			parts[i] = caser.String(part)
 		}
 	}
+
 	return strings.Join(parts, "")
 }

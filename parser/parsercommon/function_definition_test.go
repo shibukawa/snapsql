@@ -37,6 +37,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// Check that User field is expanded
 				user, ok := def.Parameters["user"].(map[string]any)
 				assert.True(t, ok, "user parameter should be a map")
@@ -70,6 +71,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// Check that Role field is expanded
 				role, ok := def.Parameters["role"].(map[string]any)
 				assert.True(t, ok, "role parameter should be a map")
@@ -91,6 +93,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// Check that GlobalType field is expanded
 				global, ok := def.Parameters["global"].(map[string]any)
 				assert.True(t, ok, "global parameter should be a map")
@@ -113,6 +116,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// Check that User[] is expanded as array
 				users, ok := def.Parameters["users"].([]any)
 				assert.True(t, ok, "users parameter should be an array")
@@ -147,6 +151,7 @@ parameters:
 				assert.Error(t, err)
 				return
 			}
+
 			assert.NoError(t, err)
 			assert.NotNil(t, def)
 
@@ -184,6 +189,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// User should be found from api/users/profiles/_common.yaml (closest ancestor with User definition)
 				user, ok := def.Parameters["user"].(map[string]any)
 				assert.True(t, ok, "user parameter should be a map")
@@ -224,6 +230,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// GlobalType should be found from project root
 				global, ok := def.Parameters["global"].(map[string]any)
 				assert.True(t, ok, "global parameter should be a map")
@@ -255,6 +262,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// User[] should be found from current directory (api/users/profiles)
 				users, ok := def.Parameters["users"].([]any)
 				assert.True(t, ok, "users parameter should be an array")
@@ -296,6 +304,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// NonExistentType should remain as string since it's not found
 				nonexistent, ok := def.Parameters["nonexistent"].(string)
 				assert.True(t, ok, "nonexistent parameter should remain as string")
@@ -319,6 +328,7 @@ parameters:
 			projectRootPath: projectRoot,
 			wantErr:         false,
 			check: func(t *testing.T, def *FunctionDefinition) {
+				t.Helper()
 				// User should be found from current directory (api/users/profiles) - closest ancestor
 				user, ok := def.Parameters["user"].(map[string]any)
 				assert.True(t, ok, "user parameter should be a map")
@@ -353,6 +363,7 @@ parameters:
 				assert.Error(t, err)
 				return
 			}
+
 			assert.NoError(t, err)
 			assert.NotNil(t, def)
 
@@ -384,6 +395,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   true,
 			wantTypeKey: "api/users/profiles/User", // Should find the closest ancestor with User definition
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				userMap, ok := result.(map[string]any)
 				assert.True(t, ok, "result should be a map")
 				assert.Equal(t, "int", userMap["id"])
@@ -513,12 +525,14 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			if tt.wantFound {
 				assert.NotNil(t, result, "result should not be nil when type is found")
 				assert.Equal(t, tt.wantTypeKey, typeKey, "type key should match expected")
+
 				if tt.checkResult != nil {
 					tt.checkResult(t, result)
 				}
 			} else {
 				assert.Nil(t, result, "result should be nil when type is not found")
 				assert.Equal(t, tt.wantTypeKey, typeKey, "type key should be empty when not found")
+
 				if tt.checkResult != nil {
 					tt.checkResult(t, result)
 				}

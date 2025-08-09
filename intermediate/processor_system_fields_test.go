@@ -16,6 +16,7 @@ import (
 // This is a helper function to generate the actual SQL text for manual SQL construction
 func GetSystemFieldsSQL(t *testing.T, implicitParams []ImplicitParameter) string {
 	t.Helper()
+
 	if len(implicitParams) == 0 {
 		return ""
 	}
@@ -304,5 +305,6 @@ func findImplicitParam(params []ImplicitParameter, name string) *ImplicitParamet
 			return &param
 		}
 	}
+
 	return nil
 }

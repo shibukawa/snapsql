@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,10 +12,10 @@ import (
 
 // Error definitions for SQL generation
 var (
-	ErrInvalidExpressionIndex = fmt.Errorf("invalid expression index")
-	ErrParameterNotFound      = fmt.Errorf("parameter not found")
-	ErrExpressionEvaluation   = fmt.Errorf("expression evaluation failed")
-	ErrUnsupportedOperation   = fmt.Errorf("unsupported operation")
+	ErrInvalidExpressionIndex = errors.New("invalid expression index")
+	ErrParameterNotFound      = errors.New("parameter not found")
+	ErrExpressionEvaluation   = errors.New("expression evaluation failed")
+	ErrUnsupportedOperation   = errors.New("unsupported operation")
 )
 
 // SQLGenerator generates SQL from intermediate format instructions
@@ -43,8 +44,10 @@ func NewSQLGenerator(instructions []intermediate.Instruction, expressions []inte
 // Generate generates SQL and parameters from the instructions
 func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interface{}, error) {
 	var result strings.Builder
+
 	sqlParams := make([]interface{}, 0) // Initialize as empty slice instead of nil
-	var conditionStack []bool           // Stack to track if/else conditions
+
+	var conditionStack []bool // Stack to track if/else conditions
 
 	for i, instr := range g.instructions {
 		// Skip instructions if we're in a false condition block
@@ -70,12 +73,14 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			}
 
 			expr := g.expressions[*instr.ExprIndex]
+
 			value, err := g.evaluateExpression(expr.Expression, params)
 			if err != nil {
-				return "", nil, fmt.Errorf("%w: %v", ErrExpressionEvaluation, err)
+				return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 			}
 
 			result.WriteString("?")
+
 			sqlParams = append(sqlParams, value)
 
 		case intermediate.OpIf:
@@ -88,9 +93,10 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			}
 
 			expr := g.expressions[*instr.ExprIndex]
+
 			condition, err := g.evaluateCondition(expr.Expression, params)
 			if err != nil {
-				return "", nil, fmt.Errorf("%w: %v", ErrExpressionEvaluation, err)
+				return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 			}
 
 			conditionStack = append(conditionStack, condition)
@@ -114,9 +120,10 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 				}
 
 				expr := g.expressions[*instr.ExprIndex]
+
 				condition, err := g.evaluateCondition(expr.Expression, params)
 				if err != nil {
-					return "", nil, fmt.Errorf("%w: %v", ErrExpressionEvaluation, err)
+					return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 				}
 
 				conditionStack[len(conditionStack)-1] = condition
@@ -249,12 +256,15 @@ func (g *SQLGenerator) dialectMatches(dialects []string) bool {
 		if g.dialect == "postgres" && (dialect == "postgresql" || dialect == "pg") {
 			return true
 		}
+
 		if g.dialect == "postgresql" && (dialect == "postgres" || dialect == "pg") {
 			return true
 		}
+
 		if g.dialect == "sqlite3" && dialect == "sqlite" {
 			return true
 		}
+
 		if g.dialect == "sqlite" && dialect == "sqlite3" {
 			return true
 		}

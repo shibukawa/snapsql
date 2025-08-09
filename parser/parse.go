@@ -198,17 +198,20 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	}
 
 	// Step 3: Run parserstep3 - Clause-level validation and assignment
-	if err := parserstep3.Execute(stmt); err != nil {
+	err = parserstep3.Execute(stmt)
+	if err != nil {
 		return nil, fmt.Errorf("parserstep3 failed: %w", err)
 	}
 
 	// Step 4: Run parserstep4 - Clause content validation
-	if err := parserstep4.Execute(stmt); err != nil {
+	err = parserstep4.Execute(stmt)
+	if err != nil {
 		return nil, fmt.Errorf("parserstep4 failed: %w", err)
 	}
 
 	// Step 5: Run parserstep5 - Directive structure validation
-	if err := parserstep5.Execute(stmt, functionDef); err != nil {
+	err = parserstep5.Execute(stmt, functionDef)
+	if err != nil {
 		return nil, fmt.Errorf("parserstep5 failed: %w", err)
 	}
 
@@ -235,14 +238,15 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	}
 
 	// Execute parserstep6 with both namespaces
-	if parseErr := parserstep6.Execute(stmt, paramNamespace, constNamespace); parseErr != nil {
+	parseErr := parserstep6.Execute(stmt, paramNamespace, constNamespace)
+	if parseErr != nil {
 		return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
 	}
 
 	// Step 7: Run parserstep7 - Subquery dependency analysis (always enabled)
 	subqueryParser := parserstep7.NewSubqueryParserIntegrated()
-	subErr := subqueryParser.ParseStatement(stmt, functionDef)
 
+	subErr := subqueryParser.ParseStatement(stmt, functionDef)
 	if subErr != nil {
 		// Don't fail the entire parse for subquery analysis errors
 		// The error can be detected via stmt.GetSubqueryDependencies() == nil
@@ -286,6 +290,7 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 	}
 
 	stmt, err := RawParse(tokens, functionDef, constants)
+
 	return stmt, functionDef, err
 }
 
@@ -316,6 +321,7 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 
 	// Merge constants with dummy data from function definition
 	mergedConstants := make(map[string]any)
+
 	if constants != nil {
 		for k, v := range constants {
 			mergedConstants[k] = v
@@ -340,5 +346,6 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 
 	// Parse the tokens with merged constants
 	stmt, err := RawParse(tokens, functionDef, mergedConstants)
+
 	return stmt, functionDef, err
 }

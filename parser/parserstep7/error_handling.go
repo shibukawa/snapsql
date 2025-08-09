@@ -105,11 +105,13 @@ func (er *ErrorReporter) GetWarnings() []*ParseError {
 // GetErrorsByType returns errors of a specific type
 func (er *ErrorReporter) GetErrorsByType(errorType ErrorType) []*ParseError {
 	var filtered []*ParseError
+
 	for _, err := range er.errors {
 		if err.Type == errorType {
 			filtered = append(filtered, err)
 		}
 	}
+
 	return filtered
 }
 
@@ -128,6 +130,7 @@ func (er *ErrorReporter) String() string {
 	var result strings.Builder
 	if len(er.errors) > 0 {
 		result.WriteString(fmt.Sprintf("Errors (%d):\n", len(er.errors)))
+
 		for i, err := range er.errors {
 			result.WriteString(fmt.Sprintf("%d. %s\n", i+1, err.Error()))
 		}
@@ -137,7 +140,9 @@ func (er *ErrorReporter) String() string {
 		if result.Len() > 0 {
 			result.WriteString("\n")
 		}
+
 		result.WriteString(fmt.Sprintf("Warnings (%d):\n", len(er.warnings)))
+
 		for i, warning := range er.warnings {
 			result.WriteString(fmt.Sprintf("%d. %s\n", i+1, warning.Error()))
 		}
@@ -160,7 +165,7 @@ func NewErrorCollector(reporter *ErrorReporter) *ErrorCollector {
 
 // ReportCircularDependency reports a circular dependency error
 func (ec *ErrorCollector) ReportCircularDependency(path []string, position Position) {
-	message := fmt.Sprintf("Circular dependency detected in path: %s", strings.Join(path, " -> "))
+	message := "Circular dependency detected in path: " + strings.Join(path, " -> ")
 	context := "Dependency chain forms a cycle"
 	suggestions := []string{
 		"Review the subquery structure to eliminate circular references",
@@ -186,9 +191,10 @@ func (ec *ErrorCollector) ReportUnresolvedReference(fieldName string, availableF
 	if len(availableFields) > 0 {
 		suggestions = append(suggestions, "Available fields in current scope:")
 		for _, field := range availableFields {
-			suggestions = append(suggestions, fmt.Sprintf("  - %s", field))
+			suggestions = append(suggestions, "  - "+field)
 		}
 	}
+
 	suggestions = append(suggestions, "Check the field name for typos")
 	suggestions = append(suggestions, "Ensure the field is defined in an accessible scope")
 
