@@ -22,11 +22,13 @@ func (c *CELExpressionExtractor) Process(ctx *ProcessingContext) error {
 
 	// Convert [][]EnvVar to []string for now (simplified)
 	var envStrings []string
+
 	for _, envGroup := range envs {
 		for _, env := range envGroup {
 			envStrings = append(envStrings, env.Name)
 		}
 	}
+
 	ctx.Environments = envStrings
 
 	// Extract enhanced CEL information with proper environment mapping
@@ -55,6 +57,7 @@ func (c *CELExpressionExtractor) extractEnhancedCELInfo(stmt parser.StatementNod
 	// Helper function to create CEL expression
 	createExpression := func(expr string, line int) CELExpression {
 		expressionCounter++
+
 		return CELExpression{
 			ID:               fmt.Sprintf("expr_%03d", expressionCounter),
 			Expression:       expr,
@@ -257,5 +260,5 @@ func extractFromStatement(stmt parser.StatementNode) (expressions []string, envs
 		processTokens(cte.RawTokens())
 	}
 
-	return
+	return expressions, envs
 }

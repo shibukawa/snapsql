@@ -23,6 +23,7 @@ var required = map[string][]cmn.NodeType{
 // It appends errors to the provided ParseError pointer, does not return error.
 func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode, perr *cmn.ParseError) {
 	var key string
+
 	switch stmtType {
 	case cmn.SELECT_STATEMENT:
 		key = "SELECT"
@@ -39,6 +40,7 @@ func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode, per
 	default:
 		return // No check for other types
 	}
+
 	if _, ok := clauseOrder[key]; !ok {
 		return
 	}
@@ -48,10 +50,12 @@ func ValidateClauseRequired(stmtType cmn.NodeType, clauses []cmn.ClauseNode, per
 	if !ok {
 		return
 	}
+
 	found := make(map[cmn.NodeType]bool)
 	for _, clause := range clauses {
 		found[clause.Type()] = true
 	}
+
 	for _, r := range req {
 		if !found[r] {
 			if perr != nil {

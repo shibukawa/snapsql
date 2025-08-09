@@ -8,11 +8,9 @@ import (
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
-func init() {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-}
-
 func TestCheckSubqueryUsage(t *testing.T) {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+
 	tests := []struct {
 		name    string
 		sql     string
@@ -60,6 +58,7 @@ func TestCheckSubqueryUsage(t *testing.T) {
 			clauses := parseClausesFromSQL(t, tt.sql)
 			perr := &cmn.ParseError{}
 			CheckSubqueryUsage(clauses, perr)
+
 			if tt.wantErr {
 				assert.Equal(t, 1, len(perr.Errors))
 			} else {

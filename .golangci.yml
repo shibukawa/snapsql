@@ -6,11 +6,10 @@ linters:
     - goconst
     - wsl
     - varnamelen
-    - perfsprint
     - cyclop
     - wrapcheck
     - testpackage
-    - tagalign
+    - tagalign  # 一旦無効のまま（構造体タグの整列）
     - mnd
     - lll
     - paralleltest
@@ -23,18 +22,19 @@ linters:
     - funlen
     - nestif
     - gocyclo
-    - nlreturn
+    - nlreturn  # 一旦無効のまま（return前の改行）
     - errchkjson
     - contextcheck
-    - revive
-    - godot
+    - revive    # 一旦無効のまま（多くのルールを含む）
+    - godot     # 一旦無効のまま（コメントの句点）
     - ireturn
     - gochecknoglobals
     - maintidx
     - forbidigo
-    - gocritic
-    - testifylint
+    - gocritic  # 一旦無効のまま（多くのルールを含む）
+    - testifylint # 一旦無効のまま（testifyライブラリ使用時のみ有用）
     - exhaustive
+    - dupword
   settings:
     tagliatelle:
       case:

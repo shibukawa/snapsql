@@ -78,17 +78,21 @@ func TestStatementClausePresence(t *testing.T) {
 			if err != nil {
 				t.Fatalf("tokenize error: %v", err)
 			}
+
 			node, err := step2.Execute(tokens)
 			if err != nil {
 				t.Fatalf("parserstep2 error: %v", err)
 			}
+
 			var perr cmn.ParseError
+
 			clauses := ValidateClausePresence(node.Type(), node.Clauses(), &perr)
 			if tt.wantErr {
 				assert.NotZero(t, len(perr.Errors), "expected error but got none")
 			} else {
 				assert.Zero(t, len(perr.Errors), "unexpected error: %v", perr.Error())
 			}
+
 			assert.Equal(t, tt.wantClauses, len(clauses), "expected number of clauses does not match")
 		})
 	}

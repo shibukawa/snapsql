@@ -23,6 +23,7 @@ var (
 // Returns nil if all pairs are matched, otherwise returns an error.
 func validateParentheses(tokens []tok.Token) error {
 	var stack []tok.Token
+
 	for _, t := range tokens {
 		switch t.Type {
 		case tok.OPENED_PARENS:
@@ -31,12 +32,15 @@ func validateParentheses(tokens []tok.Token) error {
 			if len(stack) == 0 {
 				return ErrUnmatchedCloseParenthesis
 			}
+
 			stack = stack[:len(stack)-1]
 		}
 	}
+
 	if len(stack) > 0 {
 		return ErrUnmatchedOpenParenthesis
 	}
+
 	return nil
 }
 
@@ -44,6 +48,7 @@ func validateParentheses(tokens []tok.Token) error {
 // Returns nil if all pairs are matched, otherwise returns an error.
 func validateSnapSQLDirectives(tokens []tok.Token) error {
 	var stack []string
+
 	for _, t := range tokens {
 		if t.Type == tok.BLOCK_COMMENT && t.Directive != nil {
 			dir := t.Directive.Type
@@ -59,16 +64,20 @@ func validateSnapSQLDirectives(tokens []tok.Token) error {
 				if len(stack) == 0 {
 					return ErrUnmatchedEndDirective
 				}
+
 				if stack[len(stack)-1] != "if" && stack[len(stack)-1] != "for" {
 					return ErrEndWithoutMatchingIfOrFor
 				}
+
 				stack = stack[:len(stack)-1]
 			}
 		}
 	}
+
 	if len(stack) > 0 {
 		return fmt.Errorf("%w: %s", ErrUnmatchedDirective, stack[len(stack)-1])
 	}
+
 	return nil
 }
 
@@ -80,6 +89,7 @@ func Execute(tokens []tok.Token) ([]tok.Token, error) {
 	if err := validateParentheses(tokens); err != nil {
 		return tokens, err
 	}
+
 	if err := validateSnapSQLDirectives(tokens); err != nil {
 		return tokens, err
 	}
@@ -101,7 +111,7 @@ func Execute(tokens []tok.Token) ([]tok.Token, error) {
 func insertMinimalDummyLiterals(tokens []tok.Token) []tok.Token {
 	var result []tok.Token
 
-	for i := 0; i < len(tokens); i++ {
+	for i := range tokens {
 		token := tokens[i]
 
 		if token.Type == tok.BLOCK_COMMENT && isVariableDirective(token.Value) {
@@ -110,12 +120,14 @@ func insertMinimalDummyLiterals(tokens []tok.Token) []tok.Token {
 
 			// Check if there's a whitespace token immediately after this comment
 			shouldInsert := true
+
 			if i+1 < len(tokens) {
 				switch tokens[i+1].Type {
 				case tok.NUMBER, tok.STRING, tok.BOOLEAN, tok.IDENTIFIER:
 					shouldInsert = false
 				}
 			}
+
 			if shouldInsert {
 				// Insert DUMMY_LITERAL token immediately after the comment (before the whitespace)
 				dummyLiteral := tok.Token{
@@ -150,6 +162,7 @@ func extractVariableName(comment string) string {
 	} else if strings.HasPrefix(trimmed, "/*$") {
 		content = strings.TrimSpace(trimmed[3 : len(trimmed)-2])
 	}
+
 	return content
 }
 
@@ -158,6 +171,7 @@ func extractVariableName(comment string) string {
 func processSemicolons(tokens []tok.Token) ([]tok.Token, error) {
 	// Find all semicolon positions
 	semicolonIndices := make([]int, 0)
+
 	for i, token := range tokens {
 		if token.Type == tok.SEMICOLON {
 			semicolonIndices = append(semicolonIndices, i)
@@ -211,6 +225,7 @@ func isSemicolonAtEnd(tokens []tok.Token, semicolonIndex int) bool {
 			if isSnapSQLDirective(token.Value) {
 				return false
 			}
+
 			continue
 		case tok.EOF:
 			// EOF is allowed after semicolon
@@ -227,6 +242,7 @@ func isSemicolonAtEnd(tokens []tok.Token, semicolonIndex int) bool {
 // isSnapSQLDirective checks if a comment is a SnapSQL directive
 func isSnapSQLDirective(comment string) bool {
 	trimmed := strings.TrimSpace(comment)
+
 	return strings.HasPrefix(trimmed, "/*#") ||
 		strings.HasPrefix(trimmed, "/*=") ||
 		strings.HasPrefix(trimmed, "/*$")

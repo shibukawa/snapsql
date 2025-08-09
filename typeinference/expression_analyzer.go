@@ -36,6 +36,7 @@ func NewExpressionCastAnalyzer(tokens []tokenizer.Token, engine *TypeInferenceEn
 // DetectCasts finds all CAST expressions in the token stream
 func (a *ExpressionCastAnalyzer) DetectCasts() []CastInfo {
 	var casts []CastInfo
+
 	a.position = 0
 
 	for a.position < len(a.tokens) {
@@ -86,6 +87,7 @@ func (a *ExpressionCastAnalyzer) parseCastExpression() *CastInfo {
 			(a.tokens[a.position].Type == tokenizer.IDENTIFIER && strings.ToUpper(a.tokens[a.position].Value) == "CAST")) {
 		return nil
 	}
+
 	a.position++
 
 	// Expect opening parenthesis
@@ -93,11 +95,14 @@ func (a *ExpressionCastAnalyzer) parseCastExpression() *CastInfo {
 		a.tokens[a.position].Type != tokenizer.OPENED_PARENS {
 		return nil
 	}
+
 	a.position++
 
 	// Parse expression until AS keyword
 	var expression []tokenizer.Token
+
 	parenLevel := 1
+
 	for a.position < len(a.tokens) {
 		token := a.tokens[a.position]
 
@@ -129,6 +134,7 @@ func (a *ExpressionCastAnalyzer) parseCastExpression() *CastInfo {
 		a.tokens[a.position].Type != tokenizer.CLOSED_PARENS {
 		return nil
 	}
+
 	endPos := a.position
 
 	return &CastInfo{
@@ -202,6 +208,7 @@ func (a *ExpressionCastAnalyzer) parseTypeSpecification() *TypeInfo {
 					maxLength = &num
 				}
 			}
+
 			a.position++
 
 			// Check for comma and second parameter (for DECIMAL(p,s))
@@ -211,6 +218,7 @@ func (a *ExpressionCastAnalyzer) parseTypeSpecification() *TypeInfo {
 					if num, err := strconv.Atoi(a.tokens[a.position].Value); err == nil {
 						scale = &num
 					}
+
 					a.position++
 				}
 			}
@@ -284,6 +292,7 @@ func (a *ExpressionCastAnalyzer) inferSingleToken(token tokenizer.Token) (*TypeI
 		if strings.Contains(token.Value, ".") {
 			return &TypeInfo{BaseType: "float", IsNullable: false}, nil
 		}
+
 		return &TypeInfo{BaseType: "int", IsNullable: false}, nil
 
 	case tokenizer.STRING:
@@ -296,6 +305,7 @@ func (a *ExpressionCastAnalyzer) inferSingleToken(token tokenizer.Token) (*TypeI
 			// In reality, we'd need more context about tables
 			return &TypeInfo{BaseType: "any", IsNullable: true}, nil
 		}
+
 		return &TypeInfo{BaseType: "any", IsNullable: true}, nil
 
 	default:
@@ -330,6 +340,7 @@ func (a *ExpressionCastAnalyzer) inferFunctionCall() (*TypeInfo, error) {
 	}
 
 	funcName := strings.ToUpper(a.tokens[0].Value)
+
 	return a.applyFunctionTypeRule(funcName)
 }
 
@@ -397,8 +408,10 @@ func (a *ExpressionCastAnalyzer) applyOperatorTypeRule(operator string, leftType
 			if operator == "/" {
 				return &TypeInfo{BaseType: "float", IsNullable: leftType.IsNullable || rightType.IsNullable}, nil
 			}
+
 			return &TypeInfo{BaseType: "int", IsNullable: leftType.IsNullable || rightType.IsNullable}, nil
 		}
+
 		return &TypeInfo{BaseType: "float", IsNullable: leftType.IsNullable || rightType.IsNullable}, nil
 
 	case "=", "<>", "!=", "<", ">", "<=", ">=":

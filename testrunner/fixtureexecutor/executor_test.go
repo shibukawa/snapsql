@@ -16,6 +16,7 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 	// Create in-memory SQLite database for testing
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	// Create test table
@@ -68,20 +69,28 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 	// Verify data was inserted
 	rows, err := db.Query("SELECT id, name, email FROM users ORDER BY id")
 	require.NoError(t, err)
+
 	defer rows.Close()
 
 	var users []map[string]any
+
 	for rows.Next() {
-		var id int
-		var name, email string
+		var (
+			id          int
+			name, email string
+		)
+
 		err := rows.Scan(&id, &name, &email)
 		require.NoError(t, err)
+
 		users = append(users, map[string]any{
 			"id":    id,
 			"name":  name,
 			"email": email,
 		})
 	}
+
+	require.NoError(t, rows.Err())
 
 	assert.Equal(t, 2, len(users))
 	assert.Equal(t, "John Doe", users[0]["name"])
@@ -92,6 +101,7 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 	// Create in-memory SQLite database for testing
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	// Create test table
@@ -139,20 +149,28 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 	// Verify old data was cleared and new data was inserted
 	rows, err := db.Query("SELECT id, name, email FROM users ORDER BY id")
 	require.NoError(t, err)
+
 	defer rows.Close()
 
 	var users []map[string]any
+
 	for rows.Next() {
-		var id int
-		var name, email string
+		var (
+			id          int
+			name, email string
+		)
+
 		err := rows.Scan(&id, &name, &email)
 		require.NoError(t, err)
+
 		users = append(users, map[string]any{
 			"id":    id,
 			"name":  name,
 			"email": email,
 		})
 	}
+
+	require.NoError(t, rows.Err())
 
 	// Should only have the new user, old user should be cleared
 	assert.Equal(t, 1, len(users))
@@ -163,6 +181,7 @@ func TestTestRunner_RunTests(t *testing.T) {
 	// Create in-memory SQLite database for testing
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	// Create test table
@@ -233,6 +252,7 @@ func TestTestRunner_RunTests(t *testing.T) {
 
 	// Verify data was rolled back (table should be empty)
 	var count int
+
 	err = db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count, "Data should be rolled back")

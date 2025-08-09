@@ -241,6 +241,7 @@ func TestConfig_GetDefaultValueForInsert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, exists := config.GetDefaultValueForInsert(tt.fieldName)
 			assert.Equal(t, tt.exists, exists)
+
 			if exists {
 				assert.Equal(t, tt.expected, result)
 			}
@@ -268,6 +269,7 @@ func TestConfig_GetDefaultValueForUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, exists := config.GetDefaultValueForUpdate(tt.fieldName)
 			assert.Equal(t, tt.exists, exists)
+
 			if exists {
 				assert.Equal(t, tt.expected, result)
 			}
@@ -291,6 +293,7 @@ system:
 `
 
 	var config Config
+
 	err := yaml.Unmarshal([]byte(yamlContent), &config)
 	assert.NoError(t, err)
 
@@ -331,6 +334,7 @@ system:
 `
 
 	var config Config
+
 	err := yaml.Unmarshal([]byte(yamlContent), &config)
 	assert.NoError(t, err)
 

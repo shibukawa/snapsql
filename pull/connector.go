@@ -1,6 +1,7 @@
 package pull
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net"
@@ -147,6 +148,7 @@ func (c *DatabaseConnector) Close(db *sql.DB) error {
 	if db == nil {
 		return nil
 	}
+
 	return db.Close()
 }
 
@@ -155,7 +157,10 @@ func (c *DatabaseConnector) Ping(db *sql.DB) error {
 	if db == nil {
 		return ErrConnectionFailed
 	}
-	return db.Ping()
+
+	ctx := context.Background()
+
+	return db.PingContext(ctx)
 }
 
 // ParseConnectionInfo parses a database URL into connection information
@@ -173,10 +178,12 @@ func (c *DatabaseConnector) ParseConnectionInfo(databaseURL string) (ConnectionI
 	case "postgres", "postgresql":
 		info.Type = "postgresql"
 		info.Host = u.Hostname()
+
 		info.Port = u.Port()
 		if info.Port == "" {
 			info.Port = "5432"
 		}
+
 		info.Database = strings.TrimPrefix(u.Path, "/")
 		if u.User != nil {
 			info.Username = u.User.Username()
@@ -187,10 +194,12 @@ func (c *DatabaseConnector) ParseConnectionInfo(databaseURL string) (ConnectionI
 	case "mysql":
 		info.Type = "mysql"
 		info.Host = u.Hostname()
+
 		info.Port = u.Port()
 		if info.Port == "" {
 			info.Port = "3306"
 		}
+
 		info.Database = strings.TrimPrefix(u.Path, "/")
 		if u.User != nil {
 			info.Username = u.User.Username()
@@ -229,6 +238,7 @@ func (c *DatabaseConnector) BuildConnectionString(info ConnectionInfo) string {
 			return fmt.Sprintf("postgres://%s:%s@%s/%s",
 				info.Username, info.Password, hostPort, info.Database)
 		}
+
 		return fmt.Sprintf("postgres://%s@%s/%s",
 			info.Username, hostPort, info.Database)
 	case "mysql":
@@ -236,10 +246,11 @@ func (c *DatabaseConnector) BuildConnectionString(info ConnectionInfo) string {
 			return fmt.Sprintf("mysql://%s:%s@%s/%s",
 				info.Username, info.Password, hostPort, info.Database)
 		}
+
 		return fmt.Sprintf("mysql://%s@%s/%s",
 			info.Username, hostPort, info.Database)
 	case "sqlite":
-		return fmt.Sprintf("sqlite://%s", info.Database)
+		return "sqlite://" + info.Database
 	default:
 		return ""
 	}
@@ -258,9 +269,11 @@ func (p *PullOperation) ValidateConfig() error {
 	if p.Config.DatabaseURL == "" {
 		return ErrEmptyDatabaseURL
 	}
+
 	if p.Config.DatabaseType == "" {
 		return ErrEmptyDatabaseType
 	}
+
 	if p.Config.OutputPath == "" {
 		return ErrInvalidOutputPath
 	}
@@ -270,7 +283,7 @@ func (p *PullOperation) ValidateConfig() error {
 }
 
 // Execute performs the complete pull operation
-func (p *PullOperation) Execute() (*PullResult, error) {
+func (p *PullOperation) Execute(ctx context.Context) (*PullResult, error) {
 	// Validate configuration
 	if err := p.ValidateConfig(); err != nil {
 		return nil, err
@@ -293,6 +306,7 @@ func (p *PullOperation) Execute() (*PullResult, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	p.extractor = extractor
 
 	// Create extract config
@@ -306,7 +320,7 @@ func (p *PullOperation) Execute() (*PullResult, error) {
 	}
 
 	// Extract schemas
-	schemas, err := p.extractor.ExtractSchemas(db, extractConfig)
+	schemas, err := p.extractor.ExtractSchemas(ctx, db, extractConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -343,9 +357,11 @@ func (c *DatabaseConnector) validatePostgreSQLURL(u *url.URL) error {
 	if u.Host == "" {
 		return ErrInvalidDatabaseURL
 	}
+
 	if strings.TrimPrefix(u.Path, "/") == "" {
 		return ErrInvalidDatabaseURL
 	}
+
 	return nil
 }
 
@@ -353,9 +369,11 @@ func (c *DatabaseConnector) validateMySQLURL(u *url.URL) error {
 	if u.Host == "" {
 		return ErrInvalidDatabaseURL
 	}
+
 	if strings.TrimPrefix(u.Path, "/") == "" {
 		return ErrInvalidDatabaseURL
 	}
+
 	return nil
 }
 
@@ -363,6 +381,7 @@ func (c *DatabaseConnector) validateSQLiteURL(u *url.URL) error {
 	if u.Path == "" && u.Host == "" {
 		return ErrInvalidDatabaseURL
 	}
+
 	return nil
 }
 
@@ -377,10 +396,11 @@ func (c *DatabaseConnector) convertToDriverString(databaseURL, dbType string) (s
 		// pgx supports standard PostgreSQL connection strings
 		if info.Host != "" && info.Database != "" {
 			// Build standard PostgreSQL connection string
-			connStr := fmt.Sprintf("postgres://%s", info.Host)
+			connStr := "postgres://" + info.Host
 			if info.Port != "" {
 				connStr += ":" + info.Port
 			}
+
 			connStr += "/" + info.Database
 
 			// Add authentication if provided
@@ -389,6 +409,7 @@ func (c *DatabaseConnector) convertToDriverString(databaseURL, dbType string) (s
 				if info.Password != "" {
 					auth += ":" + info.Password
 				}
+
 				connStr = fmt.Sprintf("postgres://%s@%s", auth, connStr[11:]) // Remove "postgres://"
 			}
 
@@ -403,6 +424,7 @@ func (c *DatabaseConnector) convertToDriverString(databaseURL, dbType string) (s
 
 			return connStr, nil
 		}
+
 		return "", ErrInvalidConnectionInfo
 
 	case "mysql":
@@ -413,18 +435,23 @@ func (c *DatabaseConnector) convertToDriverString(databaseURL, dbType string) (s
 			if info.Password != "" {
 				connStr += ":" + info.Password
 			}
+
 			connStr += "@"
 		}
+
 		if info.Host != "" {
 			connStr += "tcp(" + info.Host
 			if info.Port != "" {
 				connStr += ":" + info.Port
 			}
+
 			connStr += ")"
 		}
+
 		if info.Database != "" {
 			connStr += "/" + info.Database
 		}
+
 		return connStr, nil
 
 	case "sqlite":
@@ -450,7 +477,7 @@ func (c *DatabaseConnector) getDriverName(dbType string) string {
 }
 
 // ExecutePull is a convenience function that performs a complete pull operation
-func ExecutePull(config PullConfig) (*PullResult, error) {
+func ExecutePull(ctx context.Context, config PullConfig) (*PullResult, error) {
 	operation := NewPullOperation(config)
-	return operation.Execute()
+	return operation.Execute(ctx)
 }

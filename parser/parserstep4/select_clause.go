@@ -46,12 +46,15 @@ var (
 
 func parseFieldItems(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Token]) (int, []cmn.FieldName) {
 	consume := 0
+
 	var fields []cmn.FieldName
+
 	for _, part := range pc.FindIter(pctx, commaOrParenClose, tokens) {
 		consume = part.Consume + len(part.Skipped)
 		if len(part.Skipped) == 0 {
 			continue
 		}
+
 		_, f, err := field(pctx, part.Skipped)
 		if err == nil {
 			switch len(f) {
@@ -68,10 +71,12 @@ func parseFieldItems(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Tok
 				})
 			}
 		}
+
 		if part.Match[0].Val.Type == tok.CLOSED_PARENS {
 			break
 		}
 	}
+
 	return consume, fields
 }
 
@@ -87,6 +92,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 	// DISTINCT found
 	if err == nil {
 		pTokens = pTokens[consume:]
+
 		switch match[0].Type {
 		case "distinct": // DISTINCT
 			clause.Distinct = true
@@ -132,13 +138,16 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 			field.Expression = cmn.ToToken(fieldTokens)
 			clause.Fields = append(clause.Fields, field)
 			nameToPos[field.FieldName] = append(nameToPos[field.FieldName], field.Pos.String())
+
 			continue
 		}
 
 		_, match, err = fieldItemStart(pctx, fieldTokens)
 		if err != nil {
-			continue // todo: panic
+			// Skip invalid field tokens and continue processing
+			continue
 		}
+
 		v := match[0].Val
 		switch match[0].Type {
 		case "field": // identifier(column name)
@@ -147,6 +156,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 				if field.FieldName == "" {
 					field.FieldName = v.Value // use identity as alias
 				}
+
 				field.FieldKind = cmn.SingleField
 				field.TableName = ""
 				field.OriginalField = v.Value
@@ -162,6 +172,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 					if field.FieldName == "" {
 						field.FieldName = match[2].Val.Value // use identity as alias
 					}
+
 					field.FieldKind = cmn.TableField
 					field.TableName = match[0].Val.Value
 					field.OriginalField = v.Value + "." + match[2].Val.Value
@@ -175,6 +186,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 					field.TypeName = returnType
 				}
 			}
+
 			field.FieldKind = cmn.FunctionField
 			field.Expression = cmn.ToToken(match)
 			clause.Fields = append(clause.Fields, field)
@@ -197,6 +209,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		case "literal": // literal (boolean/number/string/null) or DUMMY_LITERAL
 			// Check if this is a DUMMY_LITERAL token (allowed as variable placeholder)
 			isDummyLiteral := false
+
 			for _, token := range match {
 				if token.Val.Type == tok.DUMMY_LITERAL {
 					isDummyLiteral = true
@@ -210,7 +223,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 				field.Expression = cmn.ToToken(match)
 				clause.Fields = append(clause.Fields, field)
 			} else {
-				// todo: warning
+				// Handle unrecognized field pattern as literal
 				field.FieldKind = cmn.LiteralField
 				field.Expression = cmn.ToToken(match)
 				clause.Fields = append(clause.Fields, field)
@@ -227,6 +240,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		if d.TableName != "" {
 			continue
 		}
+
 		for _, f := range clause.Fields {
 			if f.FieldName == d.Name && f.ExplicitName {
 				perr.Add(fmt.Errorf("%w at %s: only field name is allowed but %s in SELECT clause points alias", cmn.ErrInvalidSQL, f.Pos.String(), d.Name))
@@ -247,6 +261,7 @@ func parseFieldQualifier(fieldTokens []pc.Token[tok.Token]) (cmn.SelectField, []
 	}
 	// Alias
 	pctx := pc.NewParseContext[tok.Token]()
+
 	beforeAlias, match, _, _, ok := pc.Find(pctx, alias, fieldTokens)
 	if ok {
 		switch match[0].Type {
@@ -278,6 +293,7 @@ func parseFieldQualifier(fieldTokens []pc.Token[tok.Token]) (cmn.SelectField, []
 		}
 	} else {
 		var ok bool
+
 		newFieldToken, match, _, _, ok := pc.Find(pctx, postgreSQLCastEnd, fieldTokens)
 		if ok {
 			switch len(match) {
@@ -293,5 +309,6 @@ func parseFieldQualifier(fieldTokens []pc.Token[tok.Token]) (cmn.SelectField, []
 			}
 		}
 	}
+
 	return result, fieldTokens
 }

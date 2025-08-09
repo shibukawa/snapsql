@@ -39,6 +39,7 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	}
 
 	ctx.Instructions = instructions
+
 	return nil
 }
 
@@ -67,6 +68,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 		if token.Type == tok.BLOCK_COMMENT && isHeaderComment(token.Value) {
 			continue
 		}
+
 		if token.Directive != nil {
 			continue
 		}
@@ -76,6 +78,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 			if conversion := detectCastSyntax(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
+
 				continue
 			}
 		}
@@ -85,6 +88,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 			if conversion := detectPostgreSQLCast(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
+
 				continue
 			}
 		}
@@ -94,6 +98,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 			if conversion := detectNowFunction(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
+
 				continue
 			}
 		}
@@ -121,6 +126,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 		// Check for TRUE/FALSE literals
 		if token.Type == tok.BOOLEAN {
 			upperValue := strings.ToUpper(strings.TrimSpace(token.Value))
+
 			boolValue := "1"
 			if upperValue == "FALSE" {
 				boolValue = "0"
@@ -149,6 +155,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 			if conversion := detectConcatFunction(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
+
 				continue
 			}
 		}
@@ -158,6 +165,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 			if conversion := detectRandFunction(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
+
 				continue
 			}
 		}
@@ -167,6 +175,7 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 			if conversion := detectRandomFunction(tokens, i); conversion != nil {
 				conversions = append(conversions, *conversion)
 				i = conversion.EndTokenIndex // Skip processed tokens
+
 				continue
 			}
 		}
@@ -212,8 +221,10 @@ func detectCastSyntax(tokens []tok.Token, startIndex int) *DialectConversion {
 	}
 
 	// Extract expression and type
-	var exprTokens []tok.Token
-	var typeTokens []tok.Token
+	var (
+		exprTokens []tok.Token
+		typeTokens []tok.Token
+	)
 
 	for i := startIndex + 2; i < asIndex; i++ {
 		exprTokens = append(exprTokens, tokens[i])
@@ -328,8 +339,10 @@ func detectPostgreSQLCast(tokens []tok.Token, colonIndex int) *DialectConversion
 	}
 
 	// Extract expression and type tokens
-	var exprTokens []tok.Token
-	var typeTokens []tok.Token
+	var (
+		exprTokens []tok.Token
+		typeTokens []tok.Token
+	)
 
 	for i := exprStartIndex; i < colonIndex; i++ {
 		exprTokens = append(exprTokens, tokens[i])
@@ -442,7 +455,7 @@ func detectConcatFunction(tokens []tok.Token, startIndex int) *DialectConversion
 			},
 			{
 				Dialects:    []string{"postgresql"},
-				SqlFragment: fmt.Sprintf("CONCAT_SPLIT|%s", convertConcatToPostgreSQL(argsSQL)),
+				SqlFragment: "CONCAT_SPLIT|" + convertConcatToPostgreSQL(argsSQL),
 			},
 		},
 	}
@@ -454,6 +467,7 @@ func buildSQLFromTokens(tokens []tok.Token) string {
 	for _, token := range tokens {
 		result.WriteString(token.Value)
 	}
+
 	return strings.TrimSpace(result.String())
 }
 
@@ -462,10 +476,12 @@ func convertConcatToPostgreSQL(args string) string {
 	// Simple implementation: split by comma and join with ||
 	// This is a simplified version - a full implementation would need proper parsing
 	parts := strings.Split(args, ",")
+
 	var trimmedParts []string
 	for _, part := range parts {
 		trimmedParts = append(trimmedParts, strings.TrimSpace(part))
 	}
+
 	return strings.Join(trimmedParts, " || ")
 }
 
@@ -549,7 +565,7 @@ func createSplitConcatInstructions(variant DialectVariant, pos string) []Instruc
 		// PostgreSQL format: args with || operators
 		// Split by || and create instructions for each operator
 		parts := strings.Split(content, " || ")
-		for i := 0; i < len(parts)-1; i++ {
+		for range len(parts) - 1 {
 			// Add || operator between arguments
 			instructions = append(instructions, Instruction{
 				Op:          OpEmitIfDialect,
@@ -654,6 +670,7 @@ func applyDialectConversions(instruction Instruction, conversions []DialectConve
 	}
 
 	var result []Instruction
+
 	currentValue := instruction.Value
 
 	// Sort conversions by start position (ascending) to process from left to right
@@ -662,8 +679,8 @@ func applyDialectConversions(instruction Instruction, conversions []DialectConve
 	copy(sortedConversions, conversions)
 
 	// Simple bubble sort by start position (ascending)
-	for i := 0; i < len(sortedConversions)-1; i++ {
-		for j := 0; j < len(sortedConversions)-i-1; j++ {
+	for i := range len(sortedConversions) - 1 {
+		for j := range len(sortedConversions) - i - 1 {
 			if sortedConversions[j].StartTokenIndex > sortedConversions[j+1].StartTokenIndex {
 				sortedConversions[j], sortedConversions[j+1] = sortedConversions[j+1], sortedConversions[j]
 			}
@@ -672,6 +689,7 @@ func applyDialectConversions(instruction Instruction, conversions []DialectConve
 
 	// Process conversions from left to right
 	remainingValue := currentValue
+
 	var lastConversionEndPos string
 
 	// Calculate position information for each conversion
@@ -692,6 +710,7 @@ func applyDialectConversions(instruction Instruction, conversions []DialectConve
 			lastToken := conversion.OriginalTokens[len(conversion.OriginalTokens)-1]
 			// Calculate position after the token (approximate)
 			endColumn := lastToken.Position.Column + len(lastToken.Value)
+
 			return fmt.Sprintf("%d:%d", lastToken.Position.Line, endColumn)
 		}
 		// Fallback to original instruction position

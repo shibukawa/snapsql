@@ -1,6 +1,7 @@
 package markdownparser
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -13,11 +14,11 @@ import (
 
 // Sentinel errors
 var (
-	ErrInvalidFrontMatter       = fmt.Errorf("invalid front matter")
-	ErrMissingRequiredSection   = fmt.Errorf("missing required section")
-	ErrInvalidTestCase          = fmt.Errorf("invalid test case")
-	ErrDuplicateParameters      = fmt.Errorf("duplicate parameters section")
-	ErrDuplicateExpectedResults = fmt.Errorf("duplicate expected results section")
+	ErrInvalidFrontMatter       = errors.New("invalid front matter")
+	ErrMissingRequiredSection   = errors.New("missing required section")
+	ErrInvalidTestCase          = errors.New("invalid test case")
+	ErrDuplicateParameters      = errors.New("duplicate parameters section")
+	ErrDuplicateExpectedResults = errors.New("duplicate expected results section")
 )
 
 // ParseOptions contains options for parsing markdown documents
@@ -67,6 +68,7 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 		if frontMatter == nil {
 			frontMatter = make(map[string]any)
 		}
+
 		frontMatter["dialect"] = options.DatabaseOverride.Dialect
 		// Store connection info for test runners
 		frontMatter["_test_driver"] = options.DatabaseOverride.Driver
@@ -133,8 +135,10 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 			if err != nil {
 				return nil, fmt.Errorf("failed to extract parameters: %w", err)
 			}
+
 			document.ParametersText = paramText
 			document.ParametersType = paramType
+
 			break
 		}
 	}
@@ -145,6 +149,7 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse test cases: %w", err)
 		}
+
 		document.TestCases = testCases
 	}
 

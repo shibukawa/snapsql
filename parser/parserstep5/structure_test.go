@@ -198,11 +198,13 @@ WHERE active = /*= filters.active */true /*# end */`,
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
+
 			var parseErr cmn.ParseError
 
 			// Debug for IfCoveringWhereClause test
 			if tc.name == "IfCoveringWhereClause" {
 				t.Log("Debugging IfCoveringWhereClause test")
+
 				for _, clause := range stmt.Clauses() {
 					t.Logf("Clause type: %s", clause.Type())
 					debugTokens(t, clause.ContentTokens())
@@ -295,6 +297,7 @@ func TestValidateAndLinkDirectives_MultipleErrors(t *testing.T) {
 	for _, tc := range multiErrorTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
+
 			var parseErr cmn.ParseError
 			validateAndLinkDirectives(stmt, &parseErr)
 
@@ -366,6 +369,7 @@ func TestValidateAndLinkDirectives_NextIndexLinking(t *testing.T) {
 	for _, tc := range linkingTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
+
 			var parseErr cmn.ParseError
 			validateAndLinkDirectives(stmt, &parseErr)
 			assert.Equal(t, 0, len(parseErr.Errors), "validation should succeed: %v", parseErr.Errors)
@@ -401,11 +405,13 @@ func TestValidateAndLinkDirectives_NextIndexLinking(t *testing.T) {
 // findClauseByType finds a clause of the specified type in a statement
 func findClauseByType(t *testing.T, stmt cmn.StatementNode, clauseType cmn.NodeType) cmn.ClauseNode {
 	t.Helper()
+
 	for _, clause := range stmt.Clauses() {
 		if clause.Type() == clauseType {
 			return clause
 		}
 	}
+
 	return nil
 }
 
@@ -413,6 +419,7 @@ func findClauseByType(t *testing.T, stmt cmn.StatementNode, clauseType cmn.NodeT
 func debugTokens(t *testing.T, tokens []tokenizer.Token) {
 	t.Helper()
 	t.Logf("Total tokens: %d", len(tokens))
+
 	for i, token := range tokens {
 		if token.Directive != nil {
 			t.Logf("Token[%d]: Type=%s, Value=%s, Directive.Type=%s",
@@ -425,12 +432,15 @@ func debugTokens(t *testing.T, tokens []tokenizer.Token) {
 
 func extractDirectiveTokens(t *testing.T, tokens []tokenizer.Token) []tokenizer.Token {
 	t.Helper()
+
 	var directives []tokenizer.Token
+
 	for _, token := range tokens {
 		if token.Directive != nil && IsControlFlowDirective(token.Directive.Type) {
 			directives = append(directives, token)
 		}
 	}
+
 	return directives
 }
 
@@ -480,10 +490,12 @@ func TestValidateAndLinkDirectives_ParenthesesBoundary(t *testing.T) {
 	for _, tc := range parenthesesTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
+
 			var parseErr cmn.ParseError
 			validateAndLinkDirectives(stmt, &parseErr)
 
 			t.Logf("Test case: %s, Errors count: %d", tc.name, len(parseErr.Errors))
+
 			if len(parseErr.Errors) > 0 {
 				t.Logf("Errors: %v", parseErr.Errors)
 			}

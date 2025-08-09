@@ -107,8 +107,10 @@ func TestBasicTokens(t *testing.T) {
 			assert.NoError(t, err)
 
 			var actualTypes []TokenType
+
 			for _, token := range tokens {
 				assert.NoError(t, err)
+
 				actualTypes = append(actualTypes, token.Type)
 				if token.Type == EOF {
 					break
@@ -192,6 +194,7 @@ func TestSnapSQLDirectives(t *testing.T) {
 			assert.NoError(t, err)
 
 			var foundToken Token
+
 			for _, token := range tokens {
 				if token.Type != EOF {
 					foundToken = token
@@ -201,6 +204,7 @@ func TestSnapSQLDirectives(t *testing.T) {
 
 			assert.Equal(t, test.expectedType, foundToken.Type)
 			assert.Equal(t, test.isDirective, foundToken.Directive != nil)
+
 			if test.isDirective {
 				assert.Equal(t, test.directiveType, foundToken.Directive.Type)
 			}
@@ -211,6 +215,7 @@ func TestSnapSQLDirectives(t *testing.T) {
 // Helper function to test for specific token types
 func testForTokenType(t *testing.T, input string, expectedTokenType TokenType, expectError bool, errorMsg string) {
 	t.Helper()
+
 	tokens, err := Tokenize(input)
 
 	if expectError {
@@ -221,6 +226,7 @@ func testForTokenType(t *testing.T, input string, expectedTokenType TokenType, e
 	assert.NoError(t, err)
 
 	var foundToken bool
+
 	for _, token := range tokens {
 		if token.Type == expectedTokenType {
 			foundToken = true
@@ -331,15 +337,18 @@ func TestSubqueries(t *testing.T) {
 			assert.NoError(t, err)
 
 			var foundSubquery bool
+
 			parenCount := 0
 			// サブクエリ検出ロジックを現仕様に合わせて修正
 			for _, token := range tokens {
 				if token.Type == SELECT && parenCount > 0 {
 					foundSubquery = true
 				}
-				if token.Type == OPENED_PARENS {
+
+				switch token.Type {
+				case OPENED_PARENS:
 					parenCount++
-				} else if token.Type == CLOSED_PARENS {
+				case CLOSED_PARENS:
 					parenCount--
 				}
 			}
@@ -416,6 +425,7 @@ func TestAllTokens(t *testing.T) {
 	assert.NoError(t, err)
 
 	expectedTypes := []TokenType{SELECT, WHITESPACE, IDENTIFIER, WHITESPACE, FROM, WHITESPACE, IDENTIFIER, SEMICOLON, EOF}
+
 	var actualTypes []TokenType
 	for _, token := range tokens {
 		actualTypes = append(actualTypes, token.Type)
@@ -490,8 +500,10 @@ func TestComplexSQL(t *testing.T) {
 	tokens, err := Tokenize(sql)
 	assert.NoError(t, err)
 
-	var tokenCount int
-	var foundKeywords = make(map[TokenType]bool)
+	var (
+		tokenCount    int
+		foundKeywords = make(map[TokenType]bool)
+	)
 
 	for _, token := range tokens {
 		tokenCount++
@@ -510,24 +522,30 @@ func TestComplexSQL(t *testing.T) {
 func TestPostgresDoubleColonCastToken(t *testing.T) {
 	tokens, err := Tokenize("SELECT age::text, (price*quantity)::numeric FROM users;")
 	assert.NoError(t, err)
+
 	var foundDoubleColon bool
+
 	for _, tok := range tokens {
 		if tok.Type == DOUBLE_COLON {
 			foundDoubleColon = true
 		}
 	}
+
 	assert.True(t, foundDoubleColon, "DOUBLE_COLON token should be present for '::' cast operator")
 }
 
 func TestPostgresJSONOperators(t *testing.T) {
 	tokens, err := Tokenize("col->'key', col->>'key', col#>'{a,b}', col#>>'{a,b}'")
 	assert.NoError(t, err)
+
 	var found []string
+
 	for _, tok := range tokens {
 		if tok.Type == JSON_OPERATOR {
 			found = append(found, tok.Value)
 		}
 	}
+
 	assert.Equal(t, []string{"->", "->>", "#>", "#>>"}, found)
 }
 
@@ -539,6 +557,7 @@ func TestTokenizerDirectives(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Logf("Raw tokenizer output for: %s", sql)
+
 	for i, token := range tokens {
 		if token.Directive != nil {
 			t.Logf("Token[%d]: %s = %q (Directive: %s, Condition: %q)",
@@ -550,6 +569,7 @@ func TestTokenizerDirectives(t *testing.T) {
 
 	// Check if directive token is present
 	foundDirective := false
+
 	for _, token := range tokens {
 		if token.Directive != nil && token.Directive.Type == "variable" {
 			foundDirective = true
@@ -661,6 +681,7 @@ func TestTokenizeWithLineOffset(t *testing.T) {
 
 	// Find the FROM token
 	var fromToken Token
+
 	for _, token := range tokens {
 		if token.Type == FROM {
 			fromToken = token
@@ -676,6 +697,7 @@ func TestTokenizeWithLineOffset(t *testing.T) {
 
 	// Find the FROM token with offset
 	var fromTokenWithOffset Token
+
 	for _, token := range tokensWithOffset {
 		if token.Type == FROM {
 			fromTokenWithOffset = token
@@ -693,6 +715,7 @@ func TestModuloToken(t *testing.T) {
 
 	// Find the MODULO token
 	var moduloToken Token
+
 	for _, token := range tokens {
 		if token.Type == MODULO {
 			moduloToken = token

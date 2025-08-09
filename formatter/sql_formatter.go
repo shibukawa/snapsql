@@ -98,6 +98,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 		if sql[pos] == '\n' {
 			tokens = append(tokens, Token{Type: TokenNewline, Value: "\n"})
 			pos++
+
 			continue
 		}
 
@@ -110,6 +111,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 				IsSnap: true,
 			})
 			pos += snapMatch[1]
+
 			continue
 		}
 
@@ -119,6 +121,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 				comment := sql[pos : pos+commentMatch[1]]
 				tokens = append(tokens, Token{Type: TokenComment, Value: comment})
 				pos += commentMatch[1]
+
 				continue
 			}
 		}
@@ -129,6 +132,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 				literal := sql[pos : pos+stringMatch[1]]
 				tokens = append(tokens, Token{Type: TokenLiteral, Value: literal})
 				pos += stringMatch[1]
+
 				continue
 			}
 		}
@@ -139,6 +143,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 				number := sql[pos : pos+numberMatch[1]]
 				tokens = append(tokens, Token{Type: TokenLiteral, Value: number})
 				pos += numberMatch[1]
+
 				continue
 			}
 		}
@@ -154,7 +159,9 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 				} else {
 					tokens = append(tokens, Token{Type: TokenIdentifier, Value: ident})
 				}
+
 				pos += identMatch[1]
+
 				continue
 			}
 		}
@@ -171,7 +178,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 		case '=', '<', '>', '!', '+', '-', '*', '/', '%':
 			// Handle multi-character operators
 			if pos+1 < len(sql) && (sql[pos+1] == '=' || (char == '<' && sql[pos+1] == '>') || (char == '!' && sql[pos+1] == '=')) {
-				tokens = append(tokens, Token{Type: TokenOperator, Value: string(sql[pos : pos+2])})
+				tokens = append(tokens, Token{Type: TokenOperator, Value: sql[pos : pos+2]})
 				pos++
 			} else {
 				tokens = append(tokens, Token{Type: TokenOperator, Value: string(char)})
@@ -179,6 +186,7 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 		default:
 			tokens = append(tokens, Token{Type: TokenOperator, Value: string(char)})
 		}
+
 		pos++
 	}
 
@@ -187,12 +195,14 @@ func (f *SQLFormatter) tokenize(sql string) ([]Token, error) {
 
 // formatTokens formats the tokens according to the style rules
 func (f *SQLFormatter) formatTokens(tokens []Token) string {
-	var result strings.Builder
-	var indentLevel int
-	var needsNewline bool
-	var lastToken *Token
-	var inSelectList bool
-	var inValuesList bool
+	var (
+		result       strings.Builder
+		indentLevel  int
+		needsNewline bool
+		lastToken    *Token
+		inSelectList bool
+		inValuesList bool
+	)
 
 	for i, token := range tokens {
 		switch token.Type {
@@ -204,37 +214,45 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 				if strings.HasPrefix(directive, "if ") || strings.HasPrefix(directive, "for ") {
 					if needsNewline {
 						result.WriteString("\n")
-						needsNewline = false
 					}
+
 					result.WriteString(strings.Repeat(" ", indentLevel*f.indentSize))
 					result.WriteString(token.Value)
 					result.WriteString("\n")
+
 					indentLevel++
 					needsNewline = false
 				} else if directive == "end" {
 					indentLevel--
+
 					if needsNewline {
 						result.WriteString("\n")
 					}
+
 					result.WriteString(strings.Repeat(" ", indentLevel*f.indentSize))
 					result.WriteString(token.Value)
 					result.WriteString("\n")
+
 					needsNewline = false
 				} else if directive == "else" {
 					if needsNewline {
 						result.WriteString("\n")
 					}
+
 					result.WriteString(strings.Repeat(" ", (indentLevel-1)*f.indentSize))
 					result.WriteString(token.Value)
 					result.WriteString("\n")
+
 					needsNewline = false
 				} else {
 					// Other directives (function definition, etc.)
 					if i > 0 && lastToken != nil && lastToken.Type != TokenNewline {
 						result.WriteString("\n")
 					}
+
 					result.WriteString(token.Value)
 					result.WriteString("\n")
+
 					needsNewline = false
 				}
 			} else {
@@ -242,6 +260,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 				if lastToken != nil && lastToken.Type != TokenNewline && lastToken.Value != "(" && lastToken.Value != "," {
 					result.WriteString(" ")
 				}
+
 				result.WriteString(token.Value)
 			}
 
@@ -259,6 +278,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 
 				result.WriteString(strings.Repeat(" ", indent*f.indentSize))
 				result.WriteString(token.Value)
+
 				needsNewline = false
 
 				// Track if we're in a SELECT list or VALUES list
@@ -270,6 +290,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 					// Create a fake newline token to prevent extra spaces
 					fakeNewlineToken := Token{Type: TokenNewline, Value: "\n"}
 					lastToken = &fakeNewlineToken
+
 					continue // Skip the normal lastToken update
 				} else if token.Value == "VALUES" {
 					inValuesList = true
@@ -284,17 +305,20 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 				if lastToken != nil && lastToken.Type != TokenNewline && f.needsSpaceBefore(token.Value) {
 					result.WriteString(" ")
 				}
+
 				result.WriteString(token.Value)
 			}
 
 		case TokenComma:
 			result.WriteString(",")
+
 			if inSelectList || inValuesList {
 				result.WriteString("\n")
 				result.WriteString(strings.Repeat(" ", (indentLevel+1)*f.indentSize))
 				// Create a fake newline token to prevent extra spaces
 				fakeNewlineToken := Token{Type: TokenNewline, Value: "\n"}
 				lastToken = &fakeNewlineToken
+
 				continue // Skip the normal lastToken update
 			}
 
@@ -302,6 +326,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 			if needsNewline {
 				result.WriteString("\n")
 				result.WriteString(strings.Repeat(" ", indentLevel*f.indentSize))
+
 				needsNewline = false
 			}
 
@@ -315,6 +340,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 
 		case TokenOpenParen:
 			result.WriteString("(")
+
 			if inValuesList {
 				result.WriteString("\n")
 				result.WriteString(strings.Repeat(" ", (indentLevel+1)*f.indentSize))
@@ -325,6 +351,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 				result.WriteString("\n")
 				result.WriteString(strings.Repeat(" ", indentLevel*f.indentSize))
 			}
+
 			result.WriteString(")")
 
 		case TokenOperator:
@@ -335,6 +362,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 				if lastToken != nil && lastToken.Type != TokenNewline && lastToken.Value != "." && f.needsSpaceBefore(token.Value) {
 					result.WriteString(" ")
 				}
+
 				result.WriteString(token.Value)
 			}
 
@@ -342,6 +370,7 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 			if lastToken != nil && lastToken.Type != TokenNewline && lastToken.Value != "." && lastToken.Type != TokenSnapDirective && f.needsSpaceBefore(token.Value) {
 				result.WriteString(" ")
 			}
+
 			result.WriteString(token.Value)
 		}
 
@@ -364,6 +393,7 @@ func (f *SQLFormatter) isStatementKeyword(keyword string) bool {
 		"JOIN": true, "INNER": true, "LEFT": true, "RIGHT": true, "FULL": true,
 		"SET": true, "ON": true,
 	}
+
 	return statementKeywords[keyword]
 }
 
@@ -372,14 +402,10 @@ func (f *SQLFormatter) needsSpaceBefore(value string) bool {
 	return value != "(" && value != ")" && value != "," && value != ";" && value != "."
 }
 
-// needsSpaceAfter checks if a token needs a space after it
-func (f *SQLFormatter) needsSpaceAfter(value string) bool {
-	return value != "(" && value != "." && value != "/*="
-}
-
 // cleanupFormatting cleans up the formatted SQL
 func (f *SQLFormatter) cleanupFormatting(sql string) string {
 	lines := strings.Split(sql, "\n")
+
 	var cleanedLines []string
 
 	for _, line := range lines {

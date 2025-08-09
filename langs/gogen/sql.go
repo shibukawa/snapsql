@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -21,7 +22,7 @@ type sqlBuilderData struct {
 func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, dialect string) (*sqlBuilderData, error) {
 	// Require dialect to be specified
 	if dialect == "" {
-		return nil, fmt.Errorf("dialect must be specified (postgres, mysql, sqlite)")
+		return nil, snapsql.ErrDialectMustBeSpecified
 	}
 
 	// Use intermediate package's optimization with dialect filtering
@@ -42,20 +43,12 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 	return generateDynamicSQLFromOptimized(optimizedInstructions, format)
 }
 
-// processSQLBuilder processes instructions and generates SQL building code
-// It uses the dialect from the global configuration if available
-func processSQLBuilder(format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
-	// TODO: Get dialect from configuration
-	// For now, use empty string to include all dialects
-	// This should be passed from the generator or configuration
-	dialect := ""
-	return processSQLBuilderWithDialect(format, dialect)
-}
-
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions
 func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
-	var sqlParts []string
-	var arguments []int
+	var (
+		sqlParts  []string
+		arguments []int
+	)
 
 	for _, inst := range instructions {
 		switch inst.Op {
@@ -72,6 +65,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 
 	// Convert expression indices to parameter names for static SQL
 	var parameterNames []string
+
 	for _, exprIndex := range arguments {
 		if exprIndex < len(format.CELExpressions) {
 			expr := format.CELExpressions[exprIndex]
@@ -93,6 +87,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 // generateDynamicSQLFromOptimized generates dynamic SQL building code from optimized instructions
 func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var code []string
+
 	hasArguments := false
 
 	// Track control flow stack
@@ -106,6 +101,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	for _, param := range format.Parameters {
 		code = append(code, fmt.Sprintf("    %q: %s,", param.Name, snakeToCamelLower(param.Name)))
 	}
+
 	code = append(code, "}")
 
 	for _, inst := range instructions {
@@ -177,15 +173,18 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "for" {
 				// Find the corresponding LOOP_START to get the variable name
 				var loopVar string
+
 				for i := len(instructions) - 1; i >= 0; i-- {
 					if instructions[i].Op == "LOOP_START" && instructions[i].EnvIndex == inst.EnvIndex {
 						loopVar = instructions[i].Variable
 						break
 					}
 				}
+
 				if loopVar != "" {
 					code = append(code, fmt.Sprintf("    delete(paramMap, %q)", loopVar))
 				}
+
 				code = append(code, "}")
 				controlStack = controlStack[:len(controlStack)-1]
 			}

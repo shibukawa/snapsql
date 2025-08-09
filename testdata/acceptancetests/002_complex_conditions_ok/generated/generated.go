@@ -28,7 +28,7 @@ import (
 )
 // GetFilteredDataResult represents the response structure for GetFilteredData
 type GetFilteredDataResult struct {
-	ID int `json:"id"`
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Age int `json:"age"`
 	Department string `json:"department"`
@@ -271,7 +271,7 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 	for rows.Next() {
 	    var item GetFilteredDataResult
 	    err := rows.Scan(
-	        &item.ID,
+	        &item.Id,
 	        &item.Name,
 	        &item.Age,
 	        &item.Department

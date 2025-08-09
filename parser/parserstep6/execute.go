@@ -16,5 +16,6 @@ func Execute(statement cmn.StatementNode, paramNamespace *cmn.Namespace, constNa
 	if len(perr.Errors) > 0 {
 		return perr
 	}
+
 	return nil
 }

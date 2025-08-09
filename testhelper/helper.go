@@ -18,14 +18,18 @@ func replaceTab(match string) string {
 
 func TrimIndent(t *testing.T, src string) string {
 	t.Helper()
+
 	lines := strings.Split(src, "\n")
+
 	var indent string
 	if len(lines) > 1 {
 		indent = whiteSpaces.FindString(lines[1])
 	}
+
 	for i, line := range lines {
 		line = strings.TrimPrefix(line, indent)
 		lines[i] = leadingTabs.ReplaceAllStringFunc(line, replaceTab)
 	}
+
 	return strings.Join(lines[1:], "\n")
 }

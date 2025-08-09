@@ -28,7 +28,7 @@ import (
 )
 // GetUsersWithConditionsResult represents the response structure for GetUsersWithConditions
 type GetUsersWithConditionsResult struct {
-	ID int `json:"id"`
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Email string `json:"email"`
 	Email string `json:"email"`
@@ -190,7 +190,7 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	for rows.Next() {
 	    var item GetUsersWithConditionsResult
 	    err := rows.Scan(
-	        &item.ID,
+	        &item.Id,
 	        &item.Name,
 	        &item.Email,
 	        &item.Email,

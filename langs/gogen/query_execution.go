@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -35,6 +36,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate scan code: %w", err)
 			}
+
 			code = append(code, scanCode...)
 		} else {
 			// Generate generic scan code for interface{} result
@@ -57,6 +59,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate scan code: %w", err)
 			}
+
 			code = append(code, scanCode...)
 		} else {
 			// Generate generic scan code for interface{} result
@@ -65,7 +68,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported response affinity: %s", format.ResponseAffinity)
+		return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedResponseAffinity, format.ResponseAffinity)
 	}
 
 	return &queryExecutionData{
@@ -99,7 +102,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 	if isMany {
 		// Multiple rows
 		code = append(code, "for rows.Next() {")
-		code = append(code, fmt.Sprintf("    var item %s", responseStruct.Name))
+		code = append(code, "    var item "+responseStruct.Name)
 		code = append(code, "    err := rows.Scan(")
 
 		// Generate scan targets
@@ -109,7 +112,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 			}
 			// Convert field name to Go field name (PascalCase)
 			goFieldName := celNameToGoName(field.Name)
-			code = append(code, fmt.Sprintf("        &item.%s", goFieldName))
+			code = append(code, "        &item."+goFieldName)
 		}
 
 		code[len(code)-1] += ""
@@ -134,7 +137,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 			}
 			// Convert field name to Go field name (PascalCase)
 			goFieldName := celNameToGoName(field.Name)
-			code = append(code, fmt.Sprintf("    &result.%s", goFieldName))
+			code = append(code, "    &result."+goFieldName)
 		}
 
 		code[len(code)-1] += ""

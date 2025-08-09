@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
@@ -72,22 +73,23 @@ func expandArraysInValues(stmt cmn.StatementNode, funcDef *cmn.FunctionDefinitio
 // expandArraysInTokensWithNamespace processes tokens using Namespace for dynamic type checking
 func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.Namespace, gerr *cmn.ParseError) {
 	// First pass: identify expansion markers and collect column information
-	var expansionInfo []ObjectExpansionInfo
-	var objectArrayExpansionInfo []ObjectArrayExpansionInfo
-	var columnOrder []string
+	var (
+		expansionInfo            []ObjectExpansionInfo
+		objectArrayExpansionInfo []ObjectArrayExpansionInfo
+		columnOrder              []string
+	)
 
 	// Extract column order from INSERT statement
 	columnOrder = extractColumnOrderFromTokens(tokens)
 
 	// Process tokens to find expansion opportunities
-	for i := 0; i < len(tokens); i++ {
+	for i := range tokens {
 		token := tokens[i]
 
 		// Handle FOR directive - enter loop scope
 		if isForDirective(token) {
 			loopVar, arrayVar := parseForDirective(token)
 			if loopVar != "" && arrayVar != "" {
-
 				// Evaluate the array variable to get its actual value
 				arrayValue, _, err := namespace.Eval(arrayVar)
 				if err != nil {
@@ -105,6 +107,7 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 				if err != nil {
 				}
 			}
+
 			continue
 		}
 
@@ -120,7 +123,6 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 
 			// Check if this is inside parentheses (VALUES clause pattern)
 			if isInsideParentheses(tokens, i) {
-
 				// Use Namespace to check variable type in priority order
 				if isObjectArrayTypeWithNamespace(variableName, namespace) {
 					// Check if this is inside an IN clause - object arrays are not allowed in IN clauses
@@ -182,7 +184,9 @@ func isForDirective(token tokenizer.Token) bool {
 	if token.Type != tokenizer.BLOCK_COMMENT {
 		return false
 	}
+
 	content := strings.TrimSpace(token.Value)
+
 	return strings.HasPrefix(content, "/*#") &&
 		strings.Contains(content, "for ") &&
 		strings.Contains(content, " : ") &&
@@ -194,7 +198,9 @@ func isEndDirective(token tokenizer.Token) bool {
 	if token.Type != tokenizer.BLOCK_COMMENT {
 		return false
 	}
+
 	content := strings.TrimSpace(token.Value)
+
 	return content == "/*# end */"
 }
 
@@ -228,6 +234,7 @@ func parseForDirective(token tokenizer.Token) (string, string) {
 	}
 
 	forContent := strings.TrimSpace(content[4:]) // Remove "for "
+
 	parts := strings.Split(forContent, " : ")
 	if len(parts) != 2 {
 		return "", ""
@@ -242,20 +249,21 @@ func parseForDirective(token tokenizer.Token) (string, string) {
 // convertToAnySlice converts any slice type to []any using reflection
 func convertToAnySlice(value any) ([]any, error) {
 	if value == nil {
-		return nil, fmt.Errorf("value is nil")
+		return nil, snapsql.ErrValueIsNil
 	}
 
 	rv := reflect.ValueOf(value)
 
 	// Check if it's a slice or array
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-		return nil, fmt.Errorf("value is not a slice or array, got %s", rv.Kind())
+		return nil, fmt.Errorf("%w: got %s", snapsql.ErrNotSliceOrArray, rv.Kind())
 	}
 
 	// Convert to []any
 	length := rv.Len()
+
 	result := make([]any, length)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		result[i] = rv.Index(i).Interface()
 	}
 
@@ -273,10 +281,12 @@ func isArrayTypeWithNamespace(variableName string, namespace *cmn.Namespace) boo
 	// Use reflection to check if it's a slice or array
 	if result != nil {
 		rv := reflect.ValueOf(result)
+
 		isArray := rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array
 		if isArray {
 		} else {
 		}
+
 		return isArray
 	}
 
@@ -294,10 +304,12 @@ func isObjectTypeWithNamespace(variableName string, namespace *cmn.Namespace) bo
 	// Use reflection to check if it's a map (object)
 	if result != nil {
 		rv := reflect.ValueOf(result)
+
 		isObject := rv.Kind() == reflect.Map
 		if isObject {
 		} else {
 		}
+
 		return isObject
 	}
 
@@ -321,15 +333,19 @@ func isObjectArrayTypeWithNamespace(variableName string, namespace *cmn.Namespac
 				firstElement := rv.Index(0).Interface()
 				if firstElement != nil {
 					firstRv := reflect.ValueOf(firstElement)
+
 					isObjectArray := firstRv.Kind() == reflect.Map
 					if isObjectArray {
 					} else {
 					}
+
 					return isObjectArray
 				}
 			}
+
 			return false
 		}
+
 		return false
 	}
 
@@ -342,9 +358,10 @@ func isInsideParentheses(tokens []tokenizer.Token, index int) bool {
 
 	// Look backwards for opening parenthesis
 	for i := index - 1; i >= 0; i-- {
-		if tokens[i].Type == tokenizer.CLOSED_PARENS {
+		switch tokens[i].Type {
+		case tokenizer.CLOSED_PARENS:
 			parenCount++
-		} else if tokens[i].Type == tokenizer.OPENED_PARENS {
+		case tokenizer.OPENED_PARENS:
 			parenCount--
 			if parenCount < 0 {
 				// Found unmatched opening parenthesis
@@ -374,12 +391,14 @@ func isInsideInClause(tokens []tokenizer.Token, tokenIndex int) bool {
 					if prevToken.Type == tokenizer.WHITESPACE {
 						continue
 					}
+
 					if (prevToken.Type == tokenizer.IDENTIFIER || prevToken.Type == tokenizer.RESERVED_IDENTIFIER) && strings.ToUpper(prevToken.Value) == "IN" {
 						return true
 					}
 					// If we hit a non-whitespace token that's not IN, stop looking
 					break
 				}
+
 				break
 			} else {
 				parenDepth--
@@ -393,6 +412,7 @@ func isInsideInClause(tokens []tokenizer.Token, tokenIndex int) bool {
 // extractColumnOrderFromTokens extracts column order from INSERT statement tokens
 func extractColumnOrderFromTokens(tokens []tokenizer.Token) []string {
 	var columns []string
+
 	inColumnList := false
 
 	for i, token := range tokens {
@@ -401,12 +421,14 @@ func extractColumnOrderFromTokens(tokens []tokenizer.Token) []string {
 			// Check if this is the column list (not VALUES clause)
 			// Look ahead to see if there's a VALUES keyword later
 			hasValues := false
+
 			for j := i + 1; j < len(tokens); j++ {
 				if tokens[j].Type == tokenizer.VALUES {
 					hasValues = true
 					break
 				}
 			}
+
 			if hasValues {
 				inColumnList = true
 				continue
@@ -447,6 +469,7 @@ func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, na
 			availableFields := slices.Collect(maps.Keys(objectMap))
 			gerr.Add(fmt.Errorf("%w: object '%s' does not have required field '%s', available fields: %v",
 				ErrMissingObjectField, info.VariableName, column, availableFields))
+
 			return
 		}
 	}
@@ -511,11 +534,12 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 	}
 
 	// Validate that all objects in the array have required fields
-	for i := 0; i < arrayLength; i++ {
+	for i := range arrayLength {
 		element := rv.Index(i).Interface()
+
 		objectMap, ok := element.(map[string]interface{})
 		if !ok {
-			gerr.Add(fmt.Errorf("array element at index %d is not an object: %T", i, element))
+			gerr.Add(fmt.Errorf("%w: at index %d: %T", snapsql.ErrArrayElementNotObject, i, element))
 			return
 		}
 
@@ -525,6 +549,7 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 				availableFields := slices.Collect(maps.Keys(objectMap))
 				gerr.Add(fmt.Errorf("%w: object at index %d in array '%s' does not have required field '%s', available fields: %v",
 					ErrMissingObjectField, i, info.VariableName, column, availableFields))
+
 				return
 			}
 		}
@@ -532,11 +557,12 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 
 	// Generate VALUES clauses for each object in the array
 	var valuesClauses []string
-	for i := 0; i < arrayLength; i++ {
+	for i := range arrayLength {
 		var fieldExpressions []string
 		for _, column := range info.ColumnOrder {
 			fieldExpressions = append(fieldExpressions, fmt.Sprintf("/*= %s[%d].%s */", info.VariableName, i, column))
 		}
+
 		valuesClauses = append(valuesClauses, fmt.Sprintf("(%s)", strings.Join(fieldExpressions, ", ")))
 	}
 
@@ -585,9 +611,11 @@ func checkObjectUsageInStatement(stmt cmn.StatementNode, funcDef *cmn.FunctionDe
 	for _, clause := range stmt.Clauses() {
 		tokens = append(tokens, clause.RawTokens()...)
 	}
+
 	if cte := stmt.CTE(); cte != nil {
 		tokens = append(tokens, cte.RawTokens()...)
 	}
+
 	tokens = append(tokens, stmt.LeadingTokens()...)
 
 	if len(tokens) == 0 {

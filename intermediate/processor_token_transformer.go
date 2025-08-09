@@ -46,9 +46,11 @@ func (t *TokenTransformer) addSystemFieldsToInsertTokens(tokens []tokenizer.Toke
 			// First closing parenthesis is likely the end of column list
 			insertIntoEnd = i
 		}
+
 		if token.Type == tokenizer.VALUES && valuesStart == -1 {
 			valuesStart = i
 		}
+
 		if token.Type == tokenizer.CLOSED_PARENS && valuesStart != -1 && valuesEnd == -1 {
 			// Closing parenthesis after VALUES
 			valuesEnd = i
@@ -103,6 +105,7 @@ func (t *TokenTransformer) addSystemFieldsToInsertTokens(tokens []tokenizer.Toke
 		}
 
 		result = append(result, tokens[valuesEnd:]...)
+
 		return result
 	}
 

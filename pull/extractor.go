@@ -1,6 +1,7 @@
 package pull
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"strings"
@@ -13,13 +14,13 @@ import (
 // ExtractTables/ExtractColumns/ExtractConstraints/ExtractIndexes/ExtractViewsもsnapsql型で返す
 // DatabaseInfoもsnapsql型で返す
 type Extractor interface {
-	ExtractSchemas(db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error)
-	ExtractTables(db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error)
-	ExtractColumns(db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error)
-	ExtractConstraints(db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error)
-	ExtractIndexes(db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error)
-	ExtractViews(db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error)
-	GetDatabaseInfo(db *sql.DB) (snapsql.DatabaseInfo, error)
+	ExtractSchemas(ctx context.Context, db *sql.DB, config ExtractConfig) ([]snapsql.DatabaseSchema, error)
+	ExtractTables(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.TableInfo, error)
+	ExtractColumns(ctx context.Context, db *sql.DB, schemaName, tableName string) (map[string]*snapsql.ColumnInfo, error)
+	ExtractConstraints(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.ConstraintInfo, error)
+	ExtractIndexes(ctx context.Context, db *sql.DB, schemaName, tableName string) ([]snapsql.IndexInfo, error)
+	ExtractViews(ctx context.Context, db *sql.DB, schemaName string) ([]*snapsql.ViewInfo, error)
+	GetDatabaseInfo(ctx context.Context, db *sql.DB) (snapsql.DatabaseInfo, error)
 }
 
 // NewExtractor creates a new extractor for the specified database type
@@ -79,6 +80,7 @@ func ShouldIncludeSchema(schemaName string, includeSchemas, excludeSchemas []str
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -102,6 +104,7 @@ func ShouldIncludeTable(tableName string, includeTables, excludeTables []string)
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -122,6 +125,7 @@ func MatchWildcard(pattern, text string) bool {
 		// If pattern is invalid, fall back to exact match
 		return pattern == text
 	}
+
 	return matched
 }
 
@@ -150,22 +154,26 @@ func (e *BaseExtractor) MapColumnType(dbType string) string {
 // FilterSchemas filters schemas based on the configuration
 func (e *BaseExtractor) FilterSchemas(schemas []string, config ExtractConfig) []string {
 	var filtered []string
+
 	for _, schema := range schemas {
 		if ShouldIncludeSchema(schema, config.IncludeSchemas, config.ExcludeSchemas) {
 			filtered = append(filtered, schema)
 		}
 	}
+
 	return filtered
 }
 
 // FilterTables filters tables based on the configuration
 func (e *BaseExtractor) FilterTables(tables []string, config ExtractConfig) []string {
 	var filtered []string
+
 	for _, table := range tables {
 		if ShouldIncludeTable(table, config.IncludeTables, config.ExcludeTables) {
 			filtered = append(filtered, table)
 		}
 	}
+
 	return filtered
 }
 

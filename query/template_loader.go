@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,11 +13,11 @@ import (
 
 // Error definitions for template loading
 var (
-	ErrUnsupportedFileFormat = fmt.Errorf("unsupported template file format")
-	ErrFileNotFound          = fmt.Errorf("template file not found")
-	ErrFileRead              = fmt.Errorf("failed to read template file")
-	ErrTemplateGeneration    = fmt.Errorf("failed to generate intermediate format")
-	ErrParameterParsing      = fmt.Errorf("failed to parse parameters")
+	ErrUnsupportedFileFormat = errors.New("unsupported template file format")
+	ErrFileNotFound          = errors.New("template file not found")
+	ErrFileRead              = errors.New("failed to read template file")
+	ErrTemplateGeneration    = errors.New("failed to generate intermediate format")
+	ErrParameterParsing      = errors.New("failed to parse parameters")
 )
 
 // LoadIntermediateFormat loads an intermediate format from various file types
@@ -44,12 +45,12 @@ func LoadIntermediateFormat(templateFile string) (*intermediate.IntermediateForm
 func loadFromJSON(filename string) (*intermediate.IntermediateFormat, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrFileRead, err)
+		return nil, fmt.Errorf("%w: %w", ErrFileRead, err)
 	}
 
 	format, err := intermediate.FromJSON(data)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTemplateGeneration, err)
+		return nil, fmt.Errorf("%w: %w", ErrTemplateGeneration, err)
 	}
 
 	return format, nil
@@ -59,14 +60,14 @@ func loadFromJSON(filename string) (*intermediate.IntermediateFormat, error) {
 func generateFromSQL(filename string) (*intermediate.IntermediateFormat, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrFileRead, err)
+		return nil, fmt.Errorf("%w: %w", ErrFileRead, err)
 	}
 	defer file.Close()
 
 	// Generate intermediate format using the existing pipeline
 	format, err := intermediate.GenerateFromSQL(file, nil, filename, ".", nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTemplateGeneration, err)
+		return nil, fmt.Errorf("%w: %w", ErrTemplateGeneration, err)
 	}
 
 	return format, nil
@@ -76,20 +77,20 @@ func generateFromSQL(filename string) (*intermediate.IntermediateFormat, error) 
 func generateFromMarkdown(filename string) (*intermediate.IntermediateFormat, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrFileRead, err)
+		return nil, fmt.Errorf("%w: %w", ErrFileRead, err)
 	}
 	defer file.Close()
 
 	// Parse markdown to extract SQL and parameters
 	doc, err := markdownparser.Parse(file)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to parse markdown: %v", ErrTemplateGeneration, err)
+		return nil, fmt.Errorf("%w: failed to parse markdown: %w", ErrTemplateGeneration, err)
 	}
 
 	// Generate intermediate format from the markdown document directly
 	format, err := intermediate.GenerateFromMarkdown(doc, filename, ".", nil, nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTemplateGeneration, err)
+		return nil, fmt.Errorf("%w: %w", ErrTemplateGeneration, err)
 	}
 
 	// Add metadata from markdown if available

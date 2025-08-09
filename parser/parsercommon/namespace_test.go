@@ -12,15 +12,14 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
-
 func TestNamespace_Eval(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	type args struct {
 		src string
 		exp string
 	}
+
 	tests := []struct {
 		name      string
 		args      args
@@ -79,13 +78,16 @@ parameters:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var def FunctionDefinition
+
 			err := yaml.Unmarshal([]byte(tt.args.src), &def)
 			assert.NoError(t, err)
+
 			dir, _ := os.Getwd()
 			err = def.Finalize(dir, dir)
 			assert.NoError(t, err)
 			ns, err := NewNamespaceFromDefinition(&def)
 			assert.NoError(t, err)
+
 			v, tp, err := ns.Eval(tt.args.exp)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -109,8 +111,10 @@ parameters:
       hobbies: string[]`
 
 	var def FunctionDefinition
+
 	err := yaml.Unmarshal([]byte(yamlSrc), &def)
 	assert.NoError(t, err)
+
 	dir, _ := os.Getwd()
 	err = def.Finalize(dir, dir)
 	assert.NoError(t, err)

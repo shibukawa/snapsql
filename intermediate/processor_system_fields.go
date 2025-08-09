@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	. "github.com/shibukawa/snapsql"
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
@@ -52,6 +53,7 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 
 	// For INSERT statements, extract existing column names for explicit field validation
 	var existingColumns map[string]bool
+
 	if stmt.Type() == parser.SELECT_STATEMENT {
 		if insertStmt, ok := stmt.(*parser.InsertIntoStatement); ok {
 			existingColumns = extractInsertColumnNames(insertStmt)
@@ -99,14 +101,14 @@ func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperat
 	case ParameterExplicit:
 		// Check if explicit parameter is provided
 		if !paramMap[field.Name] {
-			gerr.AddError(fmt.Errorf("%s statement requires explicit parameter '%s' but it was not provided", nodeType.String(), field.Name))
+			gerr.AddError(fmt.Errorf("%w: %s statement parameter '%s'", snapsql.ErrParameterNotProvided, nodeType.String(), field.Name))
 			return nil
 		}
 
 		// For INSERT statements, also check if the field exists in column list
 		if nodeType == parser.INSERT_INTO_STATEMENT && existingColumns != nil {
 			if !existingColumns[field.Name] {
-				gerr.AddError(fmt.Errorf("%s statement requires explicit system field '%s' to be included in column list", nodeType.String(), field.Name))
+				gerr.AddError(fmt.Errorf("%w: %s statement field '%s'", snapsql.ErrSystemFieldNotIncluded, nodeType.String(), field.Name))
 				return nil
 			}
 		}
@@ -131,7 +133,7 @@ func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperat
 	case ParameterError:
 		// Check if parameter is provided (should cause error)
 		if paramMap[field.Name] {
-			gerr.AddError(fmt.Errorf("%s statement should not include parameter '%s' (configured as error)", nodeType.String(), field.Name))
+			gerr.AddError(fmt.Errorf("%w: %s statement parameter '%s'", snapsql.ErrParameterConfiguredError, nodeType.String(), field.Name))
 			return nil
 		}
 		// No parameter provided, no implicit parameter needed
@@ -169,15 +171,18 @@ func extractInsertColumnNames(stmt *parser.InsertIntoStatement) map[string]bool 
 				// Extract column names from INSERT INTO clause tokens
 				tokens := clause.RawTokens()
 				inParentheses := false
+
 				for _, token := range tokens {
 					if token.Type == tok.OPENED_PARENS {
 						inParentheses = true
 						continue
 					}
+
 					if token.Type == tok.CLOSED_PARENS {
 						inParentheses = false
 						continue
 					}
+
 					if inParentheses && token.Type == tok.IDENTIFIER {
 						// All IDENTIFIER tokens in column list are column names
 						columns[token.Value] = true
@@ -205,7 +210,7 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 	// Cast to InsertIntoStatement to access clauses
 	insertStmt, ok := stmt.(*parser.InsertIntoStatement)
 	if !ok {
-		return fmt.Errorf("failed to cast statement to InsertIntoStatement")
+		return fmt.Errorf("%w: InsertIntoStatement", snapsql.ErrInvalidStatementCast)
 	}
 
 	// Extract existing column names from Columns field
@@ -216,6 +221,7 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 
 	// Determine which implicit parameters need to be added
 	var columnsToAdd []string
+
 	for _, param := range implicitParams {
 		if !existingColumns[param.Name] {
 			columnsToAdd = append(columnsToAdd, param.Name)
@@ -233,14 +239,16 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 
 	// Update InsertIntoClause tokens to include new columns
 	if insertStmt.Into != nil {
-		if err := addSystemColumnsToInsertIntoClause(insertStmt.Into, columnsToAdd); err != nil {
+		err := addSystemColumnsToInsertIntoClause(insertStmt.Into, columnsToAdd)
+		if err != nil {
 			return fmt.Errorf("failed to add system columns to InsertIntoClause: %w", err)
 		}
 	}
 
 	// Add EMIT_SYSTEM_VALUE tokens to VALUES clause
 	if insertStmt.ValuesList != nil {
-		if err := addSystemValuesToValuesClause(insertStmt.ValuesList, columnsToAdd); err != nil {
+		err := addSystemValuesToValuesClause(insertStmt.ValuesList, columnsToAdd)
+		if err != nil {
 			return fmt.Errorf("failed to add system values to VALUES clause: %w", err)
 		}
 	}
@@ -253,7 +261,8 @@ func addSystemValuesToValuesClause(valuesClause *parser.ValuesClause, columnsToA
 	tokens := valuesClause.RawTokens()
 
 	// Find the position to insert new values (before the closing parenthesis)
-	var insertPosition int = -1
+	var insertPosition = -1
+
 	for i := len(tokens) - 1; i >= 0; i-- {
 		if tokens[i].Type == tok.CLOSED_PARENS {
 			insertPosition = i
@@ -262,7 +271,7 @@ func addSystemValuesToValuesClause(valuesClause *parser.ValuesClause, columnsToA
 	}
 
 	if insertPosition == -1 {
-		return fmt.Errorf("could not find closing parenthesis in VALUES clause")
+		return fmt.Errorf("%w: VALUES clause", snapsql.ErrClosingParenthesisNotFound)
 	}
 
 	// Create new tokens for the system values
@@ -300,7 +309,8 @@ func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClaus
 	tokens := insertIntoClause.RawTokens()
 
 	// Find the position to insert new columns (before the closing parenthesis)
-	var insertPosition int = -1
+	var insertPosition = -1
+
 	for i := len(tokens) - 1; i >= 0; i-- {
 		if tokens[i].Type == tok.CLOSED_PARENS {
 			insertPosition = i
@@ -309,7 +319,7 @@ func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClaus
 	}
 
 	if insertPosition == -1 {
-		return fmt.Errorf("could not find closing parenthesis in InsertIntoClause")
+		return fmt.Errorf("%w: InsertIntoClause", snapsql.ErrClosingParenthesisNotFound)
 	}
 
 	// Create new tokens for the system columns
@@ -339,11 +349,14 @@ func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClaus
 
 	// TODO: Update the InsertIntoClause tokens in pipeline approach
 	// insertIntoClause.SetRawTokens(updatedTokens)
+	_ = updatedTokens // Will be used when TODO above is implemented
+
+	// TODO: Update the InsertIntoClause tokens in pipeline approach
+	// insertIntoClause.SetRawTokens(updatedTokens)
 
 	// Also update the Columns field in InsertIntoClause
-	for _, column := range columnsToAdd {
-		insertIntoClause.Columns = append(insertIntoClause.Columns, column)
-	}
+	insertIntoClause.Columns = append(insertIntoClause.Columns, columnsToAdd...)
+
 	return nil
 }
 
@@ -362,12 +375,12 @@ func AddSystemFieldsToUpdate(stmt parser.StatementNode, implicitParams []Implici
 	// Cast to UpdateStatement to access SET clause
 	updateStmt, ok := stmt.(*parser.UpdateStatement)
 	if !ok {
-		return fmt.Errorf("failed to cast statement to UpdateStatement")
+		return fmt.Errorf("%w: UpdateStatement", snapsql.ErrInvalidStatementCast)
 	}
 
 	// Find the SET clause
 	if updateStmt.Set == nil {
-		return fmt.Errorf("UPDATE statement has no SET clause")
+		return fmt.Errorf("%w: SET clause", snapsql.ErrMissingClause)
 	}
 
 	// Add EMIT_SYSTEM_VALUE calls for each implicit parameter

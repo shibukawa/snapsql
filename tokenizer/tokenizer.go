@@ -40,6 +40,7 @@ func (t *sqlTokenizer) tokens() TokenIterator {
 				if !yield(Token{}, err) {
 					return
 				}
+
 				continue
 			}
 
@@ -59,6 +60,7 @@ func (t *sqlTokenizer) tokens() TokenIterator {
 // allTokens gets all tokens as a slice (non-exported)
 func (t *sqlTokenizer) allTokens() ([]Token, error) {
 	tokens := make([]Token, 0, 64)
+
 	var lastError error
 
 	for token, err := range t.tokens() {
@@ -66,6 +68,7 @@ func (t *sqlTokenizer) allTokens() ([]Token, error) {
 			lastError = err
 			continue
 		}
+
 		tokens = append(tokens, token)
 		if token.Type == EOF {
 			break
@@ -80,6 +83,7 @@ func (t *sqlTokenizer) allTokens() ([]Token, error) {
 // The optional lineOffset parameter adds the specified number to all line numbers.
 func Tokenize(sql string, lineOffset ...int) ([]Token, error) {
 	t := newSqlTokenizer(sql)
+
 	tokens, err := t.allTokens()
 	if err != nil {
 		return nil, err
@@ -121,22 +125,27 @@ func (t *tokenizer) nextToken() (Token, error) {
 		case '(':
 			token := t.newToken(OPENED_PARENS, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case ')':
 			token := t.newToken(CLOSED_PARENS, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case ',':
 			token := t.newToken(COMMA, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case ';':
 			token := t.newToken(SEMICOLON, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '.':
 			token := t.newToken(DOT, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '\'', '"', '`':
 			return t.readString(t.current)
@@ -144,80 +153,106 @@ func (t *tokenizer) nextToken() (Token, error) {
 			// PostgreSQL JSON operators: ->, ->>
 			if t.peekChar() == '>' {
 				t.readChar() // consume '-'
+
 				if t.peekChar() == '>' {
 					t.readChar() // consume first '>'
 					t.readChar() // consume second '>'
+
 					return t.newToken(JSON_OPERATOR, "->>"), nil
 				}
+
 				t.readChar() // consume '>'
+
 				return t.newToken(JSON_OPERATOR, "->"), nil
 			}
+
 			if t.peekChar() == '-' {
 				return t.readLineComment()
 			}
+
 			token := t.newToken(MINUS, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '#':
 			// PostgreSQL JSON operators: #>, #>>
 			if t.peekChar() == '>' {
 				t.readChar() // consume '#'
+
 				if t.peekChar() == '>' {
 					t.readChar() // consume first '>'
 					t.readChar() // consume second '>'
+
 					return t.newToken(JSON_OPERATOR, "#>>"), nil
 				}
+
 				t.readChar() // consume '>'
+
 				return t.newToken(JSON_OPERATOR, "#>"), nil
 			}
+
 			token := t.newToken(OTHER, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case ':':
 			// PostgreSQL-style cast operator ::
 			if t.peekChar() == ':' {
 				t.readChar() // consume first
 				t.readChar() // consume second
+
 				return t.newToken(DOUBLE_COLON, "::"), nil
 			}
+
 			return Token{}, fmt.Errorf("%w: invalid ':' at line %d, column %d", ErrInvalidSingleColon, t.line, t.column-1)
 		case '/':
 			if t.peekChar() == '*' {
 				return t.readBlockComment()
 			}
+
 			token := t.newToken(DIVIDE, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '=':
 			token := t.newToken(EQUAL, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '<':
 			if t.peekChar() == '=' {
 				t.readChar()
 				t.readChar()
+
 				return t.newToken(LESS_EQUAL, "<="), nil
 			} else if t.peekChar() == '>' {
 				t.readChar()
 				t.readChar()
+
 				return t.newToken(NOT_EQUAL, "<>"), nil
 			}
+
 			token := t.newToken(LESS_THAN, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '>':
 			if t.peekChar() == '=' {
 				t.readChar()
 				t.readChar()
+
 				return t.newToken(GREATER_EQUAL, ">="), nil
 			}
+
 			token := t.newToken(GREATER_THAN, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '!':
 			if t.peekChar() == '=' {
 				t.readChar()
 				t.readChar()
+
 				return t.newToken(NOT_EQUAL, "!="), nil
 			}
 			// '!' alone is treated as OTHER
@@ -225,14 +260,17 @@ func (t *tokenizer) nextToken() (Token, error) {
 		case '+':
 			token := t.newToken(PLUS, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '*':
 			token := t.newToken(MULTIPLY, string(t.current))
 			t.readChar()
+
 			return token, nil
 		case '%':
 			token := t.newToken(MODULO, string(t.current))
 			t.readChar()
+
 			return token, nil
 		default:
 			if unicode.IsLetter(t.current) || t.current == '_' {
@@ -252,6 +290,7 @@ func (t *tokenizer) readChar() {
 	if t.position >= len(t.input) {
 		t.current = 0
 		t.position++
+
 		return
 	}
 
@@ -271,12 +310,14 @@ func (t *tokenizer) peekChar() rune {
 	if t.position >= len(t.input) {
 		return 0
 	}
+
 	return rune(t.input[t.position])
 }
 
 // readWhitespace reads whitespace characters
 func (t *tokenizer) readWhitespace() Token {
 	var builder strings.Builder
+
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
@@ -373,6 +414,7 @@ var keywordLikeTokenTypeMap = map[string]TokenType{
 // readIdentifierOrKeyword reads identifiers and keywords with strict reservation checking
 func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 	var builder strings.Builder
+
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
@@ -410,6 +452,7 @@ func (t *tokenizer) readIdentifierOrKeyword() (Token, error) {
 // readString reads string literals or quoted identifiers with reserved keyword support
 func (t *tokenizer) readString(delimiter rune) (Token, error) {
 	var builder strings.Builder
+
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
@@ -424,20 +467,26 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 				builder.WriteRune(delimiter)
 				t.readChar()
 				t.readChar()
+
 				continue
 			}
+
 			break // closing quote
 		}
+
 		if t.current == '\\' && delimiter == '\'' {
 			// Backslash escape (PostgreSQL compatible)
 			builder.WriteRune(t.current)
 			t.readChar()
+
 			if t.current != 0 {
 				builder.WriteRune(t.current)
 				t.readChar()
 			}
+
 			continue
 		}
+
 		builder.WriteRune(t.current)
 		t.readChar()
 	}
@@ -451,6 +500,7 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 
 	// Determine token type based on delimiter
 	var tokenType TokenType
+
 	quotedContent := builder.String()
 	// Note: We no longer need to check reserved words for quoted identifiers
 
@@ -478,6 +528,7 @@ func (t *tokenizer) readString(delimiter rune) (Token, error) {
 // readNumber reads numeric literals
 func (t *tokenizer) readNumber() (Token, error) {
 	var builder strings.Builder
+
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
@@ -534,6 +585,7 @@ func (t *tokenizer) readNumber() (Token, error) {
 // readLineComment reads line comments
 func (t *tokenizer) readLineComment() (Token, error) {
 	var builder strings.Builder
+
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
@@ -564,6 +616,7 @@ func (t *tokenizer) readLineComment() (Token, error) {
 // readBlockComment reads block comments
 func (t *tokenizer) readBlockComment() (Token, error) {
 	var builder strings.Builder
+
 	startLine := t.line
 	startColumn := t.column - 1
 	startOffset := t.position - 1
@@ -581,8 +634,10 @@ func (t *tokenizer) readBlockComment() (Token, error) {
 			t.readChar()
 			builder.WriteRune(t.current)
 			t.readChar()
+
 			break
 		}
+
 		builder.WriteRune(t.current)
 		t.readChar()
 	}
@@ -648,12 +703,14 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) *Directive {
 			if len(content) > 2 && content[2] == ' ' {
 				condition = strings.TrimSpace(content[3:])
 			}
+
 			return &Directive{Type: "if", Condition: condition}
 		} else if strings.HasPrefix(content, "elseif") && (len(content) == 6 || content[6] == ' ') {
 			condition := ""
 			if len(content) > 6 && content[6] == ' ' {
 				condition = strings.TrimSpace(content[7:])
 			}
+
 			return &Directive{Type: "elseif", Condition: condition}
 		} else if content == "else" {
 			return &Directive{Type: "else"}
@@ -662,6 +719,7 @@ func (t *tokenizer) parseSnapSQLDirective(comment string) *Directive {
 			if len(content) > 3 && content[3] == ' ' {
 				condition = strings.TrimSpace(content[4:])
 			}
+
 			return &Directive{Type: "for", Condition: condition}
 		} else if content == "end" {
 			return &Directive{Type: "end"}

@@ -226,6 +226,7 @@ func StringConcatRule(left, right *TypeInfo, operator string, dialect snapsql.Di
 		// Fall back to string type but mark as nullable due to unsupported operator
 		return &TypeInfo{BaseType: "string", IsNullable: true}
 	}
+
 	if operator == "CONCAT" && !snapsql.Capabilities[dialect][snapsql.FeatureConcatFunction] {
 		return &TypeInfo{BaseType: "string", IsNullable: true}
 	}
@@ -369,6 +370,7 @@ func FirstArgRule(args []*TypeInfo, functionName, castType string, dialect snaps
 	if len(args) == 0 {
 		return &TypeInfo{BaseType: "any", IsNullable: true}
 	}
+
 	return args[0]
 }
 
@@ -413,6 +415,7 @@ func CoalesceRule(args []*TypeInfo, functionName, castType string, dialect snaps
 				baseType = promoteNumericTypes(baseType, arg.BaseType)
 			}
 		}
+
 		if !arg.IsNullable {
 			allNullable = false
 		}
@@ -434,6 +437,7 @@ func WindowArgRule(args []*TypeInfo, functionName, castType string, dialect snap
 	if len(args) == 0 {
 		return &TypeInfo{BaseType: "any", IsNullable: true}
 	}
+
 	return args[0]
 }
 

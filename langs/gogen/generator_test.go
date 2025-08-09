@@ -69,6 +69,7 @@ func TestGenerator(t *testing.T) {
 	)
 
 	var buf strings.Builder
+
 	err := gen.Generate(&buf)
 	assert.NoError(t, err)
 
@@ -96,6 +97,7 @@ func TestGeneratorWithoutDescription(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+
 	err := gen.Generate(&buf)
 	assert.NoError(t, err)
 

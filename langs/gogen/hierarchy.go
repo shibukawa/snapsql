@@ -35,9 +35,7 @@ func ParseFileHierarchy(inputPath, inputRoot, outputRoot string) FileHierarchy {
 
 	// Remove file extension and convert to Go file
 	baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
-	if strings.HasSuffix(baseName, ".snap") {
-		baseName = strings.TrimSuffix(baseName, ".snap")
-	}
+	baseName = strings.TrimSuffix(baseName, ".snap")
 
 	// Handle special cases
 	isCommonType := fileName == "_common.yaml"

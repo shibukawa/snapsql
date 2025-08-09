@@ -61,6 +61,7 @@ func InferFieldTypes(
 	if len(databaseSchemas) == 0 {
 		return nil, ErrNoSchemaProvided
 	}
+
 	if statementNode == nil {
 		return nil, ErrInvalidStatement
 	}
@@ -73,9 +74,11 @@ func InferFieldTypes(
 		if options.Dialect != "" {
 			engine.context.Dialect = options.Dialect
 		}
+
 		if options.TableAliases != nil {
 			engine.context.TableAliases = options.TableAliases
 		}
+
 		if options.CurrentTables != nil {
 			engine.context.CurrentTables = options.CurrentTables
 		}

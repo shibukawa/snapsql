@@ -48,10 +48,12 @@ func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 	}
 
 	nameToPos := make(map[string][]string)
+
 	for _, part := range pc.FindIter(pctx, groupBySplitter, pTokens) {
 		if len(part.Skipped) == 0 {
 			continue
 		}
+
 		_, match, err := groupByFields(pctx, part.Skipped)
 		if err != nil {
 			perr.Add(fmt.Errorf("%w at %s: expression in group by clause is not supported by SnapSQL", cmn.ErrInvalidForSnapSQL, part.Skipped[0].Val.Position.String()))
@@ -59,10 +61,14 @@ func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 			field := cmn.FieldName{
 				Expression: cmn.ToToken(part.Skipped),
 			}
+
 			switch match[0].Type {
 			case "field":
-				var fieldName string
-				var fullName string
+				var (
+					fieldName string
+					fullName  string
+				)
+
 				switch len(match) {
 				case 1:
 					fieldName = match[0].Val.Value
@@ -72,6 +78,7 @@ func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 					field.TableName = match[0].Val.Value
 					fullName = field.TableName + "." + fieldName
 				}
+
 				field.Name = fieldName
 				field.Pos = match[0].Val.Position
 				nameToPos[fullName] = append(nameToPos[fullName], match[0].Val.Position.String())
@@ -79,8 +86,11 @@ func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 			case "index":
 				perr.Add(fmt.Errorf("%w: GROUP BY index at %s is not allowed in SnapSQL", cmn.ErrInvalidForSnapSQL, match[0].Val.Position.String()))
 			case "case":
-				var fieldName string
-				var fullName string
+				var (
+					fieldName string
+					fullName  string
+				)
+
 				if len(match) > 4 {
 					fieldName = match[4].Val.Value
 					field.TableName = match[2].Val.Value
@@ -89,6 +99,7 @@ func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 					fieldName = match[2].Val.Value
 					fullName = fieldName
 				}
+
 				field.Name = fieldName
 				field.Pos = match[0].Val.Position
 				nameToPos[fullName] = append(nameToPos[fullName], match[0].Val.Position.String())
@@ -96,6 +107,7 @@ func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 			}
 		}
 	}
+
 	for name, pos := range nameToPos {
 		if len(pos) > 1 {
 			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))

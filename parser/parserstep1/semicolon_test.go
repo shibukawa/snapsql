@@ -115,6 +115,7 @@ func TestProcessSemicolons(t *testing.T) {
 
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorType != nil {
 					assert.Contains(t, err.Error(), tt.errorType.Error())
 				}

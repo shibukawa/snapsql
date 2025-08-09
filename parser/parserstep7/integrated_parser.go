@@ -1,15 +1,15 @@
 package parserstep7
 
 import (
-	"errors"
 	"fmt"
 
+	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 // Sentinel errors
 var (
-	ErrInvalidStatement = errors.New("invalid statement for subquery parsing")
+	ErrInvalidStatement = snapsql.ErrInvalidStatement
 )
 
 // SubqueryParserIntegrated combines all parserstep7 functionality
@@ -81,6 +81,7 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 			key := fmt.Sprintf("%s_field_%d", nodeID, i)
 			fieldSources[key] = fs
 		}
+
 		for i, tr := range node.TableRefs {
 			// Use node ID and table index as key since TableReference doesn't have ID
 			key := fmt.Sprintf("%s_table_%d", nodeID, i)
@@ -135,14 +136,17 @@ func (spi *SubqueryParserIntegrated) AddTableReferenceToNode(nodeID string, tabl
 // GetAccessibleFieldsForNode returns all fields accessible from a specific node
 func (spi *SubqueryParserIntegrated) GetAccessibleFieldsForNode(nodeID string) ([]*FieldSource, error) {
 	graph := spi.integrator.GetDependencyGraph()
+
 	result, err := cmn.GetAccessibleFieldsForNodeInGraph(graph, nodeID)
 	if err != nil {
 		return nil, err
 	}
+
 	if fields, ok := result.([]*FieldSource); ok {
 		return fields, nil
 	}
-	return nil, fmt.Errorf("unexpected return type from GetAccessibleFieldsForNodeInGraph")
+
+	return nil, snapsql.ErrUnexpectedReturnType
 }
 
 // ValidateFieldAccess validates if a field can be accessed from a specific node
@@ -154,14 +158,17 @@ func (spi *SubqueryParserIntegrated) ValidateFieldAccess(nodeID, fieldName strin
 // ResolveFieldReference resolves a field reference from a specific node's perspective
 func (spi *SubqueryParserIntegrated) ResolveFieldReference(nodeID, fieldName string) ([]*FieldSource, error) {
 	graph := spi.integrator.GetDependencyGraph()
+
 	result, err := cmn.ResolveFieldInNodeFromGraph(graph, nodeID, fieldName)
 	if err != nil {
 		return nil, err
 	}
+
 	if fields, ok := result.([]*FieldSource); ok {
 		return fields, nil
 	}
-	return nil, fmt.Errorf("unexpected return type from ResolveFieldInNodeFromGraph")
+
+	return nil, snapsql.ErrUnexpectedReturnType
 }
 
 // Reset resets all internal state

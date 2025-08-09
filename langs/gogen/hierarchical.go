@@ -16,6 +16,9 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -132,7 +135,7 @@ func generateHierarchicalStructs(functionName string, groups map[string]hierarch
 		// Add this as a field in the main struct
 		mainStructFields = append(mainStructFields, responseFieldData{
 			Name:    celNameToGoName(prefix),
-			Type:    fmt.Sprintf("[]%s", structName), // Array of nested structs
+			Type:    "[]" + structName, // Array of nested structs
 			JSONTag: prefix,
 		})
 	}
@@ -160,21 +163,26 @@ func celNameToGoName(celName string) string {
 	// Handle dot notation (e.g., "u.id" -> "UId")
 	if strings.Contains(celName, ".") {
 		parts := strings.Split(celName, ".")
+
 		result := make([]string, len(parts))
 		for i, part := range parts {
 			result[i] = celNameToGoName(part) // Recursive call for each part
 		}
+
 		return strings.Join(result, "")
 	}
 
 	// Handle underscore notation (e.g., "user_id" -> "UserID")
 	parts := strings.Split(celName, "_")
+	caser := cases.Title(language.English)
+
 	for i, part := range parts {
 		if part == "id" {
 			parts[i] = "ID"
 		} else {
-			parts[i] = strings.Title(part)
+			parts[i] = caser.String(part)
 		}
 	}
+
 	return strings.Join(parts, "")
 }

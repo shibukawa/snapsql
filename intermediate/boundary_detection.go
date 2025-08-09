@@ -36,6 +36,7 @@ func detectBoundaryDelimiter(value string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -81,7 +82,7 @@ func findConditionalBoundaries(tokens []tokenizer.Token) map[int]string {
 	for i, token := range tokens {
 		// Check if this token is inside a conditional block and starts with a delimiter
 		if token.Type != tokenizer.WHITESPACE && token.Type != tokenizer.LINE_COMMENT &&
-			!(token.Type == tokenizer.BLOCK_COMMENT && token.Directive != nil) &&
+			(token.Type != tokenizer.BLOCK_COMMENT || token.Directive == nil) &&
 			isInConditionalBlock(tokens, i) {
 			if detectBoundaryDelimiter(token.Value) {
 				boundaries[i] = "EMIT_UNLESS_BOUNDARY"
@@ -104,6 +105,7 @@ func findConditionalBoundaries(tokens []tokenizer.Token) map[int]string {
 func isInConditionalBlock(tokens []tokenizer.Token, index int) bool {
 	// Look backwards to find the nearest IF/END pair
 	ifCount := 0
+
 	for i := index - 1; i >= 0; i-- {
 		token := tokens[i]
 		if token.Type == tokenizer.BLOCK_COMMENT && token.Directive != nil {
@@ -134,5 +136,6 @@ func hasConditionalBlockBefore(tokens []tokenizer.Token, index int) bool {
 			break
 		}
 	}
+
 	return false
 }

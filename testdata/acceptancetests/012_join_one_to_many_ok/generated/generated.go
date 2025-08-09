@@ -34,9 +34,9 @@ type GetUserWithJobsResultJobs struct {
 // GetUserWithJobsResult represents the response structure for GetUserWithJobs
 type GetUserWithJobsResult struct {
 	Jobs []GetUserWithJobsResultJobs `json:"jobs"`
-	UID int `json:"u.id"`
-	UName string `json:"u.name"`
-	UEmail string `json:"u.email"`
+	Uid int `json:"u.id"`
+	Uname string `json:"u.name"`
+	Uemail string `json:"u.email"`
 }
 
 // GetUserWithJobs specific CEL programs and mock path
@@ -61,7 +61,7 @@ func init() {
 		return snapsqlgo.ConvertGoValueToCEL(v.Title)
 	}
 
-	// Create type definitions for local registry
+	// Create type definitions for local type store
 	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
 		"GetUserWithJobsResultJobs": {
 			"company": snapsqlgo.CreateFieldInfo(
@@ -82,7 +82,7 @@ func init() {
 		},
 	}
 
-	// Create and set up local registry
+	// Create and set up local type store
 	registry := snapsqlgo.NewLocalTypeRegistry()
 	for typeName, fields := range typeDefinitions {
 		structInfo := &snapsqlgo.StructInfo{
@@ -164,9 +164,9 @@ func GetUserWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, userID 
 	row := stmt.QueryRowContext(ctx, args...)
 	err = row.Scan(
 	    &result.Jobs,
-	    &result.UID,
-	    &result.UName,
-	    &result.UEmail
+	    &result.Uid,
+	    &result.Uname,
+	    &result.Uemail
 	)
 	if err != nil {
 	    return result, fmt.Errorf("failed to scan row: %w", err)

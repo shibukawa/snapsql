@@ -208,6 +208,7 @@ func TestSQLFormatter_TokenizeSnapDirectives(t *testing.T) {
 			assert.NoError(t, err)
 
 			var snapTokens []string
+
 			for _, token := range tokens {
 				if token.Type == TokenSnapDirective {
 					snapTokens = append(snapTokens, token.Value)
@@ -268,9 +269,11 @@ func TestSQLFormatter_IndentationLevels(t *testing.T) {
 		if strings.Contains(line, "/*# if condition1 */") {
 			assert.Equal(t, 0, countLeadingSpaces(line))
 		}
+
 		if strings.Contains(line, "/*# if condition2 */") {
 			assert.Equal(t, 4, countLeadingSpaces(line))
 		}
+
 		if strings.Contains(line, "select id") {
 			assert.Equal(t, 8, countLeadingSpaces(line))
 		}
@@ -285,11 +288,13 @@ func normalizeWhitespace(s string) string {
 	for i, line := range lines {
 		lines[i] = strings.TrimRight(line, " \t")
 	}
+
 	return strings.Join(lines, "\n")
 }
 
 func countLeadingSpaces(s string) int {
 	count := 0
+
 	for _, char := range s {
 		if char == ' ' {
 			count++
@@ -297,6 +302,7 @@ func countLeadingSpaces(s string) int {
 			break
 		}
 	}
+
 	return count
 }
 
@@ -314,7 +320,8 @@ parameters:
 select u.id,u.name,u.email /*# if include_profile */ ,p.bio,p.avatar_url /*# end */ from users u /*# if include_profile */ left join profiles p on u.id=p.user_id /*# end */ where u.id=/*= user_id */ /*# if start_date != "" && end_date != "" */ and u.created_at between /*= start_date */ and /*= end_date */ /*# end */ order by u.created_at desc limit 100`
 
 	t.ResetTimer()
-	for i := 0; i < t.N; i++ {
+
+	for range t.N {
 		_, err := formatter.Format(complexSQL)
 		if err != nil {
 			t.Fatal(err)

@@ -3,7 +3,6 @@ package snapsql
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 
 	"github.com/goccy/go-yaml"
@@ -140,15 +139,18 @@ const (
 // LoadConfig loads configuration from the specified file
 func LoadConfig(configPath string) (*Config, error) {
 	// Load .env files first
-	if err := loadEnvFiles(); err != nil {
+	err := loadEnvFiles()
+	if err != nil {
 		return nil, fmt.Errorf("failed to load environment files: %w", err)
 	}
 
 	// Check if config file exists
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+	_, err = os.Stat(configPath)
+	if os.IsNotExist(err) {
 		// Return default configuration if file doesn't exist
 		config := getDefaultConfig()
 		expandConfigEnvVars(config)
+
 		return config, nil
 	}
 
@@ -160,7 +162,8 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Parse YAML
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -392,10 +395,12 @@ func applySystemFieldDefaults(config *Config) {
 func loadEnvFiles() error {
 	// Try to load .env file from current directory
 	if fileExists(".env") {
-		if err := godotenv.Load(".env"); err != nil {
+		err := godotenv.Load(".env")
+		if err != nil {
 			return fmt.Errorf("failed to load .env file: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -444,39 +449,10 @@ func expandConfigEnvVars(config *Config) {
 	}
 }
 
-// ensureDir creates a directory if it doesn't exist
-func ensureDir(path string) error {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return os.MkdirAll(path, 0755)
-	}
-	return nil
-}
-
-// writeFile writes content to a file, creating directories if necessary
-func writeFile(path, content string) error {
-	// Ensure directory exists
-	dir := filepath.Dir(path)
-	if err := ensureDir(dir); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", dir, err)
-	}
-
-	// Write file
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
 // fileExists checks if a file exists
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
-}
-
-// isDirectory checks if a path is a directory
-func isDirectory(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
 }
 
 // IsSystemField checks if a field name is considered a system field
@@ -486,6 +462,7 @@ func (c *Config) IsSystemField(fieldName string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -496,6 +473,7 @@ func (c *Config) GetSystemField(fieldName string) (SystemField, bool) {
 			return field, true
 		}
 	}
+
 	return SystemField{}, false
 }
 
@@ -505,30 +483,35 @@ func (c *Config) ShouldExcludeFromSelect(fieldName string) bool {
 	if !exists {
 		return false
 	}
+
 	return field.ExcludeFromSelect
 }
 
 // GetSystemFieldsForInsert returns all system fields that should be processed for INSERT statements
 func (c *Config) GetSystemFieldsForInsert() []SystemField {
 	var fields []SystemField
+
 	for _, field := range c.System.Fields {
 		// Include fields that have either default or parameter configuration for INSERT
 		if field.OnInsert.Default != nil || field.OnInsert.Parameter != ParameterNone {
 			fields = append(fields, field)
 		}
 	}
+
 	return fields
 }
 
 // GetSystemFieldsForUpdate returns all system fields that should be processed for UPDATE statements
 func (c *Config) GetSystemFieldsForUpdate() []SystemField {
 	var fields []SystemField
+
 	for _, field := range c.System.Fields {
 		// Include fields that have either default or parameter configuration for UPDATE
 		if field.OnUpdate.Default != nil || field.OnUpdate.Parameter != ParameterNone {
 			fields = append(fields, field)
 		}
 	}
+
 	return fields
 }
 
@@ -538,6 +521,7 @@ func (c *Config) HasDefaultForInsert(fieldName string) bool {
 	if !exists {
 		return false
 	}
+
 	return field.OnInsert.Default != nil
 }
 
@@ -547,6 +531,7 @@ func (c *Config) HasDefaultForUpdate(fieldName string) bool {
 	if !exists {
 		return false
 	}
+
 	return field.OnUpdate.Default != nil
 }
 
@@ -556,6 +541,7 @@ func (c *Config) GetParameterHandlingForInsert(fieldName string) SystemFieldPara
 	if !exists {
 		return ParameterNone
 	}
+
 	return field.OnInsert.Parameter
 }
 
@@ -565,6 +551,7 @@ func (c *Config) GetParameterHandlingForUpdate(fieldName string) SystemFieldPara
 	if !exists {
 		return ParameterNone
 	}
+
 	return field.OnUpdate.Parameter
 }
 
@@ -574,6 +561,7 @@ func (c *Config) GetDefaultValueForInsert(fieldName string) (any, bool) {
 	if !exists || field.OnInsert.Default == nil {
 		return nil, false
 	}
+
 	return field.OnInsert.Default, true
 }
 
@@ -583,5 +571,6 @@ func (c *Config) GetDefaultValueForUpdate(fieldName string) (any, bool) {
 	if !exists || field.OnUpdate.Default == nil {
 		return nil, false
 	}
+
 	return field.OnUpdate.Default, true
 }

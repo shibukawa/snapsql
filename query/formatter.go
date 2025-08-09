@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -77,43 +78,54 @@ func (f *Formatter) formatAsTable(result *QueryResult, output io.Writer) error {
 
 	// Print header
 	sb.WriteString("+")
+
 	for _, width := range colWidths {
 		sb.WriteString(strings.Repeat("-", width+2))
 		sb.WriteString("+")
 	}
+
 	sb.WriteString("\n|")
+
 	for i, col := range result.Columns {
 		sb.WriteString(fmt.Sprintf(" %-*s |", colWidths[i], col))
 	}
+
 	sb.WriteString("\n+")
+
 	for _, width := range colWidths {
 		sb.WriteString(strings.Repeat("-", width+2))
 		sb.WriteString("+")
 	}
+
 	sb.WriteString("\n")
 
 	// Print rows
 	for _, row := range data {
 		sb.WriteString("|")
+
 		for i, col := range result.Columns {
 			strVal := formatValue(row[col])
 			sb.WriteString(fmt.Sprintf(" %-*s |", colWidths[i], strVal))
 		}
+
 		sb.WriteString("\n")
 	}
 
 	// Print footer
 	sb.WriteString("+")
+
 	for _, width := range colWidths {
 		sb.WriteString(strings.Repeat("-", width+2))
 		sb.WriteString("+")
 	}
+
 	sb.WriteString("\n")
 
 	// Add count and duration
 	sb.WriteString(fmt.Sprintf("%d rows in set (%.3f sec)\n", result.Count, result.Duration.Seconds()))
 
 	_, err := fmt.Fprintln(output, sb.String())
+
 	return err
 }
 
@@ -132,24 +144,30 @@ func (f *Formatter) formatAsMarkdown(result *QueryResult, output io.Writer) erro
 
 	// Print header
 	sb.WriteString("| ")
+
 	for _, col := range result.Columns {
 		sb.WriteString(col)
 		sb.WriteString(" | ")
 	}
+
 	sb.WriteString("\n|")
+
 	for range result.Columns {
 		sb.WriteString(" --- |")
 	}
+
 	sb.WriteString("\n")
 
 	// Print rows
 	for _, row := range data {
 		sb.WriteString("| ")
+
 		for _, col := range result.Columns {
 			strVal := formatValue(row[col])
 			sb.WriteString(strVal)
 			sb.WriteString(" | ")
 		}
+
 		sb.WriteString("\n")
 	}
 
@@ -157,6 +175,7 @@ func (f *Formatter) formatAsMarkdown(result *QueryResult, output io.Writer) erro
 	sb.WriteString(fmt.Sprintf("\n<!-- %d rows, Time: %v -->", result.Count, result.Duration))
 
 	_, err := fmt.Fprintln(output, sb.String())
+
 	return err
 }
 
@@ -175,6 +194,7 @@ func (f *Formatter) formatAsJSON(result *QueryResult, output io.Writer) error {
 	// Encode as JSON
 	encoder := json.NewEncoder(output)
 	encoder.SetIndent("", "  ")
+
 	return encoder.Encode(jsonResult)
 }
 
@@ -184,7 +204,8 @@ func (f *Formatter) formatAsCSV(result *QueryResult, output io.Writer) error {
 	defer writer.Flush()
 
 	// Write header
-	if err := writer.Write(result.Columns); err != nil {
+	err := writer.Write(result.Columns)
+	if err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 
@@ -195,7 +216,9 @@ func (f *Formatter) formatAsCSV(result *QueryResult, output io.Writer) error {
 		for i, val := range row {
 			strValues[i] = formatValue(val)
 		}
-		if err := writer.Write(strValues); err != nil {
+
+		err := writer.Write(strValues)
+		if err != nil {
 			return fmt.Errorf("failed to write CSV row: %w", err)
 		}
 	}
@@ -220,7 +243,9 @@ func (f *Formatter) formatAsYAML(result *QueryResult, output io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal results to YAML: %w", err)
 	}
+
 	_, err = output.Write(data)
+
 	return err
 }
 
@@ -229,13 +254,16 @@ func rowsToMaps(columns []string, rows [][]interface{}) []map[string]interface{}
 	var result []map[string]interface{}
 	for _, row := range rows {
 		rowMap := make(map[string]interface{})
+
 		for i, col := range columns {
 			if i < len(row) {
 				rowMap[col] = row[i]
 			}
 		}
+
 		result = append(result, rowMap)
 	}
+
 	return result
 }
 
@@ -251,13 +279,14 @@ func formatValue(val interface{}) string {
 	case []byte:
 		return string(v)
 	case bool:
-		return fmt.Sprintf("%t", v)
+		return strconv.FormatBool(v)
 	case map[string]interface{}:
 		// Format JSON objects
 		data, err := json.Marshal(v)
 		if err != nil {
 			return fmt.Sprintf("%v", v)
 		}
+
 		return string(data)
 	case []interface{}:
 		// Format JSON arrays
@@ -265,6 +294,7 @@ func formatValue(val interface{}) string {
 		if err != nil {
 			return fmt.Sprintf("%v", v)
 		}
+
 		return string(data)
 	default:
 		return fmt.Sprintf("%v", v)

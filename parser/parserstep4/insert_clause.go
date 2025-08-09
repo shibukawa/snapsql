@@ -29,10 +29,12 @@ func finalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Se
 
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
+
 	consume, tableName, err := parseTableName(pctx, pTokens, false)
 	if err != nil {
 		perr.Add(err)
 	}
+
 	pTokens = pTokens[consume:]
 	clause.Table = tableName
 
@@ -41,7 +43,9 @@ func finalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Se
 		if selectClause != nil {
 			return // No column list, valid for INSERT ... SELECT
 		}
+
 		perr.Add(fmt.Errorf("%w at %s: column list is required unless select clause", cmn.ErrInvalidForSnapSQL, tokens[0].Position.String()))
+
 		return
 	}
 
@@ -50,25 +54,30 @@ func finalizeInsertIntoClause(clause *cmn.InsertIntoClause, selectClause *cmn.Se
 
 	for _, part := range pc.FindIter(pctx, columnListSeparator, pTokens) {
 		pTokens = pTokens[part.Consume+len(part.Skipped):]
+
 		_, columnName, err := columnName(pctx, part.Skipped)
 		if err != nil {
 			perr.Add(fmt.Errorf("%w at %s: invalid column name", cmn.ErrInvalidSQL, part.Skipped[0].Val.Position.String()))
 			continue
 		}
+
 		if len(columnName) > 0 {
 			n := columnName[0].Val
 			clause.Columns = append(clause.Columns, n.Value)
 			nameToPos[n.Value] = append(nameToPos[n.Value], n.Position.String())
 		}
+
 		if part.Match[0].Val.Type == tok.CLOSED_PARENS {
 			break
 		}
 	}
+
 	if _, _, err = columnListEnd(pctx, pTokens); err != nil {
 		// ダミートークンを許容するために、エラーを無視する
 		// perr.Add(fmt.Errorf("%w at %s: unnecessary token is at after column list", cmn.ErrInvalidSQL, tokens[len(tokens)-1].Position.String()))
 		// return
 	}
+
 	for name, pos := range nameToPos {
 		if len(pos) > 1 {
 			perr.Add(fmt.Errorf("%w: duplicate column name '%s' at %s", cmn.ErrInvalidSQL, name, strings.Join(pos, ", ")))

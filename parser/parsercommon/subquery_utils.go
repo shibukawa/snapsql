@@ -1,9 +1,14 @@
 package parsercommon
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
+
+var ErrInvalidTableReferenceType = errors.New("invalid table reference type")
 
 // SubqueryGraphUtils provides utility functions for extracting information from SQDependencyGraph
 // without exposing internal implementation details
@@ -13,6 +18,7 @@ func GetDependencyNodes(dg *SQDependencyGraph) map[string]*SQDependencyNode {
 	if dg == nil {
 		return make(map[string]*SQDependencyNode)
 	}
+
 	return dg.GetAllNodes()
 }
 
@@ -21,8 +27,10 @@ func GetNodeByID(dg *SQDependencyGraph, nodeID string) (*SQDependencyNode, bool)
 	if dg == nil {
 		return nil, false
 	}
+
 	nodes := dg.GetAllNodes()
 	node, exists := nodes[nodeID]
+
 	return node, exists
 }
 
@@ -31,6 +39,7 @@ func AddNodeToDependencyGraph(dg *SQDependencyGraph, node *SQDependencyNode) {
 	if dg == nil || node == nil {
 		return
 	}
+
 	dg.AddNode(node)
 }
 
@@ -39,6 +48,7 @@ func AddFieldSourceToGraphNode(dg *SQDependencyGraph, nodeID string, fieldSource
 	if dg == nil {
 		return ErrNoDependencyGraph
 	}
+
 	return dg.AddFieldSourceToNode(nodeID, fieldSource)
 }
 
@@ -47,6 +57,7 @@ func GetAccessibleFieldsFromGraph(dg *SQDependencyGraph, nodeID string) ([]*SQFi
 	if dg == nil {
 		return nil, ErrNoDependencyGraph
 	}
+
 	return dg.GetAccessibleFieldsForNode(nodeID)
 }
 
@@ -55,6 +66,7 @@ func ValidateFieldAccessInGraph(dg *SQDependencyGraph, nodeID, fieldName string)
 	if dg == nil {
 		return ErrNoDependencyGraph
 	}
+
 	return dg.ValidateFieldAccessForNode(nodeID, fieldName)
 }
 
@@ -63,6 +75,7 @@ func ResolveFieldInGraph(dg *SQDependencyGraph, nodeID, fieldName string) ([]*SQ
 	if dg == nil {
 		return nil, ErrNoDependencyGraph
 	}
+
 	return dg.ResolveFieldInNode(nodeID, fieldName)
 }
 
@@ -71,6 +84,7 @@ func GetScopeHierarchyFromGraph(dg *SQDependencyGraph) string {
 	if dg == nil {
 		return "No dependency graph available"
 	}
+
 	return dg.GetScopeHierarchyVisualization()
 }
 
@@ -118,6 +132,7 @@ func hasCircularDependencyDFS(nodes map[string]*SQDependencyNode, nodeID string,
 	}
 
 	recStack[nodeID] = false
+
 	return false
 }
 
@@ -139,12 +154,14 @@ func GetProcessingOrderFromGraph(dg *SQDependencyGraph) ([]string, error) {
 
 	// Perform topological sort
 	visited := make(map[string]bool)
+
 	var result []string
 
 	// Visit all nodes
 	for nodeID := range nodes {
 		if !visited[nodeID] {
-			if err := topologicalSortDFS(nodes, nodeID, visited, &result); err != nil {
+			err := topologicalSortDFS(nodes, nodeID, visited, &result)
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -170,7 +187,8 @@ func topologicalSortDFS(nodes map[string]*SQDependencyNode, nodeID string, visit
 	// Visit all dependencies first
 	for _, depID := range node.Dependencies {
 		if !visited[depID] {
-			if err := topologicalSortDFS(nodes, depID, visited, result); err != nil {
+			err := topologicalSortDFS(nodes, depID, visited, result)
+			if err != nil {
 				return err
 			}
 		}
@@ -178,6 +196,7 @@ func topologicalSortDFS(nodes map[string]*SQDependencyNode, nodeID string, visit
 
 	// Add current node to result
 	*result = append(*result, nodeID)
+
 	return nil
 }
 
@@ -225,9 +244,11 @@ func CreateDependencyVisualization(dg *SQDependencyGraph) string {
 
 	for _, node := range nodes {
 		result.WriteString(fmt.Sprintf("- %s (%s)\n", node.ID, node.NodeType.String()))
+
 		if len(node.Dependencies) > 0 {
 			result.WriteString(fmt.Sprintf("  Dependencies: %s\n", strings.Join(node.Dependencies, ", ")))
 		}
+
 		if len(node.FieldSources) > 0 {
 			result.WriteString(fmt.Sprintf("  Fields: %d\n", len(node.FieldSources)))
 		}
@@ -243,6 +264,7 @@ func AddDependencyToGraph(dg *SQDependencyGraph, fromNodeID, toNodeID string) er
 	}
 
 	nodes := dg.GetAllNodes()
+
 	fromNode, exists := nodes[fromNodeID]
 	if !exists {
 		return fmt.Errorf("%w: %s", ErrNodeNotFound, fromNodeID)
@@ -261,6 +283,7 @@ func AddDependencyToGraph(dg *SQDependencyGraph, fromNodeID, toNodeID string) er
 	}
 
 	fromNode.Dependencies = append(fromNode.Dependencies, toNodeID)
+
 	return nil
 }
 
@@ -271,12 +294,14 @@ func AddTableReferenceToGraphNode(dg *SQDependencyGraph, nodeID string, tableRef
 	}
 
 	nodes := dg.GetAllNodes()
+
 	node, exists := nodes[nodeID]
 	if !exists {
 		return fmt.Errorf("%w: %s", ErrNodeNotFound, nodeID)
 	}
 
 	node.TableRefs = append(node.TableRefs, tableRef)
+
 	return nil
 }
 
@@ -298,6 +323,7 @@ func GetScopeHierarchyVisualizationFromGraph(dg *SQDependencyGraph) string {
 			result += "  Dependencies: " + fmt.Sprintf("%v", node.Dependencies) + "\n"
 		}
 	}
+
 	return result
 }
 
@@ -310,7 +336,8 @@ func AddFieldSourceToNodeInGraph(dg *SQDependencyGraph, nodeID string, fieldSour
 	if fs, ok := fieldSource.(*SQFieldSource); ok {
 		return AddFieldSourceToGraphNode(dg, nodeID, fs)
 	}
-	return fmt.Errorf("invalid field source type")
+
+	return snapsql.ErrInvalidFieldSourceType
 }
 
 // AddTableReferenceToNodeInGraph adds a table reference to a specific node
@@ -318,8 +345,12 @@ func AddTableReferenceToNodeInGraph(dg *SQDependencyGraph, nodeID string, tableR
 	if dg == nil {
 		return ErrNoDependencyGraph
 	}
-	// Delegate to the specific implementation
-	return AddTableReferenceToGraphNode(dg, nodeID, tableRef.(*SQTableReference))
+	// Delegate to the specific implementation with type assertion check
+	if sqTableRef, ok := tableRef.(*SQTableReference); ok {
+		return AddTableReferenceToGraphNode(dg, nodeID, sqTableRef)
+	}
+
+	return fmt.Errorf("%w: %T", ErrInvalidTableReferenceType, tableRef)
 }
 
 // GetAccessibleFieldsForNodeInGraph returns accessible fields for a node (legacy compatibility)
@@ -327,6 +358,7 @@ func GetAccessibleFieldsForNodeInGraph(dg *SQDependencyGraph, nodeID string) (in
 	if dg == nil {
 		return nil, ErrNoDependencyGraph
 	}
+
 	return GetAccessibleFieldsFromGraph(dg, nodeID)
 }
 
@@ -337,6 +369,7 @@ func ValidateFieldAccessForNodeInGraph(dg *SQDependencyGraph, nodeID, fieldName 
 	}
 	// Simple implementation for now
 	_, err := GetAccessibleFieldsFromGraph(dg, nodeID)
+
 	return err
 }
 

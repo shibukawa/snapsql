@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	snapsql "github.com/shibukawa/snapsql"
 )
 
 // HierarchicalMapper handles double underscore field mapping for JOIN queries
@@ -29,6 +31,7 @@ func NewHierarchicalMapper[T any](rootKeyFields ...string) *HierarchicalMapper[T
 	if len(rootKeyFields) == 0 {
 		rootKeyFields = []string{"id"} // Default to id field
 	}
+
 	return &HierarchicalMapper[T]{
 		currentEntities: make(map[string]*T),
 		rootKeyFields:   rootKeyFields,
@@ -48,7 +51,8 @@ func (h *HierarchicalMapper[T]) ProcessFlatRow(flatRow any) ([]T, error) {
 	// Check if we have a new root entity
 	if existingEntity, exists := h.currentEntities[rootKey]; exists {
 		// Same root entity, merge child data
-		if err := h.mergeChildData(existingEntity, childData); err != nil {
+		err := h.mergeChildData(existingEntity, childData)
+		if err != nil {
 			return nil, fmt.Errorf("failed to merge child data: %w", err)
 		}
 	} else {
@@ -61,7 +65,8 @@ func (h *HierarchicalMapper[T]) ProcessFlatRow(flatRow any) ([]T, error) {
 		h.currentEntities = make(map[string]*T)
 		h.currentEntities[rootKey] = rootEntity
 
-		if err := h.mergeChildData(rootEntity, childData); err != nil {
+		err := h.mergeChildData(rootEntity, childData)
+		if err != nil {
 			return nil, fmt.Errorf("failed to merge initial child data: %w", err)
 		}
 	}
@@ -75,6 +80,7 @@ func (h *HierarchicalMapper[T]) Finalize() []T {
 	for _, entity := range h.currentEntities {
 		entities = append(entities, *entity)
 	}
+
 	return entities
 }
 
@@ -92,8 +98,9 @@ func (h *HierarchicalMapper[T]) extractHierarchicalData(flatRow any) (string, *T
 	childData := make(map[string]any)
 
 	// Separate root fields from hierarchical fields (containing __)
-	for i := 0; i < rowType.NumField(); i++ {
+	for i := range rowType.NumField() {
 		field := rowType.Field(i)
+
 		dbTag := field.Tag.Get("db")
 		if dbTag == "" {
 			continue
@@ -112,7 +119,9 @@ func (h *HierarchicalMapper[T]) extractHierarchicalData(flatRow any) (string, *T
 
 	// Create root entity
 	rootEntity := new(T)
-	if err := mapFieldsToStruct(rootEntity, rootFields); err != nil {
+
+	err := mapFieldsToStruct(rootEntity, rootFields)
+	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to map root fields: %w", err)
 	}
 
@@ -125,11 +134,13 @@ func (h *HierarchicalMapper[T]) extractHierarchicalData(flatRow any) (string, *T
 // generateRootKey creates a unique key for grouping based on root key fields
 func (h *HierarchicalMapper[T]) generateRootKey(rootFields map[string]any) string {
 	var keyParts []string
+
 	for _, keyField := range h.rootKeyFields {
 		if value, exists := rootFields[keyField]; exists {
 			keyParts = append(keyParts, fmt.Sprintf("%s:%v", keyField, value))
 		}
 	}
+
 	return strings.Join(keyParts, "|")
 }
 
@@ -150,12 +161,14 @@ func (h *HierarchicalMapper[T]) mergeChildData(rootEntity *T, childData map[stri
 		if pathGroups[path] == nil {
 			pathGroups[path] = make(map[string]any)
 		}
+
 		pathGroups[path][fieldName] = value
 	}
 
 	// Merge each path group into the root entity
 	for path, fields := range pathGroups {
-		if err := h.mergePathGroup(rootEntity, path, fields); err != nil {
+		err := h.mergePathGroup(rootEntity, path, fields)
+		if err != nil {
 			return fmt.Errorf("failed to merge path group %s: %w", path, err)
 		}
 	}
@@ -169,22 +182,25 @@ func (h *HierarchicalMapper[T]) mergePathGroup(entity *T, path string, fields ma
 	entityType := entityValue.Type()
 
 	// Find the field corresponding to this path
-	var pathField reflect.Value
-	var pathFieldType reflect.Type
+	var (
+		pathField     reflect.Value
+		pathFieldType reflect.Type
+	)
 
-	for i := 0; i < entityType.NumField(); i++ {
+	for i := range entityType.NumField() {
 		field := entityType.Field(i)
 		jsonTag := field.Tag.Get("json")
 
 		if jsonTag == path || strings.Split(jsonTag, ",")[0] == path {
 			pathField = entityValue.Field(i)
 			pathFieldType = field.Type
+
 			break
 		}
 	}
 
 	if !pathField.IsValid() {
-		return fmt.Errorf("path field %s not found in struct", path)
+		return fmt.Errorf("%w: path field %s", snapsql.ErrFieldNotFound, path)
 	}
 
 	// Handle slice fields (arrays)
@@ -200,6 +216,7 @@ func (h *HierarchicalMapper[T]) mergePathGroup(entity *T, path string, fields ma
 func (h *HierarchicalMapper[T]) mergeSliceField(pathField reflect.Value, pathFieldType reflect.Type, fields map[string]any) error {
 	// Check if all field values are nil (no child data)
 	hasData := false
+
 	for _, value := range fields {
 		if value != nil {
 			hasData = true
@@ -218,13 +235,14 @@ func (h *HierarchicalMapper[T]) mergeSliceField(pathField reflect.Value, pathFie
 	newElem := reflect.New(elemType).Elem()
 
 	// Map fields to the new element
-	if err := mapFieldsToReflectValue(newElem, fields); err != nil {
+	err := mapFieldsToReflectValue(newElem, fields)
+	if err != nil {
 		return fmt.Errorf("failed to map fields to slice element: %w", err)
 	}
 
 	// Check if this element already exists in the slice (based on ID or other unique field)
 	existingSlice := pathField
-	for i := 0; i < existingSlice.Len(); i++ {
+	for i := range existingSlice.Len() {
 		existingElem := existingSlice.Index(i)
 		if h.elementsEqual(existingElem, newElem) {
 			// Update existing element
@@ -244,6 +262,7 @@ func (h *HierarchicalMapper[T]) mergeSliceField(pathField reflect.Value, pathFie
 func (h *HierarchicalMapper[T]) mergeSingleField(pathField reflect.Value, pathFieldType reflect.Type, fields map[string]any) error {
 	// Check if all field values are nil (no child data)
 	hasData := false
+
 	for _, value := range fields {
 		if value != nil {
 			hasData = true
@@ -259,26 +278,31 @@ func (h *HierarchicalMapper[T]) mergeSingleField(pathField reflect.Value, pathFi
 	newObj := reflect.New(pathFieldType).Elem()
 
 	// Map fields to the new object
-	if err := mapFieldsToReflectValue(newObj, fields); err != nil {
+	err := mapFieldsToReflectValue(newObj, fields)
+	if err != nil {
 		return fmt.Errorf("failed to map fields to single object: %w", err)
 	}
 
 	pathField.Set(newObj)
+
 	return nil
 }
 
 // elementsEqual checks if two elements are equal based on ID field
 func (h *HierarchicalMapper[T]) elementsEqual(elem1, elem2 reflect.Value) bool {
 	// Try to find ID field
-	for i := 0; i < elem1.NumField(); i++ {
+	for i := range elem1.NumField() {
 		field := elem1.Type().Field(i)
+
 		dbTag := field.Tag.Get("db")
 		if dbTag == "id" {
 			val1 := elem1.Field(i).Interface()
 			val2 := elem2.Field(i).Interface()
+
 			return val1 == val2
 		}
 	}
+
 	return false
 }
 
@@ -292,8 +316,9 @@ func mapFieldsToStruct(dest any, fields map[string]any) error {
 func mapFieldsToReflectValue(destValue reflect.Value, fields map[string]any) error {
 	destType := destValue.Type()
 
-	for i := 0; i < destType.NumField(); i++ {
+	for i := range destType.NumField() {
 		field := destType.Field(i)
+
 		dbTag := field.Tag.Get("db")
 		if dbTag == "" {
 			continue
@@ -307,6 +332,7 @@ func mapFieldsToReflectValue(destValue reflect.Value, fields map[string]any) err
 				if err != nil {
 					return fmt.Errorf("failed to convert value for field %s: %w", field.Name, err)
 				}
+
 				fieldValue.Set(convertedValue)
 			}
 		}
@@ -324,7 +350,8 @@ func convertValue(value any, targetType reflect.Type) (reflect.Value, error) {
 		if targetType.Kind() == reflect.Ptr {
 			return reflect.Zero(targetType), nil
 		}
-		return reflect.Value{}, fmt.Errorf("cannot assign nil to non-pointer type %s", targetType)
+
+		return reflect.Value{}, fmt.Errorf("%w: %s", snapsql.ErrCannotAssignNil, targetType)
 	}
 
 	// Direct assignment if types match
@@ -338,6 +365,7 @@ func convertValue(value any, targetType reflect.Type) (reflect.Value, error) {
 		if valueType.AssignableTo(elemType) {
 			ptrValue := reflect.New(elemType)
 			ptrValue.Elem().Set(reflect.ValueOf(value))
+
 			return ptrValue, nil
 		}
 	}
@@ -350,5 +378,5 @@ func convertValue(value any, targetType reflect.Type) (reflect.Value, error) {
 		}
 	}
 
-	return reflect.Value{}, fmt.Errorf("cannot convert %s to %s", valueType, targetType)
+	return reflect.Value{}, fmt.Errorf("%w: %s to %s", snapsql.ErrCannotConvert, valueType, targetType)
 }

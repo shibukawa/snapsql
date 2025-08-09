@@ -52,9 +52,7 @@ func TestSetRunPattern(t *testing.T) {
 
 func TestFindTestPackages(t *testing.T) {
 	// Create a temporary directory structure for testing
-	tempDir, err := os.MkdirTemp("", "testrunner_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	tempDir := t.TempDir()
 
 	// Create test directory structure
 	testDirs := []string{
