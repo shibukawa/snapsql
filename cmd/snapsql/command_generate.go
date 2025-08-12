@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/langs/gogen"
 	"github.com/shibukawa/snapsql/markdownparser"
 )
 
@@ -119,13 +121,8 @@ func generateForLanguage(lang string, generator GeneratorConfig, intermediateFil
 		// JSON generation is handled in the main loop, nothing to do here
 		return nil
 	case "go":
-		// Use external plugin if available, otherwise show not implemented message
-		_, err := exec.LookPath("snapsql-gen-go")
-		if err == nil {
-			return generateWithExternalPlugin(lang, generator, intermediateFiles, ctx)
-		}
-
-		return nil
+		// Use built-in Go generator
+		return generateGoFiles(generator, intermediateFiles, ctx)
 	case "typescript":
 		// Use external plugin if available, otherwise show not implemented message
 		_, err := exec.LookPath("snapsql-gen-typescript")
@@ -152,6 +149,80 @@ func generateForLanguage(lang string, generator GeneratorConfig, intermediateFil
 		// Try to find external generator plugin
 		return generateWithExternalPlugin(lang, generator, intermediateFiles, ctx)
 	}
+}
+
+// generateGoFiles generates Go files using the built-in generator
+func generateGoFiles(generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
+	// Load config to get dialect
+	config, err := LoadConfig(ctx.Config)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Import the Go generator
+	goGen := &gogen.Generator{}
+
+	// Configure the generator
+	if packageName, ok := generator.Settings["package"].(string); ok {
+		goGen.PackageName = packageName
+	} else {
+		// Infer package name from output path
+		outputPath := generator.Output
+		if outputPath == "" {
+			outputPath = "./generated/go"
+		}
+		goGen.PackageName = gogen.InferPackageNameFromPath(outputPath)
+	}
+
+	// Process each intermediate file
+	for _, intermediateFile := range intermediateFiles {
+		// Read intermediate format
+		data, err := os.ReadFile(intermediateFile)
+		if err != nil {
+			return fmt.Errorf("failed to read intermediate file %s: %w", intermediateFile, err)
+		}
+
+		var format intermediate.IntermediateFormat
+		if err := json.Unmarshal(data, &format); err != nil {
+			return fmt.Errorf("failed to parse intermediate file %s: %w", intermediateFile, err)
+		}
+
+		// Set format and dialect
+		goGen.Format = &format
+		goGen.Dialect = config.Dialect
+
+		// Generate Go code
+		var output strings.Builder
+		if err := goGen.Generate(&output); err != nil {
+			return fmt.Errorf("failed to generate Go code for %s: %w", intermediateFile, err)
+		}
+
+		// Determine output file path
+		outputDir := generator.Output
+		if outputDir == "" {
+			outputDir = "./generated/go"
+		}
+
+		// Create output directory if it doesn't exist
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
+		}
+
+		// Generate output file name
+		baseName := strings.TrimSuffix(filepath.Base(intermediateFile), ".json")
+		outputFile := filepath.Join(outputDir, baseName+".go")
+
+		// Write Go code to file
+		if err := os.WriteFile(outputFile, []byte(output.String()), 0644); err != nil {
+			return fmt.Errorf("failed to write Go file %s: %w", outputFile, err)
+		}
+
+		if ctx.Verbose {
+			color.Green("Generated: %s", outputFile)
+		}
+	}
+
+	return nil
 }
 
 // generateWithExternalPlugin attempts to use an external generator plugin

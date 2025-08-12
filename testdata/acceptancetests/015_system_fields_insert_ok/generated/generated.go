@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -78,12 +79,12 @@ func init() {
 		insertuserPrograms[1] = program
 	}
 }
-// InsertUser - interface{} Affinity
-func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// InsertUser - sql.Result Affinity
+func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuser", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuser", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -92,19 +93,33 @@ func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string,
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
+	// Extract implicit parameters
+	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
+		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
+		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
+		{Name: "created_by", Type: "string", Required: true},
+		{Name: "updated_by", Type: "string", Required: true},
+		{Name: "lock_no", Type: "int", Required: false, DefaultValue: 1},
+	}
+	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 
 	// Build SQL
-	query := "INSERT INTO users (name, email, created_at, updated_at, created_by, updated_by, lock_no) VALUES (?,?, , , , , )"
+	query := "INSERT INTO users (name, email, created_at, updated_at, created_by, updated_by, lock_no) VALUES ($1,$2, $3, $4, $5, $6, $7)"
 	args := []any{
 		name,
 		email,
+		systemValues["created_at"],
+		systemValues["updated_at"],
+		systemValues["created_by"],
+		systemValues["updated_by"],
+		lock_no,
 	}
 
 	// Execute query

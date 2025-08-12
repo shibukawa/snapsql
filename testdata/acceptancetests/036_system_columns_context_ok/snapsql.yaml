@@ -1,0 +1,38 @@
+dialect: postgres
+input_dir: "."
+
+generation:
+  validate: true
+  generate_mock_data: true
+  generators:
+    go:
+      output: "./generated"
+      enabled: true
+      package: "testgen"
+
+system:
+  fields:
+    - name: created_at
+      type: timestamp
+      on_insert:
+        parameter: implicit
+        default: "NOW()"
+    - name: updated_at
+      type: timestamp
+      on_insert:
+        parameter: implicit
+        default: "NOW()"
+      on_update:
+        parameter: implicit
+        default: "NOW()"
+    - name: created_by
+      type: int
+      on_insert:
+        parameter: implicit
+    - name: version
+      type: int
+      on_insert:
+        parameter: implicit
+        default: 1
+      on_update:
+        parameter: implicit

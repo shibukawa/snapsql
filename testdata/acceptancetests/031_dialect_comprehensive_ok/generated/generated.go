@@ -65,12 +65,12 @@ func init() {
 		getcomprehensivedialecttestPrograms[0] = program
 	}
 }
-// GetComprehensiveDialectTest - interface{} Affinity
-func GetComprehensiveDialectTest(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// GetComprehensiveDialectTest - sql.Result Affinity
+func GetComprehensiveDialectTest(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomprehensivedialecttest", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomprehensivedialecttest", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -79,16 +79,16 @@ func GetComprehensiveDialectTest(ctx context.Context, executor snapsqlgo.DBExecu
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name, ::INTEGER) as age_cast_standard, ::DECIMAL(10,2) as price_cast_postgresql, ::NUMERIC(12,2) as total_cast_complex,  ||  ||  as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, CURRENT_TIMESTAMP as time_mysql, CURRENT_TIMESTAMP as time_standard, TRUE as bool_true, FALSE as bool_false, RANDOM() as random_mysql, RANDOM() as random_postgresql, ::TEXT) as nested_cast_time,  ||  as nested_concat_cast FROM users WHERE id =?AND active = TRUE AND created_at > CURRENT_TIMESTAMP"
+	query := "SELECT id, name, ::INTEGER) as age_cast_standard, ::DECIMAL(10,2) as price_cast_postgresql, ::NUMERIC(12,2) as total_cast_complex,  ||  ||  as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, CURRENT_TIMESTAMP as time_mysql, CURRENT_TIMESTAMP as time_standard, TRUE as bool_true, FALSE as bool_false, RANDOM() as random_mysql, RANDOM() as random_postgresql, ::TEXT) as nested_cast_time,  ||  as nested_concat_cast FROM users WHERE id =$1AND active = TRUE AND created_at > CURRENT_TIMESTAMP"
 	args := []any{
 		userID,
 	}

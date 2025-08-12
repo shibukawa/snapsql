@@ -46,28 +46,47 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions
 func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var (
-		sqlParts  []string
-		arguments []int
+		sqlParts       []string
+		arguments      []int
+		systemFields   []string
+		parameterIndex int = 1
 	)
 
 	for _, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
-			sqlParts = append(sqlParts, inst.Value)
+			// Convert ? placeholders to PostgreSQL format
+			value := inst.Value
+			for strings.Contains(value, "?") {
+				value = strings.Replace(value, "?", fmt.Sprintf("$%d", parameterIndex), 1)
+				parameterIndex++
+			}
+			sqlParts = append(sqlParts, value)
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
 				arguments = append(arguments, *inst.ExprIndex)
 			}
+		case "ADD_SYSTEM_PARAM":
+			// Track system field name for parameter ordering
+			systemFields = append(systemFields, inst.SystemField)
+			arguments = append(arguments, -1) // Use -1 to indicate system parameter
 		}
 	}
 
 	staticSQL := strings.Join(sqlParts, "")
 
-	// Convert expression indices to parameter names for static SQL
+	// Convert expression indices and system fields to parameter names for static SQL
 	var parameterNames []string
+	systemFieldIndex := 0
 
 	for _, exprIndex := range arguments {
-		if exprIndex < len(format.CELExpressions) {
+		if exprIndex == -1 {
+			// This is a system parameter
+			if systemFieldIndex < len(systemFields) {
+				parameterNames = append(parameterNames, systemFields[systemFieldIndex])
+				systemFieldIndex++
+			}
+		} else if exprIndex < len(format.CELExpressions) {
 			expr := format.CELExpressions[exprIndex]
 			// For simple expressions that are just parameter names, use the parameter directly
 			paramName := snakeToCamelLower(expr.Expression)
@@ -121,6 +140,11 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "args = append(args, result.Value())")
 				hasArguments = true
 			}
+
+		case "ADD_SYSTEM_PARAM":
+			code = append(code, fmt.Sprintf("// Add system parameter: %s", inst.SystemField))
+			code = append(code, fmt.Sprintf("args = append(args, systemValues[%q])", inst.SystemField))
+			hasArguments = true
 
 		case "EMIT_UNLESS_BOUNDARY":
 			code = append(code, "if boundaryNeeded {")

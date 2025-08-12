@@ -120,7 +120,7 @@ func GetUsersWithCelLimitOffset(ctx context.Context, executor snapsqlgo.DBExecut
 	}
 
 	// Build SQL
-	query := "SELECT id, name, age FROM users WHERE age >=?LIMIT OFFSET "
+	query := "SELECT id, name, age FROM users WHERE age >=$1LIMIT OFFSET "
 	args := []any{
 		minAge,
 	}

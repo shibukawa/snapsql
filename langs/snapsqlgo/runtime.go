@@ -194,13 +194,17 @@ func WithPerformanceThreshold(threshold time.Duration) FuncOpt {
 func ExtractImplicitParams(ctx context.Context, specs []ImplicitParamSpec) map[string]any {
 	systemValues := ctx.Value(systemColumnKey{})
 	if systemValues == nil {
+		// No system values in context - check for required parameters and set defaults
+		result := make(map[string]any)
 		for _, spec := range specs {
 			if spec.Required {
-				panic(fmt.Sprintf("implementation error: required implicit parameter '%s' not found in context - WithSystemColumnValues() not called", spec.Name))
+				panic(fmt.Sprintf("implementation error: required implicit parameter '%s' not found in context - WithSystemValue() not called", spec.Name))
 			}
-		}
 
-		return make(map[string]any)
+			// Use default value from spec (which comes from config file)
+			result[spec.Name] = spec.DefaultValue
+		}
+		return result
 	}
 
 	systemMap, ok := systemValues.(map[string]any)
@@ -218,10 +222,8 @@ func ExtractImplicitParams(ctx context.Context, specs []ImplicitParamSpec) map[s
 				panic(fmt.Sprintf("implementation error: required implicit parameter '%s' (%s) not found in context", spec.Name, spec.Type))
 			}
 
-			if spec.DefaultValue != nil {
-				result[spec.Name] = spec.DefaultValue
-			}
-
+			// Use default value from spec (which comes from config file)
+			result[spec.Name] = spec.DefaultValue
 			continue
 		}
 

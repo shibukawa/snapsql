@@ -118,12 +118,32 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 	}
 }
 
+// isSystemColumn checks if a variable name is a known system column
+func isSystemColumn(varName string) bool {
+	systemColumns := []string{
+		"created_at", "updated_at", "created_by", "updated_by", "version",
+	}
+	for _, col := range systemColumns {
+		if varName == col {
+			return true
+		}
+	}
+	return false
+}
+
 // validateVariableDirective validates a variable directive
 func validateVariableDirective(token tokenizer.Token, paramNs *cmn.Namespace, perr *cmn.ParseError) (any, string, bool) {
 	expression := extractExpressionFromDirective(token.Value, "/*=", "*/")
 	if expression == "" {
 		perr.Add(fmt.Errorf("%w at %s: invalid variable directive format", cmn.ErrInvalidForSnapSQL, token.Position.String()))
 		return nil, "", false
+	}
+
+	// Check if this is a system column - if so, skip CEL validation
+	if isSystemColumn(strings.TrimSpace(expression)) {
+		// Return a placeholder value for system columns
+		// The actual value will be injected at runtime from context
+		return fmt.Sprintf("SYSTEM_VALUE_%s", strings.TrimSpace(expression)), "string", true
 	}
 
 	// Validate the expression using parameter CEL

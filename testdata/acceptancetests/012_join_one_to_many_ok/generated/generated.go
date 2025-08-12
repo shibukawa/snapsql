@@ -149,7 +149,7 @@ func GetUserWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, userID 
 	}
 
 	// Build SQL
-	query := "SELECT u.id, u.name, u.email, j.id AS jobs__id, j.title AS jobs__title, j.company AS jobs__company FROM users u LEFT JOIN jobs j ON u.id = j.user_id WHERE u.id =?"
+	query := "SELECT u.id, u.name, u.email, j.id AS jobs__id, j.title AS jobs__title, j.company AS jobs__company FROM users u LEFT JOIN jobs j ON u.id = j.user_id WHERE u.id =$1"
 	args := []any{
 		userID,
 	}

@@ -154,6 +154,12 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to generate query execution: %w", err)
 	}
 
+	// Process implicit parameters (system columns)
+	implicitParams, err := processImplicitParameters(g.Format)
+	if err != nil {
+		return fmt.Errorf("failed to process implicit parameters: %w", err)
+	}
+
 	// Convert function name to CamelCase
 	funcName := snakeToCamel(g.Format.FunctionName)
 
@@ -177,6 +183,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		TypeDefinitions   map[string]map[string]string
 		ImplicitParams    []implicitParam
 		Imports           map[string]struct{}
+		ImportSlice       []string
 		NumCELEnvs        int
 		NumCELPrograms    int
 	}{
@@ -196,6 +203,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		StructDefinitions: structDefinitions,
 		TypeRegistrations: typeRegistrations,
 		TypeDefinitions:   typeDefinitions,
+		ImplicitParams:    implicitParams,
 		NumCELEnvs:        len(g.Format.CELEnvironments),
 		NumCELPrograms:    len(g.Format.CELExpressions),
 		Imports:           make(map[string]struct{}),
@@ -208,11 +216,35 @@ func (g *Generator) Generate(w io.Writer) error {
 		}
 	}
 
+	// Add time import if any implicit parameter uses time.Now() as default
+	for _, param := range implicitParams {
+		if param.DefaultValueLiteral == "time.Now()" {
+			data.Imports["time"] = struct{}{}
+			break
+		}
+	}
+
+	// Convert imports map to slice for template
+	var importSlice []string
+	for imp := range data.Imports {
+		importSlice = append(importSlice, imp)
+	}
+	data.ImportSlice = importSlice
+
 	// Execute template
 	tmpl, err := template.New("go").Funcs(template.FuncMap{
 		"toLower":  strings.ToLower,
 		"backtick": func() string { return "`" },
 		"title":    cases.Title(language.English).String,
+		"isSystemColumn": func(paramName string) bool {
+			systemColumns := []string{"created_at", "updated_at", "created_by", "updated_by", "version"}
+			for _, col := range systemColumns {
+				if paramName == col {
+					return true
+				}
+			}
+			return false
+		},
 		"celTypeConvert": func(typeName string) string {
 			// Handle array types
 			if strings.HasPrefix(typeName, "[]") {
@@ -472,7 +504,8 @@ func convertToGoType(snapType string) (string, error) {
 // processResponseType determines the response type based on response affinity and responses
 func processResponseType(format *intermediate.IntermediateFormat) (string, error) {
 	if len(format.Responses) == 0 {
-		return "interface{}", nil
+		// No response fields - return sql.Result for INSERT/UPDATE/DELETE statements
+		return "sql.Result", nil
 	}
 
 	// Check for hierarchical structure
@@ -546,7 +579,8 @@ type responseFieldData struct {
 // processResponseStruct processes response fields and generates struct data
 func processResponseStruct(format *intermediate.IntermediateFormat) (*responseStructData, error) {
 	if len(format.Responses) == 0 {
-		return nil, snapsql.ErrNoResponseFields
+		// No response fields - this is normal for INSERT/UPDATE/DELETE statements
+		return nil, nil
 	}
 
 	// Check for hierarchical structure
@@ -615,9 +649,108 @@ type parameter struct {
 }
 
 type implicitParam struct {
-	Name     string
-	Type     string
-	Required bool
+	Name                string
+	Type                string
+	Required            bool
+	Default             any
+	DefaultValueLiteral string
+}
+
+// convertTypeToGo converts intermediate format type to Go type
+func convertTypeToGo(typeName string) (string, error) {
+	switch typeName {
+	case "int":
+		return "int", nil
+	case "string":
+		return "string", nil
+	case "bool":
+		return "bool", nil
+	case "float", "double":
+		return "float64", nil
+	case "decimal":
+		return "decimal.Decimal", nil
+	case "timestamp", "datetime":
+		return "time.Time", nil
+	case "date":
+		return "time.Time", nil
+	case "any":
+		return "interface{}", nil
+	default:
+		if strings.HasSuffix(typeName, "[]") {
+			elementType := strings.TrimSuffix(typeName, "[]")
+			goElementType, err := convertTypeToGo(elementType)
+			if err != nil {
+				return "", err
+			}
+			return "[]" + goElementType, nil
+		}
+		return typeName, nil
+	}
+}
+
+// processImplicitParameters processes implicit parameters from intermediate format
+func processImplicitParameters(format *intermediate.IntermediateFormat) ([]implicitParam, error) {
+	var implicitParams []implicitParam
+
+	for _, param := range format.ImplicitParameters {
+		goType, err := convertTypeToGo(param.Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert implicit parameter type %s: %w", param.Type, err)
+		}
+
+		// Determine if parameter is required (no default value and not nullable)
+		required := param.Default == nil && !isNullableType(goType)
+
+		// Generate default value literal for Go code
+		var defaultValueLiteral string
+		if param.Default != nil {
+			defaultValueLiteral, err = generateDefaultValueLiteral(param.Default, goType)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate default value literal for %s: %w", param.Name, err)
+			}
+		}
+
+		implicitParams = append(implicitParams, implicitParam{
+			Name:                param.Name,
+			Type:                goType,
+			Required:            required,
+			Default:             param.Default,
+			DefaultValueLiteral: defaultValueLiteral,
+		})
+	}
+
+	return implicitParams, nil
+}
+
+// generateDefaultValueLiteral generates Go code literal for default values
+func generateDefaultValueLiteral(defaultValue any, goType string) (string, error) {
+	switch v := defaultValue.(type) {
+	case string:
+		if v == "NOW()" {
+			// For NOW() function, generate time.Now() call
+			return "time.Now()", nil
+		}
+		// For other string values, quote them
+		return fmt.Sprintf("%q", v), nil
+	case int:
+		return fmt.Sprintf("%d", v), nil
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	case float64:
+		return fmt.Sprintf("%g", v), nil
+	case bool:
+		return fmt.Sprintf("%t", v), nil
+	case nil:
+		return "nil", nil
+	default:
+		// For complex types, use fmt.Sprintf with %v
+		return fmt.Sprintf("%v", v), nil
+	}
+}
+
+// isNullableType checks if a Go type is nullable (pointer type)
+func isNullableType(goType string) bool {
+	return strings.HasPrefix(goType, "*")
 }
 
 const goTemplate = `//go:build !ignore_autogenerated
@@ -644,6 +777,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	{{- range .ImportSlice }}
+	"{{ . }}"
+	{{- end }}
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -781,7 +917,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{{- range .ImplicitParams }}
-		{Name: "{{ .Name }}", Type: "{{ .Type }}", Required: {{ .Required }}},
+		{Name: "{{ .Name }}", Type: "{{ .Type }}", Required: {{ .Required }}{{ if .Default }}, DefaultValue: {{ .DefaultValueLiteral }}{{ end }}},
 		{{- end }}
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
@@ -790,10 +926,14 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	// Build SQL
 	{{- if .SQLBuilder.IsStatic }}
 	query := {{ printf "%q" .SQLBuilder.StaticSQL }}
-	{{- if .SQLBuilder.HasArguments }}
+	{{- if or .SQLBuilder.HasArguments .ImplicitParams }}
 	args := []any{
 		{{- range .SQLBuilder.ParameterNames }}
+		{{- if isSystemColumn . }}
+		systemValues["{{ . }}"],
+		{{- else }}
 		{{ . }},
+		{{- end }}
 		{{- end }}
 	}
 	{{- else }}

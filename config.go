@@ -317,24 +317,24 @@ func applyDefaults(config *Config) {
 	} else {
 		// Ensure JSON generator is always enabled
 		jsonGen.Enabled = true
-		
+
 		// Apply defaults for missing fields
 		if jsonGen.Output == "" {
 			jsonGen.Output = "./generated"
 		}
-		
+
 		// For PreserveHierarchy, we'll default to true if not explicitly configured
 		// Since we can't distinguish between false and unset in YAML, we'll use a heuristic:
 		// If the config has no other custom settings, assume it's using defaults
 		if jsonGen.Settings == nil && jsonGen.Output == "" {
 			jsonGen.PreserveHierarchy = true
 		}
-		
+
 		// Initialize settings if nil
 		if jsonGen.Settings == nil {
 			jsonGen.Settings = make(map[string]any)
 		}
-		
+
 		// Apply default settings if not present
 		if _, exists := jsonGen.Settings["pretty"]; !exists {
 			jsonGen.Settings["pretty"] = true
@@ -343,7 +343,7 @@ func applyDefaults(config *Config) {
 			jsonGen.Settings["include_metadata"] = true
 		}
 	}
-	
+
 	config.Generation.Generators["json"] = jsonGen
 
 	// Apply default schema extraction settings

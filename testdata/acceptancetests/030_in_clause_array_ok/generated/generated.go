@@ -65,12 +65,12 @@ func init() {
 		getusersbydepartmentsPrograms[0] = program
 	}
 }
-// GetUsersByDepartments - interface{} Affinity
-func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departmentIds []int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// GetUsersByDepartments - sql.Result Affinity
+func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departmentIds []int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getusersbydepartments", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getusersbydepartments", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -79,16 +79,16 @@ func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, d
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name FROM users WHERE department_id IN (?, 2, 3)"
+	query := "SELECT id, name FROM users WHERE department_id IN ($1, 2, 3)"
 	args := []any{
 		departmentIds,
 	}

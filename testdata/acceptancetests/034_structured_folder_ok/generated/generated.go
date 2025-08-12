@@ -95,7 +95,7 @@ func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int
 	}
 
 	// Build SQL
-	query := "SELECT id, name, email, created_at FROM users WHERE id =?"
+	query := "SELECT id, name, email, created_at FROM users WHERE id =$1"
 	args := []any{
 		userID,
 	}

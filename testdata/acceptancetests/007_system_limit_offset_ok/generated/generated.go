@@ -107,7 +107,7 @@ func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor,
 	}
 
 	// Build SQL
-	query := "SELECT id, name, age FROM users WHERE age >=?AND age <=?LIMIT OFFSET "
+	query := "SELECT id, name, age FROM users WHERE age >=$1AND age <=$2LIMIT OFFSET "
 	args := []any{
 		minAge,
 		maxAge,
