@@ -65,12 +65,12 @@ func init() {
 		deleteuserwithreturningPrograms[0] = program
 	}
 }
-// DeleteUserWithReturning - interface{} Affinity
-func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// DeleteUserWithReturning - sql.Result Affinity
+func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteuserwithreturning", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteuserwithreturning", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -79,16 +79,16 @@ func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "DELETE FROM users WHERE id =?RETURNING id, name, email"
+	query := "DELETE FROM users WHERE id =$1RETURNING id, name, email"
 	args := []any{
 		userID,
 	}

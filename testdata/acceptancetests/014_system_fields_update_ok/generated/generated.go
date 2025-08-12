@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -91,12 +92,12 @@ func init() {
 		updateuserPrograms[2] = program
 	}
 }
-// UpdateUser - interface{} Affinity
-func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, lockNo int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// UpdateUser - sql.Result Affinity
+func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, lockNo int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuser", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuser", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -105,16 +106,22 @@ func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string,
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
+	// Extract implicit parameters
+	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
+		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
+		{Name: "updated_by", Type: "string", Required: true},
+	}
+	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 
 	// Build SQL
-	query := "UPDATE users SET name =?, email =?, lock_no =?, updated_at = /*= updated_at */NOW(), updated_by = /*= updated_by */NOW()WHERE id = 1"
+	query := "UPDATE users SET name =$1, email =$2, lock_no =$3, updated_at = /*= updated_at */NOW(), updated_by = /*= updated_by */NOW()WHERE id = 1"
 	args := []any{
 		name,
 		email,

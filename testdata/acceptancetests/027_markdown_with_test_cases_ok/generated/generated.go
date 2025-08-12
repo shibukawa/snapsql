@@ -66,11 +66,11 @@ func init() {
 	}
 }
 // FindUser This query finds a user by their ID.
-func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduser", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduser", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -79,16 +79,16 @@ func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, op
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name, age FROM users WHERE id =?"
+	query := "SELECT id, name, age FROM users WHERE id =$1"
 	args := []any{
 		userID,
 	}

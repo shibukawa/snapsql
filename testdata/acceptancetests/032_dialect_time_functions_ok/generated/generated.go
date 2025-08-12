@@ -52,12 +52,12 @@ func init() {
 	// Create programs for each expression using the corresponding environment
 	getcurrenttimePrograms = make([]cel.Program, 0)
 }
-// GetCurrentTime - interface{} Affinity
-func GetCurrentTime(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// GetCurrentTime - sql.Result Affinity
+func GetCurrentTime(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcurrenttime", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcurrenttime", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -66,9 +66,9 @@ func GetCurrentTime(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil

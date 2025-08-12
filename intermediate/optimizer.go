@@ -13,6 +13,7 @@ type OptimizedInstruction struct {
 	Variable            string // for LOOP_START
 	CollectionExprIndex *int   // for LOOP_START
 	EnvIndex            *int   // for LOOP_START/LOOP_END
+	SystemField         string // for ADD_SYSTEM_PARAM - system field name
 }
 
 // OptimizeInstructions filters and optimizes instructions for a specific dialect
@@ -144,8 +145,19 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 			// Skip system directives (treat as false)
 			skipUntilEnd = 1
 
-		case OpEmitSystemLimit, OpEmitSystemOffset, OpEmitSystemValue:
-			// Skip system emissions
+		case OpEmitSystemLimit, OpEmitSystemOffset:
+			// Skip system limit/offset emissions (not supported in static SQL)
+
+		case OpEmitSystemValue:
+			// Handle system value emission - convert to placeholder and parameter
+			result = append(result, OptimizedInstruction{
+				Op:    "EMIT_STATIC",
+				Value: "?",
+			})
+			result = append(result, OptimizedInstruction{
+				Op:          "ADD_SYSTEM_PARAM",
+				SystemField: inst.SystemField,
+			})
 		}
 	}
 

@@ -66,12 +66,12 @@ func init() {
 		getuserPrograms[0] = program
 	}
 }
-// GetUser - interface{} Affinity
-func GetUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, user User, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// GetUser - sql.Result Affinity
+func GetUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, user User, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuser", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuser", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -80,16 +80,16 @@ func GetUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, use
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT u.id, u.name, u.email FROM users u WHERE u.id =?"
+	query := "SELECT u.id, u.name, u.email FROM users u WHERE u.id =$1"
 	args := []any{
 		userID,
 	}

@@ -65,12 +65,12 @@ func init() {
 		getnesteddialectcastPrograms[0] = program
 	}
 }
-// GetNestedDialectCast - interface{} Affinity
-func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// GetNestedDialectCast - sql.Result Affinity
+func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getnesteddialectcast", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getnesteddialectcast", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -79,16 +79,16 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name, ::TEXT) as current_time_text, ::INTEGER as bool_as_int FROM users WHERE id =?"
+	query := "SELECT id, name, ::TEXT) as current_time_text, ::INTEGER as bool_as_int FROM users WHERE id =$1"
 	args := []any{
 		userID,
 	}

@@ -78,12 +78,12 @@ func init() {
 		updateuserwithreturningPrograms[1] = program
 	}
 }
-// UpdateUserWithReturning - interface{} Affinity
-func UpdateUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, newName string, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// UpdateUserWithReturning - sql.Result Affinity
+func UpdateUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, newName string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturning", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturning", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -92,16 +92,16 @@ func UpdateUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "UPDATE users SET name =?, updated_at = CURRENT_TIMESTAMP WHERE id =?RETURNING id, name, email, updated_at"
+	query := "UPDATE users SET name =$1, updated_at = CURRENT_TIMESTAMP WHERE id =$2RETURNING id, name, email, updated_at"
 	args := []any{
 		newName,
 		userID,

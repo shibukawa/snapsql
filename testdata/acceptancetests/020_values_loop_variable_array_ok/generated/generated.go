@@ -100,12 +100,12 @@ func init() {
 		insertusertagsPrograms[2] = program
 	}
 }
-// InsertUserTags - interface{} Affinity
-func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []User, user interface{}, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// InsertUserTags - sql.Result Affinity
+func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []User, user interface{}, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertusertags", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertusertags", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -114,9 +114,9 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil

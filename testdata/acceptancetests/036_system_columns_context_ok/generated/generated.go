@@ -28,12 +28,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// InsertUser specific CEL programs and mock path
+// CreateUserWithSystemColumnsContext specific CEL programs and mock path
 var (
-	insertuserPrograms []cel.Program
+	createuserwithsystemcolumnscontextPrograms []cel.Program
 )
 
-const insertuserMockPath = ""
+const createuserwithsystemcolumnscontextMockPath = ""
 
 func init() {
 
@@ -44,50 +44,51 @@ func init() {
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
 		snapsqlgo.DecimalLibrary,
-		cel.Variable("user", cel.types.NewObjectType("User")),
+		cel.Variable("name", cel.StringType),
+		cel.Variable("email", cel.StringType),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUser CEL environment 0: %v", err))
+		panic(fmt.Sprintf("failed to create CreateUserWithSystemColumnsContext CEL environment 0: %v", err))
 	}
 	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
-	insertuserPrograms = make([]cel.Program, 2)
-	// expr_001: "user.id" using environment 0
+	createuserwithsystemcolumnscontextPrograms = make([]cel.Program, 2)
+	// expr_001: "name" using environment 0
 	{
-		ast, issues := celEnvironments[0].Compile("user.id")
+		ast, issues := celEnvironments[0].Compile("name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user.id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression 'name': %v", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user.id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for 'name': %v", err))
 		}
-		insertuserPrograms[0] = program
+		createuserwithsystemcolumnscontextPrograms[0] = program
 	}
-	// expr_002: "user.name" using environment 0
+	// expr_002: "email" using environment 0
 	{
-		ast, issues := celEnvironments[0].Compile("user.name")
+		ast, issues := celEnvironments[0].Compile("email")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user.name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression 'email': %v", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user.name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for 'email': %v", err))
 		}
-		insertuserPrograms[1] = program
+		createuserwithsystemcolumnscontextPrograms[1] = program
 	}
 }
-// InsertUser - sql.Result Affinity
-func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, user User, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+// CreateUserWithSystemColumnsContext Create a new user with automatic system column handling via context.
+func CreateUserWithSystemColumnsContext(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuser", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "createuserwithsystemcolumnscontext", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(createuserwithsystemcolumnscontextMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
@@ -103,16 +104,20 @@ func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, user User, o
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
+		{Name: "created_by", Type: "int", Required: true},
+		{Name: "version", Type: "int", Required: false, DefaultValue: 1},
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 
 	// Build SQL
-	query := "INSERT INTO users (id, name, created_at, updated_at) VALUES ($1,$2, $3, $4)"
+	query := "INSERT INTO users (name, email, created_at, updated_at, created_by, version) VALUES ($1,$2, $3, $4, $5, $6)"
 	args := []any{
-		user.id,
-		user.name,
+		name,
+		email,
 		systemValues["created_at"],
 		systemValues["updated_at"],
+		systemValues["created_by"],
+		systemValues["version"],
 	}
 
 	// Execute query
