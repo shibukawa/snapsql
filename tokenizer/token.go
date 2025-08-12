@@ -3,7 +3,7 @@ package tokenizer
 import (
 	"strconv"
 
-	snapsql "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql"
 )
 
 // Sentinel errors
