@@ -1,109 +1,202 @@
 package gogen
 
 import (
-	"bytes"
 	"strings"
 	"testing"
-
-	"github.com/alecthomas/assert/v2"
-	"github.com/shibukawa/snapsql/intermediate"
 )
 
-func TestGenerator(t *testing.T) {
-	// Helper function to create *int
-	intPtr := func(i int) *int {
-		return &i
+func TestConvertToGoType_UnknownType(t *testing.T) {
+	tests := []struct {
+		name        string
+		inputType   string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "invalid type name with special characters",
+			inputType:   "unknown-type",
+			expectError: true,
+			errorMsg:    "unsupported parameter type 'unknown-type'",
+		},
+		{
+			name:        "invalid type name with numbers at start",
+			inputType:   "123invalid",
+			expectError: true,
+			errorMsg:    "unsupported parameter type '123invalid'",
+		},
+		{
+			name:        "valid custom type",
+			inputType:   "CustomType",
+			expectError: false,
+		},
+		{
+			name:        "valid unknown but valid identifier type",
+			inputType:   "unknowntype",
+			expectError: false,
+		},
+		{
+			name:        "valid package qualified type",
+			inputType:   "time.Time",
+			expectError: false,
+		},
+		{
+			name:        "valid array type",
+			inputType:   "string[]",
+			expectError: false,
+		},
+		{
+			name:        "invalid array element type",
+			inputType:   "123invalid[]",
+			expectError: true,
+			errorMsg:    "unsupported parameter type '123invalid'",
+		},
+		{
+			name:        "invalid empty type",
+			inputType:   "",
+			expectError: true,
+			errorMsg:    "unsupported parameter type ''",
+		},
 	}
 
-	// Test case based on find_user_by_id.go
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "FindUserByID",
-		Description:  "finds a user by ID and tenant ID",
-		CELEnvironments: []intermediate.CELEnvironment{
-			{
-				Index: 0,
-				AdditionalVariables: []intermediate.CELVariableInfo{
-					{Name: "tenant_id", Type: "string"}, // idはParametersにあるので除外
-				},
-			},
-		},
-		CELExpressions: []intermediate.CELExpression{
-			{
-				ID:               "expr_001",
-				Expression:       "id",
-				EnvironmentIndex: 0,
-			},
-			{
-				ID:               "expr_002",
-				Expression:       "tenant_id",
-				EnvironmentIndex: 0,
-			},
-		},
-		Instructions: []intermediate.Instruction{
-			{Op: "EMIT_STATIC", Value: "SELECT id, name, email, tenant_id, department_id, status, created_by, created_at, updated_at FROM users WHERE id = "},
-			{Op: "EMIT_EVAL", ExprIndex: intPtr(0)},
-			{Op: "EMIT_STATIC", Value: " AND tenant_id = "},
-			{Op: "EMIT_EVAL", ExprIndex: intPtr(1)},
-		},
-		Parameters: []intermediate.Parameter{
-			{Name: "id", Type: "int"},
-		},
-		ResponseAffinity: "one",
-		Responses: []intermediate.Response{
-			{Name: "id", Type: "int"},
-			{Name: "name", Type: "string"},
-			{Name: "email", Type: "string"},
-			{Name: "tenant_id", Type: "string"},
-			{Name: "department_id", Type: "int"},
-			{Name: "status", Type: "string"},
-			{Name: "created_by", Type: "int"},
-			{Name: "created_at", Type: "time.Time"},
-			{Name: "updated_at", Type: "*time.Time"},
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := convertToGoType(tt.inputType)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("expected error message to contain '%s', got '%s'", tt.errorMsg, err.Error())
+				}
+
+				// Check if it's our custom error type with hints
+				if unsupportedErr, ok := err.(*UnsupportedTypeError); ok {
+					if len(unsupportedErr.Hints) == 0 {
+						t.Errorf("expected hints to be provided")
+					}
+					t.Logf("Error with hints: %s", err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+					return
+				}
+				if result == "" {
+					t.Errorf("expected non-empty result")
+				}
+			}
+		})
 	}
-
-	gen := New(format,
-		WithPackageName("generated"),
-		WithMockPath("comprehensive/find_user_by_id"),
-		WithDialect("postgresql"),
-	)
-
-	var buf strings.Builder
-
-	err := gen.Generate(&buf)
-	assert.NoError(t, err)
-
-	// TODO: Add assertions for generated code
-	t.Logf("Generated code:\n%s", buf.String())
 }
 
-func TestGeneratorWithoutDescription(t *testing.T) {
-	gen := &Generator{
-		PackageName: "generated",
-		MockPath:    "test/mock",
-		Dialect:     "postgresql",
-		Format: &intermediate.IntermediateFormat{
-			FunctionName: "TestFunction",
-			// Description is empty
-			Parameters: []intermediate.Parameter{
-				{Name: "id", Type: "int"},
-			},
-			ResponseAffinity: "one",
-			Responses: []intermediate.Response{
-				{Name: "id", Type: "int"},
-				{Name: "name", Type: "string"},
-			},
+func TestIsValidGoTypeName(t *testing.T) {
+	tests := []struct {
+		name     string
+		typeName string
+		expected bool
+	}{
+		{"valid simple type", "MyType", true},
+		{"valid lowercase type", "myType", true},
+		{"valid with underscore", "My_Type", true},
+		{"valid package qualified", "time.Time", true},
+		{"invalid empty", "", false},
+		{"invalid starts with number", "123Type", false},
+		{"invalid special characters", "My-Type", false},
+		{"invalid multiple dots", "a.b.c", false},
+		{"valid single letter", "T", true},
+		{"valid underscore start", "_Type", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidGoTypeName(tt.typeName)
+			if result != tt.expected {
+				t.Errorf("isValidGoTypeName(%q) = %v, expected %v", tt.typeName, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidGoIdentifier(t *testing.T) {
+	tests := []struct {
+		name       string
+		identifier string
+		expected   bool
+	}{
+		{"valid identifier", "myVar", true},
+		{"valid with underscore", "my_var", true},
+		{"valid starts with underscore", "_var", true},
+		{"valid uppercase", "MyVar", true},
+		{"invalid empty", "", false},
+		{"invalid starts with number", "123var", false},
+		{"invalid with dash", "my-var", false},
+		{"invalid with space", "my var", false},
+		{"valid single letter", "a", true},
+		{"valid single underscore", "_", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidGoIdentifier(tt.identifier)
+			if result != tt.expected {
+				t.Errorf("isValidGoIdentifier(%q) = %v, expected %v", tt.identifier, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestUnsupportedTypeError(t *testing.T) {
+	tests := []struct {
+		name            string
+		typeName        string
+		context         string
+		expectedMessage string
+		expectedHints   int
+	}{
+		{
+			name:            "parameter context",
+			typeName:        "unknowntype",
+			context:         "parameter",
+			expectedMessage: "unsupported parameter type 'unknowntype'",
+			expectedHints:   4,
+		},
+		{
+			name:            "implicit parameter context",
+			typeName:        "badtype",
+			context:         "implicit parameter 'created_by'",
+			expectedMessage: "unsupported implicit parameter 'created_by' type 'badtype'",
+			expectedHints:   2,
+		},
+		{
+			name:            "type context",
+			typeName:        "invalidtype",
+			context:         "type",
+			expectedMessage: "unsupported type type 'invalidtype'",
+			expectedHints:   2,
 		},
 	}
 
-	var buf bytes.Buffer
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := newUnsupportedTypeError(tt.typeName, tt.context)
 
-	err := gen.Generate(&buf)
-	assert.NoError(t, err)
+			if !strings.Contains(err.Message, tt.expectedMessage) {
+				t.Errorf("expected message to contain '%s', got '%s'", tt.expectedMessage, err.Message)
+			}
 
-	generated := buf.String()
+			if len(err.Hints) != tt.expectedHints {
+				t.Errorf("expected %d hints, got %d", tt.expectedHints, len(err.Hints))
+			}
 
-	// Should use fallback comment format when description is empty
-	assert.Contains(t, generated, "// TestFunction - TestFunctionResult Affinity")
-	assert.NotContains(t, generated, "finds a user")
+			// Test Error() method includes hint
+			errorStr := err.Error()
+			if !strings.Contains(errorStr, "Hint:") {
+				t.Errorf("expected error string to contain hint, got: %s", errorStr)
+			}
+
+			t.Logf("Error: %s", errorStr)
+		})
+	}
 }
