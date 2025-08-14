@@ -216,17 +216,83 @@ func (cmd *TestCmd) runGoTests(projectRoot string, options *fixtureexecutor.Exec
 
 // CLI represents the command-line interface
 var CLI struct {
-	Config   string      `help:"Configuration file path" default:"snapsql.yaml"`
-	Verbose  bool        `help:"Enable verbose output" short:"v"`
-	Quiet    bool        `help:"Suppress output" short:"q"`
-	Generate GenerateCmd `cmd:"" help:"Generate intermediate files from SQL templates"`
-	Validate ValidateCmd `cmd:"" help:"Validate SQL templates"`
-	Init     InitCmd     `cmd:"" help:"Initialize a new SnapSQL project"`
-	Pull     PullCmd     `cmd:"" help:"Pull schema information from database"`
-	Query    QueryCmd    `cmd:"" help:"Execute SQL queries"`
-	Test     TestCmd     `cmd:"" help:"Run tests"`
-	Format   FormatCmd   `cmd:"" help:"Format SnapSQL template files"`
-	Version  VersionCmd  `cmd:"" help:"Show version information"`
+	Config    string       `help:"Configuration file path" default:"snapsql.yaml"`
+	Verbose   bool         `help:"Enable verbose output" short:"v"`
+	Quiet     bool         `help:"Suppress output" short:"q"`
+	Generate  GenerateCmd  `cmd:"" help:"Generate intermediate files from SQL templates"`
+	Validate  ValidateCmd  `cmd:"" help:"Validate SQL templates"`
+	Init      InitCmd      `cmd:"" help:"Initialize a new SnapSQL project"`
+	Pull      PullCmd      `cmd:"" help:"Pull schema information from database"`
+	Query     QueryCmd     `cmd:"" help:"Execute SQL queries"`
+	Test      TestCmd      `cmd:"" help:"Run tests"`
+	Format    FormatCmd    `cmd:"" help:"Format SnapSQL template files"`
+	HelpTypes HelpTypesCmd `cmd:"help-types" help:"Show detailed information about supported types"`
+	Version   VersionCmd   `cmd:"" help:"Show version information"`
+}
+
+// HelpTypesCmd represents the help-types command
+type HelpTypesCmd struct{}
+
+// Run executes the help-types command
+func (cmd *HelpTypesCmd) Run() error {
+	fmt.Println("SnapSQL Supported Types")
+	fmt.Println("=======================")
+	fmt.Println()
+
+	fmt.Println("Basic Types:")
+	fmt.Println("  int, int32, int64    - Integer numbers")
+	fmt.Println("  string               - Text strings")
+	fmt.Println("  bool                 - Boolean values (true/false)")
+	fmt.Println("  float, float32, float64 - Floating point numbers")
+	fmt.Println("  decimal              - High-precision decimal numbers")
+	fmt.Println("  timestamp, date, time - Date and time values")
+	fmt.Println("  bytes                - Binary data")
+	fmt.Println("  any                  - Any type (interface{})")
+	fmt.Println()
+
+	fmt.Println("Array Types:")
+	fmt.Println("  string[]             - Array of strings")
+	fmt.Println("  int[]                - Array of integers")
+	fmt.Println("  any[]                - Array of any type")
+	fmt.Println("  CustomType[]         - Array of custom types")
+	fmt.Println()
+
+	fmt.Println("Pointer Types:")
+	fmt.Println("  *string              - Pointer to string (nullable)")
+	fmt.Println("  *int                 - Pointer to integer (nullable)")
+	fmt.Println("  *CustomType          - Pointer to custom type")
+	fmt.Println()
+
+	fmt.Println("Package-Qualified Types:")
+	fmt.Println("  time.Time            - Go standard library time")
+	fmt.Println("  decimal.Decimal      - Decimal library type")
+	fmt.Println("  mypackage.MyType     - Custom package types")
+	fmt.Println()
+
+	fmt.Println("Custom Types:")
+	fmt.Println("  MyType               - Custom struct types")
+	fmt.Println("  UserModel            - Domain model types")
+	fmt.Println("  ./User               - Relative path types")
+	fmt.Println("  ./models/User        - Nested path types")
+	fmt.Println()
+
+	fmt.Println("System Column Types (for implicit parameters):")
+	fmt.Println("  int                  - For user IDs, version numbers")
+	fmt.Println("  string               - For user names, reasons")
+	fmt.Println("  timestamp            - For created_at, updated_at")
+	fmt.Println("  bool                 - For flags and status")
+	fmt.Println()
+
+	fmt.Println("Examples:")
+	fmt.Println("  parameters:")
+	fmt.Println("    user_id: int")
+	fmt.Println("    name: string")
+	fmt.Println("    tags: string[]")
+	fmt.Println("    profile: ./UserProfile")
+	fmt.Println("    created_at: timestamp")
+	fmt.Println()
+
+	return nil
 }
 
 // VersionCmd represents the version command

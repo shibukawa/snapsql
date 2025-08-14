@@ -10,7 +10,6 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -497,7 +496,11 @@ func convertToGoType(snapType string) (string, error) {
 	case "any":
 		return "interface{}", nil
 	default:
-		return "", fmt.Errorf("%w: %s", snapsql.ErrUnsupportedType, snapType)
+		// Handle custom types (valid Go type names)
+		if isValidGoTypeName(snapType) {
+			return snapType, nil
+		}
+		return "", newUnsupportedTypeError(snapType, "parameter")
 	}
 }
 
@@ -657,6 +660,103 @@ type implicitParam struct {
 }
 
 // convertTypeToGo converts intermediate format type to Go type
+// UnsupportedTypeError represents an error for unsupported types with helpful hints
+type UnsupportedTypeError struct {
+	Type    string
+	Context string
+	Message string
+	Hints   []string
+}
+
+func (e *UnsupportedTypeError) Error() string {
+	msg := e.Message
+	if len(e.Hints) > 0 {
+		msg += "\n\nHint: " + e.Hints[0]
+		if len(e.Hints) > 1 {
+			msg += "\nFor more information, run with --help-types flag"
+		}
+	}
+	return msg
+}
+
+// newUnsupportedTypeError creates a new UnsupportedTypeError with context-appropriate hints
+func newUnsupportedTypeError(typeName, context string) *UnsupportedTypeError {
+	err := &UnsupportedTypeError{
+		Type:    typeName,
+		Context: context,
+		Message: fmt.Sprintf("unsupported %s type '%s'", context, typeName),
+	}
+
+	// Add context-specific hints
+	switch {
+	case context == "parameter":
+		err.Hints = []string{
+			"Basic types: int, string, bool, float, decimal, timestamp, date, time, bytes, any",
+			"Arrays: string[], int[], etc.",
+			"Pointers: *string, *int, etc.",
+			"Custom types: MyType, time.Time, ./CustomType",
+		}
+	case strings.Contains(context, "implicit parameter"):
+		err.Hints = []string{
+			"System column types: int, string, bool, timestamp, decimal",
+			"Arrays: int[], string[], etc.",
+		}
+	case context == "type":
+		err.Hints = []string{
+			"Supported types: int, string, bool, float, double, decimal, timestamp, datetime, date, any",
+			"Arrays: type[], custom Go types",
+		}
+	default:
+		err.Hints = []string{
+			"Check the documentation for supported type formats",
+		}
+	}
+
+	return err
+}
+
+// isValidGoTypeName checks if a type name follows Go naming conventions
+func isValidGoTypeName(typeName string) bool {
+	if typeName == "" {
+		return false
+	}
+
+	// Check for package qualified types (e.g., "time.Time", "decimal.Decimal")
+	if strings.Contains(typeName, ".") {
+		parts := strings.Split(typeName, ".")
+		if len(parts) != 2 {
+			return false
+		}
+		// Both package and type name should be valid identifiers
+		return isValidGoIdentifier(parts[0]) && isValidGoIdentifier(parts[1])
+	}
+
+	// Check for simple type names
+	return isValidGoIdentifier(typeName)
+}
+
+// isValidGoIdentifier checks if a string is a valid Go identifier
+func isValidGoIdentifier(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	// First character must be a letter or underscore
+	first := rune(name[0])
+	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_') {
+		return false
+	}
+
+	// Remaining characters must be letters, digits, or underscores
+	for _, r := range name[1:] {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+			return false
+		}
+	}
+
+	return true
+}
+
 func convertTypeToGo(typeName string) (string, error) {
 	switch typeName {
 	case "int":
@@ -684,7 +784,12 @@ func convertTypeToGo(typeName string) (string, error) {
 			}
 			return "[]" + goElementType, nil
 		}
-		return typeName, nil
+		// For custom types, we assume they are valid Go types
+		// but we should validate that they follow Go naming conventions
+		if isValidGoTypeName(typeName) {
+			return typeName, nil
+		}
+		return "", newUnsupportedTypeError(typeName, "type")
 	}
 }
 
@@ -695,7 +800,7 @@ func processImplicitParameters(format *intermediate.IntermediateFormat) ([]impli
 	for _, param := range format.ImplicitParameters {
 		goType, err := convertTypeToGo(param.Type)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert implicit parameter type %s: %w", param.Type, err)
+			return nil, newUnsupportedTypeError(param.Type, fmt.Sprintf("implicit parameter '%s'", param.Name))
 		}
 
 		// Determine if parameter is required (no default value and not nullable)

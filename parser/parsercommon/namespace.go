@@ -29,7 +29,11 @@ type Namespace struct {
 func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 	var vars []*decls.VariableDecl
 	for key, val := range fd.Parameters {
-		vars = append(vars, decls.NewVariable(key, snapSqlToCel(val)))
+		celType, err := snapSqlToCel(val)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert parameter '%s' type: %w", key, err)
+		}
+		vars = append(vars, decls.NewVariable(key, celType))
 	}
 
 	root := cel.VariableDecls(vars...)
@@ -61,7 +65,11 @@ func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 	var consts []*decls.VariableDecl
 	for key, val := range constants {
-		consts = append(consts, decls.NewVariable(key, snapSqlToCel(inferTypeStringFromActualValues(val, nil))))
+		celType, err := snapSqlToCel(inferTypeStringFromActualValues(val, nil))
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert constant '%s' type: %w", key, err)
+		}
+		consts = append(consts, decls.NewVariable(key, celType))
 	}
 
 	root := cel.VariableDecls(consts...)
@@ -145,8 +153,12 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 	newValues[variableName] = a[0]
 
 	// Create a new environment with the loop variable
+	celType, err := snapSqlToCel(InferTypeStringFromDummyValue(a[0]))
+	if err != nil {
+		return fmt.Errorf("failed to convert loop variable '%s' type: %w", variableName, err)
+	}
 	newEnv, err := ns.currentEnv.Extend(
-		cel.Variable(variableName, snapSqlToCel(InferTypeStringFromDummyValue(a[0]))),
+		cel.Variable(variableName, celType),
 	)
 	if err != nil {
 		return fmt.Errorf("%w: error creating new environment for loop variable %s: %w", ErrInvalidForSnapSQL, variableName, err)
@@ -181,7 +193,7 @@ func (ns *Namespace) ExitLoop() error {
 }
 
 // snapSqlToCel converts a SnapSQL type to a CEL type
-func snapSqlToCel(val any) *cel.Type {
+func snapSqlToCel(val any) (*cel.Type, error) {
 	switch v := val.(type) {
 	case string:
 		return snapSqlTypeToCel(v)
@@ -193,54 +205,58 @@ func snapSqlToCel(val any) *cel.Type {
 		}
 	}
 
-	return cel.DynType
+	return cel.DynType, nil
 }
 
 // snapSqlTypeToCel converts a SnapSQL type string to a CEL type
-func snapSqlTypeToCel(val any) *cel.Type {
+func snapSqlTypeToCel(val any) (*cel.Type, error) {
 	switch val {
 	case "string":
-		return cel.StringType
+		return cel.StringType, nil
 	case "int", "int64", "int32", "int16", "int8":
-		return cel.IntType
+		return cel.IntType, nil
 	case "float":
-		return cel.DoubleType
+		return cel.DoubleType, nil
 	case "decimal":
-		return snapsqlgo.DecimalType
+		return snapsqlgo.DecimalType, nil
 	case "bool":
-		return cel.BoolType
+		return cel.BoolType, nil
 	// --- Special types ---
 	case "date":
-		return cel.StringType
+		return cel.StringType, nil
 	case "datetime", "timestamp", "time":
-		return cel.TimestampType
+		return cel.TimestampType, nil
 	case "email":
-		return cel.StringType
+		return cel.StringType, nil
 	case "uuid":
-		return cel.StringType
+		return cel.StringType, nil
 	case "json":
-		return cel.MapType(cel.StringType, cel.DynType)
+		return cel.MapType(cel.StringType, cel.DynType), nil
 	case "any", "map":
-		return cel.DynType
+		return cel.DynType, nil
 	default:
 		switch v := val.(type) {
 		case []any:
-			return cel.ListType(cel.DynType)
+			return cel.ListType(cel.DynType), nil
 		case map[string]any:
-			return cel.DynType
+			return cel.DynType, nil
 		case string:
 			if strings.HasSuffix(v, "[]") {
-				return cel.ListType(snapSqlToCel(strings.TrimSuffix(v, "[]")))
+				baseType, err := snapSqlTypeToCel(strings.TrimSuffix(v, "[]"))
+				if err != nil {
+					return nil, err
+				}
+				return cel.ListType(baseType), nil
 			}
 			// Handle Common Type references (e.g., "./User", "./User[]")
 			if strings.HasPrefix(v, "./") {
 				// Common Types are treated as dynamic objects
-				return cel.DynType
+				return cel.DynType, nil
 			}
 		}
 	}
 
-	panic(fmt.Sprintf("Unsupported type for CEL conversion: %T of %v", val, val))
+	return nil, fmt.Errorf("unsupported CEL type '%v'\n\nHint: Supported types include string, int, float, decimal, bool, date, datetime, timestamp, time, email, uuid, json, any, arrays (type[]), and custom types (./TypeName)", val)
 }
 
 func inferTypeStringFromActualValues(v any, rt ref.Type) string {
