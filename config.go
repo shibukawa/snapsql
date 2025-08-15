@@ -307,7 +307,7 @@ func applyDefaults(config *Config) {
 	if !exists {
 		jsonGen = GeneratorConfig{
 			Output:            "./generated",
-			Enabled:           true,
+			Enabled:           false, // Default to disabled unless explicitly enabled
 			PreserveHierarchy: true,
 			Settings: map[string]any{
 				"pretty":           true,
@@ -315,9 +315,6 @@ func applyDefaults(config *Config) {
 			},
 		}
 	} else {
-		// Ensure JSON generator is always enabled
-		jsonGen.Enabled = true
-
 		// Apply defaults for missing fields
 		if jsonGen.Output == "" {
 			jsonGen.Output = "./generated"
