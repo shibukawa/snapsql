@@ -65,12 +65,12 @@ tables:
   columns:
     id:
       name: id  # nolint:dupword // YAML field name
-      dataType: INTEGER
+      data_type: INTEGER
       nullable: false
-      isPrimaryKey: true
+      is_primary_key: true
     name:
       name: name
-      dataType: TEXT
+      data_type: TEXT
       nullable: false
 databaseInfo:
   type: sqlite
@@ -117,7 +117,7 @@ tables:
     columns:
       email:
         name: email
-        dataType: TEXT
+        data_type: TEXT
         nullable: true
 databaseInfo:
   type: sqlite
@@ -221,11 +221,11 @@ tables:
     columns:
       id:
         name: id  # nolint:dupword // YAML field name
-        dataType: INTEGER
+        data_type: INTEGER
         nullable: false
       name:
         name: name
-        dataType: TEXT
+        data_type: TEXT
         nullable: false
 databaseInfo:
   type: sqlite
@@ -324,7 +324,7 @@ tables:
     columns:
       id:
         name: id
-        dataType: INTEGER
+        data_type: INTEGER
         nullable: false
 databaseInfo:
   type: sqlite
@@ -352,7 +352,7 @@ tables:
     columns:
       id:
         name: id
-        dataType: INTEGER
+        data_type: INTEGER
         nullable: false
 databaseInfo:
   type: sqlite

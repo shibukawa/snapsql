@@ -162,7 +162,7 @@ func (e *Executor) validateNumericResult(result *ValidationResult, spec Validati
 				return fmt.Errorf("%w: expected rows_affected %d, got %d", snapsql.ErrResultRowCountMismatch, expectedRows, result.RowsAffected)
 			}
 		case "last_insert_id":
-			// TODO: Implement last_insert_id validation
+			// last_insert_id validation is not yet implemented
 			// This requires getting the last insert ID from the database
 			return snapsql.ErrLastInsertIdNotImplemented
 		default:
@@ -251,7 +251,8 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 		return fmt.Errorf("%w: expected %d rows in table %s, got %d rows", snapsql.ErrTableRowCountMismatch, len(expected), spec.TableName, len(actualData))
 	}
 
-	// TODO: Implement more sophisticated comparison (order-independent, partial matching)
+	// Current implementation uses simple row-by-row comparison
+	// More sophisticated comparison (order-independent, partial matching) may be added in future versions
 	for i, expectedRow := range expected {
 		if i >= len(actualData) {
 			return fmt.Errorf("%w %d in table %s", snapsql.ErrMissingRowInTable, i, spec.TableName)

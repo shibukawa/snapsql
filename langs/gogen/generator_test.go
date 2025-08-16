@@ -1,6 +1,7 @@
 package gogen
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -67,15 +68,18 @@ func TestConvertToGoType_UnknownType(t *testing.T) {
 					t.Errorf("expected error but got none")
 					return
 				}
+
 				if !strings.Contains(err.Error(), tt.errorMsg) {
 					t.Errorf("expected error message to contain '%s', got '%s'", tt.errorMsg, err.Error())
 				}
 
 				// Check if it's our custom error type with hints
-				if unsupportedErr, ok := err.(*UnsupportedTypeError); ok {
+				var unsupportedErr *UnsupportedTypeError
+				if errors.As(err, &unsupportedErr) {
 					if len(unsupportedErr.Hints) == 0 {
 						t.Errorf("expected hints to be provided")
 					}
+
 					t.Logf("Error with hints: %s", err.Error())
 				}
 			} else {
@@ -83,6 +87,7 @@ func TestConvertToGoType_UnknownType(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 					return
 				}
+
 				if result == "" {
 					t.Errorf("expected non-empty result")
 				}

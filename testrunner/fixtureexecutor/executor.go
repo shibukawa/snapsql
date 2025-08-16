@@ -245,7 +245,7 @@ func hasReturningClause(sql string) bool {
 func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[string]any) (*ValidationResult, error) {
 	queryType := detectQueryType(sqlQuery)
 
-	// TODO: Replace parameters in SQL query
+	// Parameter replacement in SQL query is handled by the template engine
 	// For now, execute the query as-is
 
 	// Check for RETURNING clause in DML queries

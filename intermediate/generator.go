@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	. "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/parser/parsercommon"
@@ -41,10 +41,7 @@ type TestCase struct {
 // GenerateMockFiles generates mock data JSON files from markdown content
 func (g *MockDataGenerator) GenerateMockFiles(markdownFile string, markdownContent string) error {
 	// Parse test cases from markdown
-	testCases, err := g.parseTestCasesFromMarkdown(markdownContent)
-	if err != nil {
-		return fmt.Errorf("failed to parse test cases: %w", err)
-	}
+	testCases := g.parseTestCasesFromMarkdown(markdownContent)
 
 	if len(testCases) == 0 {
 		// No test cases found, skip mock data generation
@@ -55,8 +52,7 @@ func (g *MockDataGenerator) GenerateMockFiles(markdownFile string, markdownConte
 	functionName := g.extractFunctionName(markdownContent)
 
 	// Generate mock data files (one per test case)
-	err = g.writeMockDataFile(markdownFile, testCases, functionName)
-	if err != nil {
+	if err := g.writeMockDataFile(markdownFile, testCases, functionName); err != nil {
 		return fmt.Errorf("failed to write mock data files: %w", err)
 	}
 
@@ -66,7 +62,7 @@ func (g *MockDataGenerator) GenerateMockFiles(markdownFile string, markdownConte
 }
 
 // parseTestCasesFromMarkdown parses test cases from markdown content
-func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCase, error) {
+func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) []TestCase {
 	testCases := make([]TestCase, 0)
 
 	// Regular expressions to match test case sections
@@ -136,7 +132,7 @@ func (g *MockDataGenerator) parseTestCasesFromMarkdown(content string) ([]TestCa
 		testCases = append(testCases, testCase)
 	}
 
-	return testCases, nil
+	return testCases
 }
 
 // extractFunctionName extracts the function name from SQL comments in markdown
@@ -205,7 +201,7 @@ func (g *MockDataGenerator) writeMockDataFile(sourceFile string, testCases []Tes
 }
 
 // GenerateFromSQL generates the intermediate format for a SQL template
-func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
+func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
 	// Parse the SQL
 	stmt, funcDef, err := parser.ParseSQLFile(reader, constants, basePath, projectRootPath)
 	if err != nil {
@@ -217,7 +213,7 @@ func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string
 }
 
 // GenerateFromMarkdown generates the intermediate format for a Markdown file containing SQL
-func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
+func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
 	// Parse the Markdown
 	stmt, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants)
 	if err != nil {
@@ -245,7 +241,8 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 }
 
 // generateIntermediateFormat is the common implementation using the new pipeline approach
-func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]*TableInfo, config *Config) (*IntermediateFormat, error) {
+func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
+	_ = filePath // File path not currently used in pipeline processing
 	// Create and execute the token processing pipeline
 	pipeline := CreateDefaultPipeline(stmt, funcDef, config, tableInfo)
 
@@ -297,7 +294,9 @@ func extractTokensFromStatement(stmt parsercommon.StatementNode) []tokenizer.Tok
 }
 
 // extractSystemFieldsInfo extracts system fields information from config
-func extractSystemFieldsInfo(config *Config, stmt parsercommon.StatementNode) []SystemFieldInfo {
+func extractSystemFieldsInfo(config *snapsql.Config, stmt parsercommon.StatementNode) []SystemFieldInfo {
+	_ = stmt // Statement not currently used for system field extraction
+
 	var systemFields []SystemFieldInfo
 
 	// Get all system fields from config

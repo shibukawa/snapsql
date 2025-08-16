@@ -105,6 +105,8 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 				// Enter loop with the actual array values
 				err = namespace.EnterLoop(loopVar, arraySlice)
 				if err != nil {
+					// Skip this loop iteration if entry fails
+					continue
 				}
 			}
 
@@ -161,10 +163,10 @@ func expandArraysInTokensWithNamespace(tokens []tokenizer.Token, namespace *cmn.
 					} else {
 						gerr.Add(fmt.Errorf("%w: variable '%s' is an object but objects can only be expanded when column order is available (INSERT statements)", ErrObjectInArrayContext, variableName))
 					}
-				} else {
 				}
-			} else {
+				// Note: Non-object variables are handled in other processing steps
 			}
+			// Note: Non-array variables are handled in other processing steps
 		}
 	}
 
@@ -283,9 +285,6 @@ func isArrayTypeWithNamespace(variableName string, namespace *cmn.Namespace) boo
 		rv := reflect.ValueOf(result)
 
 		isArray := rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array
-		if isArray {
-		} else {
-		}
 
 		return isArray
 	}
@@ -304,13 +303,7 @@ func isObjectTypeWithNamespace(variableName string, namespace *cmn.Namespace) bo
 	// Use reflection to check if it's a map (object)
 	if result != nil {
 		rv := reflect.ValueOf(result)
-
-		isObject := rv.Kind() == reflect.Map
-		if isObject {
-		} else {
-		}
-
-		return isObject
+		return rv.Kind() == reflect.Map
 	}
 
 	return false
@@ -333,13 +326,7 @@ func isObjectArrayTypeWithNamespace(variableName string, namespace *cmn.Namespac
 				firstElement := rv.Index(0).Interface()
 				if firstElement != nil {
 					firstRv := reflect.ValueOf(firstElement)
-
-					isObjectArray := firstRv.Kind() == reflect.Map
-					if isObjectArray {
-					} else {
-					}
-
-					return isObjectArray
+					return firstRv.Kind() == reflect.Map
 				}
 			}
 

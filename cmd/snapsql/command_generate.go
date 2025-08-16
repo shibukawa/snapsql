@@ -173,6 +173,7 @@ func generateGoFiles(generator GeneratorConfig, intermediateFiles []string, ctx 
 		if outputPath == "" {
 			outputPath = "./generated/go"
 		}
+
 		goGen.PackageName = gogen.InferPackageNameFromPath(outputPath)
 	}
 
@@ -229,6 +230,7 @@ func generateGoFiles(generator GeneratorConfig, intermediateFiles []string, ctx 
 
 // generateWithExternalPlugin attempts to use an external generator plugin
 func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
+	_ = ctx // Context not currently used for external plugin generation
 	pluginName := "snapsql-gen-" + lang
 
 	// Check if plugin exists in PATH
@@ -428,6 +430,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 
 // processTemplateFile processes a single template file and generates intermediate JSON
 func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string, constantFiles []string, config *Config, ctx *Context) (string, error) {
+	_ = constantFiles // Constant files are loaded through config, not directly used here
 	// Load constants
 	constants, err := g.loadConstants(config, ctx)
 	if err != nil {
@@ -496,6 +499,8 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string,
 
 // loadConstants loads constants from configuration and constant files
 func (g *GenerateCmd) loadConstants(config *Config, ctx *Context) (map[string]any, error) {
+	_ = config // Config not currently used for constant loading
+	_ = ctx    // Context not currently used for constant loading
 	constants := make(map[string]any)
 
 	// Load constants from files
@@ -545,6 +550,7 @@ func (g *GenerateCmd) generateOutputFilename(inputFile, outputDir, inputDir stri
 
 		// Create subdirectory structure in output
 		outputSubDir := filepath.Join(outputDir, relDir)
+
 		return filepath.Join(outputSubDir, name+".json")
 	}
 

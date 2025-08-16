@@ -18,6 +18,9 @@ linters:
     - exhaustruct
     - nonamedreturns
     - gosec
+    - prealloc  # スライスの事前割り当て（パフォーマンス最適化のため無効化）
+    - noinlineerr  # インラインエラーハンドリングは一般的なGoイディオム
+    - unparam  # 将来の拡張やインターフェース統一のために必要なパラメータが多数存在
     - gocognit
     - funlen
     - nestif

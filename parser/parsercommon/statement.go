@@ -8,6 +8,7 @@ import (
 
 // DML Statement structures
 
+//nolint:interfacebloat // StatementNode requires multiple methods for comprehensive SQL statement handling
 type StatementNode interface {
 	AstNode
 	CTE() *WithClause                 // Returns CTE definitions in the block

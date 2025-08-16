@@ -3,7 +3,7 @@ package intermediate
 import (
 	"fmt"
 
-	. "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
@@ -13,8 +13,8 @@ type TokenPipeline struct {
 	tokens     []tokenizer.Token
 	stmt       parser.StatementNode
 	funcDef    *parser.FunctionDefinition
-	config     *Config
-	tableInfo  map[string]*TableInfo
+	config     *snapsql.Config
+	tableInfo  map[string]*snapsql.TableInfo
 	processors []TokenProcessor
 }
 
@@ -29,8 +29,8 @@ type ProcessingContext struct {
 	Tokens      []tokenizer.Token
 	Statement   parser.StatementNode
 	FunctionDef *parser.FunctionDefinition
-	Config      *Config
-	TableInfo   map[string]*TableInfo
+	Config      *snapsql.Config
+	TableInfo   map[string]*snapsql.TableInfo
 
 	// Processing results
 	Environments   []string
@@ -50,7 +50,7 @@ type ProcessingContext struct {
 }
 
 // NewTokenPipeline creates a new token processing pipeline
-func NewTokenPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *Config, tableInfo map[string]*TableInfo) *TokenPipeline {
+func NewTokenPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *snapsql.Config, tableInfo map[string]*snapsql.TableInfo) *TokenPipeline {
 	return &TokenPipeline{
 		tokens:    extractTokensFromStatement(stmt),
 		stmt:      stmt,
@@ -131,7 +131,7 @@ func convertEnvironmentsToEnvs(environments []string) [][]EnvVar {
 }
 
 // CreateDefaultPipeline creates a pipeline with default processors
-func CreateDefaultPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *Config, tableInfo map[string]*TableInfo) *TokenPipeline {
+func CreateDefaultPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *snapsql.Config, tableInfo map[string]*snapsql.TableInfo) *TokenPipeline {
 	pipeline := NewTokenPipeline(stmt, funcDef, config, tableInfo)
 
 	// Add processors in order

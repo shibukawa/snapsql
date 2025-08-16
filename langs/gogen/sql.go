@@ -49,7 +49,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 		sqlParts       []string
 		arguments      []int
 		systemFields   []string
-		parameterIndex int = 1
+		parameterIndex = 1
 	)
 
 	for _, inst := range instructions {
@@ -61,6 +61,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 				value = strings.Replace(value, "?", fmt.Sprintf("$%d", parameterIndex), 1)
 				parameterIndex++
 			}
+
 			sqlParts = append(sqlParts, value)
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
@@ -77,6 +78,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 
 	// Convert expression indices and system fields to parameter names for static SQL
 	var parameterNames []string
+
 	systemFieldIndex := 0
 
 	for _, exprIndex := range arguments {
@@ -142,7 +144,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			}
 
 		case "ADD_SYSTEM_PARAM":
-			code = append(code, fmt.Sprintf("// Add system parameter: %s", inst.SystemField))
+			code = append(code, "// Add system parameter: "+inst.SystemField)
 			code = append(code, fmt.Sprintf("args = append(args, systemValues[%q])", inst.SystemField))
 			hasArguments = true
 

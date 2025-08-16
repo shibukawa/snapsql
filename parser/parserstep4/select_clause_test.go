@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/shibukawa/snapsql/parser/parsercommon"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/parser/parserstep2"
 	"github.com/shibukawa/snapsql/parser/parserstep3"
@@ -378,11 +377,11 @@ func TestFinalizeSelectClause(t *testing.T) {
 			err = parserstep3.Execute(ast)
 			assert.NoError(t, err)
 
-			selectStmt, ok := ast.(*parsercommon.SelectStatement)
+			selectStmt, ok := ast.(*cmn.SelectStatement)
 			assert.True(t, ok)
 
 			selectClause := selectStmt.Select
-			perr := &parsercommon.ParseError{}
+			perr := &cmn.ParseError{}
 			finalizeSelectClause(selectClause, perr)
 
 			if tc.wantError {

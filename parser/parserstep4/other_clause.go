@@ -131,7 +131,8 @@ func finalizeReturningClause(clause *cmn.ReturningClause, perr *cmn.ParseError) 
 
 		field, fieldTokens := parseFieldQualifier(part.Skipped)
 		// standard single field
-		if _, match, err := singleField(pctx, fieldTokens); err == nil {
+		_, match, err := singleField(pctx, fieldTokens)
+		if err == nil {
 			if field.FieldName == "" {
 				field.FieldName = match[0].Val.Value // use identity as alias
 			}

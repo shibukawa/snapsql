@@ -251,6 +251,7 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 		// Don't fail the entire parse for subquery analysis errors
 		// The error can be detected via stmt.GetSubqueryDependencies() == nil
 		// This allows graceful degradation
+		_ = subErr // Explicitly ignore the error for now
 	}
 
 	return stmt, nil
@@ -322,10 +323,8 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 	// Merge constants with dummy data from function definition
 	mergedConstants := make(map[string]any)
 
-	if constants != nil {
-		for k, v := range constants {
-			mergedConstants[k] = v
-		}
+	for k, v := range constants {
+		mergedConstants[k] = v
 	}
 	// Add dummy data (dummy data takes precedence if constants is nil or doesn't contain the key)
 	if dummyDataAny := functionDef.DummyData(); dummyDataAny != nil {

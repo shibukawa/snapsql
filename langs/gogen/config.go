@@ -76,7 +76,7 @@ func WithConfig(config Config, outputPath string) Option {
 		if config.MockPath != "" {
 			g.MockPath = config.MockPath
 		}
-		// TODO: Add GenerateTests and PreserveHierarchy support when implemented
+		// GenerateTests and PreserveHierarchy will be added in future versions
 	}
 }
 

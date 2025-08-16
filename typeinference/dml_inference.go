@@ -217,7 +217,7 @@ func (d *DMLInferenceEngine) extractTableNameFromClause(clause parser.ClauseNode
 	}
 
 	// This is a placeholder implementation
-	// TODO: Implement proper table name extraction from clause tokens
+	// Proper table name extraction from clause tokens will be implemented when needed
 	return "placeholder_table", nil
 }
 

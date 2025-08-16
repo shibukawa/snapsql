@@ -16,6 +16,7 @@ func WithSystemValue(ctx context.Context, key string, value interface{}) context
 	for k, v := range systemValues {
 		newSystemValues[k] = v
 	}
+
 	newSystemValues[key] = value
 
 	return context.WithValue(ctx, systemColumnKey{}, newSystemValues)
@@ -28,5 +29,6 @@ func getSystemValuesFromContext(ctx context.Context) map[string]any {
 			return systemValues
 		}
 	}
+
 	return nil
 }
