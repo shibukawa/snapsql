@@ -352,7 +352,7 @@ func getIndentLevel(line string) int {
 		case '\t':
 			count += 4 // Treat tab as 4 spaces
 		default:
-			break
+			return count
 		}
 	}
 

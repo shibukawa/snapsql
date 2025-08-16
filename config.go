@@ -163,6 +163,7 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Parse YAML
 	var config Config
+
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
@@ -336,6 +337,7 @@ func applyDefaults(config *Config) {
 		if _, exists := jsonGen.Settings["pretty"]; !exists {
 			jsonGen.Settings["pretty"] = true
 		}
+
 		if _, exists := jsonGen.Settings["include_metadata"]; !exists {
 			jsonGen.Settings["include_metadata"] = true
 		}

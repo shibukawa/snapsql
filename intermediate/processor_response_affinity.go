@@ -3,7 +3,7 @@ package intermediate
 import (
 	"strings"
 
-	. "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
@@ -38,7 +38,7 @@ const (
 )
 
 // determineResponseAffinity analyzes the statement and determines the response affinity
-func determineResponseAffinity(stmt parser.StatementNode, tableInfo map[string]*TableInfo) ResponseAffinity {
+func determineResponseAffinity(stmt parser.StatementNode, tableInfo map[string]*snapsql.TableInfo) ResponseAffinity {
 	// Default affinity is "many" for SELECT statements
 	affinity := ResponseAffinityMany
 
@@ -116,7 +116,7 @@ func determineResponseAffinity(stmt parser.StatementNode, tableInfo map[string]*
 }
 
 // hasUniqueKeyCondition checks if a SELECT statement has a WHERE clause with a unique key condition
-func hasUniqueKeyCondition(stmt *parser.SelectStatement, tableInfo map[string]*TableInfo) bool {
+func hasUniqueKeyCondition(stmt *parser.SelectStatement, tableInfo map[string]*snapsql.TableInfo) bool {
 	if stmt.Where == nil {
 		return false
 	}
@@ -147,7 +147,7 @@ func hasJoinTables(fromClause *parser.FromClause) bool {
 }
 
 // hasUniqueKeyConditionForJoin checks unique key condition for JOIN queries
-func hasUniqueKeyConditionForJoin(stmt *parser.SelectStatement, tableInfo map[string]*TableInfo) bool {
+func hasUniqueKeyConditionForJoin(stmt *parser.SelectStatement, tableInfo map[string]*snapsql.TableInfo) bool {
 	// Get the driving table (first table in FROM clause)
 	drivingTable := getDrivingTable(stmt.From)
 	if drivingTable == "" {
@@ -172,7 +172,7 @@ func hasUniqueKeyConditionForJoin(stmt *parser.SelectStatement, tableInfo map[st
 }
 
 // hasUniqueKeyConditionForSingleTable handles single table queries (existing logic)
-func hasUniqueKeyConditionForSingleTable(stmt *parser.SelectStatement, tableInfo map[string]*TableInfo) bool {
+func hasUniqueKeyConditionForSingleTable(stmt *parser.SelectStatement, tableInfo map[string]*snapsql.TableInfo) bool {
 	// Get the main table name from FROM clause
 	tableName := getMainTableName(stmt.From)
 	if tableName == "" {
@@ -271,7 +271,7 @@ func hasValidJoinFieldPatternWithAlias(selectClause *parser.SelectClause, drivin
 }
 
 // isDrivingTablePrimaryKeySpecifiedWithAlias checks if driving table's primary key is in WHERE clause with alias
-func isDrivingTablePrimaryKeySpecifiedWithAlias(whereClause *parser.WhereClause, drivingTable string, drivingAlias string, tableInfo map[string]*TableInfo) bool {
+func isDrivingTablePrimaryKeySpecifiedWithAlias(whereClause *parser.WhereClause, drivingTable string, drivingAlias string, tableInfo map[string]*snapsql.TableInfo) bool {
 	if whereClause == nil {
 		return false
 	}
@@ -365,7 +365,7 @@ func getMainTableName(fromClause *parser.FromClause) string {
 }
 
 // getPrimaryKeyColumns returns the list of primary key column names
-func getPrimaryKeyColumns(table *TableInfo) []string {
+func getPrimaryKeyColumns(table *snapsql.TableInfo) []string {
 	var primaryKeys []string
 
 	for _, column := range table.Columns {
@@ -512,7 +512,7 @@ func hasAggregateFunctions(stmt *parser.SelectStatement) bool {
 }
 
 // hasUniqueKeyConditionForUpdate checks if an UPDATE statement has a WHERE clause with a unique key condition
-func hasUniqueKeyConditionForUpdate(stmt *parser.UpdateStatement, tableInfo map[string]*TableInfo) bool {
+func hasUniqueKeyConditionForUpdate(stmt *parser.UpdateStatement, tableInfo map[string]*snapsql.TableInfo) bool {
 	if stmt.Where == nil {
 		return false
 	}
@@ -540,7 +540,7 @@ func hasUniqueKeyConditionForUpdate(stmt *parser.UpdateStatement, tableInfo map[
 }
 
 // hasUniqueKeyConditionForDelete checks if a DELETE statement has a WHERE clause with a unique key condition
-func hasUniqueKeyConditionForDelete(stmt *parser.DeleteFromStatement, tableInfo map[string]*TableInfo) bool {
+func hasUniqueKeyConditionForDelete(stmt *parser.DeleteFromStatement, tableInfo map[string]*snapsql.TableInfo) bool {
 	if stmt.Where == nil {
 		return false
 	}

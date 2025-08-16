@@ -128,6 +128,7 @@ func isSystemColumn(varName string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -143,7 +144,7 @@ func validateVariableDirective(token tokenizer.Token, paramNs *cmn.Namespace, pe
 	if isSystemColumn(strings.TrimSpace(expression)) {
 		// Return a placeholder value for system columns
 		// The actual value will be injected at runtime from context
-		return fmt.Sprintf("SYSTEM_VALUE_%s", strings.TrimSpace(expression)), "string", true
+		return "SYSTEM_VALUE_" + strings.TrimSpace(expression), "string", true
 	}
 
 	// Validate the expression using parameter CEL

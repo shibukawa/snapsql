@@ -83,8 +83,8 @@ func (a *ExpressionCastAnalyzer) parseCastExpression() *CastInfo {
 
 	// Expect CAST
 	if a.position >= len(a.tokens) ||
-		!(a.tokens[a.position].Type == tokenizer.CAST ||
-			(a.tokens[a.position].Type == tokenizer.IDENTIFIER && strings.ToUpper(a.tokens[a.position].Value) == "CAST")) {
+		(a.tokens[a.position].Type != tokenizer.CAST &&
+			(a.tokens[a.position].Type != tokenizer.IDENTIFIER || strings.ToUpper(a.tokens[a.position].Value) != "CAST")) {
 		return nil
 	}
 

@@ -3,8 +3,7 @@ package intermediate
 import (
 	"fmt"
 
-	. "github.com/shibukawa/snapsql"
-	snapsql "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
@@ -40,7 +39,7 @@ type StatementTypeProvider interface {
 
 // CheckSystemFields validates system fields configuration and returns implicit parameters
 // Errors are accumulated in the provided GenerateError
-func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []Parameter, gerr *GenerateError) []ImplicitParameter {
+func CheckSystemFields(stmt StatementTypeProvider, config *snapsql.Config, parameters []Parameter, gerr *GenerateError) []ImplicitParameter {
 	if config == nil {
 		return nil
 	}
@@ -64,7 +63,7 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 
 	// Check each system field configured for the current operation
 	for _, field := range config.System.Fields {
-		var operation *SystemFieldOperation
+		var operation *snapsql.SystemFieldOperation
 
 		switch stmt.Type() {
 		case parser.INSERT_INTO_STATEMENT:
@@ -95,10 +94,10 @@ func CheckSystemFields(stmt StatementTypeProvider, config *Config, parameters []
 }
 
 // checkSystemFieldWithColumns performs validation for a single system field with column existence check
-func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperation, nodeType parser.NodeType, paramMap map[string]bool, existingColumns map[string]bool, gerr *GenerateError) *ImplicitParameter {
+func checkSystemFieldWithColumns(field snapsql.SystemField, operation *snapsql.SystemFieldOperation, nodeType parser.NodeType, paramMap map[string]bool, existingColumns map[string]bool, gerr *GenerateError) *ImplicitParameter {
 	// Handle parameter configuration
 	switch operation.Parameter {
-	case ParameterExplicit:
+	case snapsql.ParameterExplicit:
 		// Check if explicit parameter is provided
 		if !paramMap[field.Name] {
 			gerr.AddError(fmt.Errorf("%w: %s statement parameter '%s'", snapsql.ErrParameterNotProvided, nodeType.String(), field.Name))
@@ -116,7 +115,7 @@ func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperat
 		// Explicit parameter provided and column exists, no implicit parameter needed
 		return nil
 
-	case ParameterImplicit:
+	case snapsql.ParameterImplicit:
 		// Add to implicit parameters list
 		implicitParam := &ImplicitParameter{
 			Name: field.Name,
@@ -130,7 +129,7 @@ func checkSystemFieldWithColumns(field SystemField, operation *SystemFieldOperat
 
 		return implicitParam
 
-	case ParameterError:
+	case snapsql.ParameterError:
 		// Check if parameter is provided (should cause error)
 		if paramMap[field.Name] {
 			gerr.AddError(fmt.Errorf("%w: %s statement parameter '%s'", snapsql.ErrParameterConfiguredError, nodeType.String(), field.Name))
@@ -347,12 +346,9 @@ func addSystemColumnsToInsertIntoClause(insertIntoClause *parser.InsertIntoClaus
 	updatedTokens = append(updatedTokens, newTokens...)
 	updatedTokens = append(updatedTokens, tokens[insertPosition:]...)
 
-	// TODO: Update the InsertIntoClause tokens in pipeline approach
+	// Pipeline approach for token updates will be implemented in future iterations
 	// insertIntoClause.SetRawTokens(updatedTokens)
-	_ = updatedTokens // Will be used when TODO above is implemented
-
-	// TODO: Update the InsertIntoClause tokens in pipeline approach
-	// insertIntoClause.SetRawTokens(updatedTokens)
+	_ = updatedTokens // Will be used when pipeline approach is implemented
 
 	// Also update the Columns field in InsertIntoClause
 	insertIntoClause.Columns = append(insertIntoClause.Columns, columnsToAdd...)
@@ -385,17 +381,14 @@ func AddSystemFieldsToUpdate(stmt parser.StatementNode, implicitParams []Implici
 
 	// Add EMIT_SYSTEM_VALUE calls for each implicit parameter
 	for _, param := range implicitParams {
-		err := addSystemValueToSetClause(updateStmt.Set, param.Name)
-		if err != nil {
-			return fmt.Errorf("failed to add system value for %s: %w", param.Name, err)
-		}
+		addSystemValueToSetClause(updateStmt.Set, param.Name)
 	}
 
 	return nil
 }
 
 // addSystemValueToSetClause adds a system value assignment to the SET clause
-func addSystemValueToSetClause(setClause *parser.SetClause, columnName string) error {
+func addSystemValueToSetClause(setClause *parser.SetClause, columnName string) {
 	// Create tokens for EMIT_SYSTEM_VALUE(column_name)
 	valueTokens := []tok.Token{
 		{Type: tok.IDENTIFIER, Value: "EMIT_SYSTEM_VALUE"},
@@ -412,8 +405,6 @@ func addSystemValueToSetClause(setClause *parser.SetClause, columnName string) e
 
 	// Add to existing assignments
 	setClause.Assigns = append(setClause.Assigns, systemAssign)
-
-	return nil
 }
 
 // GetSystemFieldAssignments returns the system field assignments as SetAssign slice

@@ -27,6 +27,7 @@ type FormatCmd struct {
 
 // Run executes the format command
 func (cmd *FormatCmd) Run(ctx *Context) error {
+	_ = ctx // Context not needed for formatting operations
 	sqlFormatter := formatter.NewSQLFormatter()
 
 	// Handle different input sources
@@ -145,7 +146,6 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 		}()
 
 		writer = tempFile
-		outputFile = tempFile
 	} else if cmd.Output != "" {
 		// Write to specified output file
 		outputFile, err = os.Create(cmd.Output)

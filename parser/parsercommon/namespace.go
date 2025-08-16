@@ -28,11 +28,13 @@ type Namespace struct {
 
 func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 	var vars []*decls.VariableDecl
+
 	for key, val := range fd.Parameters {
 		celType, err := snapSqlToCel(val)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert parameter '%s' type: %w", key, err)
 		}
+
 		vars = append(vars, decls.NewVariable(key, celType))
 	}
 
@@ -64,11 +66,13 @@ func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 
 func NewNamespaceFromConstants(constants map[string]any) (*Namespace, error) {
 	var consts []*decls.VariableDecl
+
 	for key, val := range constants {
 		celType, err := snapSqlToCel(inferTypeStringFromActualValues(val, nil))
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert constant '%s' type: %w", key, err)
 		}
+
 		consts = append(consts, decls.NewVariable(key, celType))
 	}
 
@@ -157,6 +161,7 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 	if err != nil {
 		return fmt.Errorf("failed to convert loop variable '%s' type: %w", variableName, err)
 	}
+
 	newEnv, err := ns.currentEnv.Extend(
 		cel.Variable(variableName, celType),
 	)
@@ -246,6 +251,7 @@ func snapSqlTypeToCel(val any) (*cel.Type, error) {
 				if err != nil {
 					return nil, err
 				}
+
 				return cel.ListType(baseType), nil
 			}
 			// Handle Common Type references (e.g., "./User", "./User[]")
@@ -256,7 +262,16 @@ func snapSqlTypeToCel(val any) (*cel.Type, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("unsupported CEL type '%v'\n\nHint: Supported types include string, int, float, decimal, bool, date, datetime, timestamp, time, email, uuid, json, any, arrays (type[]), and custom types (./TypeName)", val)
+	return nil, UnsupportedCELTypeError{Type: fmt.Sprintf("%v", val)}
+}
+
+// UnsupportedCELTypeError represents an unsupported CEL type error
+type UnsupportedCELTypeError struct {
+	Type string
+}
+
+func (e UnsupportedCELTypeError) Error() string {
+	return fmt.Sprintf("unsupported CEL type '%s'\n\nHint: Supported types include string, int, float, decimal, bool, date, datetime, timestamp, time, email, uuid, json, any, arrays (type[]), and custom types (./TypeName)", e.Type)
 }
 
 func inferTypeStringFromActualValues(v any, rt ref.Type) string {

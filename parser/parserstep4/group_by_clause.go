@@ -36,7 +36,8 @@ func finalizeGroupByClause(clause *cmn.GroupByClause, perr *cmn.ParseError) {
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
 
-	if consume, match, err := groupByAdvanced(pctx, pTokens); err == nil {
+	consume, match, err := groupByAdvanced(pctx, pTokens)
+	if err == nil {
 		switch match[0].Type {
 		case "null":
 			clause.Null = true

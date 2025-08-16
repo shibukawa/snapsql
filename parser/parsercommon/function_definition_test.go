@@ -412,6 +412,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   true,
 			wantTypeKey: "api/users/User", // Should find User from api/users/_common.yaml
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				userMap, ok := result.(map[string]any)
 				assert.True(t, ok, "result should be a map")
 				assert.Equal(t, "int", userMap["id"])
@@ -429,6 +430,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   true,
 			wantTypeKey: "api/users/profiles/Profile",
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				profileMap, ok := result.(map[string]any)
 				assert.True(t, ok, "result should be a map")
 				assert.Equal(t, "int", profileMap["id"])
@@ -444,6 +446,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   true,
 			wantTypeKey: "api/users/profiles/settings/Settings",
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				settingsMap, ok := result.(map[string]any)
 				assert.True(t, ok, "result should be a map")
 				assert.Equal(t, "int", settingsMap["id"])
@@ -459,6 +462,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   true,
 			wantTypeKey: "GlobalType",
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				globalMap, ok := result.(map[string]any)
 				assert.True(t, ok, "result should be a map")
 				assert.Equal(t, "int", globalMap["id"])
@@ -474,6 +478,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   true,
 			wantTypeKey: "api/users/profiles/User[]", // Should find the closest ancestor with User definition
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				userArray, ok := result.([]any)
 				assert.True(t, ok, "result should be an array")
 				assert.Len(t, userArray, 1)
@@ -492,6 +497,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   false,
 			wantTypeKey: "",
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				assert.Nil(t, result, "result should be nil when type not found")
 			},
 		},
@@ -503,6 +509,7 @@ func TestSearchCommonTypeInAncestors(t *testing.T) {
 			wantFound:   true,
 			wantTypeKey: "api/users/Department", // Department is only defined in api/users/_common.yaml
 			checkResult: func(t *testing.T, result any) {
+				t.Helper()
 				deptMap, ok := result.(map[string]any)
 				assert.True(t, ok, "result should be a map")
 				assert.Equal(t, "int", deptMap["id"])

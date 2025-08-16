@@ -1,13 +1,13 @@
 package intermediate
 
 import (
-	. "github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/typeinference"
 )
 
 // determineResponseType analyzes the statement and determines the response type
-func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*TableInfo) []Response {
+func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*snapsql.TableInfo) []Response {
 	// Convert tableInfo to DatabaseSchema format for typeinference package
 	schemas := convertTableInfoToSchemas(tableInfo)
 
@@ -40,15 +40,15 @@ func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*Tabl
 }
 
 // convertTableInfoToSchemas converts intermediate.TableInfo to typeinference.DatabaseSchema
-func convertTableInfoToSchemas(tableInfo map[string]*TableInfo) []DatabaseSchema {
+func convertTableInfoToSchemas(tableInfo map[string]*snapsql.TableInfo) []snapsql.DatabaseSchema {
 	if len(tableInfo) == 0 {
 		return nil
 	}
 
 	// Create a single database schema with all tables
-	schema := DatabaseSchema{
+	schema := snapsql.DatabaseSchema{
 		Name:   "default", // Default database name
-		Tables: make([]*TableInfo, 0, len(tableInfo)),
+		Tables: make([]*snapsql.TableInfo, 0, len(tableInfo)),
 	}
 
 	// TableInfo is already in the correct format, just add to schema
@@ -56,5 +56,5 @@ func convertTableInfoToSchemas(tableInfo map[string]*TableInfo) []DatabaseSchema
 		schema.Tables = append(schema.Tables, info)
 	}
 
-	return []DatabaseSchema{schema}
+	return []snapsql.DatabaseSchema{schema}
 }

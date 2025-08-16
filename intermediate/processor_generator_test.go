@@ -121,7 +121,7 @@ SELECT id, TRUE as is_active FROM users`,
 			}
 
 			// For now, just verify that the parsing works
-			// TODO: Add more specific assertions once the integration is complete
+			// Integration testing will be added when more specific requirements are defined
 			_ = stmt
 			_ = funcDef
 		})

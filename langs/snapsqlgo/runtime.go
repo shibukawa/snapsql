@@ -196,6 +196,7 @@ func ExtractImplicitParams(ctx context.Context, specs []ImplicitParamSpec) map[s
 	if systemValues == nil {
 		// No system values in context - check for required parameters and set defaults
 		result := make(map[string]any)
+
 		for _, spec := range specs {
 			if spec.Required {
 				panic(fmt.Sprintf("implementation error: required implicit parameter '%s' not found in context - WithSystemValue() not called", spec.Name))
@@ -204,6 +205,7 @@ func ExtractImplicitParams(ctx context.Context, specs []ImplicitParamSpec) map[s
 			// Use default value from spec (which comes from config file)
 			result[spec.Name] = spec.DefaultValue
 		}
+
 		return result
 	}
 
@@ -224,6 +226,7 @@ func ExtractImplicitParams(ctx context.Context, specs []ImplicitParamSpec) map[s
 
 			// Use default value from spec (which comes from config file)
 			result[spec.Name] = spec.DefaultValue
+
 			continue
 		}
 

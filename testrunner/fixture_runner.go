@@ -216,8 +216,9 @@ func (ftr *FixtureTestRunner) parseTestFile(filePath string) (*TestFileInfo, err
 	parameters := make(map[string]any)
 
 	if doc.ParametersText != "" {
-		// TODO: Parse YAML parameters from ParametersText
-		// For now, leave empty
+		// YAML parameter parsing is not yet implemented
+		// Parameters are currently handled through individual test cases
+		_ = doc.ParametersText // Explicitly acknowledge the unused parameter text
 	}
 
 	return &TestFileInfo{

@@ -59,6 +59,7 @@ func TestSystemColumnsIntegration(t *testing.T) {
 	}`
 
 	var format intermediate.IntermediateFormat
+
 	err := json.Unmarshal([]byte(intermediateJSON), &format)
 	require.NoError(t, err)
 
@@ -71,6 +72,7 @@ func TestSystemColumnsIntegration(t *testing.T) {
 
 	// Generate Go code
 	var output strings.Builder
+
 	err = generator.Generate(&output)
 	require.NoError(t, err)
 

@@ -199,12 +199,12 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 			}
 
 			// Execute parserstep6 with function definition
-			parseErr = Execute(stmt, paramNs, constNs)
+			parseErr6 := Execute(stmt, paramNs, constNs)
 
 			if tt.expectError {
-				assert.True(t, parseErr != nil, "Expected error but got none")
+				assert.True(t, len(parseErr6.Errors) > 0, "Expected error but got none")
 			} else {
-				assert.True(t, parseErr == nil, "Did not expect an error but got: %v", parseErr)
+				assert.True(t, len(parseErr6.Errors) == 0, "Did not expect an error but got: %v", parseErr6)
 
 				dummyLiteralFound := false
 

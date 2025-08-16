@@ -1,8 +1,10 @@
 package gogen
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -119,7 +121,7 @@ func (g *Generator) Generate(w io.Writer) error {
 
 	// Process response struct
 	responseStruct, err := processResponseStruct(g.Format)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoResponseFields) {
 		return fmt.Errorf("failed to process response struct: %w", err)
 	}
 
@@ -228,6 +230,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	for imp := range data.Imports {
 		importSlice = append(importSlice, imp)
 	}
+
 	data.ImportSlice = importSlice
 
 	// Execute template
@@ -500,6 +503,7 @@ func convertToGoType(snapType string) (string, error) {
 		if isValidGoTypeName(snapType) {
 			return snapType, nil
 		}
+
 		return "", newUnsupportedTypeError(snapType, "parameter")
 	}
 }
@@ -579,11 +583,14 @@ type responseFieldData struct {
 	IsPointer bool
 }
 
+// ErrNoResponseFields indicates that there are no response fields
+var ErrNoResponseFields = errors.New("no response fields")
+
 // processResponseStruct processes response fields and generates struct data
 func processResponseStruct(format *intermediate.IntermediateFormat) (*responseStructData, error) {
 	if len(format.Responses) == 0 {
 		// No response fields - this is normal for INSERT/UPDATE/DELETE statements
-		return nil, nil
+		return nil, ErrNoResponseFields
 	}
 
 	// Check for hierarchical structure
@@ -676,6 +683,7 @@ func (e *UnsupportedTypeError) Error() string {
 			msg += "\nFor more information, run with --help-types flag"
 		}
 	}
+
 	return msg
 }
 
@@ -743,13 +751,13 @@ func isValidGoIdentifier(name string) bool {
 
 	// First character must be a letter or underscore
 	first := rune(name[0])
-	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_') {
+	if (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') && first != '_' {
 		return false
 	}
 
 	// Remaining characters must be letters, digits, or underscores
 	for _, r := range name[1:] {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
 			return false
 		}
 	}
@@ -778,10 +786,12 @@ func convertTypeToGo(typeName string) (string, error) {
 	default:
 		if strings.HasSuffix(typeName, "[]") {
 			elementType := strings.TrimSuffix(typeName, "[]")
+
 			goElementType, err := convertTypeToGo(elementType)
 			if err != nil {
 				return "", err
 			}
+
 			return "[]" + goElementType, nil
 		}
 		// For custom types, we assume they are valid Go types
@@ -789,6 +799,7 @@ func convertTypeToGo(typeName string) (string, error) {
 		if isValidGoTypeName(typeName) {
 			return typeName, nil
 		}
+
 		return "", newUnsupportedTypeError(typeName, "type")
 	}
 }
@@ -838,13 +849,13 @@ func generateDefaultValueLiteral(defaultValue any, goType string) (string, error
 		// For other string values, quote them
 		return fmt.Sprintf("%q", v), nil
 	case int:
-		return fmt.Sprintf("%d", v), nil
+		return strconv.Itoa(v), nil
 	case int64:
-		return fmt.Sprintf("%d", v), nil
+		return strconv.FormatInt(v, 10), nil
 	case float64:
 		return fmt.Sprintf("%g", v), nil
 	case bool:
-		return fmt.Sprintf("%t", v), nil
+		return strconv.FormatBool(v), nil
 	case nil:
 		return "nil", nil
 	default:
