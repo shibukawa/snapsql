@@ -64,10 +64,14 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPath string, constantFiles []string) error {
 	// Generate files for all enabled generators
 	generatedLanguages := 0
-	var intermediateFiles []string
-	var err error
+
+	var (
+		intermediateFiles []string
+		err               error
+	)
 
 	// Generate all enabled generators
+
 	for lang, generator := range config.Generation.Generators {
 		if !generator.Enabled {
 			continue
