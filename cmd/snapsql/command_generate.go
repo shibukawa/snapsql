@@ -21,7 +21,7 @@ import (
 // GenerateCmd represents the generate command
 type GenerateCmd struct {
 	Input    string   `short:"i" help:"Input file or directory" type:"path"`
-	Lang     string   `help:"Output language/format" default:"json"`
+	Lang     string   `help:"Output language/format"`
 	Package  string   `help:"Package name (language-specific)"`
 	Const    []string `help:"Constant definition files"`
 	Validate bool     `help:"Validate templates before generation"`
@@ -45,7 +45,7 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 	constantFiles := append([]string{}, config.ConstantFiles...)
 	constantFiles = append(constantFiles, g.Const...)
 
-	if g.Lang != "json" {
+	if g.Lang != "" {
 		color.Blue("Generating %s files from %s", g.Lang, inputPath)
 	} else {
 		color.Blue("Generating files from %s", inputPath)
@@ -62,51 +62,53 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 
 // generateAllLanguages generates files for all configured languages
 func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPath string, constantFiles []string) error {
-	// Generate JSON intermediate files (always generated)
-	intermediateFiles, err := g.generateIntermediateFiles(ctx, config, inputPath, constantFiles)
-	if err != nil {
-		color.Red("Failed to generate JSON intermediate files: %v", err)
-		return err
-	}
-
-	if len(intermediateFiles) == 0 {
-		color.Yellow("No intermediate files generated")
-		return nil
-	}
-
-	// Generate files for all configured generators
+	// Generate files for all enabled generators
 	generatedLanguages := 0
+	var intermediateFiles []string
+	var err error
 
-	// JSON is always generated
-	generatedLanguages++
-
-	color.Blue("Generating files from %d intermediate files", len(intermediateFiles))
-
-	// If specific language is requested, generate only that language
-	if g.Lang != "" && g.Lang != "json" {
-		if generator, exists := config.Generation.Generators[g.Lang]; exists && generator.Enabled {
-			err := generateForLanguage(g.Lang, generator, intermediateFiles, ctx)
-			if err != nil {
-				return fmt.Errorf("failed to generate %s files: %w", g.Lang, err)
-			}
-
-			generatedLanguages++
-		} else {
-			return fmt.Errorf("%w: '%s'", ErrGeneratorNotConfigured, g.Lang)
+	// Generate all enabled generators
+	for lang, generator := range config.Generation.Generators {
+		if !generator.Enabled {
+			continue
 		}
-	} else if g.Lang == "" {
-		// Generate all other enabled generators
-		for lang, generator := range config.Generation.Generators {
-			if lang != "json" && generator.Enabled {
-				err := generateForLanguage(lang, generator, intermediateFiles, ctx)
+
+		// For non-JSON languages, we need intermediate files first
+		if lang != "json" {
+			if intermediateFiles == nil {
+				intermediateFiles, err = g.generateIntermediateFiles(ctx, config, inputPath, constantFiles)
 				if err != nil {
-					color.Red("Failed to generate %s files: %v", lang, err)
-					continue
+					color.Red("Failed to generate intermediate files: %v", err)
+					return err
 				}
 
-				generatedLanguages++
+				if len(intermediateFiles) == 0 {
+					color.Yellow("No intermediate files generated")
+					return nil
+				}
+			}
+
+			// Generate other language files
+			err = generateForLanguage(lang, generator, intermediateFiles, ctx)
+			if err != nil {
+				color.Red("Failed to generate %s files: %v", lang, err)
+				continue
+			}
+		} else {
+			// Generate JSON intermediate files
+			_, err = g.generateIntermediateFiles(ctx, config, inputPath, constantFiles)
+			if err != nil {
+				color.Red("Failed to generate JSON files: %v", err)
+				continue
 			}
 		}
+
+		generatedLanguages++
+	}
+
+	if generatedLanguages == 0 {
+		color.Yellow("No generators are enabled in configuration")
+		return nil
 	}
 
 	color.Green("Generation completed for %d language(s)", generatedLanguages)
@@ -418,9 +420,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 		generatedFiles = append(generatedFiles, outputFile)
 		processedCount++
 
-		if ctx.Verbose {
-			color.Green("Generated: %s", outputFile)
-		}
+		// Output message is handled in processTemplateFile
 	}
 
 	return generatedFiles, nil
@@ -486,7 +486,10 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string,
 		return "", fmt.Errorf("failed to write intermediate file: %w", err)
 	}
 
-	color.Green("Generated: %s", outputFile)
+	// Only show output message if verbose mode is enabled
+	if ctx.Verbose {
+		color.Green("Generated: %s", outputFile)
+	}
 
 	return outputFile, nil
 }
