@@ -28,12 +28,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// CreateUserWithSystemColumnsContext specific CEL programs and mock path
+// Input specific CEL programs and mock path
 var (
-	createuserwithsystemcolumnscontextPrograms []cel.Program
+	inputPrograms []cel.Program
 )
 
-const createuserwithsystemcolumnscontextMockPath = ""
+const inputMockPath = ""
 
 func init() {
 
@@ -48,12 +48,12 @@ func init() {
 		cel.Variable("email", cel.StringType),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create CreateUserWithSystemColumnsContext CEL environment 0: %v", err))
+		panic(fmt.Sprintf("failed to create Input CEL environment 0: %v", err))
 	}
 	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
-	createuserwithsystemcolumnscontextPrograms = make([]cel.Program, 2)
+	inputPrograms = make([]cel.Program, 2)
 	// expr_001: "name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("name")
@@ -64,7 +64,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for 'name': %v", err))
 		}
-		createuserwithsystemcolumnscontextPrograms[0] = program
+		inputPrograms[0] = program
 	}
 	// expr_002: "email" using environment 0
 	{
@@ -76,19 +76,19 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for 'email': %v", err))
 		}
-		createuserwithsystemcolumnscontextPrograms[1] = program
+		inputPrograms[1] = program
 	}
 }
-// CreateUserWithSystemColumnsContext Create a new user with automatic system column handling via context.
-func CreateUserWithSystemColumnsContext(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+// Input Create a new user with automatic system column handling via context.
+func Input(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "createuserwithsystemcolumnscontext", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "input", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(createuserwithsystemcolumnscontextMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(inputMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}

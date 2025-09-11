@@ -4,19 +4,20 @@
 
 SnapSQL supports literate programming through Markdown-based query definition files (`.snap.md`). This format integrates SQL templates with comprehensive documentation, test cases, and metadata into a single, readable document.
 
-## Section Structure
+## Section Structure (Implementation-aligned)
 
 | Section/Item | Required | Supported Formats | Alternative | Count |
 |-------------|----------|-------------------|-------------|-------|
 | Front Matter | × | YAML | Function Name + Description Section | 0-1 |
-| Function Name | ○ | H1 Title (auto snake_case) | Front Matter `function_name` | 1 |
-| Description | ○ | Text, Markdown | Overview | 1 |
-| Parameters | × | YAML, JSON, List | - | 0-1 |
-| SQL | ○ | SQL (SnapSQL format) | - | 1 |
-| Test Cases | × | YAML, JSON, List | - | 0-n |
-| - Fixtures | × | YAML, JSON, CSV, DBUnit XML, List | - | 0-1 per test |
-| - Parameters | ○ | YAML, JSON, List | - | 1 per test |
-| - Expected Results | ○ | YAML, JSON, CSV, DBUnit XML, List | - | 1 per test |
+| Function Name | Auto | Auto (explicit allowed) | `function_name` (explicit) / file name fallback | 1 |
+| Description | Required | Text/Markdown (H2) | Overview | 1 |
+| Parameters | Optional | Fenced code: YAML/JSON (lists allowed for docs) | - | 0-1 |
+| SQL | Required | Fenced code: language `sql` | - | 1 |
+| Test Cases | Optional | H3+ heading + emphasis marker sub-sections | - | 0-n |
+| - Fixtures | Optional | YAML/JSON (multi-table), CSV (single-table), DBUnit XML | - | 0-many per test |
+| - Parameters | Required | YAML/JSON (fenced) | - | 1 per test |
+| - Expected Results | Required | YAML/JSON (array) | - | 1 per test |
+| - Verify Query | Optional | Fenced code: language `sql` | - | 0-1 per test |
 
 ## Section Details
 
@@ -28,21 +29,24 @@ YAML format metadata. Can be replaced by Function Name and Description sections.
 ---
 function_name: "get_user_data"  # Explicit function name (optional)
 description: "Get user data"    # Description (optional)
-version: "1.0.0"               # Additional metadata
+dialect: postgres                # Dialect hint (optional)
 ---
 ```
 
-### Function Name (Required)
+### Function Name (Automatic)
 
-Automatically generates snake_case function name from H1 title.
+Resolved by priority (auto-generated if omitted):
 
-```markdown
-# Get User Data Query
-```
-↓ Auto-converts to
-```
-function_name: "get_user_data_query"
-```
+1. `function_name` in front matter
+2. File name without extension (e.g., `get_users.snap.md` → `get_users`)
+
+Note: H1 is used as the document title and not for name generation.
+
+#### Normalization / conversion rules
+- Extension handling: if the file ends with `.snap.md`, strip that pair; otherwise strip the last extension only (e.g., `.md`).
+- Character conversion: do not change letter case, spaces, or symbols; the file name is used as-is.
+- Recommendation: using `snake_case` is encouraged but not enforced.
+- Collisions: behavior is undefined; avoid duplicate function names in the same package.
 
 ### Description (Required)
 
@@ -57,7 +61,9 @@ Email retrieval can be controlled via an option.
 
 ### Parameters (Optional)
 
-Input parameter definitions. Supports multiple formats.
+Define input parameters. Parsing switches by fenced language. The parser also stores raw text (`ParametersText`/`ParametersType`).
+
+Fully optional: if omitted, the query has no parameters (empty fenced blocks are discouraged).
 
 **YAML format (recommended):**
 ```yaml
@@ -83,17 +89,11 @@ pagination:
 }
 ```
 
-**List format:**
-```markdown
-- user_id (int): User ID
-- include_email (bool): Whether to include email
-- filters.active (bool): Active users only
-- filters.departments ([string]): Department filter
-```
+Lists may be used for human-readable docs only; they are not treated as typed definitions.
 
 ### SQL (Required)
 
-SQL template in SnapSQL format.
+SQL template in SnapSQL format. Must be a fenced block with language `sql` (the parser records the starting line number).
 
 ```sql
 SELECT 
@@ -111,14 +111,28 @@ WHERE u.id = /*= user_id */1
 
 ### Test Cases (Optional)
 
-Test case definitions. Each test case can include:
-- Fixtures: Database state before test execution
-- Parameters: Test input values
-- Expected Results: Expected output
+Use H3 (`###`) or deeper as the test case name. Then place an emphasized label in the following paragraph to switch sub-sections.
 
-#### Fixtures Format Examples
+Labels (case-insensitive, colon accepted):
+- Parameters: `Parameters:` / `Params:` / `Input Parameters:`
+- Expected Results: `Expected:` / `Expected Results:` / `Expected Result:` / `Results:`
+- Verify Query: `Verify Query:` / `Verification Query:` (optional)
+- Fixtures: `Fixtures:` (for CSV, prefer `Fixtures: <table>[strategy]`)
 
-**YAML format:**
+#### Strict rules
+- Each test case must contain exactly one `Parameters` and one `Expected` section (duplicates are errors).
+- `Fixtures` is optional and may appear multiple times (YAML/JSON/CSV/XML can be mixed).
+- `Verify Query` is optional and may appear at most once.
+- Labels must be written as emphasis (italic/bold) in a paragraph (not as headings).
+- The label must precede the fenced code block of that sub-section.
+- Typical errors include:
+  - Duplicate `Parameters` or `Expected` sections
+  - Missing required sections (`Description`, `SQL`)
+  - Fenced language mismatch (e.g., SQL code block not tagged as `sql`)
+
+#### Fixtures Examples
+
+**YAML/JSON (multi-table):**
 ```yaml
 users:
   - {id: 1, name: "John Doe", email: "john@example.com", department_id: 1}
@@ -128,18 +142,23 @@ departments:
   - {id: 2, name: "Design"}
 ```
 
-**CSV format:**
-```csv
-# users
-id,name,email,department_id
-1,"John Doe","john@example.com",1
-2,"Jane Smith","jane@example.com",2
+**CSV (single-table with strategy):**
 
-# departments
-id,name
-1,"Engineering"
-2,"Design"
+Emphasis label example:
+
 ```
+**Fixtures: users[insert]**
+```
+
+Then the fenced code:
+
+```csv
+id,name,email,department_id
+1,John Doe,john@example.com,1
+2,Jane Smith,jane@example.com,2
+```
+
+Strategies: `clear-insert` (default) / `insert` / `upsert` / `delete`.
 
 **DBUnit XML format:**
 ```xml
@@ -151,33 +170,44 @@ id,name
 </dataset>
 ```
 
-#### Parameters Format Examples
+## Fixture Strategies and Formats
 
-**YAML format (recommended):**
+Supported insert strategies (`[strategy]`):
+- `clear-insert` (default): truncate then insert
+- `insert`: insert only (keep existing rows)
+- `upsert`: insert or update on conflict
+- `delete`: delete rows matching the provided keys
+
+Format-specific handling:
+- YAML/JSON (multi-table):
+  - Use a map keyed by table name; each value is an array of rows.
+  - If the label is written as `Fixtures: <table>[strategy]`, apply the strategy to that table.
+  - If no strategy is specified, `clear-insert` is applied.
+- CSV (single-table):
+  - The label must specify `Fixtures: <table>[strategy]`.
+  - The fenced CSV contains a header row followed by data rows.
+- DBUnit XML:
+  - Children under `<dataset>` are treated as table rows with attributes as columns.
+
+Notes:
+- When multiple `Fixtures` sections are combined, rows for the same table are concatenated in order of appearance.
+- Strategy is interpreted per table; when strategies differ, the one specified with the section label takes precedence for that section.
+
+#### Parameters Examples (inside test cases)
+
+**YAML/JSON (recommended):**
 ```yaml
 user_id: 1
 include_email: true
 ```
 
-**JSON format:**
-```json
-{
-  "user_id": 1,
-  "include_email": true
-}
-```
+Lists are not supported here.
 
-**List format:**
-```markdown
-- user_id: 1
-- include_email: true
-```
+#### Expected Results Examples
 
-#### Expected Results Format Examples
+Supports YAML/JSON arrays.
 
-Supports the same formats as Fixtures.
-
-**YAML format:**
+**YAML:**
 ```yaml
 - id: 1
   name: "John Doe"
@@ -186,18 +216,15 @@ Supports the same formats as Fixtures.
   departments__name: "Engineering"
 ```
 
-**CSV format:**
-```csv
-id,name,email,departments__id,departments__name
-1,"John Doe","john@example.com",1,"Engineering"
-```
+CSV/DBUnit XML are not supported for expected results.
 
 ## Complete Example
 
 ````markdown
 ---
-version: "1.0.0"
-author: "Development Team"
+function_name: "get_user_data"
+description: "Get user data"
+dialect: postgres
 ---
 
 # Get User Data Query

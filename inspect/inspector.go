@@ -398,6 +398,14 @@ func joinToString(j cmn.JoinType) string {
 		return "full"
 	case cmn.JoinCross:
 		return "cross"
+	case cmn.JoinNatural:
+		return "natural"
+	case cmn.JoinNaturalLeft:
+		return "natural_left"
+	case cmn.JoinNaturalRight:
+		return "natural_right"
+	case cmn.JoinNaturalFull:
+		return "natural_full"
 	default:
 		return "unknown"
 	}

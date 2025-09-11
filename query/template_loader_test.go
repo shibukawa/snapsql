@@ -525,7 +525,7 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 	assert.True(t, format != nil)
 
 	// Check function name and description
-	assert.Equal(t, "get_user_information_by_id", format.FunctionName)
+	assert.Equal(t, "test", format.FunctionName)
 	assert.Equal(t, "Get user information by ID", format.Description)
 
 	// Check parameters

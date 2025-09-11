@@ -27,7 +27,7 @@
   ],
   "description": "Create a new user with automatic system column handling via context.",
   "format_version": "1",
-  "function_name": "create_user_with_system_columns_context",
+  "function_name": "input",
   "implicit_parameters": [
     {
       "name": "created_at",

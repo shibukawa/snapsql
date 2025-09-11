@@ -83,6 +83,24 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 		Description:  getStringFromMap(doc.Metadata, "description", ""),
 	}
 
+	// If function name is still empty, derive from file name (without extension).
+	if def.FunctionName == "" && basePath != "" {
+		base := filepath.Base(basePath)
+
+		var name string
+		// Prefer stripping .snap.md if present
+		if strings.HasSuffix(strings.ToLower(base), ".snap.md") {
+			name = base[:len(base)-len(".snap.md")]
+		} else {
+			// Fallback: strip one extension
+			name = strings.TrimSuffix(base, filepath.Ext(base))
+		}
+
+		if name != "" {
+			def.FunctionName = name
+		}
+	}
+
 	// Copy generators if present
 	if generators, ok := doc.Metadata["generators"]; ok {
 		def.Generators = make(map[string]map[string]any)
@@ -836,4 +854,10 @@ func getStringFromMap(m map[string]any, key string, defaultValue string) string 
 	}
 
 	return defaultValue
+}
+
+// IsNoFunctionDefinition reports whether the error indicates that no function
+// definition was found in the SQL comment.
+func IsNoFunctionDefinition(err error) bool {
+	return errors.Is(err, snapsql.ErrNoFunctionDefinition)
 }

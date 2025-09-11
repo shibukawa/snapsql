@@ -38,11 +38,4 @@ func parseFrontMatter(content string) (map[string]any, string, error) {
 }
 
 // generateFunctionNameFromTitle generates a snake_case function name from title
-func generateFunctionNameFromTitle(title string) string {
-	words := strings.Fields(strings.ToLower(title))
-	if len(words) == 0 {
-		return "query"
-	}
-
-	return strings.Join(words, "_")
-}
+// Note: function name is resolved from front matter or file name, not from title.
