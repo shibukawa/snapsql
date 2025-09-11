@@ -1,0 +1,4 @@
+name,alias,schema,source,joinType
+users,u,,main,none
+orders,o,,join,natural_left
+

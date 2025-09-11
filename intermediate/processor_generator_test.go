@@ -92,7 +92,7 @@ SELECT id, TRUE as is_active FROM users`,
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL
 			reader := strings.NewReader(tt.sql)
-			stmt, funcDef, err := parser.ParseSQLFile(reader, nil, "", "")
+			stmt, funcDef, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
 			assert.NoError(t, err)
 
 			// Generate intermediate format (create new reader since the previous one was consumed)
@@ -210,7 +210,7 @@ func TestDetectDialectPatterns(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL to get tokens
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "")
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
 			assert.NoError(t, err)
 
 			// Extract tokens
