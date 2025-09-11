@@ -2,7 +2,7 @@
 
 ## 概要
 
-SnapSQLのパーサーを保守性・拡張性・テスト容易性を重視して再設計しました。パース処理を7つのステップに分割し、各ステップを独立した関数スタイルで実装しています。パーサーの組み立てには`parsercombinator`パッケージを利用しています。
+SnapSQLのパーサーは保守性・拡張性・テスト容易性を重視した新構成で実装済みです。パース処理を段階（ステップ）に分割し、各ステップを独立した関数スタイルで実装しています。実装では `parsercombinator` パッケージを利用しています。
 
 ## パース処理フロー
 
@@ -46,19 +46,21 @@ SnapSQLのパーサーを保守性・拡張性・テスト容易性を重視し�
 - 実行時に必要な情報の付加
 - デバッグ情報の付加
 
-## ディレクトリ構成
+## ディレクトリ構成（現行実装）
 
 ```
-parser2/
+parser/
   ├── parsercommon/   # 共通型・関数・ユーティリティ
   ├── parserstep1/    # 基本構文チェック
   ├── parserstep2/    # SQL文法チェック
-  ├── parserstep3/    # SnapSQLディレクティブ解析
-  ├── parserstep4/    # AST構築
-  ├── parserstep5/    # AST最適化
-  ├── parserstep6/    # 中間形式生成
-  ├── parser.go       # 外部公開API
-  └── errors.go       # エラー定義
+  ├── parserstep3/    # 句レベル検証/割当
+  ├── parserstep4/    # 句内容の検証
+  ├── parserstep5/    # ディレクティブ構造検証（InspectMode時は緩和）
+  ├── parserstep6/    # 変数/CEL検証・リテラル展開（InspectMode時は緩和）
+  ├── parserstep7/    # サブクエリ依存解析（常時有効／失敗しても全体は継続）
+  ├── parse.go        # 外部公開API（エントリポイント群）
+  ├── options.go      # パーサーオプション（InspectModeのみ）
+  └── ...
 ```
 
 ## エラーハンドリング
@@ -97,37 +99,53 @@ parser2/
 - 既存テストケースの再利用
 - バグ修正の検証
 
-## 外部インターフェース
+## 外部インターフェース（現行実装）
+
+公開APIは以下です（`parser/parse.go`）。`ParseStepN` という公開関数は存在しません。段階ごとの検証は `parserstepN` パッケージの `Execute*` をテストから直接利用します。
 
 ```go
-// メインのパース関数
-func Parse(tokens []tokenizer.Token) (any, error)
+// 代表的なオプション（将来追加予定なし）
+type Options struct {
+    InspectMode bool
+}
 
-// 段階的なパース関数（デバッグ用）
-func ParseStep1(tokens []tokenizer.Token) (*Step1Result, error)
-func ParseStep2(result *Step1Result) (*Step2Result, error)
-func ParseStep3(result *Step2Result) (*Step3Result, error)
-func ParseStep4(result *Step3Result) (*Step4Result, error)
-func ParseStep5(result *Step4Result) (*Step5Result, error)
-func ParseStep6(result *Step5Result) (*intermediate.Instructions, error)
+// トークン列からパース（関数定義と定数を伴う）
+func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constants map[string]any, opts Options) (StatementNode, error)
+
+// SQLファイルをパース（関数定義はコメントから抽出）
+func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, opts Options) (StatementNode, *FunctionDefinition, error)
+
+// Markdownドキュメント（SnapSQL）をパース
+func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, opts Options) (StatementNode, *FunctionDefinition, error)
+```
+
+段階的な実行（テスト/デバッグ用途）は以下の内部APIを直接利用します。
+
+```go
+// parserstep1
+func Execute(tokens []tokenizer.Token) ([]tokenizer.Token, error)
+
+// parserstep2
+func Execute(tokens []tokenizer.Token) (parser.StatementNode, error)
+
+// parserstep3, step4
+func Execute(stmt parser.StatementNode) error
+
+// parserstep5（InspectMode対応）
+func ExecuteWithOptions(stmt parser.StatementNode, functionDef *parser.FunctionDefinition, inspectMode bool) error
+
+// parserstep6（InspectMode対応）
+func ExecuteWithOptions(stmt parser.StatementNode, paramNs, constNs *parser.Namespace, inspectMode bool) error
+
+// parserstep7（依存解析。失敗しても全体は継続）
+func (p *SubqueryParserIntegrated) ParseStatement(stmt parser.StatementNode, functionDef *parser.FunctionDefinition) error
 ```
 
 ## 型システムと依存関係
 
-### パッケージ構造
+### パッケージ構造（再掲）
 
-```
-parser/
-  ├── parsercommon/   # パーサー内部の共通型・関数・ユーティリティ
-  ├── parserstep1/    # 基本構文チェック
-  ├── parserstep2/    # SQL文法チェック
-  ├── parserstep3/    # SnapSQLディレクティブ解析
-  ├── parserstep4/    # AST構築
-  ├── parserstep5/    # AST最適化
-  ├── parserstep6/    # 中間形式生成
-  ├── parser.go       # 外部公開API
-  └── errors.go       # 公開エラー定義
-```
+上記「ディレクトリ構成（現行実装）」を参照。
 
 ### 型定義の階層構造
 
@@ -175,17 +193,13 @@ parser/
    ```go
    package parser
 
-   // 外部公開用の型エイリアス（必要最小限）
-   type ParseResult = parsercommon.ParseResult
-   type ResultMetadata = parsercommon.ResultMetadata
-
-   // 外部公開用の新しい型
+   // 外部公開用の新しい型（将来追加予定なし）
    type Options struct {
-       // パース設定オプション
+       InspectMode bool
    }
    ```
 
-### 依存関係の制御
+### 依存関係の制御（要点）
 
 1. **パッケージ間の参照ルール**
    - `parsercommon`: パーサー内部の共通機能を提供（外部からは非公開）
@@ -213,21 +227,9 @@ parser/
    )
    ```
 
-3. **エラー型の管理**
-   ```go
-   // parsercommon/errors.go - 内部エラー
-   var (
-       errInvalidSyntax = errors.New("invalid syntax")
-       errInternalError = errors.New("internal parser error")
-   )
-
-   // parser/errors.go - 公開エラー
-   var (
-       // 公開用のエラー型（内部エラーをラップ）
-       ErrSyntax = fmt.Errorf("syntax error: %w", parsercommon.errInvalidSyntax)
-       ErrParse = errors.New("parse error")
-   )
-   ```
+3. **エラー情報の扱い**
+   - 位置情報は `tokenizer.Position` を通じて行/列/オフセットを保持し、各ステップのエラーメッセージへ埋め込む（例: `... at %s`, `token.Position.String()`)。
+   - 複数エラーは `parsercommon.ParseError` に集約し、`parser.AsParseError(err)` で取り出し可能。
 
 ### パッケージ構造の利点
 
@@ -251,7 +253,7 @@ parser/
    - モックやスタブの作成が簡単
    - 外部インターフェースの安定性確保
 
-## パフォーマンス最適化
+## パフォーマンス最適化（現状）
 
 1. **メモリ効率**
    - トークンの再利用
@@ -264,6 +266,4 @@ parser/
    - キャッシュの活用
 
 3. **並列処理**
-   - 独立したファイルの並列パース
-   - ステップ内の並列処理
-   - リソース使用の最適化
+   - 現時点では未採用（必要性が出た時点で計測のうえ検討）

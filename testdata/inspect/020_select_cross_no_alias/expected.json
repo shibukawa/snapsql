@@ -1,0 +1,8 @@
+{
+  "statement": "select",
+  "tables": [
+    { "name": "users", "source": "main", "join_type": "none" },
+    { "name": "regions", "source": "join", "join_type": "cross" }
+  ]
+}
+

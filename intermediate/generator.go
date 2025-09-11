@@ -203,7 +203,7 @@ func (g *MockDataGenerator) writeMockDataFile(sourceFile string, testCases []Tes
 // GenerateFromSQL generates the intermediate format for a SQL template
 func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
 	// Parse the SQL
-	stmt, funcDef, err := parser.ParseSQLFile(reader, constants, basePath, projectRootPath)
+	stmt, funcDef, err := parser.ParseSQLFile(reader, constants, basePath, projectRootPath, parser.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string
 // GenerateFromMarkdown generates the intermediate format for a Markdown file containing SQL
 func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
 	// Parse the Markdown
-	stmt, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants)
+	stmt, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants, parser.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}

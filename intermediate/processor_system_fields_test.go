@@ -63,7 +63,7 @@ parameters:
 UPDATE users SET name = 'Updated Name', email = 'updated@example.com' WHERE id = 1`
 	reader := strings.NewReader(sql)
 
-	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "")
+	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
 	require.NoError(t, err, "Failed to parse SQL")
 
 	// Cast to UpdateStatement
@@ -141,7 +141,7 @@ parameters:
 INSERT INTO users (name, email) VALUES ('John', 'john@example.com')`
 	reader := strings.NewReader(sql)
 
-	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "")
+	stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
 	require.NoError(t, err, "Failed to parse SQL")
 
 	parameters := []Parameter{

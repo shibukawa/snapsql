@@ -13,7 +13,7 @@ type TableRef struct {
 	Alias    string `json:"alias,omitempty"`
 	Schema   string `json:"schema,omitempty"`
 	Source   string `json:"source"`    // main|join|cte|subquery
-	JoinType string `json:"join_type"` // none|inner|left|right|full|cross|natural|unknown
+	JoinType string `json:"join_type"` // none|inner|left|right|full|cross|natural|natural_left|natural_right|natural_full|unknown
 }
 
 // InspectResult is the JSON-serializable output model.
