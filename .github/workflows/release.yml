@@ -90,8 +90,9 @@ jobs:
       run: |
         mkdir -p dist
         BINARY_NAME="snapsql-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+        # Build the actual CLI entrypoint; building '.' would produce a non-executable archive for non-main packages
         go build -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-          -o "dist/${BINARY_NAME}" .
+          -o "dist/${BINARY_NAME}" ./cmd/snapsql
         
         # Create compressed archive
         cd dist
@@ -134,7 +135,7 @@ jobs:
     - name: List downloaded artifacts
       run: |
         echo "Downloaded artifacts:"
-        find artifacts -type f -name "*.zip" -o -name "*.tar.gz" | sort
+        find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) | sort
         
     - name: Generate release notes
       id: release_notes
@@ -174,7 +175,9 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        files: artifacts/*
+        files: |
+          artifacts/**/*.zip
+          artifacts/**/*.tar.gz
         body_path: release_notes.md
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}
