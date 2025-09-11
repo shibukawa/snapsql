@@ -1,7 +1,7 @@
 {
   "statement": "insert",
   "tables": [
-    { "name": "snapshots", "source": "main", "joinType": "none" },
-    { "name": "latest", "alias": "l", "source": "cte", "joinType": "none" }
+    { "name": "snapshots", "source": "main", "join_type": "none" },
+    { "name": "latest", "alias": "l", "source": "cte", "join_type": "none" }
   ]
 }

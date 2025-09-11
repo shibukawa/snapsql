@@ -5,6 +5,7 @@ import (
 
 	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // Sentinel errors
@@ -112,29 +113,153 @@ func (ai *ASTIntegrator) buildNodeFieldSources(node *cmn.SQDependencyNode) error
 		return nil // Skip nodes without statements (e.g., CTE placeholders)
 	}
 
-	selectStmt, ok := node.Statement.(*cmn.SelectStatement)
-	if !ok {
-		return nil // Only SELECT statements produce fields
+	// Populate table references for this node from the AST
+	node.TableRefs = extractTableRefsFromStatement(node.Statement)
+
+	// Field source分析は将来対応（現状は未実装）
+	return nil
+}
+
+// extractTableRefsFromStatement collects tables referenced by the statement.
+// It covers SELECT (FROM), INSERT (INTO + FROM), UPDATE (target), DELETE (target).
+func extractTableRefsFromStatement(stmt cmn.StatementNode) []*cmn.SQTableReference {
+	var refs []*cmn.SQTableReference
+
+	switch s := stmt.(type) {
+	case *cmn.SelectStatement:
+		refs = append(refs, extractFromClauseTablesWithCTE(s.CTE(), s.From)...)
+	case *cmn.InsertIntoStatement:
+		if s.Into != nil {
+			tr := &cmn.SQTableReference{
+				Name:     nameOrAlias(s.Into.Table),
+				RealName: realName(s.Into.Table),
+				Schema:   s.Into.Table.SchemaName,
+				Join:     cmn.JoinNone,
+				Source:   cmn.SQTableSourceMain,
+			}
+			refs = append(refs, tr)
+		}
+
+		refs = append(refs, extractFromClauseTablesWithCTE(s.CTE(), s.From)...)
+	case *cmn.UpdateStatement:
+		if s.Update != nil {
+			tr := &cmn.SQTableReference{
+				Name:     nameOrAlias(s.Update.Table),
+				RealName: realName(s.Update.Table),
+				Schema:   s.Update.Table.SchemaName,
+				Join:     cmn.JoinNone,
+				Source:   cmn.SQTableSourceMain,
+			}
+			refs = append(refs, tr)
+		}
+	case *cmn.DeleteFromStatement:
+		if s.From != nil {
+			tr := &cmn.SQTableReference{
+				Name:     nameOrAlias(s.From.Table),
+				RealName: realName(s.From.Table),
+				Schema:   s.From.Table.SchemaName,
+				Join:     cmn.JoinNone,
+				Source:   cmn.SQTableSourceMain,
+			}
+			refs = append(refs, tr)
+		}
 	}
 
-	if selectStmt.Select == nil {
+	return refs
+}
+
+func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) []*cmn.SQTableReference {
+	if from == nil {
 		return nil
 	}
+	// Build CTE set
+	ctes := map[string]struct{}{}
 
-	var fieldSources []*FieldSource
+	if with != nil {
+		for _, d := range with.CTEs {
+			if d.Name != "" {
+				ctes[d.Name] = struct{}{}
+			}
+		}
+	}
 
-	// Create basic field sources without detailed analysis
-	// Note: Full implementation would analyze actual field expressions
-	fieldSources = append(fieldSources, &FieldSource{
-		Name:       "placeholder_field",
-		SourceType: SourceTypeTable,
-	})
+	out := make([]*cmn.SQTableReference, 0, len(from.Tables))
+	for i, t := range from.Tables {
+		// Heuristic: some earlier steps don't flag IsSubquery; detect via Expression tokens
+		isSub := t.IsSubquery || looksLikeSubquery(t)
 
-	// Store field sources in the node (requires extending DependencyNode structure)
-	// Note: Future version will add FieldSources field to DependencyNode
-	_ = fieldSources
+		tr := &cmn.SQTableReference{
+			Name:       t.Name,
+			RealName:   realName(t.TableReference),
+			Schema:     t.SchemaName,
+			IsSubquery: isSub,
+			Join:       t.JoinType,
+			Source:     cmn.SQTableSourceJoin,
+		}
+		if i == 0 {
+			tr.Join = cmn.JoinNone
+			tr.Source = cmn.SQTableSourceMain
+		}
 
-	return nil
+		if _, ok := ctes[tr.RealName]; ok {
+			tr.Source = cmn.SQTableSourceCTE
+		} else if tr.IsSubquery {
+			tr.Source = cmn.SQTableSourceSubquery
+		}
+
+		out = append(out, tr)
+	}
+
+	return out
+}
+
+func looksLikeSubquery(t cmn.TableReferenceForFrom) bool {
+	// Quick heuristic: if no base table name, likely a derived table
+	if t.TableName == "" {
+		return true
+	}
+	// If we have expression tokens starting with '(' and containing SELECT, treat as subquery
+	if len(t.Expression) == 0 {
+		return false
+	}
+
+	hasParen := false
+	hasSelect := false
+
+	for _, tok := range t.Expression {
+		switch tok.Type {
+		case tokenizer.OPENED_PARENS:
+			hasParen = true
+		case tokenizer.SELECT:
+			hasSelect = true
+		}
+
+		if hasParen && hasSelect {
+			return true
+		}
+	}
+
+	return false
+}
+
+func nameOrAlias(t cmn.TableReference) string { // alias if exists else name
+	if t.TableName != "" && t.Name != "" && t.TableName != t.Name {
+		return t.Name
+	}
+
+	if t.Name != "" {
+		return t.Name
+	}
+
+	return t.TableName
+}
+
+func realName(t cmn.TableReference) string {
+	if t.TableName != "" {
+		return t.TableName
+	}
+
+	return t.Name
 }
 
 // GetDependencyGraph returns the built dependency graph

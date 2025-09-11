@@ -1,8 +1,7 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "alias": "u", "source": "main", "joinType": "none" },
-    { "name": "recent", "alias": "r", "source": "cte", "joinType": "left" }
+    { "name": "users", "alias": "u", "source": "main", "join_type": "none" },
+    { "name": "recent", "alias": "r", "source": "cte", "join_type": "left" }
   ]
 }
-

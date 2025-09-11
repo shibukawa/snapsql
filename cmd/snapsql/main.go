@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/inspect"
 	"github.com/shibukawa/snapsql/testrunner"
 	"github.com/shibukawa/snapsql/testrunner/fixtureexecutor"
 )
@@ -227,7 +229,69 @@ var CLI struct {
 	Test      TestCmd      `cmd:"" help:"Run tests"`
 	Format    FormatCmd    `cmd:"" help:"Format SnapSQL template files"`
 	HelpTypes HelpTypesCmd `cmd:"help-types" help:"Show detailed information about supported types"`
+	Inspect   InspectCmd   `cmd:"" help:"Inspect an SQL and print JSON summary"`
 	Version   VersionCmd   `cmd:"" help:"Show version information"`
+}
+
+// InspectCmd represents the inspect command
+type InspectCmd struct {
+	Stdin  bool   `help:"Read SQL from stdin"`
+	Pretty bool   `help:"Pretty-print JSON output"`
+	Strict bool   `help:"Strict mode: fail on partial/unsupported constructs"`
+	Format string `help:"Output format: json|csv" default:"json"`
+	Path   string `arg:"" optional:"" help:"Path to SQL file (omit or '-' to use --stdin)"`
+}
+
+var ErrUnsupportedFormat = errors.New("unsupported format")
+
+// Run executes the inspect command
+func (cmd *InspectCmd) Run(ctx *Context) error {
+	var r *os.File
+	if cmd.Stdin || cmd.Path == "-" || cmd.Path == "" {
+		r = os.Stdin
+	} else {
+		f, err := os.Open(cmd.Path)
+		if err != nil {
+			return fmt.Errorf("failed to open SQL file: %w", err)
+		}
+		defer f.Close()
+
+		r = f
+	}
+
+	// Execute inspect
+	res, err := inspect.Inspect(r, inspect.InspectOptions{InspectMode: true, Strict: cmd.Strict, Pretty: cmd.Pretty})
+	if err != nil {
+		return err
+	}
+
+	switch cmd.Format {
+	case "json", "":
+		var b []byte
+		if cmd.Pretty {
+			b, err = json.MarshalIndent(res, "", "  ")
+		} else {
+			b, err = json.Marshal(res)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to marshal result: %w", err)
+		}
+
+		os.Stdout.Write(b)
+		os.Stdout.WriteString("\n")
+	case "csv":
+		b, err := inspect.TablesCSV(res, true)
+		if err != nil {
+			return err
+		}
+
+		os.Stdout.Write(b)
+	default:
+		return fmt.Errorf("%w: %s", ErrUnsupportedFormat, cmd.Format)
+	}
+
+	return nil
 }
 
 // HelpTypesCmd represents the help-types command

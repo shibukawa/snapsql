@@ -227,6 +227,9 @@ type SQTableReference struct {
 	IsSubquery bool             // Whether this is a subquery
 	SubqueryID string           // Subquery ID (if subquery)
 	Fields     []*SQFieldSource // Available fields
+	// Added classifications for inspect/analysis consumers
+	Join   JoinType          // Join type relative to preceding table (main is JoinNone)
+	Source SQTableSourceKind // Source classification: main|join|cte|subquery
 }
 
 // GetField returns a field by name
@@ -238,6 +241,31 @@ func (tr *SQTableReference) GetField(fieldName string) *SQFieldSource {
 	}
 
 	return nil
+}
+
+// SQTableSourceKind represents origin of a table reference
+type SQTableSourceKind int
+
+const (
+	SQTableSourceMain SQTableSourceKind = iota
+	SQTableSourceJoin
+	SQTableSourceCTE
+	SQTableSourceSubquery
+)
+
+func (sk SQTableSourceKind) String() string {
+	switch sk {
+	case SQTableSourceMain:
+		return "main"
+	case SQTableSourceJoin:
+		return "join"
+	case SQTableSourceCTE:
+		return "cte"
+	case SQTableSourceSubquery:
+		return "subquery"
+	default:
+		return "unknown"
+	}
 }
 
 // SQScope represents a variable scope in SQL execution
