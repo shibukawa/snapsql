@@ -1,0 +1,7 @@
+{
+  "statement": "update",
+  "tables": [
+    { "name": "orders", "source": "main", "joinType": "none" }
+  ]
+}
+

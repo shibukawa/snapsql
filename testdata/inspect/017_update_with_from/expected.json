@@ -1,0 +1,6 @@
+{
+  "statement": "update",
+  "tables": [
+    { "name": "users", "source": "main", "joinType": "none" }
+  ]
+}

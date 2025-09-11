@@ -1,0 +1,3 @@
+name,alias,schema,source,joinType
+users,s,,subquery,none
+orders,o,,join,inner

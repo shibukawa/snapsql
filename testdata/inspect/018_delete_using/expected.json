@@ -1,0 +1,6 @@
+{
+  "statement": "delete",
+  "tables": [
+    { "name": "users", "source": "main", "joinType": "none" }
+  ]
+}

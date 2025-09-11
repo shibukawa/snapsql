@@ -1,0 +1,4 @@
+name,alias,schema,source,joinType
+users,u,public,main,none
+orders,o,sales,join,inner
+

@@ -1,0 +1,7 @@
+{
+  "statement": "select",
+  "tables": [
+    { "name": "users", "alias": "s", "source": "subquery", "joinType": "none" },
+    { "name": "orders", "alias": "o", "source": "join", "joinType": "inner" }
+  ]
+}

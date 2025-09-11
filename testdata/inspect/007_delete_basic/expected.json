@@ -1,0 +1,7 @@
+{
+  "statement": "delete",
+  "tables": [
+    { "name": "sessions", "source": "main", "joinType": "none" }
+  ]
+}
+

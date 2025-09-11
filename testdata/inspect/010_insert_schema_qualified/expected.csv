@@ -1,0 +1,3 @@
+name,alias,schema,source,joinType
+audit_logs,,sales,main,none
+
