@@ -185,6 +185,12 @@ var (
 //   - StatementNode: The parsed statement AST with subquery analysis results
 //   - error: Any parsing errors encountered
 func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constants map[string]any) (StatementNode, error) {
+	return RawParseWithOptions(tokens, functionDef, constants, DefaultOptions)
+}
+
+// RawParseWithOptions is the main entry point with options for parsing SQL templates
+// from pre-tokenized tokens.
+func RawParseWithOptions(tokens []tokenizer.Token, functionDef *FunctionDefinition, constants map[string]any, opts Options) (StatementNode, error) {
 	// Step 1: Run parserstep1 - Basic syntax validation and dummy literal insertion
 	processedTokens, err := parserstep1.Execute(tokens)
 	if err != nil {
@@ -210,7 +216,8 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	}
 
 	// Step 5: Run parserstep5 - Directive structure validation
-	err = parserstep5.Execute(stmt, functionDef)
+	// Use relaxed behavior in InspectMode
+	err = parserstep5.ExecuteWithOptions(stmt, functionDef, opts.InspectMode)
 	if err != nil {
 		return nil, fmt.Errorf("parserstep5 failed: %w", err)
 	}
@@ -238,7 +245,7 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 	}
 
 	// Execute parserstep6 with both namespaces
-	parseErr := parserstep6.Execute(stmt, paramNamespace, constNamespace)
+	parseErr := parserstep6.ExecuteWithOptions(stmt, paramNamespace, constNamespace, opts.InspectMode)
 	if parseErr != nil {
 		return nil, fmt.Errorf("parserstep6 failed: %w", parseErr)
 	}
@@ -272,6 +279,11 @@ func RawParse(tokens []tokenizer.Token, functionDef *FunctionDefinition, constan
 //   - *FunctionDefinition: The function definition extracted from the SQL file
 //   - error: Any parsing errors encountered
 func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, projectRootPath string) (StatementNode, *FunctionDefinition, error) {
+	return ParseSQLFileWithOptions(reader, constants, basePath, projectRootPath, DefaultOptions)
+}
+
+// ParseSQLFileWithOptions parses an SQL file from an io.Reader with options.
+func ParseSQLFileWithOptions(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, opts Options) (StatementNode, *FunctionDefinition, error) {
 	// Read all content from the reader
 	content, err := io.ReadAll(reader)
 	if err != nil {
@@ -290,7 +302,7 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 		return nil, nil, err
 	}
 
-	stmt, err := RawParse(tokens, functionDef, constants)
+	stmt, err := RawParseWithOptions(tokens, functionDef, constants, opts)
 
 	return stmt, functionDef, err
 }
@@ -309,6 +321,11 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 //   - *FunctionDefinition: The function definition extracted from the document
 //   - error: Any parsing errors encountered
 func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any) (StatementNode, *FunctionDefinition, error) {
+	return ParseMarkdownFileWithOptions(doc, basePath, projectRootPath, constants, DefaultOptions)
+}
+
+// ParseMarkdownFileWithOptions parses a SnapSQLDocument with options.
+func ParseMarkdownFileWithOptions(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, opts Options) (StatementNode, *FunctionDefinition, error) {
 	// Create a function definition from the SnapSQLDocument
 	functionDef, err := cmn.ParseFunctionDefinitionFromSnapSQLDocument(doc, basePath, projectRootPath)
 	if err != nil {
@@ -344,7 +361,7 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 	}
 
 	// Parse the tokens with merged constants
-	stmt, err := RawParse(tokens, functionDef, mergedConstants)
+	stmt, err := RawParseWithOptions(tokens, functionDef, mergedConstants, opts)
 
 	return stmt, functionDef, err
 }

@@ -58,6 +58,7 @@ LIMIT 10
 
 	if format == nil {
 		t.Fatal("format should not be nil")
+		return
 	}
 
 	// Verify basic properties
@@ -115,7 +116,11 @@ LIMIT /*= limit != 0 ? limit : 10 */10
 	// Load intermediate format
 	format, err := LoadIntermediateFormat(tmpFile)
 	assert.NoError(t, err)
-	assert.True(t, format != nil)
+
+	if format == nil {
+		t.Fatalf("format is nil")
+		return
+	}
 
 	// Check function name and description
 	assert.Equal(t, "get_user_by_id", format.FunctionName)
@@ -197,7 +202,11 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
 	// Load intermediate format
 	format, err := LoadIntermediateFormat(tmpFile)
 	assert.NoError(t, err)
-	assert.True(t, format != nil)
+
+	if format == nil {
+		t.Fatalf("format is nil")
+		return
+	}
 
 	// Check parameters
 	assert.Equal(t, 2, len(format.Parameters))
@@ -260,7 +269,11 @@ WHERE name = /*= name */'dummy'
 	// Load intermediate format
 	format, err := LoadIntermediateFormat(tmpFile)
 	assert.NoError(t, err)
-	assert.True(t, format != nil)
+
+	if format == nil {
+		t.Fatalf("format is nil")
+		return
+	}
 
 	// Check parameters
 	assert.Equal(t, 3, len(format.Parameters))

@@ -1,0 +1,6 @@
+{
+  "statement": "insert",
+  "tables": [
+    { "name": "audit_logs", "source": "main", "join_type": "none" }
+  ]
+}

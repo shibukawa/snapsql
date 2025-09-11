@@ -1,0 +1,4 @@
+testdata/inspect/*/actual.*
+cmd/snapsql/snapsql
+cmd/snapsql/snapsql.exe
+
