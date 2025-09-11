@@ -89,7 +89,7 @@ jobs:
         CGO_ENABLED: 0
       run: |
         mkdir -p dist
-        BINARY_NAME="oidcld-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+        BINARY_NAME="snapsql-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
         go build -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
           -o "dist/${BINARY_NAME}" .
         
@@ -113,62 +113,10 @@ jobs:
           dist/*.tar.gz
         retention-days: 1
 
-  build-docker:
-    name: Build and Push Docker Images
-    runs-on: ubuntu-latest
-    needs: test
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
-      
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-      
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=tag
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
-          type=raw,value=latest,enable={{is_default_branch}}
-        
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        build-args: |
-          VERSION=${{ github.ref_name }}
-          COMMIT=${{ github.sha }}
-          DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-binaries, build-docker]
+    needs: [build-binaries]
     permissions:
       contents: write
     
@@ -197,31 +145,19 @@ jobs:
         ### 📦 Downloads
         
         #### Binaries
-        - **Windows (AMD64)**: `oidcld-windows-amd64.zip`
-        - **macOS (ARM64)**: `oidcld-darwin-arm64.tar.gz`
-        - **Linux (AMD64)**: `oidcld-linux-amd64.tar.gz`
-        - **Linux (ARM64)**: `oidcld-linux-arm64.tar.gz`
-        
-        #### Docker Images
-        ```bash
-        # Multi-architecture (AMD64 + ARM64)
-        docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-        docker pull ghcr.io/${{ github.repository }}:latest
-        ```
+        - **Windows (AMD64)**: `snapsql-windows-amd64.zip`
+        - **macOS (ARM64)**: `snapsql-darwin-arm64.tar.gz`
+        - **Linux (AMD64)**: `snapsql-linux-amd64.tar.gz`
+        - **Linux (ARM64)**: `snapsql-linux-arm64.tar.gz`
         
         ### 🔧 Installation
         
         #### Binary Installation
         1. Download the appropriate binary for your platform
         2. Extract the archive
-        3. Make executable (Unix): `chmod +x oidcld`
-        4. Run: `./oidcld --help`
-        
-        #### Docker Installation
-        ```bash
-        docker run --rm -p 18888:18888 ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-        ```
-        
+        3. Make executable (Unix): `chmod +x snapsql`
+        4. Run: `./snapsql --help`
+
         ### 📋 What's Changed
         
         See the commit history for detailed changes in this release.
