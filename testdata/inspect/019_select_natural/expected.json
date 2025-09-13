@@ -1,0 +1,8 @@
+{
+  "statement": "select",
+  "tables": [
+    { "name": "users", "alias": "u", "source": "main", "join_type": "none" },
+    { "name": "orders", "alias": "o", "source": "join", "join_type": "natural" }
+  ]
+}
+

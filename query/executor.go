@@ -6,22 +6,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/markdownparser"
 )
 
 // Error definitions
 var (
-	ErrDatabaseConnection   = errors.New("database connection failed")
-	ErrQueryExecution       = errors.New("query execution failed")
-	ErrInvalidOutputFormat  = errors.New("invalid output format")
-	ErrMissingRequiredParam = errors.New("missing required parameter")
-	ErrInvalidParams        = errors.New("invalid parameters")
-	ErrDangerousQuery       = errors.New("dangerous query detected")
+    ErrDatabaseConnection   = errors.New("database connection failed")
+    ErrQueryExecution       = errors.New("query execution failed")
+    ErrInvalidOutputFormat  = errors.New("invalid output format")
+    ErrInvalidParams        = errors.New("invalid parameters")
+    ErrDangerousQuery       = errors.New("dangerous query detected")
 )
 
 // OutputFormat represents the supported output formats
@@ -88,15 +89,35 @@ func NewExecutor(db *sql.DB) *Executor {
 
 // ExecuteWithTemplate executes a query using a template file
 func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string, params map[string]interface{}, options QueryOptions) (*QueryResult, error) {
-	// Load template
-	format, err := LoadIntermediateFormat(templateFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load template: %w", err)
-	}
+    // Load template
+    format, err := LoadIntermediateFormat(templateFile)
+    if err != nil {
+        return nil, fmt.Errorf("failed to load template: %w", err)
+    }
 
-	// Apply system directives based on options
-	// Note: This functionality needs to be reimplemented with the new format structure
-	// For now, we'll skip this part
+    // Preflight parameter validation before any evaluation
+    if err := ValidateParameters(format, params); err != nil {
+        return nil, fmt.Errorf("%w", err)
+    }
+
+	// Static fast-path: if there are no dynamic instructions and no CEL expressions,
+	// fall back to executing the original SQL text. This preserves constructs like CTEs
+	// that are not yet reconstructed by the instruction pipeline.
+	dialect := getDialectFromDriver(options.Driver)
+    optimized, _ := intermediate.OptimizeInstructions(format.Instructions, dialect)
+	if !intermediate.HasDynamicInstructions(optimized) && len(format.CELExpressions) == 0 {
+		sqlText, readErr := readOriginalSQL(templateFile)
+		if readErr == nil && sqlText != "" {
+			// Dangerous query check
+            sqlText = addLimitOffsetIfNeeded(sqlText, options)
+            sqlText = FormatSQLForDriver(sqlText, options.Driver)
+			if IsDangerousQuery(sqlText) && !options.ExecuteDangerousQuery {
+				return nil, fmt.Errorf("%w: query contains DELETE/UPDATE without WHERE clause. Use --execute-dangerous-query flag to execute anyway", ErrDangerousQuery)
+			}
+			return e.executeSQL(ctx, sqlText, nil, options)
+		}
+		// If reading original SQL failed, fall back to pipeline execution
+	}
 
 	return e.Execute(ctx, format, params, options)
 }
@@ -119,11 +140,24 @@ func IsDangerousQuery(sql string) bool {
 	return false
 }
 
+// isWriteWithoutReturning detects INSERT/UPDATE/DELETE without RETURNING clause
+func isWriteWithoutReturning(sql string) bool {
+	s := strings.ToUpper(strings.TrimSpace(sql))
+	if strings.HasPrefix(s, "INSERT") || strings.HasPrefix(s, "UPDATE") || strings.HasPrefix(s, "DELETE") {
+		// crude check: no RETURNING keyword
+		return !strings.Contains(s, " RETURNING ") && !strings.HasSuffix(s, " RETURNING")
+	}
+	return false
+}
+
 // buildSQLFromOptimized builds SQL from optimized instructions
 func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]interface{}) (string, []interface{}, error) {
 	var (
 		builder strings.Builder
 		args    []interface{}
+		// Boundary handling state
+		deferredTokens    []string // tokens seen as EMIT_UNLESS_BOUNDARY since last boundary
+		hasContentSinceBd bool     // true if any EMIT_STATIC appended since last boundary
 	)
 
 	// Create parameter map for evaluation
@@ -135,7 +169,12 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 	// Create CEL programs for expressions
 	celPrograms := make(map[int]*cel.Program)
 
-	env, err := cel.NewEnv()
+	// Declare variables for CEL: params map + individual keys
+	decls := []cel.EnvOption{cel.Variable("params", cel.MapType(cel.StringType, cel.AnyType))}
+	for k := range paramMap {
+		decls = append(decls, cel.Variable(k, cel.AnyType))
+	}
+	env, err := cel.NewEnv(decls...)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
@@ -154,36 +193,94 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 		celPrograms[i] = &program
 	}
 
+	flushDeferred := func() {
+		if len(deferredTokens) > 0 {
+			for _, tok := range deferredTokens {
+				builder.WriteString(tok)
+			}
+			deferredTokens = nil
+		}
+	}
+
 	// Process optimized instructions
 	for _, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
-			builder.WriteString(inst.Value)
+			// When we see the first content after deferred boundary tokens, flush them first.
+			if len(deferredTokens) > 0 && !isOnlyWhitespace(inst.Value) {
+				flushDeferred()
+			}
+			if inst.Value != "" {
+				builder.WriteString(inst.Value)
+				if !isOnlyWhitespace(inst.Value) {
+					hasContentSinceBd = true
+				}
+			}
 
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
+				// Fast path: direct param lookup by expression string
+				if *inst.ExprIndex >= 0 && *inst.ExprIndex < len(format.CELExpressions) {
+					exprStr := format.CELExpressions[*inst.ExprIndex].Expression
+					if v, ok := paramMap[exprStr]; ok {
+						args = append(args, v)
+						break
+					}
+				}
 				program, exists := celPrograms[*inst.ExprIndex]
 				if !exists {
 					return "", nil, fmt.Errorf("%w: %d", snapsql.ErrExpressionIndexNotFound, *inst.ExprIndex)
 				}
-
-				// Evaluate expression
-				result, _, err := (*program).Eval(paramMap)
+				// Provide both params map and individual variables
+				evalParams := map[string]interface{}{"params": paramMap}
+				for k, v := range paramMap {
+					evalParams[k] = v
+				}
+				result, _, err := (*program).Eval(evalParams)
 				if err != nil {
 					return "", nil, fmt.Errorf("failed to evaluate expression %d: %w", *inst.ExprIndex, err)
 				}
-
-				builder.WriteString("?")
-
 				args = append(args, result.Value())
 			}
 
+		case "EMIT_UNLESS_BOUNDARY":
+			// Defer emission until we know content appears before the next boundary
+			if inst.Value != "" {
+				deferredTokens = append(deferredTokens, inst.Value)
+			}
+
+		case "BOUNDARY":
+			// Reached boundary; emit deferred tokens only if content has appeared since previous boundary
+			if hasContentSinceBd {
+				flushDeferred()
+			} else {
+				// Drop deferred tokens
+				deferredTokens = nil
+			}
+			// Reset for next region
+			hasContentSinceBd = false
+
 		default:
-			// For now, ignore other operations (they should be handled by optimization)
+			// Ignore other control flow ops here (IF/ELSE/END/LOOP_* are resolved at optimization or not supported yet)
 		}
 	}
 
+	// End: if we still have deferred tokens and we emitted content, flush them
+	if hasContentSinceBd && len(deferredTokens) > 0 {
+		flushDeferred()
+	}
+
 	return builder.String(), args, nil
+}
+
+// isOnlyWhitespace reports whether s consists of only whitespace characters
+func isOnlyWhitespace(s string) bool {
+	for _, r := range s {
+		if r != ' ' && r != '\n' && r != '\t' && r != '\r' {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 // getDialectFromDriver converts database driver name to dialect
@@ -216,112 +313,227 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 		return nil, fmt.Errorf("failed to build SQL: %w", err)
 	}
 
+	// Apply optional LIMIT/OFFSET for SELECT when not present in SQL
+    sql = addLimitOffsetIfNeeded(sql, options)
+    // Convert placeholders and ensure readability (shared logic)
+    sql = FormatSQLForDriver(sql, options.Driver)
+
 	// Check for dangerous queries
 	if IsDangerousQuery(sql) && !options.ExecuteDangerousQuery {
 		return nil, fmt.Errorf("%w: query contains DELETE/UPDATE without WHERE clause. Use --execute-dangerous-query flag to execute anyway", ErrDangerousQuery)
 	}
 
+	return e.executeSQL(ctx, sql, args, options)
+}
+
+// executeSQL runs the given SQL with args and formats the result according to options
+func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{}, options QueryOptions) (*QueryResult, error) {
 	// Create query context with timeout
 	queryCtx := ctx
-
 	if options.Timeout > 0 {
 		var cancel context.CancelFunc
-
 		queryCtx, cancel = context.WithTimeout(ctx, time.Duration(options.Timeout)*time.Second)
 		defer cancel()
 	}
 
-	// Execute query
 	startTime := time.Now()
+
+	if isWriteWithoutReturning(sql) {
+		res, err := e.db.ExecContext(queryCtx, sql, args...)
+		duration := time.Since(startTime)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrQueryExecution, err)
+		}
+		ra, _ := res.RowsAffected()
+		li, _ := res.LastInsertId()
+		return &QueryResult{
+			SQL:        sql,
+			Parameters: args,
+			Duration:   duration,
+			Columns:    []string{"rows_affected", "last_insert_id"},
+			Rows:       [][]interface{}{{ra, li}},
+			Count:      1,
+		}, nil
+	}
+
 	rows, err := e.db.QueryContext(queryCtx, sql, args...)
 	duration := time.Since(startTime)
-
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrQueryExecution, err)
 	}
-
 	defer rows.Close()
 
-	// Process results
-	result := &QueryResult{
-		SQL:        sql,
-		Parameters: args,
-		Duration:   duration,
-	}
+	result := &QueryResult{SQL: sql, Parameters: args, Duration: duration}
 
-	// Get column names
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column names: %w", err)
 	}
-
 	result.Columns = columns
 
-	// For EXPLAIN queries, handle differently
 	if options.Explain {
-		// For EXPLAIN queries, we expect a single column with the plan
-		var (
-			plan  string
-			plans []string
-		)
-
-		for rows.Next() {
-			err := rows.Scan(&plan)
-			if err != nil {
-				return nil, fmt.Errorf("failed to scan explain plan: %w", err)
+		// Re-run with EXPLAIN prefix depending on driver
+		_ = rows.Close()
+		var explainSQL string
+		switch options.Driver {
+		case "sqlite3":
+			explainSQL = "EXPLAIN QUERY PLAN " + sql
+		case "postgres", "pgx":
+			if options.ExplainAnalyze {
+				explainSQL = "EXPLAIN ANALYZE " + sql
+			} else {
+				explainSQL = "EXPLAIN " + sql
 			}
-
-			plans = append(plans, plan)
+		default:
+			explainSQL = "EXPLAIN " + sql
 		}
 
-		err := rows.Err()
-		if err != nil {
-			return nil, fmt.Errorf("error during row iteration: %w", err)
+		rows2, err2 := e.db.QueryContext(queryCtx, explainSQL, args...)
+		if err2 != nil {
+			return nil, fmt.Errorf("%w: %w", ErrQueryExecution, err2)
 		}
+		defer rows2.Close()
 
-		// Combine all plan lines
-		result.ExplainPlan = ""
-		for _, line := range plans {
-			result.ExplainPlan += line + "\n"
+		// Aggregate rows into a plan string (driver-agnostic)
+		cols, _ := rows2.Columns()
+		vals := make([]interface{}, len(cols))
+		ptrs := make([]interface{}, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
 		}
-
+		var lines []string
+		for rows2.Next() {
+			if err := rows2.Scan(ptrs...); err != nil {
+				return nil, fmt.Errorf("failed to scan explain row: %w", err)
+			}
+			// join values by space
+			var sb strings.Builder
+			for i, v := range vals {
+				if i > 0 {
+					sb.WriteString(" ")
+				}
+				sb.WriteString(formatValue(v))
+			}
+			lines = append(lines, sb.String())
+		}
+		if err := rows2.Err(); err != nil {
+			return nil, fmt.Errorf("error during explain iteration: %w", err)
+		}
+		result.ExplainPlan = strings.Join(lines, "\n")
 		return result, nil
 	}
 
-	// For regular queries, process all rows
 	var resultRows [][]interface{}
-
 	values := make([]interface{}, len(columns))
-
 	scanArgs := make([]interface{}, len(columns))
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
-
 	for rows.Next() {
-		// Scan row values
-		err := rows.Scan(scanArgs...)
-		if err != nil {
+		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
-
-		// Copy values
 		rowValues := make([]interface{}, len(columns))
 		for i, v := range values {
 			rowValues[i] = convertSQLValue(v)
 		}
-
 		resultRows = append(resultRows, rowValues)
 	}
-
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error during row iteration: %w", err)
 	}
-
 	result.Rows = resultRows
 	result.Count = len(resultRows)
-
 	return result, nil
+}
+
+// addLimitOffsetIfNeeded appends LIMIT/OFFSET to SELECT when not present
+func addLimitOffsetIfNeeded(sql string, options QueryOptions) string {
+	if options.Limit <= 0 && options.Offset <= 0 {
+		return sql
+	}
+	s := strings.TrimSpace(sql)
+	upper := strings.ToUpper(s)
+	if !strings.HasPrefix(upper, "SELECT") {
+		return sql
+	}
+	// Skip if already contains LIMIT or OFFSET (naive check)
+	if strings.Contains(upper, " LIMIT ") || strings.Contains(upper, " OFFSET ") {
+		return sql
+	}
+	// Handle trailing semicolon
+	hasSemi := strings.HasSuffix(s, ";")
+	if hasSemi {
+		s = strings.TrimSuffix(s, ";")
+	}
+	if options.Limit > 0 {
+		s = s + fmt.Sprintf(" LIMIT %d", options.Limit)
+	}
+	if options.Offset > 0 {
+		s = s + fmt.Sprintf(" OFFSET %d", options.Offset)
+	}
+	if hasSemi {
+		s += ";"
+	}
+	return s
+}
+
+// convertPlaceholdersForDriver converts '?' placeholders to driver-specific syntax
+func convertPlaceholdersForDriver(sql string, driver string) string {
+	d := strings.ToLower(driver)
+	if d != "postgres" && d != "pgx" && d != "postgresql" {
+		return sql
+	}
+	var b strings.Builder
+	n := 1
+	inSingle := false
+	inDouble := false
+	for i := 0; i < len(sql); i++ {
+		ch := sql[i]
+		if ch == '\'' && !inDouble {
+			inSingle = !inSingle
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '?' && !inSingle && !inDouble {
+			b.WriteByte('$')
+			b.WriteString(fmt.Sprintf("%d", n))
+			n++
+			continue
+		}
+		b.WriteByte(ch)
+	}
+	return b.String()
+}
+
+// readOriginalSQL reads SQL content from .snap.sql or extracts SQL from .snap.md
+func readOriginalSQL(path string) (string, error) {
+	lower := strings.ToLower(path)
+	if strings.HasSuffix(lower, ".snap.sql") || strings.HasSuffix(lower, ".sql") {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
+	if strings.HasSuffix(lower, ".snap.md") || strings.HasSuffix(lower, ".md") {
+		f, err := os.Open(path)
+		if err != nil {
+			return "", err
+		}
+		defer f.Close()
+		doc, err := markdownparser.Parse(f)
+		if err != nil {
+			return "", err
+		}
+		return doc.SQL, nil
+	}
+	return "", fmt.Errorf("unsupported template extension: %s", path)
 }
 
 // convertSQLValue converts SQL values to appropriate Go types

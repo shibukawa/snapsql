@@ -1,0 +1,5 @@
+CREATE TABLE items (
+  id INT AUTO_INCREMENT PRIMARY KEY
+);
+INSERT INTO items(id) VALUES (1),(2),(3);
+

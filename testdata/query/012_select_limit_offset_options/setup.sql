@@ -1,0 +1,3 @@
+CREATE TABLE items (id INTEGER PRIMARY KEY);
+INSERT INTO items(id) VALUES (1),(2),(3),(4),(5);
+
