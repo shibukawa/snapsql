@@ -31,29 +31,35 @@ type YAMLColumnInfo struct {
 
 // loadConfig loads configuration from snapsql.yaml file
 func loadConfig(testDir string) (*Config, error) {
-	configPath := filepath.Join(testDir, "snapsql.yaml")
+	// Priority: config.yaml > snapsql.yaml > default
+	candidates := []string{"config.yaml", "snapsql.yaml"}
+	var loaded *Config
 
-	// Check if snapsql.yaml exists
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// Return default configuration if file doesn't exist
-		return &Config{
-			Dialect: "postgres", // Default dialect
-		}, nil
+	for _, name := range candidates {
+		path := filepath.Join(testDir, name)
+		if _, err := os.Stat(path); err == nil {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil, err
+			}
+			var cfg Config
+			if err := yaml.Unmarshal(data, &cfg); err != nil {
+				return nil, err
+			}
+			loaded = &cfg
+
+			break
+		}
 	}
 
-	// Read YAML file
-	yamlContent, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
+	if loaded == nil {
+		loaded = &Config{Dialect: "postgres"}
 	}
-
-	// Parse YAML
-	var config Config
-	if err := yaml.Unmarshal(yamlContent, &config); err != nil {
-		return nil, err
+	// Ensure default dialect fallback
+	if loaded.Dialect == "" {
+		loaded.Dialect = "postgres"
 	}
-
-	return &config, nil
+	return loaded, nil
 }
 func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
 	tablesPath := filepath.Join(testDir, "tables.yaml")

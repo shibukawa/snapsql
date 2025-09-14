@@ -53,16 +53,6 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 				ExprIndex: inst.ExprIndex,
 			})
 
-		case OpEmitIfDialect:
-			// Filter by dialect - only emit if matches current dialect
-			if dialect == "" || containsDialect(inst.Dialects, dialect) {
-				result = append(result, OptimizedInstruction{
-					Op:    "EMIT_STATIC",
-					Value: inst.SqlFragment,
-				})
-			}
-			// If dialect doesn't match, skip this instruction
-
 		case OpEmitUnlessBoundary:
 			// Check if we're in a static context (no control flow between here and next BOUNDARY)
 			isStaticContext := true
@@ -166,15 +156,6 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 }
 
 // containsDialect checks if the target dialect is in the list of supported dialects
-func containsDialect(dialects []string, target string) bool {
-	for _, dialect := range dialects {
-		if dialect == target {
-			return true
-		}
-	}
-
-	return false
-}
 
 // MergeAdjacentStatic merges adjacent EMIT_STATIC instructions
 func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruction {

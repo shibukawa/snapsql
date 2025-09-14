@@ -8,6 +8,7 @@ const (
 	DialectPostgres Dialect = "postgres"
 	DialectMySQL    Dialect = "mysql"
 	DialectSQLite   Dialect = "sqlite"
+	DialectMariaDB  Dialect = "mariadb"
 )
 
 // Feature represents DB-specific feature flags
