@@ -27,12 +27,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// GetNestedDialectCast specific CEL programs and mock path
+// UpdateUserWithReturningMariadb specific CEL programs and mock path
 var (
-	getnesteddialectcastPrograms []cel.Program
+	updateuserwithreturningmariadbPrograms []cel.Program
 )
 
-const getnesteddialectcastMockPath = ""
+const updateuserwithreturningmariadbMockPath = ""
 
 func init() {
 
@@ -44,15 +44,28 @@ func init() {
 		cel.EagerlyValidateDeclarations(true),
 		snapsqlgo.DecimalLibrary,
 		cel.Variable("user_id", cel.IntType),
+		cel.Variable("new_name", cel.StringType),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create GetNestedDialectCast CEL environment 0: %v", err))
+		panic(fmt.Sprintf("failed to create UpdateUserWithReturningMariadb CEL environment 0: %v", err))
 	}
 	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
-	getnesteddialectcastPrograms = make([]cel.Program, 1)
-	// expr_001: "user_id" using environment 0
+	updateuserwithreturningmariadbPrograms = make([]cel.Program, 2)
+	// expr_001: "new_name" using environment 0
+	{
+		ast, issues := celEnvironments[0].Compile("new_name")
+		if issues != nil && issues.Err() != nil {
+			panic(fmt.Sprintf("failed to compile CEL expression 'new_name': %v", issues.Err()))
+		}
+		program, err := celEnvironments[0].Program(ast)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create CEL program for 'new_name': %v", err))
+		}
+		updateuserwithreturningmariadbPrograms[0] = program
+	}
+	// expr_002: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
 		if issues != nil && issues.Err() != nil {
@@ -62,19 +75,19 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
 		}
-		getnesteddialectcastPrograms[0] = program
+		updateuserwithreturningmariadbPrograms[1] = program
 	}
 }
-// GetNestedDialectCast - sql.Result Affinity
-func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+// UpdateUserWithReturningMariadb - sql.Result Affinity
+func UpdateUserWithReturningMariadb(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, newName string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getnesteddialectcast", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturningmariadb", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getnesteddialectcastMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(updateuserwithreturningmariadbMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
@@ -88,8 +101,9 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 	}
 
 	// Build SQL
-	query := "SELECT id, name, (NOW()::TEXT) as current_time_text, (TRUE)::INTEGER as bool_as_int FROM users WHERE id =$1"
+	query := "UPDATE users SET name =$1, updated_at = NOW() WHERE id =$2"
 	args := []any{
+		newName,
 		userID,
 	}
 

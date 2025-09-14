@@ -30,6 +30,7 @@ var (
 	ErrDefaultEnvironmentNotFound = errors.New("default environment not found in config")
 	ErrNoDatabaseConnection       = errors.New("no database connection specified")
 	ErrExpressionIndexNotFound    = errors.New("expression index not found")
+	ErrInvalidDialect             = errors.New("invalid dialect")
 )
 
 // QueryCmd represents the query command
@@ -49,6 +50,7 @@ type QueryCmd struct {
 	Offset                int      `long:"offset" help:"Offset for result set"`
 	ExecuteDangerousQuery bool     `long:"execute-dangerous-query" help:"Execute DELETE/UPDATE queries without WHERE clause (dangerous!)"`
 	DryRun                bool     `long:"dry-run" help:"Show generated SQL without executing"`
+	Dialect               string   `long:"dialect" help:"SQL dialect for dry-run or when no DB (postgresql|mysql|sqlite)"`
 }
 
 // Run executes the query command
@@ -334,8 +336,16 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 		return fmt.Errorf("failed to load template: %w", err)
 	}
 
-	// Generate SQL using the same logic as actual execution
-	dialect := q.getDialectFromOptions(options)
+	// Preflight parameter validation
+	if err := query.ValidateParameters(format, params); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+
+	// Determine dialect for dry-run
+	dialect := strings.ToLower(strings.TrimSpace(q.Dialect))
+	if dialect == "" {
+		dialect = q.getDialectFromOptions(options)
+	}
 
 	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {
@@ -347,6 +357,9 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 	if err != nil {
 		return fmt.Errorf("failed to build SQL: %w", err)
 	}
+
+	// Format SQL for display (shared with executor)
+	sql = query.FormatSQLForDialect(sql, dialect)
 
 	// Display results
 	if !ctx.Quiet {
@@ -382,6 +395,8 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 
 	return nil
 }
+
+// removed local formatting helpers; using shared query.FormatSQLForDialect
 
 // executeQuery executes the query and outputs results
 func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options query.QueryOptions) error {
@@ -464,8 +479,10 @@ func (q *QueryCmd) getDialectFromOptions(options query.QueryOptions) string {
 // buildSQLFromOptimized builds SQL from optimized instructions (for dry-run)
 func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]any) (string, []any, error) {
 	var (
-		builder strings.Builder
-		args    []any
+		builder           strings.Builder
+		args              []any
+		deferredTokens    []string
+		hasContentSinceBd bool
 	)
 
 	// Create parameter map for evaluation
@@ -477,7 +494,12 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 	// Create CEL programs for expressions
 	celPrograms := make(map[int]*cel.Program)
 
-	env, err := cel.NewEnv()
+	// Declare variables for CEL: params map + individual keys
+	decls := []cel.EnvOption{cel.Variable("params", cel.MapType(cel.StringType, cel.AnyType))}
+	for k := range paramMap {
+		decls = append(decls, cel.Variable(k, cel.AnyType))
+	}
+	env, err := cel.NewEnv(decls...)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
@@ -496,36 +518,86 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 		celPrograms[i] = &program
 	}
 
+	flushDeferred := func() {
+		if len(deferredTokens) > 0 {
+			for _, tok := range deferredTokens {
+				builder.WriteString(tok)
+			}
+			deferredTokens = nil
+		}
+	}
+
 	// Process optimized instructions
 	for _, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
-			builder.WriteString(inst.Value)
+			if len(deferredTokens) > 0 && !isOnlyWhitespace(inst.Value) {
+				flushDeferred()
+			}
+			if inst.Value != "" {
+				builder.WriteString(inst.Value)
+				if !isOnlyWhitespace(inst.Value) {
+					hasContentSinceBd = true
+				}
+			}
 
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
+				// Fast path: direct param lookup by expression string
+				if *inst.ExprIndex >= 0 && *inst.ExprIndex < len(format.CELExpressions) {
+					exprStr := format.CELExpressions[*inst.ExprIndex].Expression
+					if v, ok := paramMap[exprStr]; ok {
+						args = append(args, v)
+						break
+					}
+				}
 				program, exists := celPrograms[*inst.ExprIndex]
 				if !exists {
 					return "", nil, fmt.Errorf("%w: %d", ErrExpressionIndexNotFound, *inst.ExprIndex)
 				}
-
-				// Evaluate expression
-				result, _, err := (*program).Eval(paramMap)
+				evalParams := map[string]any{"params": paramMap}
+				for k, v := range paramMap {
+					evalParams[k] = v
+				}
+				result, _, err := (*program).Eval(evalParams)
 				if err != nil {
 					return "", nil, fmt.Errorf("failed to evaluate expression %d: %w", *inst.ExprIndex, err)
 				}
-
-				builder.WriteString("?")
-
 				args = append(args, result.Value())
 			}
 
+		case "EMIT_UNLESS_BOUNDARY":
+			if inst.Value != "" {
+				deferredTokens = append(deferredTokens, inst.Value)
+			}
+
+		case "BOUNDARY":
+			if hasContentSinceBd {
+				flushDeferred()
+			} else {
+				deferredTokens = nil
+			}
+			hasContentSinceBd = false
+
 		default:
-			// For now, ignore other operations (they should be handled by optimization)
+			// Ignore other ops for dry-run scope
 		}
 	}
 
+	if hasContentSinceBd && len(deferredTokens) > 0 {
+		flushDeferred()
+	}
+
 	return builder.String(), args, nil
+}
+
+func isOnlyWhitespace(s string) bool {
+	for _, r := range s {
+		if r != ' ' && r != '\n' && r != '\t' && r != '\r' {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 // isDangerousQuery checks if a query is potentially dangerous

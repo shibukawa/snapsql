@@ -27,12 +27,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// GetNestedDialectCast specific CEL programs and mock path
+// InsertUserWithReturningSqlite specific CEL programs and mock path
 var (
-	getnesteddialectcastPrograms []cel.Program
+	insertuserwithreturningsqlitePrograms []cel.Program
 )
 
-const getnesteddialectcastMockPath = ""
+const insertuserwithreturningsqliteMockPath = ""
 
 func init() {
 
@@ -43,38 +43,51 @@ func init() {
 		cel.HomogeneousAggregateLiterals(),
 		cel.EagerlyValidateDeclarations(true),
 		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_id", cel.IntType),
+		cel.Variable("user_name", cel.StringType),
+		cel.Variable("user_email", cel.StringType),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create GetNestedDialectCast CEL environment 0: %v", err))
+		panic(fmt.Sprintf("failed to create InsertUserWithReturningSqlite CEL environment 0: %v", err))
 	}
 	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
-	getnesteddialectcastPrograms = make([]cel.Program, 1)
-	// expr_001: "user_id" using environment 0
+	insertuserwithreturningsqlitePrograms = make([]cel.Program, 2)
+	// expr_001: "user_name" using environment 0
 	{
-		ast, issues := celEnvironments[0].Compile("user_id")
+		ast, issues := celEnvironments[0].Compile("user_name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression 'user_name': %v", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for 'user_name': %v", err))
 		}
-		getnesteddialectcastPrograms[0] = program
+		insertuserwithreturningsqlitePrograms[0] = program
+	}
+	// expr_002: "user_email" using environment 0
+	{
+		ast, issues := celEnvironments[0].Compile("user_email")
+		if issues != nil && issues.Err() != nil {
+			panic(fmt.Sprintf("failed to compile CEL expression 'user_email': %v", issues.Err()))
+		}
+		program, err := celEnvironments[0].Program(ast)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create CEL program for 'user_email': %v", err))
+		}
+		insertuserwithreturningsqlitePrograms[1] = program
 	}
 }
-// GetNestedDialectCast - sql.Result Affinity
-func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+// InsertUserWithReturningSqlite - sql.Result Affinity
+func InsertUserWithReturningSqlite(ctx context.Context, executor snapsqlgo.DBExecutor, userName string, userEmail string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getnesteddialectcast", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuserwithreturningsqlite", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getnesteddialectcastMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserwithreturningsqliteMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
@@ -88,9 +101,10 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 	}
 
 	// Build SQL
-	query := "SELECT id, name, (NOW()::TEXT) as current_time_text, (TRUE)::INTEGER as bool_as_int FROM users WHERE id =$1"
+	query := "INSERT INTO users (name, email, created_at) VALUES ($1,$2, CURRENT_TIMESTAMP) RETURNING id, name, email, created_at"
 	args := []any{
-		userID,
+		userName,
+		userEmail,
 	}
 
 	// Execute query
@@ -99,13 +113,8 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
-	rows, err := stmt.QueryContext(ctx, args...)
-	if err != nil {
-	    return result, fmt.Errorf("failed to execute query: %w", err)
-	}
-	defer rows.Close()
-	
+	// Execute query and scan single row
+	row := stmt.QueryRowContext(ctx, args...)
 	// Generic scan for interface{} result - not implemented
 	// This would require runtime reflection or predefined column mapping
 

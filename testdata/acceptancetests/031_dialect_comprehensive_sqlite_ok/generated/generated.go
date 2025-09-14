@@ -27,12 +27,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// GetNestedDialectCast specific CEL programs and mock path
+// GetComprehensiveDialectTestSqlite specific CEL programs and mock path
 var (
-	getnesteddialectcastPrograms []cel.Program
+	getcomprehensivedialecttestsqlitePrograms []cel.Program
 )
 
-const getnesteddialectcastMockPath = ""
+const getcomprehensivedialecttestsqliteMockPath = ""
 
 func init() {
 
@@ -46,12 +46,12 @@ func init() {
 		cel.Variable("user_id", cel.IntType),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create GetNestedDialectCast CEL environment 0: %v", err))
+		panic(fmt.Sprintf("failed to create GetComprehensiveDialectTestSqlite CEL environment 0: %v", err))
 	}
 	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
-	getnesteddialectcastPrograms = make([]cel.Program, 1)
+	getcomprehensivedialecttestsqlitePrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -62,19 +62,19 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
 		}
-		getnesteddialectcastPrograms[0] = program
+		getcomprehensivedialecttestsqlitePrograms[0] = program
 	}
 }
-// GetNestedDialectCast - sql.Result Affinity
-func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+// GetComprehensiveDialectTestSqlite - sql.Result Affinity
+func GetComprehensiveDialectTestSqlite(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getnesteddialectcast", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomprehensivedialecttestsqlite", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getnesteddialectcastMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getcomprehensivedialecttestsqliteMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
@@ -88,7 +88,7 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 	}
 
 	// Build SQL
-	query := "SELECT id, name, (NOW()::TEXT) as current_time_text, (TRUE)::INTEGER as bool_as_int FROM users WHERE id =$1"
+	query := "SELECT id, name, CAST(age AS INTEGER) as age_cast_standard, CAST(price AS DECIMAL(10,2)) as price_cast_postgresql, CAST(salary + bonus AS NUMERIC(12,2)) as total_cast_complex, first_name || ' ' || last_name as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, CURRENT_TIMESTAMP as time_mysql, CURRENT_TIMESTAMP as time_standard, 1 as bool_true, 0 as bool_false, RAND() as random_mysql, RAND() as random_postgresql, CAST(CURRENT_TIMESTAMP AS TEXT) as nested_cast_time, 'ID: ' || CAST(id AS TEXT) as nested_concat_cast FROM users WHERE id =$1AND active = TRUE AND created_at > CURRENT_TIMESTAMP"
 	args := []any{
 		userID,
 	}

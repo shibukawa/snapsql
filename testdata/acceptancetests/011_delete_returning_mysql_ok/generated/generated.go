@@ -27,12 +27,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// GetNestedDialectCast specific CEL programs and mock path
+// DeleteUserWithReturningMysql specific CEL programs and mock path
 var (
-	getnesteddialectcastPrograms []cel.Program
+	deleteuserwithreturningmysqlPrograms []cel.Program
 )
 
-const getnesteddialectcastMockPath = ""
+const deleteuserwithreturningmysqlMockPath = ""
 
 func init() {
 
@@ -46,12 +46,12 @@ func init() {
 		cel.Variable("user_id", cel.IntType),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create GetNestedDialectCast CEL environment 0: %v", err))
+		panic(fmt.Sprintf("failed to create DeleteUserWithReturningMysql CEL environment 0: %v", err))
 	}
 	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
-	getnesteddialectcastPrograms = make([]cel.Program, 1)
+	deleteuserwithreturningmysqlPrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -62,19 +62,19 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
 		}
-		getnesteddialectcastPrograms[0] = program
+		deleteuserwithreturningmysqlPrograms[0] = program
 	}
 }
-// GetNestedDialectCast - sql.Result Affinity
-func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+// DeleteUserWithReturningMysql - sql.Result Affinity
+func DeleteUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getnesteddialectcast", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteuserwithreturningmysql", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getnesteddialectcastMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(deleteuserwithreturningmysqlMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
@@ -88,7 +88,7 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 	}
 
 	// Build SQL
-	query := "SELECT id, name, (NOW()::TEXT) as current_time_text, (TRUE)::INTEGER as bool_as_int FROM users WHERE id =$1"
+	query := "DELETE FROM users WHERE id =$1"
 	args := []any{
 		userID,
 	}
