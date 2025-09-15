@@ -74,7 +74,7 @@ const (
 	JoinRight
 	JoinFull
 	JoinCross
-	// Natural join family (allowed only in InspectMode)
+	// Natural join family (inspect mode only; generation mode treats it as invalid)
 	JoinNatural
 	JoinNaturalLeft
 	JoinNaturalRight

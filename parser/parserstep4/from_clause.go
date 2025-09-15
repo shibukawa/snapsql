@@ -36,13 +36,13 @@ var (
 	)
 )
 
-// finalizeFromClause checks if a FROM clause contains a subquery without an alias.
-// If found, it adds an error to perr. No return value.
+// finalizeFromClause is the legacy strict entry (kept for existing tests).
 func finalizeFromClause(clause *cmn.FromClause, perr *cmn.ParseError) {
 	finalizeFromClauseWithOptions(clause, perr, false)
 }
 
-// finalizeFromClauseWithOptions checks the FROM clause with optional relaxations (inspectMode)
+// finalizeFromClauseWithOptions checks a FROM clause and builds table refs.
+// InspectMode allows some otherwise-invalid patterns (e.g., NATURAL JOIN) to pass for inspection.
 func finalizeFromClauseWithOptions(clause *cmn.FromClause, perr *cmn.ParseError, inspectMode bool) {
 	// Check if the FROM clause is empty
 	if clause == nil || len(clause.ContentTokens()) == 0 {
@@ -79,13 +79,6 @@ func finalizeFromClauseWithOptions(clause *cmn.FromClause, perr *cmn.ParseError,
 	}
 }
 
-// parseJoin is kept for backward-compat tests; delegates to parseJoinWithOptions.
-//
-//nolint:unused // kept for backward compatibility in tests
-func parseJoin(pToken []pc.Token[tok.Token]) (cmn.JoinType, error) {
-	return parseJoinWithOptions(pToken, false)
-}
-
 func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.JoinType, error) {
 	pos := pToken[0].Val.Position
 	if pToken[0].Val.Type == tok.COMMA {
@@ -115,11 +108,14 @@ func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.J
 			return cmn.JoinInvalid, fmt.Errorf("%w: %s", ErrInvalidJoinType, pos.String())
 		}
 
-		if !inspectMode {
+    // NATURAL + qualifier handling
+		// Allowed only with inspectMode
+    if !inspectMode {
 			return cmn.JoinInvalid, fmt.Errorf("%w: %s", ErrNaturalJoin, pos.String())
 		}
 
 		// Determine NATURAL variant
+		// Remove NATURAL from tokens
 		rest := make([]tok.TokenType, 0, len(joinTokens))
 		for _, jt := range joinTokens {
 			if jt != tok.NATURAL {
@@ -127,6 +123,7 @@ func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.J
 			}
 		}
 
+		// Accept optional OUTER with LEFT/RIGHT/FULL
 		switch len(rest) {
 		case 0:
 			return cmn.JoinNatural, nil
@@ -146,6 +143,7 @@ func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.J
 				return cmn.JoinInvalid, fmt.Errorf("%w at %s: invalid NATURAL qualifier", ErrInvalidJoinType, pos.String())
 			}
 		case 2:
+			// Expect LEFT/RIGHT/FULL + OUTER (order may vary)
 			if (rest[0] == tok.LEFT || rest[0] == tok.RIGHT || rest[0] == tok.FULL) && rest[1] == tok.OUTER {
 				switch rest[0] {
 				case tok.LEFT:
@@ -215,11 +213,6 @@ func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.J
 	panic("should not reach here")
 }
 
-//nolint:unused // kept for backward compatibility in tests
-func parseTableReference(pctx *pc.ParseContext[tok.Token], head, body []pc.Token[tok.Token]) (cmn.TableReferenceForFrom, error) {
-	return parseTableReferenceWithOptions(pctx, head, body, false)
-}
-
 func parseTableReferenceWithOptions(pctx *pc.ParseContext[tok.Token], head, body []pc.Token[tok.Token], inspectMode bool) (cmn.TableReferenceForFrom, error) {
 	// head: semi-colon, JOIN clause
 	// body: join type and ON/USING clause
@@ -245,8 +238,7 @@ func parseTableReferenceWithOptions(pctx *pc.ParseContext[tok.Token], head, body
 				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: CROSS JOIN can't have '%s' condition at %s", cmn.ErrInvalidSQL, cond.Value, cond.Position.String())
 			}
 
-			// NATURAL variants must not have conditions
-			if joinType == cmn.JoinNatural {
+			if joinType == cmn.JoinNatural || joinType == cmn.JoinNaturalLeft || joinType == cmn.JoinNaturalRight || joinType == cmn.JoinNaturalFull {
 				cond := skipped[0].Val
 				return cmn.TableReferenceForFrom{}, fmt.Errorf("%w: NATURAL JOIN can't have '%s' condition at %s", ErrNaturalJoinWithCondition, cond.Value, cond.Position.String())
 			}

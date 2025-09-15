@@ -48,7 +48,8 @@ func Inspect(r io.Reader, opt InspectOptions) (InspectResult, error) {
 		return res, fmt.Errorf("parserstep3: %w", err)
 	}
 
-	if err := parserstep4.Execute(stmt); err != nil {
+	// In fallback, relax validations (InspectMode=true) so we can still extract tables
+	if err := parserstep4.ExecuteWithOptions(stmt, true); err != nil {
 		if opt.Strict {
 			return res, fmt.Errorf("parserstep4: %w", err)
 		}
@@ -80,7 +81,7 @@ func tryFullParserWithInspect(sql string, opt InspectOptions) (InspectResult, bo
 	// Use sentinel FunctionDefinition (empty). Constants are empty.
 	fd := &parser.FunctionDefinition{}
 
-	stmt, err := parser.RawParseWithOptions(tokens, fd, map[string]any{}, parser.Options{InspectMode: true})
+	stmt, err := parser.RawParse(tokens, fd, map[string]any{}, parser.Options{InspectMode: true})
 	if err != nil {
 		if opt.Strict {
 			return res, true, err

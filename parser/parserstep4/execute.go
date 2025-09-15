@@ -11,11 +11,13 @@ func Execute(stmt cmn.StatementNode) error {
 }
 
 // ExecuteWithOptions runs clause-level validation for parserstep4 with optional relaxations
+// When inspectMode is true, allow NATURAL/CROSS JOIN
 func ExecuteWithOptions(stmt cmn.StatementNode, inspectMode bool) error {
 	perr := &cmn.ParseError{}
 
 	switch s := stmt.(type) {
 	case *cmn.SelectStatement:
+		// In InspectMode, skip strict SELECT validation to allow '*', etc.
 		if !inspectMode {
 			finalizeSelectClause(s.Select, perr)
 		}
