@@ -68,16 +68,18 @@ type TestExecution struct {
 
 // Executor handles fixture data insertion and query execution
 type Executor struct {
-	db      *sql.DB
-	dialect string
+	db        *sql.DB
+	dialect   string
+	tableInfo map[string]*snapsql.TableInfo
 }
 
 // NewExecutor creates a new fixture executor
-func NewExecutor(db *sql.DB, dialect string) *Executor {
-	return &Executor{
-		db:      db,
-		dialect: dialect,
-	}
+func NewExecutor(db *sql.DB, dialect string, tableInfo map[string]*snapsql.TableInfo) *Executor {
+       return &Executor{
+	       db:        db,
+	       dialect:   dialect,
+	       tableInfo: tableInfo,
+       }
 }
 
 // ExecuteTest executes a complete test case within a transaction
@@ -413,8 +415,48 @@ func (e *Executor) executeUpsert(tx *sql.Tx, fixture markdownparser.TableFixture
 
 // executeDelete deletes rows that match the dataset's primary keys
 func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture) error {
-	// This requires knowledge of primary keys, which we'll implement later
-	return snapsql.ErrDeleteStrategyNotImplemented
+	   if len(fixture.Data) == 0 {
+		   return nil
+	   }
+
+	   // 主キー情報取得
+	   tblInfo, ok := e.tableInfo[fixture.TableName]
+	   if !ok || tblInfo == nil {
+		   return fmt.Errorf("table info not found for table: %s", fixture.TableName)
+	   }
+	   var pkCols []string
+	   for colName, colInfo := range tblInfo.Columns {
+		   if colInfo.IsPrimaryKey {
+			   pkCols = append(pkCols, colName)
+		   }
+	   }
+	   if len(pkCols) == 0 {
+		   return fmt.Errorf("no primary key defined for table: %s", fixture.TableName)
+	   }
+
+	   for _, row := range fixture.Data {
+		   var (
+			   whereClauses []string
+			   values       []any
+			   idx          = 1
+		   )
+		   for _, pk := range pkCols {
+			   val, exists := row[pk]
+			   if !exists {
+				   return fmt.Errorf("primary key column %s missing in fixture data for table %s", pk, fixture.TableName)
+			   }
+			   whereClauses = append(whereClauses, fmt.Sprintf("%s = %s", e.quoteIdentifier(pk), e.getPlaceholder(idx)))
+			   values = append(values, val)
+			   idx++
+		   }
+		   // 主キー以外のカラムは無視
+		   query := fmt.Sprintf("DELETE FROM %s WHERE %s", e.quoteIdentifier(fixture.TableName), strings.Join(whereClauses, " AND "))
+		   ctx := context.Background()
+		   if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+			   return fmt.Errorf("failed to execute delete for table %s: %w", fixture.TableName, err)
+		   }
+	   }
+	   return nil
 }
 
 // truncateTable truncates a table based on database dialect

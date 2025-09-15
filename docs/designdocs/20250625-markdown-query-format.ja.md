@@ -1,3 +1,107 @@
+### Expected Results値比較の特殊指定
+
+YAML配列内の値として、以下の特殊値・マッチ条件を記述できます（ダブルクオート不要）。
+
+| 記法 | 意味 |
+|------|------|
+| [null] | 値がnullであること |
+| [notnull] | 値がnull以外であること |
+| [any] | どんな値でも一致（ワイルドカード） |
+| [regexp, (正規表現)] | 正規表現で一致 |
+
+#### 記述例
+
+```yaml
+- id: 1
+  name: [any]
+  email: [notnull]
+  phone: [null]
+  comment: [regexp, ^foo.*bar$]
+```
+
+#### 仕様詳細
+
+- YAML配列の値として `[null]` を指定した場合、そのカラム値がnullであることを検証
+- `[notnull]` はnull以外であれば一致
+- `[any]` はどんな値でも一致（値の有無は問わない）
+- `[regexp, ...]` は指定した正規表現で値が一致することを検証
+  - 例: `[regexp, ^foo.*bar$]` → `foo...bar` で始まり終わる文字列に一致
+
+#### 注意事項
+
+- YAML配列の値としてのみ利用可能（他の形式ではサポート外）
+- 配列・オブジェクト型の値には適用不可（スカラー値のみ）
+### Expected Results（DML結果比較・テーブル名指定）
+
+DML（update/insert/delete）クエリの結果比較には、テーブル名を明示して期待値を記述します。
+
+#### 記法
+
+- SELECT/RETURNING の場合：従来通り、無名の表（配列）で結果を比較
+  - 例：`**Expected Results:**`
+- UPDATE/INSERT/DELETE の場合：テーブル名を明示
+  - 例：`**Expected Results: users**`
+  - 期待値は「users」テーブルの内容・状態を比較
+
+#### 比較戦略（strategy）
+
+テストケースごとに、以下の比較戦略を選択可能です（デフォルトは「all」）。
+
+| 戦略名 | 概要 | 記法例 |
+|--------|------|--------|
+| all     | テーブルの内容が期待値と完全一致（行・主キー・値すべて） | `**Expected Results: users[all]**` |
+| pk-match | 指定主キーの行のみ内容一致（他の行は無視） | `**Expected Results: users[pk-match]**` |
+| pk-exists | 指定主キーの行が存在することのみ検証 | `**Expected Results: users[pk-exists]**` |
+| pk-not-exists | 指定主キーの行が存在しないことのみ検証 | `**Expected Results: users[pk-not-exists]**` |
+
+#### 期待値データの記述
+
+- YAML/JSON配列、または外部ファイル参照（Markdownリンク）で記述
+- 主キーはテーブル定義に従い自動判定
+
+#### 具体例
+
+```markdown
+**Expected Results: users[all]**
+```yaml
+- id: 1
+  name: "Alice"
+- id: 2
+  name: "Bob"
+```
+
+**Expected Results: users[pk-match]**
+```yaml
+- id: 2
+  name: "Bob"
+```
+
+**Expected Results: users[pk-exists]**
+```yaml
+- id: 2
+```
+
+**Expected Results: users[pk-not-exists]**
+```yaml
+- id: 3
+```
+
+**外部ファイル参照例**
+```markdown
+**Expected Results: users[all]**
+[期待値データ](../expected/expected_users.yaml)
+```
+
+#### 比較戦略の意味
+
+- **all**: テーブルの内容が期待値と完全一致（行数・主キー・値すべて）
+- **pk-match**: 指定主キーの行のみ内容一致（他の行は無視）
+- **pk-exists**: 指定主キーの行が存在することのみ検証（値は問わない）
+- **pk-not-exists**: 指定主キーの行が存在しないことのみ検証
+
+#### デフォルト動作
+
+- テーブル名のみ指定（`**Expected Results: users**`）の場合は「all」戦略と同じ扱い
 # Markdownクエリー定義フォーマット
 
 ## 概要
@@ -144,7 +248,6 @@ WHERE u.id = /*= user_id */1
 
 サポートされる挿入戦略（`[strategy]`）
 - `clear-insert`（既定）: テーブルを空にしてから挿入
-- `insert`: 既存データを残したまま挿入のみ
 - `upsert`: 既存行があれば更新、なければ挿入
 - `delete`: 指定データに一致する行を削除（主キー等に基づく）
 
@@ -212,9 +315,10 @@ include_email: true
 
 （JSONも可。箇条書きは不可）
 
+
 #### Expected Results 形式例
 
-YAML/JSON の配列をサポート。
+YAML/JSON の配列、または外部ファイル参照（Markdownリンク）をサポート。
 
 **YAML:**
 ```yaml
@@ -224,6 +328,19 @@ YAML/JSON の配列をサポート。
   departments__id: 1
   departments__name: "Engineering"
 ```
+
+**外部ファイル参照（YAML/JSON）:**
+```markdown
+**Expected Results:**
+[[期待値データ](../expected/expected_user.yaml)]
+```
+または
+```markdown
+**Expected Results:**
+[[期待値データ](../expected/expected_user.json)]
+```
+
+外部ファイルの内容はYAML/JSON配列形式で記述します。
 
 （CSV/DBUnit XMLは対象外）
 
@@ -311,3 +428,113 @@ include_email: false
   departments__name: "Design"
 ```
 ````
+
+````markdown
+## Fixtures（テーブルデータ挿入戦略・外部ファイル参照）
+
+テストケースごとに、テーブルごとのフィクスチャ挿入戦略（truncate+insert, insert, upsert, delete）を指定できます。
+
+### 基本構文
+
+```markdown
+### Test: ユーザー挿入テスト
+
+**Fixtures: users[clear-insert]**
+```yaml
+- id: 1
+  name: "Alice"
+- id: 2
+  name: "Bob"
+```
+
+**Fixtures: users[upsert]**
+```yaml
+- id: 3
+  name: "Charlie"
+```
+
+**Fixtures: users[upsert]**
+```yaml
+- id: 4
+  name: "David"
+```
+
+**Fixtures: users[delete]**
+```yaml
+- id: 2
+```
+```
+
+- `[clear-insert]` : テーブルをtruncate（またはdelete）してからinsert（デフォルト）
+- `[upsert]` : 既存データがあればupdate、なければinsert
+- `[delete]` : 指定した主キーでdelete
+
+### 外部ファイル参照による共通データの共有
+
+複数テストケース間で共通フィクスチャデータを使いたい場合、外部ファイル（YAML/CSV）を参照できます。
+
+#### 記述例
+
+```markdown
+**Fixtures: users[clear-insert]**
+[共通ユーザーデータ](../fixtures/common_users.yaml)
+```
+
+- `[]()`のMarkdownリンクでファイルパスを指定
+- YAML/CSV形式のファイルをサポート
+- ファイルの内容は自動的に読み込まれ、テーブルデータとして挿入されます
+
+#### 外部ファイルの内容例
+
+`fixtures/common_users.yaml`:
+```yaml
+- id: 1
+  name: "Alice"
+- id: 2
+  name: "Bob"
+```
+
+### 複数テーブル一括インポート（YAML）
+
+1ファイルで複数テーブルのデータを一括で取り込みたい場合、
+`**Fixtures[upsert]**` のラベルとMarkdownリンクでYAMLファイルを指定します。
+
+**例: `fixtures/common_data.yaml`**
+```yaml
+users:
+  - id: 1
+    name: "Alice"
+  - id: 2
+    name: "Bob"
+orders:
+  - id: 100
+    user_id: 1
+    item: "Book"
+  - id: 101
+    user_id: 2
+    item: "Pen"
+```
+
+Markdownテストケース側:
+```markdown
+**Fixtures[upsert]**
+[共通データ](../fixtures/common_data.yaml)
+```
+
+- この場合、YAMLファイル内の全テーブルデータがupsert戦略で一括投入されます。
+- テーブルごとに個別指定したい場合は従来通り `**Fixtures: users[upsert]**` のように記述してください。
+
+---
+
+### 外部ファイル方式まとめ（修正版）
+
+- **YAML**: 1ファイルで複数テーブル（トップレベルキーで分割、一括または個別指定）
+- **CSV**: 1ファイル1テーブル（ファイル名や指定でテーブル名を明示）
+- Markdownリンクで参照し、テストケースごとに柔軟にインポート可能
+
+---
+
+### 戦略の推奨
+
+- `upsert` のみを標準運用とし、他の戦略は必要に応じて明示的に使う設計が合理的です。
+- `insert` 戦略は廃止（主キー重複時のエラー回避のため）。

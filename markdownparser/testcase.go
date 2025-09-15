@@ -239,12 +239,44 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 			return fmt.Errorf("%w in test case %q", ErrDuplicateExpectedResults, testCase.Name)
 		}
 
-		results, err := parseExpectedResults(content)
-		if err != nil {
-			return fmt.Errorf("failed to parse expected results in test case %q: %w", testCase.Name, err)
-		}
-
-		testCase.ExpectedResult = results
+	       // Markdownリンクによる外部ファイル参照を検出
+	       contentStr := strings.TrimSpace(string(content))
+	       var results []map[string]any
+	       var err error
+	       if strings.HasPrefix(contentStr, "[") && strings.Contains(contentStr, "](") {
+		       // Markdownリンク形式: [ラベル](パス)
+		       re := regexp.MustCompile(`\[.*?\]\((.*?)\)`)
+		       matches := re.FindStringSubmatch(contentStr)
+		       if len(matches) == 2 {
+			       filePath := matches[1]
+			       // ファイル読み込み（YAML/JSONのみ対応）
+			       ext := strings.ToLower(filePath[strings.LastIndex(filePath, ".")+1:])
+			       var fileContent []byte
+			       fileContent, err = snapsql.ReadExternalFile(filePath)
+			       if err != nil {
+				       return fmt.Errorf("failed to read expected results external file %s: %w", filePath, err)
+			       }
+			       switch ext {
+			       case "yaml", "yml":
+				       err = parseYAMLData(fileContent, &results)
+			       case "json":
+				       err = parseJSONData(fileContent, &results)
+			       default:
+				       return fmt.Errorf("unsupported expected results file type: %s", ext)
+			       }
+			       if err != nil {
+				       return fmt.Errorf("failed to parse expected results external file %s: %w", filePath, err)
+			       }
+		       } else {
+			       return fmt.Errorf("invalid expected results external file link format in test case %q", testCase.Name)
+		       }
+	       } else {
+		       results, err = parseExpectedResults(content)
+		       if err != nil {
+			       return fmt.Errorf("failed to parse expected results in test case %q: %w", testCase.Name, err)
+		       }
+	       }
+	       testCase.ExpectedResult = results
 
 	case "verify_query":
 		// Verify Queryが既に設定されている場合はエラー
@@ -299,12 +331,18 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 					return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
 				}
 
+				// section.StrategyがUpsert（**Fixtures[upsert]**）なら全テーブルUpsertで投入
+				strategy := section.Strategy
+				if strategy == "" {
+					strategy = ClearInsert
+				}
 				for tableName, rows := range tableData {
-					// 後方互換性のため既存のFixtureフィールドにも追加
 					testCase.Fixture[tableName] = append(testCase.Fixture[tableName], rows...)
-
-					// 新しいFixturesフィールドに追加（デフォルト戦略を使用）
-					addOrUpdateTableFixture(testCase, tableName, ClearInsert, rows)
+					if strategy == Upsert {
+						addOrUpdateTableFixture(testCase, tableName, Upsert, rows)
+					} else {
+						addOrUpdateTableFixture(testCase, tableName, ClearInsert, rows)
+					}
 				}
 			}
 		}
