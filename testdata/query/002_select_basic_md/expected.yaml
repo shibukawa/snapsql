@@ -1,0 +1,5 @@
+columns: [id, name]
+rows:
+  - {id: 2, name: "Bob"}
+count: 1
+

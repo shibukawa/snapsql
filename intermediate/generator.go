@@ -280,14 +280,15 @@ func extractParameterType(paramValue any) string {
 func extractTokensFromStatement(stmt parsercommon.StatementNode) []tokenizer.Token {
 	tokens := []tokenizer.Token{}
 
-	// Process tokens from each clause
-	for _, clause := range stmt.Clauses() {
-		tokens = append(tokens, clause.RawTokens()...)
-	}
-
-	// Process CTE tokens if available
+	// WITH clause must appear before the main statement.
+	// Ensure CTE tokens come first if present.
 	if cte := stmt.CTE(); cte != nil {
 		tokens = append(tokens, cte.RawTokens()...)
+	}
+
+	// Then process tokens from each clause
+	for _, clause := range stmt.Clauses() {
+		tokens = append(tokens, clause.RawTokens()...)
 	}
 
 	return tokens

@@ -1,0 +1,4 @@
+columns: [rows_affected, last_insert_id]
+rows:
+  - {rows_affected: 1, last_insert_id: 1}
+count: 1

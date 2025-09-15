@@ -30,7 +30,7 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	dialectConversions := detectDialectPatterns(ctx.Tokens)
 
 	// Insert dialect-specific instructions where needed
-	instructions = insertDialectInstructions(instructions, dialectConversions)
+	instructions = insertDialectInstructions(instructions, dialectConversions, ctx.Dialect)
 
 	// Set env_index in loop instructions based on environments
 	if len(ctx.Environments) > 0 {
@@ -485,100 +485,6 @@ func convertConcatToPostgreSQL(args string) string {
 	return strings.Join(trimmedParts, " || ")
 }
 
-// createSplitCastInstructions creates multiple EMIT_IF_DIALECT instructions for split CAST syntax
-func createSplitCastInstructions(variant DialectVariant, pos string) []Instruction {
-	var instructions []Instruction
-
-	// Remove the "CAST_SPLIT|" prefix
-	content := strings.TrimPrefix(variant.SqlFragment, "CAST_SPLIT|")
-
-	// Split by "|" to get individual parts
-	parts := strings.Split(content, "|")
-
-	if len(parts) < 3 {
-		// Fallback to single instruction if split format is invalid
-		return []Instruction{
-			{
-				Op:          OpEmitIfDialect,
-				Pos:         pos,
-				SqlFragment: strings.TrimPrefix(variant.SqlFragment, "CAST_SPLIT|"),
-				Dialects:    variant.Dialects,
-			},
-		}
-	}
-
-	// Create separate instructions for each part
-	for i, part := range parts {
-		if part != "" {
-			// Skip the expression part (index 1 for CAST, index 0 for PostgreSQL)
-			// The expression will be processed separately and may contain other dialect code
-			isExpressionPart := false
-
-			if len(parts) == 4 { // CAST(expr|AS|type) format
-				isExpressionPart = (i == 1) // Skip the expression part
-			} else if len(parts) == 3 { // expr|::|type format
-				isExpressionPart = (i == 0) // Skip the expression part
-			}
-
-			if !isExpressionPart {
-				instructions = append(instructions, Instruction{
-					Op:          OpEmitIfDialect,
-					Pos:         pos,
-					SqlFragment: part,
-					Dialects:    variant.Dialects,
-				})
-			}
-		}
-	}
-
-	return instructions
-}
-
-// createSplitConcatInstructions creates multiple EMIT_IF_DIALECT instructions for split CONCAT syntax
-func createSplitConcatInstructions(variant DialectVariant, pos string) []Instruction {
-	var instructions []Instruction
-
-	// Remove the "CONCAT_SPLIT|" prefix
-	content := strings.TrimPrefix(variant.SqlFragment, "CONCAT_SPLIT|")
-
-	// For MySQL/SQLite: CONCAT(args|)
-	// For PostgreSQL: args with || operators
-	if strings.HasPrefix(content, "CONCAT(") && strings.HasSuffix(content, "|)") {
-		// MySQL/SQLite format: CONCAT(args|)
-		instructions = append(instructions, Instruction{
-			Op:          OpEmitIfDialect,
-			Pos:         pos,
-			SqlFragment: "CONCAT(",
-			Dialects:    variant.Dialects,
-		})
-
-		// The arguments will be processed separately and may contain other dialect code
-		// We only emit the CONCAT( and ) parts
-
-		instructions = append(instructions, Instruction{
-			Op:          OpEmitIfDialect,
-			Pos:         pos,
-			SqlFragment: ")",
-			Dialects:    variant.Dialects,
-		})
-	} else {
-		// PostgreSQL format: args with || operators
-		// Split by || and create instructions for each operator
-		parts := strings.Split(content, " || ")
-		for range len(parts) - 1 {
-			// Add || operator between arguments
-			instructions = append(instructions, Instruction{
-				Op:          OpEmitIfDialect,
-				Pos:         pos,
-				SqlFragment: " || ",
-				Dialects:    variant.Dialects,
-			})
-		}
-	}
-
-	return instructions
-}
-
 // isExpressionBoundary checks if a token marks the boundary of an expression
 func isExpressionBoundary(token tok.Token) bool {
 	// Check token types first (most efficient)
@@ -641,7 +547,7 @@ func isTypeBoundary(token tok.Token) bool {
 }
 
 // insertDialectInstructions inserts dialect-specific instructions into the instruction stream
-func insertDialectInstructions(instructions []Instruction, conversions []DialectConversion) []Instruction {
+func insertDialectInstructions(instructions []Instruction, conversions []DialectConversion, dialect string) []Instruction {
 	if len(conversions) == 0 {
 		return instructions
 	}
@@ -649,152 +555,161 @@ func insertDialectInstructions(instructions []Instruction, conversions []Dialect
 	var result []Instruction
 
 	for _, instruction := range instructions {
-		// Check if this instruction contains SQL that needs dialect conversion
 		if instruction.Op == OpEmitStatic {
-			// Apply all conversions to this instruction
-			processedInstructions := applyDialectConversions(instruction, conversions)
-			result = append(result, processedInstructions...)
+			processed := applyDialectConversions(instruction, conversions, dialect)
+			result = append(result, processed...)
 		} else {
-			// No conversion needed, keep original instruction
 			result = append(result, instruction)
 		}
 	}
 
-	return result
+	return mergeAdjacentStaticInstructions(result)
 }
 
 // applyDialectConversions applies all dialect conversions to a single instruction
-func applyDialectConversions(instruction Instruction, conversions []DialectConversion) []Instruction {
+func applyDialectConversions(instruction Instruction, conversions []DialectConversion, dialect string) []Instruction {
 	if len(conversions) == 0 {
 		return []Instruction{instruction}
 	}
 
-	var result []Instruction
+	remaining := instruction.Value
+	if remaining == "" {
+		return []Instruction{instruction}
+	}
+	// sort by start index
+	sorted := make([]DialectConversion, len(conversions))
+	copy(sorted, conversions)
 
-	currentValue := instruction.Value
-
-	// Sort conversions by start position (ascending) to process from left to right
-	// This ensures we process outer constructs before inner ones
-	sortedConversions := make([]DialectConversion, len(conversions))
-	copy(sortedConversions, conversions)
-
-	// Simple bubble sort by start position (ascending)
-	for i := range len(sortedConversions) - 1 {
-		for j := range len(sortedConversions) - i - 1 {
-			if sortedConversions[j].StartTokenIndex > sortedConversions[j+1].StartTokenIndex {
-				sortedConversions[j], sortedConversions[j+1] = sortedConversions[j+1], sortedConversions[j]
+	for i := range len(sorted) - 1 {
+		for j := range len(sorted) - i - 1 {
+			if sorted[j].StartTokenIndex > sorted[j+1].StartTokenIndex {
+				sorted[j], sorted[j+1] = sorted[j+1], sorted[j]
 			}
 		}
 	}
 
-	// Process conversions from left to right
-	remainingValue := currentValue
+	var out []Instruction
 
-	var lastConversionEndPos string
+	for _, conv := range sorted {
+		original := buildSQLFromTokens(conv.OriginalTokens)
 
-	// Calculate position information for each conversion
-	calculatePositionForConversion := func(conversion DialectConversion) string {
-		// Use the position of the first token in the conversion
-		if len(conversion.OriginalTokens) > 0 {
-			firstToken := conversion.OriginalTokens[0]
-			return fmt.Sprintf("%d:%d", firstToken.Position.Line, firstToken.Position.Column)
+		idx := strings.Index(remaining, original)
+		if idx == -1 {
+			continue
 		}
-		// Fallback to original instruction position
-		return instruction.Pos
+
+		if pre := remaining[:idx]; pre != "" {
+			out = append(out, Instruction{Op: OpEmitStatic, Pos: instruction.Pos, Value: pre})
+		}
+
+		chosen := chooseVariant(conv.Variants, dialect)
+		out = append(out, expandVariant(chosen, instruction.Pos))
+		remaining = remaining[idx+len(original):]
 	}
 
-	// Calculate position after a conversion
-	calculatePositionAfterConversion := func(conversion DialectConversion) string {
-		// Use the position after the last token in the conversion
-		if len(conversion.OriginalTokens) > 0 {
-			lastToken := conversion.OriginalTokens[len(conversion.OriginalTokens)-1]
-			// Calculate position after the token (approximate)
-			endColumn := lastToken.Position.Column + len(lastToken.Value)
-
-			return fmt.Sprintf("%d:%d", lastToken.Position.Line, endColumn)
-		}
-		// Fallback to original instruction position
-		return instruction.Pos
+	if remaining != "" {
+		out = append(out, Instruction{Op: OpEmitStatic, Pos: instruction.Pos, Value: remaining})
 	}
 
-	for _, conversion := range sortedConversions {
-		originalText := buildSQLFromTokens(conversion.OriginalTokens)
+	if len(out) == 0 {
+		return []Instruction{instruction}
+	}
 
-		if strings.Contains(remainingValue, originalText) {
-			// Split around the conversion point
-			parts := strings.Split(remainingValue, originalText)
+	return out
+}
 
-			// Calculate position for this conversion
-			conversionPos := calculatePositionForConversion(conversion)
+func chooseVariant(vars []DialectVariant, dialect string) DialectVariant {
+	if len(vars) == 0 {
+		return DialectVariant{}
+	}
 
-			// Add the part before the conversion
-			if len(parts) > 0 && parts[0] != "" {
-				// Use the position after the last conversion, or original position if this is the first
-				beforePos := instruction.Pos
-				if lastConversionEndPos != "" {
-					beforePos = lastConversionEndPos
-				}
+	norm := func(s string) string {
+		s = strings.ToLower(s)
+		switch s {
+		case "postgresql", "pg":
+			return "postgres"
+		case "sqlite3":
+			return "sqlite"
+		default:
+			return s
+		}
+	}
+	d := norm(dialect)
 
-				result = append(result, Instruction{
-					Op:    OpEmitStatic,
-					Pos:   beforePos,
-					Value: parts[0],
-				})
-			}
-
-			// Add dialect-specific instructions
-			for _, variant := range conversion.Variants {
-				if strings.HasPrefix(variant.SqlFragment, "CAST_SPLIT|") {
-					// Handle split CAST instructions
-					splitInstructions := createSplitCastInstructions(variant, conversionPos)
-					result = append(result, splitInstructions...)
-				} else if strings.HasPrefix(variant.SqlFragment, "CONCAT_SPLIT|") {
-					// Handle split CONCAT instructions
-					splitInstructions := createSplitConcatInstructions(variant, conversionPos)
-					result = append(result, splitInstructions...)
-				} else {
-					// Handle regular instructions
-					result = append(result, Instruction{
-						Op:          OpEmitIfDialect,
-						Pos:         conversionPos,
-						SqlFragment: variant.SqlFragment,
-						Dialects:    variant.Dialects,
-					})
-				}
-			}
-
-			// Update remainingValue to the part after the conversion
-			if len(parts) > 1 {
-				remainingValue = strings.Join(parts[1:], originalText)
-				// Update the position for the remaining content
-				lastConversionEndPos = calculatePositionAfterConversion(conversion)
-			} else {
-				remainingValue = ""
+	for _, v := range vars {
+		for _, vd := range v.Dialects {
+			if norm(vd) == d {
+				return v
 			}
 		}
 	}
 
-	// Add any remaining part
-	if remainingValue != "" {
-		// Use the position after the last conversion, or original position if no conversions
-		remainingPos := instruction.Pos
-		if lastConversionEndPos != "" {
-			remainingPos = lastConversionEndPos
+	return vars[0]
+}
+
+func expandVariant(v DialectVariant, pos string) Instruction {
+	sql := v.SqlFragment
+	if strings.HasPrefix(sql, "CAST_SPLIT|") {
+		parts := strings.Split(strings.TrimPrefix(sql, "CAST_SPLIT|"), "|")
+		if len(parts) == 4 { // CAST(expr|AS|type)
+			return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("CAST(%s AS %s)", parts[0], parts[2])}
 		}
 
-		result = append(result, Instruction{
-			Op:    OpEmitStatic,
-			Pos:   remainingPos,
-			Value: remainingValue,
-		})
+		if len(parts) == 3 { // expr|::|type
+			return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("%s::%s", parts[0], parts[2])}
+		}
+
+		return Instruction{Op: OpEmitStatic, Pos: pos, Value: strings.ReplaceAll(strings.ReplaceAll(sql, "CAST_SPLIT|", ""), "|", "")}
 	}
 
-	// If no conversions were applied, return the original instruction
-	if len(result) == 0 {
-		result = append(result, instruction)
+	if strings.HasPrefix(sql, "CONCAT_SPLIT|") {
+		content := strings.TrimPrefix(sql, "CONCAT_SPLIT|")
+		if strings.HasPrefix(content, "CONCAT(") && strings.HasSuffix(content, "|)") {
+			inner := strings.TrimSuffix(strings.TrimPrefix(content, "CONCAT("), "|)")
+			return Instruction{Op: OpEmitStatic, Pos: pos, Value: "CONCAT(" + inner + ")"}
+		}
+
+		return Instruction{Op: OpEmitStatic, Pos: pos, Value: content}
 	}
 
-	return result
+	return Instruction{Op: OpEmitStatic, Pos: pos, Value: sql}
+}
+
+func mergeAdjacentStaticInstructions(ins []Instruction) []Instruction {
+	if len(ins) == 0 {
+		return ins
+	}
+
+	var (
+		out []Instruction
+		buf strings.Builder
+		pos string
+	)
+
+	flush := func() {
+		if buf.Len() > 0 {
+			out = append(out, Instruction{Op: OpEmitStatic, Pos: pos, Value: buf.String()})
+			buf.Reset()
+		}
+	}
+
+	for _, in := range ins {
+		if in.Op == OpEmitStatic {
+			if buf.Len() == 0 {
+				pos = in.Pos
+			}
+
+			buf.WriteString(in.Value)
+		} else {
+			flush()
+
+			out = append(out, in)
+		}
+	}
+
+	flush()
+
+	return out
 }
 
 // detectRandFunction detects RAND() function

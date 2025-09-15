@@ -107,9 +107,10 @@ func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.J
 			// NATURAL CROSS JOIN is not allowed
 			return cmn.JoinInvalid, fmt.Errorf("%w: %s", ErrInvalidJoinType, pos.String())
 		}
-		// NATURAL + qualifier handling
+
+    // NATURAL + qualifier handling
 		// Allowed only with inspectMode
-		if !inspectMode {
+    if !inspectMode {
 			return cmn.JoinInvalid, fmt.Errorf("%w: %s", ErrNaturalJoin, pos.String())
 		}
 

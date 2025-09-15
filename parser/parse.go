@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 
 	"github.com/shibukawa/snapsql/markdownparser"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -294,10 +296,37 @@ func ParseSQLFile(reader io.Reader, constants map[string]any, basePath string, p
 		return nil, nil, fmt.Errorf("tokenization failed: %w", err)
 	}
 
-	// Extract function definition from SQL comments
+	// Extract function definition from SQL comments (fallback to file name if absent)
 	functionDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
 	if err != nil {
-		return nil, nil, err
+		if cmn.IsNoFunctionDefinition(err) {
+			def := &cmn.FunctionDefinition{}
+
+			if basePath != "" {
+				base := filepath.Base(basePath)
+
+				var name string
+				// normalize extension comparison
+				lower := strings.ToLower(base)
+				if strings.HasSuffix(lower, ".snap.sql") {
+					name = base[:len(base)-len(".snap.sql")]
+				} else {
+					name = strings.TrimSuffix(base, filepath.Ext(base))
+				}
+
+				if name != "" {
+					def.FunctionName = name
+				}
+			}
+
+			if err := def.Finalize(basePath, projectRootPath); err != nil {
+				return nil, nil, fmt.Errorf("failed to finalize fallback function definition: %w", err)
+			}
+
+			functionDef = def
+		} else {
+			return nil, nil, err
+		}
 	}
 
 	stmt, err := RawParse(tokens, functionDef, constants, opts)

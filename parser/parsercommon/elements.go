@@ -75,10 +75,10 @@ const (
 	JoinFull
 	JoinCross
 	// Natural join family (inspect mode only; generation mode treats it as invalid)
-	JoinNatural      // NATURAL [INNER] JOIN
-	JoinNaturalLeft  // NATURAL LEFT [OUTER] JOIN
-	JoinNaturalRight // NATURAL RIGHT [OUTER] JOIN
-	JoinNaturalFull  // NATURAL FULL [OUTER] JOIN
+	JoinNatural
+	JoinNaturalLeft
+	JoinNaturalRight
+	JoinNaturalFull
 	JoinInvalid
 )
 

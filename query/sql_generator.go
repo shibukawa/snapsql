@@ -145,12 +145,6 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			// Pop the condition stack
 			conditionStack = conditionStack[:len(conditionStack)-1]
 
-		case intermediate.OpEmitIfDialect:
-			// Check if current dialect matches
-			if g.dialectMatches(instr.Dialects) {
-				result.WriteString(instr.SqlFragment)
-			}
-
 		case intermediate.OpEmitUnlessBoundary:
 			// For now, just emit the value (boundary handling is complex)
 			result.WriteString(instr.Value)
@@ -223,7 +217,7 @@ func (g *SQLGenerator) evaluateCondition(expression string, params map[string]in
 		return false, err
 	}
 
-	// Convert result to boolean
+	// Convert result to boolean (duplicated logic from previous implementation)
 	switch v := result.(type) {
 	case bool:
 		return v, nil
@@ -238,37 +232,6 @@ func (g *SQLGenerator) evaluateCondition(expression string, params map[string]in
 	case string:
 		return v != "", nil
 	default:
-		return true, nil // Non-zero/non-empty values are truthy
+		return true, nil // treat non-zero/non-empty as truthy
 	}
-}
-
-// dialectMatches checks if the current dialect matches any of the specified dialects
-func (g *SQLGenerator) dialectMatches(dialects []string) bool {
-	if len(dialects) == 0 {
-		return true // No dialect restriction
-	}
-
-	for _, dialect := range dialects {
-		if strings.EqualFold(dialect, g.dialect) {
-			return true
-		}
-		// Handle common dialect aliases
-		if g.dialect == "postgres" && (dialect == "postgresql" || dialect == "pg") {
-			return true
-		}
-
-		if g.dialect == "postgresql" && (dialect == "postgres" || dialect == "pg") {
-			return true
-		}
-
-		if g.dialect == "sqlite3" && dialect == "sqlite" {
-			return true
-		}
-
-		if g.dialect == "sqlite" && dialect == "sqlite3" {
-			return true
-		}
-	}
-
-	return false
 }

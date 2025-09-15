@@ -11,7 +11,7 @@ func Execute(stmt cmn.StatementNode) error {
 }
 
 // ExecuteWithOptions runs clause-level validation for parserstep4 with optional relaxations
-// When inspectMode is true, NATURAL/CROSS JOIN等の一部エラーを許容し、解析継続できるようにします。
+// When inspectMode is true, allow NATURAL/CROSS JOIN
 func ExecuteWithOptions(stmt cmn.StatementNode, inspectMode bool) error {
 	perr := &cmn.ParseError{}
 
