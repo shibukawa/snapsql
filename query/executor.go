@@ -19,11 +19,12 @@ import (
 
 // Error definitions
 var (
-	ErrDatabaseConnection  = errors.New("database connection failed")
-	ErrQueryExecution      = errors.New("query execution failed")
-	ErrInvalidOutputFormat = errors.New("invalid output format")
-	ErrInvalidParams       = errors.New("invalid parameters")
-	ErrDangerousQuery      = errors.New("dangerous query detected")
+	ErrDatabaseConnection        = errors.New("database connection failed")
+	ErrQueryExecution            = errors.New("query execution failed")
+	ErrInvalidOutputFormat       = errors.New("invalid output format")
+	ErrInvalidParams             = errors.New("invalid parameters")
+	ErrDangerousQuery            = errors.New("dangerous query detected")
+	ErrUnsupportedTemplateFormat = errors.New("unsupported template extension")
 )
 
 // OutputFormat represents the supported output formats
@@ -596,7 +597,7 @@ func readOriginalSQL(path string) (string, error) {
 		return doc.SQL, nil
 	}
 
-	return "", fmt.Errorf("unsupported template extension: %s", path)
+	return "", fmt.Errorf("%w: %s", ErrUnsupportedTemplateFormat, path)
 }
 
 // convertSQLValue converts SQL values to appropriate Go types
