@@ -499,6 +499,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 	for k := range paramMap {
 		decls = append(decls, cel.Variable(k, cel.AnyType))
 	}
+
 	env, err := cel.NewEnv(decls...)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create CEL environment: %w", err)
@@ -523,6 +524,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 			for _, tok := range deferredTokens {
 				builder.WriteString(tok)
 			}
+
 			deferredTokens = nil
 		}
 	}
@@ -534,8 +536,10 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 			if len(deferredTokens) > 0 && !isOnlyWhitespace(inst.Value) {
 				flushDeferred()
 			}
+
 			if inst.Value != "" {
 				builder.WriteString(inst.Value)
+
 				if !isOnlyWhitespace(inst.Value) {
 					hasContentSinceBd = true
 				}
@@ -551,18 +555,22 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 						break
 					}
 				}
+
 				program, exists := celPrograms[*inst.ExprIndex]
 				if !exists {
 					return "", nil, fmt.Errorf("%w: %d", ErrExpressionIndexNotFound, *inst.ExprIndex)
 				}
+
 				evalParams := map[string]any{"params": paramMap}
 				for k, v := range paramMap {
 					evalParams[k] = v
 				}
+
 				result, _, err := (*program).Eval(evalParams)
 				if err != nil {
 					return "", nil, fmt.Errorf("failed to evaluate expression %d: %w", *inst.ExprIndex, err)
 				}
+
 				args = append(args, result.Value())
 			}
 
@@ -577,6 +585,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 			} else {
 				deferredTokens = nil
 			}
+
 			hasContentSinceBd = false
 
 		default:
@@ -597,6 +606,7 @@ func isOnlyWhitespace(s string) bool {
 			return false
 		}
 	}
+
 	return len(s) > 0
 }
 

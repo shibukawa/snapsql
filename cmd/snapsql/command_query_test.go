@@ -14,8 +14,10 @@ import (
 // helper to write a file
 func writeTemp(t *testing.T, dir, name, content string) string {
 	t.Helper()
+
 	p := filepath.Join(dir, name)
 	assert.NoError(t, os.WriteFile(p, []byte(content), 0644))
+
 	return p
 }
 

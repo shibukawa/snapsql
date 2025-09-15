@@ -264,6 +264,7 @@ func normalizeSystemFieldTimeFunctions(ctx *ProcessingContext, dialectName strin
 		if field.OnInsert != nil {
 			normalizeTimeAny(&field.OnInsert.Default, dialectName)
 		}
+
 		if field.OnUpdate != nil {
 			normalizeTimeAny(&field.OnUpdate.Default, dialectName)
 		}
@@ -298,5 +299,6 @@ func normalizeTimeStringValue(value string, dialectName string) string {
 			return "CURRENT_TIMESTAMP"
 		}
 	}
+
 	return value
 }

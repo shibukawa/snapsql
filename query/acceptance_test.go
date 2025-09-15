@@ -36,24 +36,29 @@ func toRowMaps(cols []string, rows [][]interface{}) []map[string]any {
 				m[c] = r[j]
 			}
 		}
+
 		out[i] = m
 	}
+
 	return out
 }
 
 func TestQueryAcceptance_SQLite(t *testing.T) {
 	root := filepath.Join("..", "testdata", "query")
+
 	entries, err := os.ReadDir(root)
 	if os.IsNotExist(err) {
 		t.Skip("no testdata/query present")
 		return
 	}
+
 	assert.NoError(t, err)
 
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
+
 		caseDir := filepath.Join(root, e.Name())
 
 		t.Run(e.Name(), func(t *testing.T) {
@@ -66,6 +71,7 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 					break
 				}
 			}
+
 			assert.NotEqual(t, "", input, "input file missing")
 
 			// load params if present
@@ -86,6 +92,7 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 				Explain        bool   `yaml:"explain"`
 				ExplainAnalyze bool   `yaml:"explain_analyze"`
 			}
+
 			var optf optionsFile
 			if b, err := os.ReadFile(filepath.Join(caseDir, "options.yaml")); err == nil {
 				_ = yaml.Unmarshal(b, &optf)
@@ -108,17 +115,20 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 				dbPath := filepath.Join(t.TempDir(), "test.db")
 				db, err = OpenDatabase("sqlite3", dbPath, 5)
 				assert.NoError(t, err)
+
 				defer db.Close()
 			case "postgres", "pgx":
 				if testing.Short() {
 					t.Skip("skipping postgres container in short mode")
 				}
+
 				db, cancel = setupPostgreSQLContainerForQuery(t)
 				defer cancel()
 			case "mysql":
 				if testing.Short() {
 					t.Skip("skipping mysql container in short mode")
 				}
+
 				db, cancel = setupMySQLContainerForQuery(t)
 				defer cancel()
 			default:
@@ -127,8 +137,14 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 
 			// run setup.sql if exists
 			if b, err := os.ReadFile(filepath.Join(caseDir, "setup.sql")); err == nil {
-				_, err = db.Exec(string(b))
-				assert.NoError(t, err)
+				for _, stmt := range splitSQLStatements(string(b)) {
+					if stmt == "" {
+						continue
+					}
+
+					_, err = db.Exec(stmt)
+					assert.NoError(t, err)
+				}
 			}
 
 			// execute
@@ -147,12 +163,14 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 				if res != nil {
 					assert.NotEqual(t, "", strings.TrimSpace(res.ExplainPlan))
 				}
+
 				return
 			}
 
 			// load expected
 			b, err := os.ReadFile(filepath.Join(caseDir, "expected.yaml"))
 			assert.NoError(t, err)
+
 			var exp expectedResult
 			assert.NoError(t, yaml.Unmarshal(b, &exp))
 
@@ -162,6 +180,7 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 			if len(exp.Columns) == 0 {
 				got.Columns = nil
 			}
+
 			if exp.Count == 0 {
 				got.Count = 0
 			}
@@ -177,7 +196,9 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 // Postgres helper
 func setupPostgreSQLContainerForQuery(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
+
 	ctx := context.Background()
+
 	pg, err := postgres.Run(ctx,
 		"postgres:15-alpine",
 		postgres.WithDatabase("testdb"),
@@ -189,10 +210,12 @@ func setupPostgreSQLContainerForQuery(t *testing.T) (*sql.DB, func()) {
 	if err != nil {
 		t.Fatalf("start postgres: %v", err)
 	}
+
 	connStr, err := pg.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatalf("postgres conn string: %v", err)
 	}
+
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -203,19 +226,24 @@ func setupPostgreSQLContainerForQuery(t *testing.T) (*sql.DB, func()) {
 		if err := db.Ping(); err == nil {
 			break
 		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
+
 	cleanup := func() {
 		_ = db.Close()
 		_ = pg.Terminate(ctx)
 	}
+
 	return db, cleanup
 }
 
 // MySQL helper
 func setupMySQLContainerForQuery(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
+
 	ctx := context.Background()
+
 	my, err := mysql.Run(ctx,
 		"mysql:8.0",
 		mysql.WithDatabase("testdb"),
@@ -227,10 +255,12 @@ func setupMySQLContainerForQuery(t *testing.T) (*sql.DB, func()) {
 	if err != nil {
 		t.Fatalf("start mysql: %v", err)
 	}
+
 	connStr, err := my.ConnectionString(ctx)
 	if err != nil {
 		t.Fatalf("mysql conn string: %v", err)
 	}
+
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {
 		t.Fatalf("open mysql: %v", err)
@@ -241,11 +271,76 @@ func setupMySQLContainerForQuery(t *testing.T) (*sql.DB, func()) {
 		if err := db.Ping(); err == nil {
 			break
 		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
+
 	cleanup := func() {
 		_ = db.Close()
 		_ = my.Terminate(ctx)
 	}
+
 	return db, cleanup
+}
+
+// splitSQLStatements is a very small helper for test setup scripts.
+// It splits on semicolons while preserving inner semicolons inside single/double quotes.
+// It does not support dollar-quoted PostgreSQL blocks etc., as not needed for current testdata.
+func splitSQLStatements(src string) []string {
+	var (
+		out []string
+		b   strings.Builder
+	)
+
+	inSingle := false
+	inDouble := false
+
+	flush := func() {
+		stmt := strings.TrimSpace(b.String())
+		if stmt != "" {
+			out = append(out, stmt)
+		}
+
+		b.Reset()
+	}
+
+	for i, r := range src {
+		switch r {
+		case '\'':
+			// toggle single quote if not in double
+			if !inDouble {
+				inSingle = !inSingle
+			}
+
+			b.WriteRune(r)
+		case '"':
+			if !inSingle {
+				inDouble = !inDouble
+			}
+
+			b.WriteRune(r)
+		case ';':
+			if !inSingle && !inDouble {
+				flush()
+			} else {
+				b.WriteRune(r)
+			}
+		case '\r', '\n':
+			// normalize newlines to single space if inside a literal, else keep as whitespace
+			if inSingle || inDouble {
+				b.WriteRune(' ')
+			} else {
+				b.WriteRune(r)
+			}
+		default:
+			b.WriteRune(r)
+		}
+
+		// If last rune, flush
+		if i == len(src)-1 {
+			flush()
+		}
+	}
+
+	return out
 }

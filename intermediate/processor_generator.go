@@ -621,7 +621,9 @@ func insertDialectInstructions(instructions []Instruction, conversions []Dialect
 	if len(conversions) == 0 {
 		return instructions
 	}
+
 	var result []Instruction
+
 	for _, instruction := range instructions {
 		if instruction.Op == OpEmitStatic {
 			processed := applyDialectConversions(instruction, conversions, dialect)
@@ -630,6 +632,7 @@ func insertDialectInstructions(instructions []Instruction, conversions []Dialect
 			result = append(result, instruction)
 		}
 	}
+
 	return mergeAdjacentStaticInstructions(result)
 }
 
@@ -638,6 +641,7 @@ func applyDialectConversions(instruction Instruction, conversions []DialectConve
 	if len(conversions) == 0 {
 		return []Instruction{instruction}
 	}
+
 	remaining := instruction.Value
 	if remaining == "" {
 		return []Instruction{instruction}
@@ -645,33 +649,42 @@ func applyDialectConversions(instruction Instruction, conversions []DialectConve
 	// sort by start index
 	sorted := make([]DialectConversion, len(conversions))
 	copy(sorted, conversions)
-	for i := 0; i < len(sorted)-1; i++ {
-		for j := 0; j < len(sorted)-i-1; j++ {
+
+	for i := range len(sorted) - 1 {
+		for j := range len(sorted) - i - 1 {
 			if sorted[j].StartTokenIndex > sorted[j+1].StartTokenIndex {
 				sorted[j], sorted[j+1] = sorted[j+1], sorted[j]
 			}
 		}
 	}
+
 	var out []Instruction
+
 	for _, conv := range sorted {
 		original := buildSQLFromTokens(conv.OriginalTokens)
+
 		idx := strings.Index(remaining, original)
 		if idx == -1 {
 			continue
 		}
+
 		if pre := remaining[:idx]; pre != "" {
 			out = append(out, Instruction{Op: OpEmitStatic, Pos: instruction.Pos, Value: pre})
 		}
+
 		chosen := chooseVariant(conv.Variants, dialect)
 		out = append(out, expandVariant(chosen, instruction.Pos))
 		remaining = remaining[idx+len(original):]
 	}
+
 	if remaining != "" {
 		out = append(out, Instruction{Op: OpEmitStatic, Pos: instruction.Pos, Value: remaining})
 	}
+
 	if len(out) == 0 {
 		return []Instruction{instruction}
 	}
+
 	return out
 }
 
@@ -679,6 +692,7 @@ func chooseVariant(vars []DialectVariant, dialect string) DialectVariant {
 	if len(vars) == 0 {
 		return DialectVariant{}
 	}
+
 	norm := func(s string) string {
 		s = strings.ToLower(s)
 		switch s {
@@ -691,6 +705,7 @@ func chooseVariant(vars []DialectVariant, dialect string) DialectVariant {
 		}
 	}
 	d := norm(dialect)
+
 	for _, v := range vars {
 		for _, vd := range v.Dialects {
 			if norm(vd) == d {
@@ -698,6 +713,7 @@ func chooseVariant(vars []DialectVariant, dialect string) DialectVariant {
 			}
 		}
 	}
+
 	return vars[0]
 }
 
@@ -708,19 +724,24 @@ func expandVariant(v DialectVariant, pos string) Instruction {
 		if len(parts) == 4 { // CAST(expr|AS|type)
 			return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("CAST(%s AS %s)", parts[0], parts[2])}
 		}
+
 		if len(parts) == 3 { // expr|::|type
 			return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("%s::%s", parts[0], parts[2])}
 		}
+
 		return Instruction{Op: OpEmitStatic, Pos: pos, Value: strings.ReplaceAll(strings.ReplaceAll(sql, "CAST_SPLIT|", ""), "|", "")}
 	}
+
 	if strings.HasPrefix(sql, "CONCAT_SPLIT|") {
 		content := strings.TrimPrefix(sql, "CONCAT_SPLIT|")
 		if strings.HasPrefix(content, "CONCAT(") && strings.HasSuffix(content, "|)") {
 			inner := strings.TrimSuffix(strings.TrimPrefix(content, "CONCAT("), "|)")
 			return Instruction{Op: OpEmitStatic, Pos: pos, Value: "CONCAT(" + inner + ")"}
 		}
+
 		return Instruction{Op: OpEmitStatic, Pos: pos, Value: content}
 	}
+
 	return Instruction{Op: OpEmitStatic, Pos: pos, Value: sql}
 }
 
@@ -728,27 +749,36 @@ func mergeAdjacentStaticInstructions(ins []Instruction) []Instruction {
 	if len(ins) == 0 {
 		return ins
 	}
-	var out []Instruction
-	var buf strings.Builder
-	var pos string
+
+	var (
+		out []Instruction
+		buf strings.Builder
+		pos string
+	)
+
 	flush := func() {
 		if buf.Len() > 0 {
 			out = append(out, Instruction{Op: OpEmitStatic, Pos: pos, Value: buf.String()})
 			buf.Reset()
 		}
 	}
+
 	for _, in := range ins {
 		if in.Op == OpEmitStatic {
 			if buf.Len() == 0 {
 				pos = in.Pos
 			}
+
 			buf.WriteString(in.Value)
 		} else {
 			flush()
+
 			out = append(out, in)
 		}
 	}
+
 	flush()
+
 	return out
 }
 

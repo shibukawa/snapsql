@@ -22,7 +22,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -102,8 +101,8 @@ func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string,
 	}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
+		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
+		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
 		{Name: "created_by", Type: "string", Required: true},
 		{Name: "updated_by", Type: "string", Required: true},
 		{Name: "lock_no", Type: "int", Required: false, DefaultValue: 1},

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,11 +19,11 @@ import (
 
 // Error definitions
 var (
-    ErrDatabaseConnection   = errors.New("database connection failed")
-    ErrQueryExecution       = errors.New("query execution failed")
-    ErrInvalidOutputFormat  = errors.New("invalid output format")
-    ErrInvalidParams        = errors.New("invalid parameters")
-    ErrDangerousQuery       = errors.New("dangerous query detected")
+	ErrDatabaseConnection  = errors.New("database connection failed")
+	ErrQueryExecution      = errors.New("query execution failed")
+	ErrInvalidOutputFormat = errors.New("invalid output format")
+	ErrInvalidParams       = errors.New("invalid parameters")
+	ErrDangerousQuery      = errors.New("dangerous query detected")
 )
 
 // OutputFormat represents the supported output formats
@@ -89,31 +90,34 @@ func NewExecutor(db *sql.DB) *Executor {
 
 // ExecuteWithTemplate executes a query using a template file
 func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string, params map[string]interface{}, options QueryOptions) (*QueryResult, error) {
-    // Load template
-    format, err := LoadIntermediateFormat(templateFile)
-    if err != nil {
-        return nil, fmt.Errorf("failed to load template: %w", err)
-    }
+	// Load template
+	format, err := LoadIntermediateFormat(templateFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load template: %w", err)
+	}
 
-    // Preflight parameter validation before any evaluation
-    if err := ValidateParameters(format, params); err != nil {
-        return nil, fmt.Errorf("%w", err)
-    }
+	// Preflight parameter validation before any evaluation
+	if err := ValidateParameters(format, params); err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
 
 	// Static fast-path: if there are no dynamic instructions and no CEL expressions,
 	// fall back to executing the original SQL text. This preserves constructs like CTEs
 	// that are not yet reconstructed by the instruction pipeline.
 	dialect := getDialectFromDriver(options.Driver)
-    optimized, _ := intermediate.OptimizeInstructions(format.Instructions, dialect)
+
+	optimized, _ := intermediate.OptimizeInstructions(format.Instructions, dialect)
 	if !intermediate.HasDynamicInstructions(optimized) && len(format.CELExpressions) == 0 {
 		sqlText, readErr := readOriginalSQL(templateFile)
 		if readErr == nil && sqlText != "" {
 			// Dangerous query check
-            sqlText = addLimitOffsetIfNeeded(sqlText, options)
-            sqlText = FormatSQLForDriver(sqlText, options.Driver)
+			sqlText = addLimitOffsetIfNeeded(sqlText, options)
+
+			sqlText = FormatSQLForDriver(sqlText, options.Driver)
 			if IsDangerousQuery(sqlText) && !options.ExecuteDangerousQuery {
 				return nil, fmt.Errorf("%w: query contains DELETE/UPDATE without WHERE clause. Use --execute-dangerous-query flag to execute anyway", ErrDangerousQuery)
 			}
+
 			return e.executeSQL(ctx, sqlText, nil, options)
 		}
 		// If reading original SQL failed, fall back to pipeline execution
@@ -147,6 +151,7 @@ func isWriteWithoutReturning(sql string) bool {
 		// crude check: no RETURNING keyword
 		return !strings.Contains(s, " RETURNING ") && !strings.HasSuffix(s, " RETURNING")
 	}
+
 	return false
 }
 
@@ -174,6 +179,7 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 	for k := range paramMap {
 		decls = append(decls, cel.Variable(k, cel.AnyType))
 	}
+
 	env, err := cel.NewEnv(decls...)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create CEL environment: %w", err)
@@ -198,6 +204,7 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 			for _, tok := range deferredTokens {
 				builder.WriteString(tok)
 			}
+
 			deferredTokens = nil
 		}
 	}
@@ -210,8 +217,10 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 			if len(deferredTokens) > 0 && !isOnlyWhitespace(inst.Value) {
 				flushDeferred()
 			}
+
 			if inst.Value != "" {
 				builder.WriteString(inst.Value)
+
 				if !isOnlyWhitespace(inst.Value) {
 					hasContentSinceBd = true
 				}
@@ -227,6 +236,7 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 						break
 					}
 				}
+
 				program, exists := celPrograms[*inst.ExprIndex]
 				if !exists {
 					return "", nil, fmt.Errorf("%w: %d", snapsql.ErrExpressionIndexNotFound, *inst.ExprIndex)
@@ -236,10 +246,12 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 				for k, v := range paramMap {
 					evalParams[k] = v
 				}
+
 				result, _, err := (*program).Eval(evalParams)
 				if err != nil {
 					return "", nil, fmt.Errorf("failed to evaluate expression %d: %w", *inst.ExprIndex, err)
 				}
+
 				args = append(args, result.Value())
 			}
 
@@ -280,6 +292,7 @@ func isOnlyWhitespace(s string) bool {
 			return false
 		}
 	}
+
 	return len(s) > 0
 }
 
@@ -314,9 +327,9 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 	}
 
 	// Apply optional LIMIT/OFFSET for SELECT when not present in SQL
-    sql = addLimitOffsetIfNeeded(sql, options)
-    // Convert placeholders and ensure readability (shared logic)
-    sql = FormatSQLForDriver(sql, options.Driver)
+	sql = addLimitOffsetIfNeeded(sql, options)
+	// Convert placeholders and ensure readability (shared logic)
+	sql = FormatSQLForDriver(sql, options.Driver)
 
 	// Check for dangerous queries
 	if IsDangerousQuery(sql) && !options.ExecuteDangerousQuery {
@@ -330,8 +343,10 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{}, options QueryOptions) (*QueryResult, error) {
 	// Create query context with timeout
 	queryCtx := ctx
+
 	if options.Timeout > 0 {
 		var cancel context.CancelFunc
+
 		queryCtx, cancel = context.WithTimeout(ctx, time.Duration(options.Timeout)*time.Second)
 		defer cancel()
 	}
@@ -341,11 +356,14 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 	if isWriteWithoutReturning(sql) {
 		res, err := e.db.ExecContext(queryCtx, sql, args...)
 		duration := time.Since(startTime)
+
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrQueryExecution, err)
 		}
+
 		ra, _ := res.RowsAffected()
 		li, _ := res.LastInsertId()
+
 		return &QueryResult{
 			SQL:        sql,
 			Parameters: args,
@@ -358,9 +376,11 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 
 	rows, err := e.db.QueryContext(queryCtx, sql, args...)
 	duration := time.Since(startTime)
+
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrQueryExecution, err)
 	}
+
 	defer rows.Close()
 
 	result := &QueryResult{SQL: sql, Parameters: args, Duration: duration}
@@ -369,12 +389,15 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column names: %w", err)
 	}
+
 	result.Columns = columns
 
 	if options.Explain {
 		// Re-run with EXPLAIN prefix depending on driver
 		_ = rows.Close()
+
 		var explainSQL string
+
 		switch options.Driver {
 		case "sqlite3":
 			explainSQL = "EXPLAIN QUERY PLAN " + sql
@@ -397,53 +420,70 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 		// Aggregate rows into a plan string (driver-agnostic)
 		cols, _ := rows2.Columns()
 		vals := make([]interface{}, len(cols))
+
 		ptrs := make([]interface{}, len(cols))
 		for i := range vals {
 			ptrs[i] = &vals[i]
 		}
+
 		var lines []string
+
 		for rows2.Next() {
 			if err := rows2.Scan(ptrs...); err != nil {
 				return nil, fmt.Errorf("failed to scan explain row: %w", err)
 			}
 			// join values by space
 			var sb strings.Builder
+
 			for i, v := range vals {
 				if i > 0 {
 					sb.WriteString(" ")
 				}
+
 				sb.WriteString(formatValue(v))
 			}
+
 			lines = append(lines, sb.String())
 		}
+
 		if err := rows2.Err(); err != nil {
 			return nil, fmt.Errorf("error during explain iteration: %w", err)
 		}
+
 		result.ExplainPlan = strings.Join(lines, "\n")
+
 		return result, nil
 	}
 
 	var resultRows [][]interface{}
+
 	values := make([]interface{}, len(columns))
+
 	scanArgs := make([]interface{}, len(columns))
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
+
 	for rows.Next() {
 		if err := rows.Scan(scanArgs...); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
+
 		rowValues := make([]interface{}, len(columns))
 		for i, v := range values {
 			rowValues[i] = convertSQLValue(v)
 		}
+
 		resultRows = append(resultRows, rowValues)
 	}
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error during row iteration: %w", err)
 	}
+
 	result.Rows = resultRows
 	result.Count = len(resultRows)
+
 	return result, nil
 }
 
@@ -452,7 +492,9 @@ func addLimitOffsetIfNeeded(sql string, options QueryOptions) string {
 	if options.Limit <= 0 && options.Offset <= 0 {
 		return sql
 	}
+
 	s := strings.TrimSpace(sql)
+
 	upper := strings.ToUpper(s)
 	if !strings.HasPrefix(upper, "SELECT") {
 		return sql
@@ -466,15 +508,19 @@ func addLimitOffsetIfNeeded(sql string, options QueryOptions) string {
 	if hasSemi {
 		s = strings.TrimSuffix(s, ";")
 	}
+
 	if options.Limit > 0 {
 		s = s + fmt.Sprintf(" LIMIT %d", options.Limit)
 	}
+
 	if options.Offset > 0 {
 		s = s + fmt.Sprintf(" OFFSET %d", options.Offset)
 	}
+
 	if hasSemi {
 		s += ";"
 	}
+
 	return s
 }
 
@@ -484,30 +530,42 @@ func convertPlaceholdersForDriver(sql string, driver string) string {
 	if d != "postgres" && d != "pgx" && d != "postgresql" {
 		return sql
 	}
+
 	var b strings.Builder
+
 	n := 1
 	inSingle := false
 	inDouble := false
-	for i := 0; i < len(sql); i++ {
+
+	for i := range len(sql) {
 		ch := sql[i]
 		if ch == '\'' && !inDouble {
 			inSingle = !inSingle
+
 			b.WriteByte(ch)
+
 			continue
 		}
+
 		if ch == '"' && !inSingle {
 			inDouble = !inDouble
+
 			b.WriteByte(ch)
+
 			continue
 		}
+
 		if ch == '?' && !inSingle && !inDouble {
 			b.WriteByte('$')
-			b.WriteString(fmt.Sprintf("%d", n))
+			b.WriteString(strconv.Itoa(n))
 			n++
+
 			continue
 		}
+
 		b.WriteByte(ch)
 	}
+
 	return b.String()
 }
 
@@ -519,20 +577,25 @@ func readOriginalSQL(path string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		return string(b), nil
 	}
+
 	if strings.HasSuffix(lower, ".snap.md") || strings.HasSuffix(lower, ".md") {
 		f, err := os.Open(path)
 		if err != nil {
 			return "", err
 		}
 		defer f.Close()
+
 		doc, err := markdownparser.Parse(f)
 		if err != nil {
 			return "", err
 		}
+
 		return doc.SQL, nil
 	}
+
 	return "", fmt.Errorf("unsupported template extension: %s", path)
 }
 

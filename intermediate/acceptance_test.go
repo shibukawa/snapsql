@@ -33,6 +33,7 @@ type YAMLColumnInfo struct {
 func loadConfig(testDir string) (*Config, error) {
 	// Priority: config.yaml > snapsql.yaml > default
 	candidates := []string{"config.yaml", "snapsql.yaml"}
+
 	var loaded *Config
 
 	for _, name := range candidates {
@@ -42,10 +43,12 @@ func loadConfig(testDir string) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			var cfg Config
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
 				return nil, err
 			}
+
 			loaded = &cfg
 
 			break
@@ -59,6 +62,7 @@ func loadConfig(testDir string) (*Config, error) {
 	if loaded.Dialect == "" {
 		loaded.Dialect = "postgres"
 	}
+
 	return loaded, nil
 }
 func loadTableInfo(testDir string) (map[string]*TableInfo, error) {

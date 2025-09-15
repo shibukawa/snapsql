@@ -21,6 +21,7 @@ func (p *ReturningProcessor) Process(ctx *ProcessingContext) error {
 	if ctx == nil || len(ctx.Tokens) == 0 {
 		return nil
 	}
+
 	dialect := ctx.Dialect
 
 	// Quick dialect capability predicates
@@ -47,7 +48,8 @@ func (p *ReturningProcessor) Process(ctx *ProcessingContext) error {
 	filtered := make([]tok.Token, 0, len(ctx.Tokens))
 	parenDepth := 0
 	skipping := false
-	for i := 0; i < len(ctx.Tokens); i++ {
+
+	for i := range len(ctx.Tokens) {
 		tk := ctx.Tokens[i]
 		if tk.Type == tok.OPENED_PARENS {
 			parenDepth++
@@ -69,6 +71,7 @@ func (p *ReturningProcessor) Process(ctx *ProcessingContext) error {
 	}
 
 	ctx.Tokens = filtered
+
 	return nil
 }
 
@@ -96,6 +99,7 @@ func detectStatementType(tokens []tok.Token) int {
 			return stmtUnknown
 		}
 	}
+
 	return stmtUnknown
 }
 
