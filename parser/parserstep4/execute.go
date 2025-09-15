@@ -7,13 +7,20 @@ import (
 // Execute runs clause-level validation for parserstep4
 // Returns *ParseError (nil if no error)
 func Execute(stmt cmn.StatementNode) error {
+	return ExecuteWithOptions(stmt, false)
+}
+
+// ExecuteWithOptions runs clause-level validation for parserstep4 with optional relaxations
+func ExecuteWithOptions(stmt cmn.StatementNode, inspectMode bool) error {
 	perr := &cmn.ParseError{}
 
 	switch s := stmt.(type) {
 	case *cmn.SelectStatement:
-		finalizeSelectClause(s.Select, perr)
+		if !inspectMode {
+			finalizeSelectClause(s.Select, perr)
+		}
 
-		finalizeFromClause(s.From, perr)
+		finalizeFromClauseWithOptions(s.From, perr, inspectMode)
 
 		if s.With != nil {
 			emptyCheck(s.With, perr)
@@ -61,8 +68,11 @@ func Execute(stmt cmn.StatementNode) error {
 		}
 
 		if s.Select != nil {
-			finalizeSelectClause(s.Select, perr)
-			finalizeFromClause(s.From, perr)
+			if !inspectMode {
+				finalizeSelectClause(s.Select, perr)
+			}
+
+			finalizeFromClauseWithOptions(s.From, perr, inspectMode)
 
 			if s.Where != nil {
 				emptyCheck(s.Where, perr)

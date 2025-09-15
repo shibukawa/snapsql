@@ -63,16 +63,15 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 		return nil, err
 	}
 
-	// Apply database override if provided
+	// Apply database override if provided (dialect hint only)
 	if options != nil && options.DatabaseOverride != nil {
 		if frontMatter == nil {
 			frontMatter = make(map[string]any)
 		}
 
-		frontMatter["dialect"] = options.DatabaseOverride.Dialect
-		// Store connection info for test runners
-		frontMatter["_test_driver"] = options.DatabaseOverride.Driver
-		frontMatter["_test_connection"] = options.DatabaseOverride.Connection
+		if options.DatabaseOverride.Dialect != "" {
+			frontMatter["dialect"] = options.DatabaseOverride.Dialect
+		}
 	}
 
 	// Create parser
@@ -101,13 +100,9 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 		Metadata: frontMatter,
 	}
 
-	// Set title if available
+	// Set title if available (do not derive function_name from title)
 	if title != "" {
 		document.Metadata["title"] = title
-		// Generate function_name if not present in metadata
-		if document.Metadata["function_name"] == nil {
-			document.Metadata["function_name"] = generateFunctionNameFromTitle(title)
-		}
 	}
 
 	// Extract SQL

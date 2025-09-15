@@ -74,11 +74,11 @@ const (
 	JoinRight
 	JoinFull
 	JoinCross
-	// Natural join is invalid for SnapSQL
-	// JoinNaturalInner
-	// JoinNaturalLeft
-	// JoinNaturalRight
-	// JoinNaturalFull
+	// Natural join family (allowed only in InspectMode)
+	JoinNatural
+	JoinNaturalLeft
+	JoinNaturalRight
+	JoinNaturalFull
 	JoinInvalid
 )
 
@@ -96,6 +96,14 @@ func (jt JoinType) String() string {
 		return "FULL OUTER JOIN"
 	case JoinCross:
 		return "CROSS JOIN"
+	case JoinNatural:
+		return "NATURAL JOIN"
+	case JoinNaturalLeft:
+		return "NATURAL LEFT JOIN"
+	case JoinNaturalRight:
+		return "NATURAL RIGHT JOIN"
+	case JoinNaturalFull:
+		return "NATURAL FULL JOIN"
 	case JoinInvalid:
 		return "invalid JOIN"
 	default:

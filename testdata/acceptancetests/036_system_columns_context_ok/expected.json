@@ -27,17 +27,17 @@
   ],
   "description": "Create a new user with automatic system column handling via context.",
   "format_version": "1",
-  "function_name": "create_user_with_system_columns_context",
+  "function_name": "input",
   "implicit_parameters": [
     {
       "name": "created_at",
       "type": "timestamp",
-      "default": "NOW()"
+      "default": "CURRENT_TIMESTAMP"
     },
     {
       "name": "updated_at",
       "type": "timestamp",
-      "default": "NOW()"
+      "default": "CURRENT_TIMESTAMP"
     },
     {
       "name": "created_by",
@@ -131,18 +131,18 @@
     {
       "name": "created_at",
       "on_insert": {
-        "default": "NOW()",
+        "default": "CURRENT_TIMESTAMP",
         "parameter": "implicit"
       }
     },
     {
       "name": "updated_at",
       "on_insert": {
-        "default": "NOW()",
+        "default": "CURRENT_TIMESTAMP",
         "parameter": "implicit"
       },
       "on_update": {
-        "default": "NOW()",
+        "default": "CURRENT_TIMESTAMP",
         "parameter": "implicit"
       }
     },

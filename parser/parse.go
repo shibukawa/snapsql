@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 
 	"github.com/shibukawa/snapsql/markdownparser"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -134,13 +136,16 @@ const (
 	DependencyFromSubquery   = cmn.SQDependencyFromSubquery
 	DependencySelectSubquery = cmn.SQDependencySelectSubquery
 
-	JoinNone    = cmn.JoinNone
-	JoinInner   = cmn.JoinInner
-	JoinLeft    = cmn.JoinLeft
-	JoinRight   = cmn.JoinRight
-	JoinFull    = cmn.JoinFull
-	JoinCross   = cmn.JoinCross
-	JoinNatural = cmn.JoinInvalid
+	JoinNone         = cmn.JoinNone
+	JoinInner        = cmn.JoinInner
+	JoinLeft         = cmn.JoinLeft
+	JoinRight        = cmn.JoinRight
+	JoinFull         = cmn.JoinFull
+	JoinCross        = cmn.JoinCross
+	JoinNatural      = cmn.JoinNatural
+	JoinNaturalLeft  = cmn.JoinNaturalLeft
+	JoinNaturalRight = cmn.JoinNaturalRight
+	JoinNaturalFull  = cmn.JoinNaturalFull
 )
 
 // Re-export sentinel errors
@@ -209,8 +214,8 @@ func RawParseWithOptions(tokens []tokenizer.Token, functionDef *FunctionDefiniti
 		return nil, fmt.Errorf("parserstep3 failed: %w", err)
 	}
 
-	// Step 4: Run parserstep4 - Clause content validation
-	err = parserstep4.Execute(stmt)
+	// Step 4: Run parserstep4 - Clause content validation (relaxed in InspectMode)
+	err = parserstep4.ExecuteWithOptions(stmt, opts.InspectMode)
 	if err != nil {
 		return nil, fmt.Errorf("parserstep4 failed: %w", err)
 	}
@@ -296,10 +301,37 @@ func ParseSQLFileWithOptions(reader io.Reader, constants map[string]any, basePat
 		return nil, nil, fmt.Errorf("tokenization failed: %w", err)
 	}
 
-	// Extract function definition from SQL comments
+	// Extract function definition from SQL comments (fallback to file name if absent)
 	functionDef, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, basePath, projectRootPath)
 	if err != nil {
-		return nil, nil, err
+		if cmn.IsNoFunctionDefinition(err) {
+			def := &cmn.FunctionDefinition{}
+
+			if basePath != "" {
+				base := filepath.Base(basePath)
+
+				var name string
+				// normalize extension comparison
+				lower := strings.ToLower(base)
+				if strings.HasSuffix(lower, ".snap.sql") {
+					name = base[:len(base)-len(".snap.sql")]
+				} else {
+					name = strings.TrimSuffix(base, filepath.Ext(base))
+				}
+
+				if name != "" {
+					def.FunctionName = name
+				}
+			}
+
+			if err := def.Finalize(basePath, projectRootPath); err != nil {
+				return nil, nil, fmt.Errorf("failed to finalize fallback function definition: %w", err)
+			}
+
+			functionDef = def
+		} else {
+			return nil, nil, err
+		}
 	}
 
 	stmt, err := RawParseWithOptions(tokens, functionDef, constants, opts)
