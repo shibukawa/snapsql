@@ -30,14 +30,23 @@ type TableFixture struct {
 	Data      []map[string]any
 }
 
+// ExpectedResultSpec represents expected result for a table with strategy and data
+type ExpectedResultSpec struct {
+	TableName    string
+	Strategy     string           // "all", "pk-match", "pk-exists", "pk-not-exists"
+	Data         []map[string]any // 値比較特殊指定（[null],[notnull],[any],[regexp,...]）含む
+	ExternalFile string           // 外部ファイル参照時のパス
+}
+
 // TestCase represents a single test case
 type TestCase struct {
-	Name           string
-	Fixtures       []TableFixture              // テーブルごとのfixture情報
-	Fixture        map[string][]map[string]any // 後方互換性のため残す
-	Parameters     map[string]any
-	VerifyQuery    string // 検証用SELECTクエリ
-	ExpectedResult []map[string]any
+	Name            string
+	Fixtures        []TableFixture              // テーブルごとのfixture情報
+	Fixture         map[string][]map[string]any // 後方互換性のため残す
+	Parameters      map[string]any
+	VerifyQuery     string               // 検証用SELECTクエリ
+	ExpectedResult  []map[string]any     // 従来型（無名配列）
+	ExpectedResults []ExpectedResultSpec // 新型（テーブル名・戦略付き）
 }
 
 // TestSection represents a section within a test case
@@ -235,48 +244,61 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 
 	case "expected", "expected results", "results":
 		// Expected Resultsが既に設定されている場合はエラー
-		if len(testCase.ExpectedResult) > 0 {
+		if len(testCase.ExpectedResult) > 0 || len(testCase.ExpectedResults) > 0 {
 			return fmt.Errorf("%w in test case %q", ErrDuplicateExpectedResults, testCase.Name)
 		}
 
-	       // Markdownリンクによる外部ファイル参照を検出
-	       contentStr := strings.TrimSpace(string(content))
-	       var results []map[string]any
-	       var err error
-	       if strings.HasPrefix(contentStr, "[") && strings.Contains(contentStr, "](") {
-		       // Markdownリンク形式: [ラベル](パス)
-		       re := regexp.MustCompile(`\[.*?\]\((.*?)\)`)
-		       matches := re.FindStringSubmatch(contentStr)
-		       if len(matches) == 2 {
-			       filePath := matches[1]
-			       // ファイル読み込み（YAML/JSONのみ対応）
-			       ext := strings.ToLower(filePath[strings.LastIndex(filePath, ".")+1:])
-			       var fileContent []byte
-			       fileContent, err = snapsql.ReadExternalFile(filePath)
-			       if err != nil {
-				       return fmt.Errorf("failed to read expected results external file %s: %w", filePath, err)
-			       }
-			       switch ext {
-			       case "yaml", "yml":
-				       err = parseYAMLData(fileContent, &results)
-			       case "json":
-				       err = parseJSONData(fileContent, &results)
-			       default:
-				       return fmt.Errorf("unsupported expected results file type: %s", ext)
-			       }
-			       if err != nil {
-				       return fmt.Errorf("failed to parse expected results external file %s: %w", filePath, err)
-			       }
-		       } else {
-			       return fmt.Errorf("invalid expected results external file link format in test case %q", testCase.Name)
-		       }
-	       } else {
-		       results, err = parseExpectedResults(content)
-		       if err != nil {
-			       return fmt.Errorf("failed to parse expected results in test case %q: %w", testCase.Name, err)
-		       }
-	       }
-	       testCase.ExpectedResult = results
+		// セクションラベルからテーブル名・戦略を抽出
+		tableName := ""
+		strategy := "all"
+		if section.TableName != "" {
+			// 例: users[pk-match]
+			re := regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)(?:\[([^\]]+)\])?$`)
+			matches := re.FindStringSubmatch(section.TableName)
+			if len(matches) > 0 {
+				tableName = matches[1]
+				if len(matches) > 2 && matches[2] != "" {
+					strategy = matches[2]
+				}
+			}
+		}
+
+		// Markdownリンクによる外部ファイル参照を検出
+		contentStr := strings.TrimSpace(string(content))
+		var results []map[string]any
+		var err error
+		externalFile := ""
+		if strings.HasPrefix(contentStr, "[") && strings.Contains(contentStr, "](") {
+			// Markdownリンク形式: [ラベル](パス)
+			re := regexp.MustCompile(`\[.*?\]\((.*?)\)`)
+			matches := re.FindStringSubmatch(contentStr)
+			if len(matches) == 2 {
+				externalFile = matches[1]
+				// ファイル読み込み（YAML/JSONのみ対応）
+				// ext := strings.ToLower(externalFile[strings.LastIndex(externalFile, ".")+1:])
+				// ファイル内容は実行時にロードする想定
+			} else {
+				return fmt.Errorf("invalid expected results external file link format in test case %q", testCase.Name)
+			}
+		} else {
+			results, err = parseExpectedResults(content)
+			if err != nil {
+				return fmt.Errorf("failed to parse expected results in test case %q: %w", testCase.Name, err)
+			}
+		}
+
+		// 新型: テーブル名・戦略付き
+		testCase.ExpectedResults = append(testCase.ExpectedResults, ExpectedResultSpec{
+			TableName:    tableName,
+			Strategy:     strategy,
+			Data:         results,
+			ExternalFile: externalFile,
+		})
+
+		// 従来型: 無名配列（SELECT/RETURNING用）
+		if tableName == "" {
+			testCase.ExpectedResult = results
+		}
 
 	case "verify_query":
 		// Verify Queryが既に設定されている場合はエラー

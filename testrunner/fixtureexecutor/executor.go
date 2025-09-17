@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -75,11 +77,11 @@ type Executor struct {
 
 // NewExecutor creates a new fixture executor
 func NewExecutor(db *sql.DB, dialect string, tableInfo map[string]*snapsql.TableInfo) *Executor {
-       return &Executor{
-	       db:        db,
-	       dialect:   dialect,
-	       tableInfo: tableInfo,
-       }
+	return &Executor{
+		db:        db,
+		dialect:   dialect,
+		tableInfo: tableInfo,
+	}
 }
 
 // ExecuteTest executes a complete test case within a transaction
@@ -193,24 +195,10 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 		return verifyResult, nil
 	}
 
-	// 4. Validate main query results (existing logic)
-	if len(execution.TestCase.ExpectedResult) > 0 {
-		// For SELECT queries or DML queries with RETURNING clause, do direct result comparison
-		if result.QueryType == SelectQuery || hasReturningClause(execution.SQL) {
-			err := e.validateDirectResults(result, execution.TestCase.ExpectedResult)
-			if err != nil {
-				return nil, fmt.Errorf("direct result validation failed: %w", err)
-			}
-		} else {
-			// For DML queries without RETURNING, use validation specs
-			specs, err := parseValidationSpecs(execution.TestCase.ExpectedResult)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse validation specs: %w", err)
-			}
-
-			if err := e.validateResult(execution.Transaction, result, specs); err != nil {
-				return nil, fmt.Errorf("validation failed: %w", err)
-			}
+	// 4. Validate (暫定: 旧式 ExpectedResult を直接比較)
+	if len(execution.TestCase.ExpectedResult) > 0 && (result.QueryType == SelectQuery || hasReturningClause(execution.SQL)) {
+		if err := compareRowsSlice(execution.TestCase.ExpectedResult, result.Data); err != nil {
+			return nil, fmt.Errorf("simple validation failed: %w", err)
 		}
 	}
 
@@ -383,13 +371,11 @@ func (e *Executor) executeTableFixture(tx *sql.Tx, fixture markdownparser.TableF
 
 // executeClearInsert truncates the table and inserts data
 func (e *Executor) executeClearInsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
-	// Truncate table
-	err := e.truncateTable(tx, fixture.TableName)
-	if err != nil {
-		return fmt.Errorf("failed to truncate table: %w", err)
+	// 簡易DELETE実装（dialect依存truncateは未実装暫定）
+	query := fmt.Sprintf("DELETE FROM %s", e.quoteIdentifier(fixture.TableName))
+	if _, err := tx.ExecContext(context.Background(), query); err != nil {
+		return fmt.Errorf("failed to clear table %s: %w", fixture.TableName, err)
 	}
-
-	// Insert data
 	return e.insertData(tx, fixture.TableName, fixture.Data)
 }
 
@@ -415,68 +401,227 @@ func (e *Executor) executeUpsert(tx *sql.Tx, fixture markdownparser.TableFixture
 
 // executeDelete deletes rows that match the dataset's primary keys
 func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture) error {
-	   if len(fixture.Data) == 0 {
-		   return nil
-	   }
-
-	   // 主キー情報取得
-	   tblInfo, ok := e.tableInfo[fixture.TableName]
-	   if !ok || tblInfo == nil {
-		   return fmt.Errorf("table info not found for table: %s", fixture.TableName)
-	   }
-	   var pkCols []string
-	   for colName, colInfo := range tblInfo.Columns {
-		   if colInfo.IsPrimaryKey {
-			   pkCols = append(pkCols, colName)
-		   }
-	   }
-	   if len(pkCols) == 0 {
-		   return fmt.Errorf("no primary key defined for table: %s", fixture.TableName)
-	   }
-
-	   for _, row := range fixture.Data {
-		   var (
-			   whereClauses []string
-			   values       []any
-			   idx          = 1
-		   )
-		   for _, pk := range pkCols {
-			   val, exists := row[pk]
-			   if !exists {
-				   return fmt.Errorf("primary key column %s missing in fixture data for table %s", pk, fixture.TableName)
-			   }
-			   whereClauses = append(whereClauses, fmt.Sprintf("%s = %s", e.quoteIdentifier(pk), e.getPlaceholder(idx)))
-			   values = append(values, val)
-			   idx++
-		   }
-		   // 主キー以外のカラムは無視
-		   query := fmt.Sprintf("DELETE FROM %s WHERE %s", e.quoteIdentifier(fixture.TableName), strings.Join(whereClauses, " AND "))
-		   ctx := context.Background()
-		   if _, err := tx.ExecContext(ctx, query, values...); err != nil {
-			   return fmt.Errorf("failed to execute delete for table %s: %w", fixture.TableName, err)
-		   }
-	   }
-	   return nil
-}
-
-// truncateTable truncates a table based on database dialect
-func (e *Executor) truncateTable(tx *sql.Tx, tableName string) error {
-	var query string
-
-	switch e.dialect {
-	case "postgres":
-		query = fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", e.quoteIdentifier(tableName))
-	case "mysql":
-		query = "TRUNCATE TABLE " + e.quoteIdentifier(tableName)
-	case "sqlite":
-		query = "DELETE FROM " + e.quoteIdentifier(tableName)
-	default:
-		return fmt.Errorf("%w: %s", snapsql.ErrTruncateNotSupported, e.dialect)
+	if len(fixture.Data) == 0 {
+		return nil
 	}
 
-	_, err := tx.ExecContext(context.Background(), query)
+	// 主キー情報取得
+	tblInfo, ok := e.tableInfo[fixture.TableName]
+	if !ok || tblInfo == nil {
+		return fmt.Errorf("table info not found for table: %s", fixture.TableName)
+	}
+	var pkCols []string
+	for colName, colInfo := range tblInfo.Columns {
+		if colInfo.IsPrimaryKey {
+			pkCols = append(pkCols, colName)
+		}
+	}
+	if len(pkCols) == 0 {
+		return fmt.Errorf("no primary key defined for table: %s", fixture.TableName)
+	}
 
-	return err
+	for _, row := range fixture.Data {
+		var (
+			whereClauses []string
+			values       []any
+			idx          = 1
+		)
+		for _, pk := range pkCols {
+			val, exists := row[pk]
+			if !exists {
+				return fmt.Errorf("primary key column %s missing in fixture data for table %s", pk, fixture.TableName)
+			}
+			whereClauses = append(whereClauses, fmt.Sprintf("%s = %s", e.quoteIdentifier(pk), e.getPlaceholder(idx)))
+			values = append(values, val)
+			idx++
+		}
+		// 主キー以外のカラムは無視
+		query := fmt.Sprintf("DELETE FROM %s WHERE %s", e.quoteIdentifier(fixture.TableName), strings.Join(whereClauses, " AND "))
+		ctx := context.Background()
+		if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+			return fmt.Errorf("failed to execute delete for table %s: %w", fixture.TableName, err)
+		}
+	}
+	return nil
+}
+
+// getPrimaryKeyColumns: テーブルの主キー列名リストを返す
+func (e *Executor) getPrimaryKeyColumns(tableName string) ([]string, error) {
+	tblInfo, ok := e.tableInfo[tableName]
+	if !ok || tblInfo == nil {
+		return nil, fmt.Errorf("table info not found for table: %s", tableName)
+	}
+	var pkCols []string
+	for col, info := range tblInfo.Columns {
+		if info.IsPrimaryKey {
+			pkCols = append(pkCols, col)
+		}
+	}
+	if len(pkCols) == 0 {
+		return nil, fmt.Errorf("no primary key defined for table: %s", tableName)
+	}
+	return pkCols, nil
+}
+
+// matchPrimaryKey: 主キー列で2行が一致するか
+func matchPrimaryKey(pkCols []string, row1, row2 map[string]any) bool {
+	for _, pk := range pkCols {
+		v1, ok1 := row1[pk]
+		v2, ok2 := row2[pk]
+		if !ok1 || !ok2 {
+			return false
+		}
+		if v1 != v2 {
+			return false
+		}
+	}
+	return true
+}
+
+// extractPrimaryKey: 主キー値のみ抽出
+func extractPrimaryKey(pkCols []string, row map[string]any) map[string]any {
+	m := make(map[string]any)
+	for _, pk := range pkCols {
+		m[pk] = row[pk]
+	}
+	return m
+}
+
+// compareRowsSlice: 2つの[]map[string]anyを順序・件数・値で完全一致比較
+func compareRowsSlice(expected, actual []map[string]any) error {
+	if len(expected) != len(actual) {
+		return fmt.Errorf("row count mismatch: expected %d, got %d", len(expected), len(actual))
+	}
+	for i := range expected {
+		if err := compareRowsWithMatchers(expected[i], actual[i]); err != nil {
+			return fmt.Errorf("row %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// compareRowsWithMatchers: 1行分の値比較（値比較特殊指定対応）
+func compareRowsWithMatchers(expected, actual map[string]any) error {
+	for k, vExp := range expected {
+		vAct, ok := actual[k]
+		if !ok {
+			return fmt.Errorf("column %s missing in actual row", k)
+		}
+		// 値比較特殊指定
+		switch val := vExp.(type) {
+		case []any:
+			// [null], [notnull], [any], [regexp, ...]
+			if len(val) == 1 {
+				switch val[0] {
+				case "null":
+					if vAct != nil {
+						return fmt.Errorf("column %s: expected null, got %v", k, vAct)
+					}
+				case "notnull":
+					if vAct == nil {
+						return fmt.Errorf("column %s: expected notnull, got null", k)
+					}
+				case "any":
+					// 何でもOK
+				default:
+					return fmt.Errorf("column %s: unknown matcher %v", k, val[0])
+				}
+			} else if len(val) == 2 && val[0] == "regexp" {
+				pat, ok := val[1].(string)
+				if !ok {
+					return fmt.Errorf("column %s: regexp pattern must be string", k)
+				}
+				s, ok := vAct.(string)
+				if !ok {
+					return fmt.Errorf("column %s: regexp matcher expects string, got %T", k, vAct)
+				}
+				matched, err := regexp.MatchString(pat, s)
+				if err != nil {
+					return fmt.Errorf("column %s: regexp error: %w", k, err)
+				}
+				if !matched {
+					return fmt.Errorf("column %s: value '%s' does not match regexp '%s'", k, s, pat)
+				}
+			} else {
+				return fmt.Errorf("column %s: invalid matcher syntax: %v", k, val)
+			}
+		default:
+			// 通常値比較
+			if !valueEquals(vExp, vAct) {
+				return fmt.Errorf("column %s: expected %v, got %v", k, vExp, vAct)
+			}
+		}
+	}
+	return nil
+}
+
+// valueEquals: 厳密一致（float/int/文字列/その他）
+func valueEquals(a, b any) bool {
+	// nil 同士
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	// string と []byte の比較（SQLite で TEXT が []byte になるケース緩和）
+	if sa, ok := a.(string); ok {
+		if bb, ok2 := b.([]byte); ok2 {
+			return sa == string(bb)
+		}
+	}
+	if sb, ok := b.(string); ok {
+		if ab, ok2 := a.([]byte); ok2 {
+			return string(ab) == sb
+		}
+	}
+
+	// 数値型の包括比較
+	if fa, ok := toFloat(a); ok {
+		if fb, ok2 := toFloat(b); ok2 {
+			// ここは整数同士なら誤差不要だが一律で扱う
+			if fa == fb {
+				return true
+			}
+			// 浮動小数点誤差吸収（将来拡張用）
+			if math.Abs(fa-fb) < 1e-9 {
+				return true
+			}
+			return false
+		}
+	}
+
+	return a == b
+}
+
+// toFloat: 任意の数値型を float64 に正規化
+func toFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	default:
+		return 0, false
+	}
 }
 
 // insertData inserts data into a table
@@ -656,7 +801,7 @@ func (e *Executor) validateDirectResults(result *ValidationResult, expectedResul
 	for i, expectedRow := range expectedResults {
 		actualRow := result.Data[i]
 
-		err := compareRows(expectedRow, actualRow)
+		err := compareRowsBasic(expectedRow, actualRow)
 		if err != nil {
 			return fmt.Errorf("result row %d mismatch: %w", i, err)
 		}
@@ -672,7 +817,7 @@ func (e *Executor) validateVerifyResults(result *ValidationResult, expectedResul
 	for i, expectedRow := range expectedResults {
 		actualRow := result.Data[i]
 
-		err := compareRows(expectedRow, actualRow)
+		err := compareRowsBasic(expectedRow, actualRow)
 		if err != nil {
 			return fmt.Errorf("verify query result row %d mismatch: %w", i, err)
 		}

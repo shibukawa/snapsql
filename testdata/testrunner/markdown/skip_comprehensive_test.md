@@ -14,6 +14,108 @@ Comprehensive test suite covering all SQL operations (SELECT/INSERT/UPDATE/DELET
 test_name: "Comprehensive Test"
 ```
 
+# ---
+# 新仕様: 比較戦略・値比較特殊指定・外部ファイル参照・複数テーブル
+
+## upsert + all戦略 + 値比較
+
+```sql
+--! fixture: upsert
+insert into users (id, name, age) values (1, 'Alice', 20);
+insert into users (id, name, age) values (2, 'Bob', 30);
+```
+
+```yaml
+--! expected: users, strategy=all
+- id: 1
+  name: Alice
+  age: 20
+- id: 2
+  name: Bob
+  age: 30
+```
+
+# ---
+
+## clear-insert + pk-match + [notnull] matcher
+
+```sql
+--! fixture: clear-insert
+insert into users (id, name, age) values (3, 'Carol', null);
+insert into users (id, name, age) values (4, 'Dave', 40);
+```
+
+```yaml
+--! expected: users, strategy=pk-match
+- id: 3
+  name: Carol
+  age: [null]
+- id: 4
+  name: Dave
+  age: [notnull]
+```
+
+# ---
+
+## delete + pk-exists + [any] matcher
+
+```sql
+--! fixture: delete
+-- 削除前に2件レコードが存在する前提
+```
+
+```yaml
+--! expected: users, strategy=pk-exists
+- id: 1
+  name: [any]
+  age: [any]
+```
+
+# ---
+
+## pk-not-exists + [regexp] matcher
+
+```yaml
+--! expected: users, strategy=pk-not-exists
+- id: 99
+  name: [regexp, ^Z.*]
+  age: [regexp, ^[0-9]+$]
+```
+
+# ---
+
+## 外部ファイル参照（fixture, expected）
+
+```sql
+--! fixture: upsert, file=fixtures/users_upsert.sql
+```
+
+```yaml
+--! expected: users, strategy=all, file=expected/users_all.yaml
+```
+
+# ---
+
+## 複数テーブル・複数戦略
+
+```sql
+--! fixture: upsert
+insert into users (id, name, age) values (10, 'Eve', 50);
+insert into orders (id, user_id, amount) values (100, 10, 999);
+```
+
+```yaml
+--! expected: users, strategy=all
+- id: 10
+  name: Eve
+  age: 50
+
+--! expected: orders, strategy=all
+- id: 100
+  user_id: 10
+  amount: 999
+```
+
 ## SQL
 ```sql
 -- This will be overridden by individual test cases

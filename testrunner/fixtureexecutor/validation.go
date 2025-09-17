@@ -134,7 +134,7 @@ func (e *Executor) validateDirectResult(result *ValidationResult, spec Validatio
 	for i, expectedRow := range expected {
 		actualRow := result.Data[i]
 
-		err := compareRows(expectedRow, actualRow)
+		err := compareRowsBasic(expectedRow, actualRow)
 		if err != nil {
 			return fmt.Errorf("row %d mismatch: %w", i, err)
 		}
@@ -258,7 +258,7 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 			return fmt.Errorf("%w %d in table %s", snapsql.ErrMissingRowInTable, i, spec.TableName)
 		}
 
-		err := compareRows(expectedRow, actualData[i])
+		err := compareRowsBasic(expectedRow, actualData[i])
 		if err != nil {
 			return fmt.Errorf("table %s row %d mismatch: %w", spec.TableName, i, err)
 		}
@@ -358,8 +358,8 @@ func (e *Executor) validateCount(tx *sql.Tx, spec ValidationSpec) error {
 	return nil
 }
 
-// compareRows compares two row maps with type tolerance
-func compareRows(expected, actual map[string]any) error {
+// compareRowsBasic compares two row maps with type tolerance (legacy basic comparison)
+func compareRowsBasic(expected, actual map[string]any) error {
 	for key, expectedValue := range expected {
 		actualValue, exists := actual[key]
 		if !exists {

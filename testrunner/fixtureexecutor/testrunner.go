@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 )
 
@@ -44,7 +45,7 @@ func NewTestRunner(db *sql.DB, dialect string, options *ExecutionOptions) *TestR
 	}
 
 	return &TestRunner{
-		executor:   NewExecutor(db, dialect),
+		executor:   NewExecutor(db, dialect, make(map[string]*snapsql.TableInfo)),
 		workerPool: make(chan struct{}, options.Parallel),
 		options:    options,
 		parameters: make(map[string]any),

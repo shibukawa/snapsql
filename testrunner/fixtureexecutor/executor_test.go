@@ -7,6 +7,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,8 +30,8 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Create executor
-	executor := NewExecutor(db, "sqlite")
+	// Create executor (empty table info map for tests)
+	executor := NewExecutor(db, "sqlite", map[string]*snapsql.TableInfo{})
 
 	// Create test case with fixtures
 	testCase := &markdownparser.TestCase{
@@ -118,8 +119,8 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 	_, err = db.Exec("INSERT INTO users (id, name, email) VALUES (999, 'Old User', 'old@example.com')")
 	require.NoError(t, err)
 
-	// Create executor
-	executor := NewExecutor(db, "sqlite")
+	// Create executor (empty table info map for tests)
+	executor := NewExecutor(db, "sqlite", map[string]*snapsql.TableInfo{})
 
 	// Create test case with clear-insert strategy
 	testCase := &markdownparser.TestCase{
