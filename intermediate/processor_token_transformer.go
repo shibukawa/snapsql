@@ -118,6 +118,7 @@ func (t *TokenTransformer) addSystemFieldsToUpdateTokens(tokens []tokenizer.Toke
 
 	// Find the end of SET clause (before WHERE, or end of statement)
 	setEnd := len(tokens)
+
 	for i, token := range tokens {
 		if token.Type == tokenizer.WHERE {
 			setEnd = i

@@ -123,6 +123,7 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 				if lang, ok := langAny.(string); ok {
 					if config, ok := configAny.(map[any]any); ok {
 						langConfig := make(map[string]any)
+
 						for keyAny, valAny := range config {
 							if key, ok := keyAny.(string); ok {
 								langConfig[key] = valAny
@@ -362,6 +363,7 @@ func inferTypeFromValue(val any) string {
 // generateDummyData creates dummy data tree from parameter definitions
 func generateDummyData(params map[string]any) (map[string]any, error) {
 	result := make(map[string]any, len(params))
+
 	for k, v := range params {
 		switch val := v.(type) {
 		case string:
@@ -652,6 +654,7 @@ func (f *FunctionDefinition) normalizeAndResolveAny(v any, fullName string, errs
 			detailResult := make([]any, len(val))
 
 			originalResult := make([]any, len(val))
+
 			for i, e := range val {
 				detail, original := f.normalizeAndResolveAny(e, fullName+fmt.Sprintf("[%d]", i), errs)
 				detailResult[i] = detail

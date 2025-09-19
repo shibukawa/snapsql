@@ -100,6 +100,7 @@ func (dg *SQDependencyGraph) GetScopeHierarchyVisualization() string {
 	}
 
 	var result strings.Builder
+
 	result.WriteString("Scope Hierarchy:\n")
 
 	// Start from root scope

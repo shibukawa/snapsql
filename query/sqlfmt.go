@@ -58,6 +58,7 @@ func convertPlaceholdersForDialect(sql, dialect string) string {
 			if ch == '?' && !inSingle && !inDouble {
 				b.WriteByte('$')
 				b.WriteString(strconv.Itoa(n))
+
 				n++
 
 				continue

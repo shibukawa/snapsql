@@ -252,6 +252,7 @@ func (f *Formatter) formatAsYAML(result *QueryResult, output io.Writer) error {
 // rowsToMaps converts rows to maps
 func rowsToMaps(columns []string, rows [][]interface{}) []map[string]interface{} {
 	var result []map[string]interface{}
+
 	for _, row := range rows {
 		rowMap := make(map[string]interface{})
 

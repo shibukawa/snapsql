@@ -31,7 +31,8 @@ dummy: "value"
 
 **Fixtures: users[clear-insert]**
 ```yaml
-- name: "Existing User"
+- id: 10
+  name: "Existing User"
   email: "existing@example.com"
   age: 30
   status: "inactive"

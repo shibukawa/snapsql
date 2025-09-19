@@ -122,6 +122,7 @@ func generateHierarchicalStructs(functionName string, groups map[string]hierarch
 		structName := fmt.Sprintf("%s%s", generateStructName(functionName), celNameToGoName(prefix))
 
 		var structDef strings.Builder
+
 		structDef.WriteString(fmt.Sprintf("type %s struct {\n", structName))
 
 		for _, field := range group.Fields {

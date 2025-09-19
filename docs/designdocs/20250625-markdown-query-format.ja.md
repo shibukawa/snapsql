@@ -1,107 +1,3 @@
-### Expected Results値比較の特殊指定
-
-YAML配列内の値として、以下の特殊値・マッチ条件を記述できます（ダブルクオート不要）。
-
-| 記法 | 意味 |
-|------|------|
-| [null] | 値がnullであること |
-| [notnull] | 値がnull以外であること |
-| [any] | どんな値でも一致（ワイルドカード） |
-| [regexp, (正規表現)] | 正規表現で一致 |
-
-#### 記述例
-
-```yaml
-- id: 1
-  name: [any]
-  email: [notnull]
-  phone: [null]
-  comment: [regexp, ^foo.*bar$]
-```
-
-#### 仕様詳細
-
-- YAML配列の値として `[null]` を指定した場合、そのカラム値がnullであることを検証
-- `[notnull]` はnull以外であれば一致
-- `[any]` はどんな値でも一致（値の有無は問わない）
-- `[regexp, ...]` は指定した正規表現で値が一致することを検証
-  - 例: `[regexp, ^foo.*bar$]` → `foo...bar` で始まり終わる文字列に一致
-
-#### 注意事項
-
-- YAML配列の値としてのみ利用可能（他の形式ではサポート外）
-- 配列・オブジェクト型の値には適用不可（スカラー値のみ）
-### Expected Results（DML結果比較・テーブル名指定）
-
-DML（update/insert/delete）クエリの結果比較には、テーブル名を明示して期待値を記述します。
-
-#### 記法
-
-- SELECT/RETURNING の場合：従来通り、無名の表（配列）で結果を比較
-  - 例：`**Expected Results:**`
-- UPDATE/INSERT/DELETE の場合：テーブル名を明示
-  - 例：`**Expected Results: users**`
-  - 期待値は「users」テーブルの内容・状態を比較
-
-#### 比較戦略（strategy）
-
-テストケースごとに、以下の比較戦略を選択可能です（デフォルトは「all」）。
-
-| 戦略名 | 概要 | 記法例 |
-|--------|------|--------|
-| all     | テーブルの内容が期待値と完全一致（行・主キー・値すべて） | `**Expected Results: users[all]**` |
-| pk-match | 指定主キーの行のみ内容一致（他の行は無視） | `**Expected Results: users[pk-match]**` |
-| pk-exists | 指定主キーの行が存在することのみ検証 | `**Expected Results: users[pk-exists]**` |
-| pk-not-exists | 指定主キーの行が存在しないことのみ検証 | `**Expected Results: users[pk-not-exists]**` |
-
-#### 期待値データの記述
-
-- YAML/JSON配列、または外部ファイル参照（Markdownリンク）で記述
-- 主キーはテーブル定義に従い自動判定
-
-#### 具体例
-
-```markdown
-**Expected Results: users[all]**
-```yaml
-- id: 1
-  name: "Alice"
-- id: 2
-  name: "Bob"
-```
-
-**Expected Results: users[pk-match]**
-```yaml
-- id: 2
-  name: "Bob"
-```
-
-**Expected Results: users[pk-exists]**
-```yaml
-- id: 2
-```
-
-**Expected Results: users[pk-not-exists]**
-```yaml
-- id: 3
-```
-
-**外部ファイル参照例**
-```markdown
-**Expected Results: users[all]**
-[期待値データ](../expected/expected_users.yaml)
-```
-
-#### 比較戦略の意味
-
-- **all**: テーブルの内容が期待値と完全一致（行数・主キー・値すべて）
-- **pk-match**: 指定主キーの行のみ内容一致（他の行は無視）
-- **pk-exists**: 指定主キーの行が存在することのみ検証（値は問わない）
-- **pk-not-exists**: 指定主キーの行が存在しないことのみ検証
-
-#### デフォルト動作
-
-- テーブル名のみ指定（`**Expected Results: users**`）の場合は「all」戦略と同じ扱い
 # Markdownクエリー定義フォーマット
 
 ## 概要
@@ -538,3 +434,108 @@ Markdownテストケース側:
 
 - `upsert` のみを標準運用とし、他の戦略は必要に応じて明示的に使う設計が合理的です。
 - `insert` 戦略は廃止（主キー重複時のエラー回避のため）。
+
+### Expected Results値比較の特殊指定
+
+YAML配列内の値として、以下の特殊値・マッチ条件を記述できます（ダブルクオート不要）。
+
+| 記法 | 意味 |
+|------|------|
+| [null] | 値がnullであること |
+| [notnull] | 値がnull以外であること |
+| [any] | どんな値でも一致（ワイルドカード） |
+| [regexp, (正規表現)] | 正規表現で一致 |
+
+#### 記述例
+
+```yaml
+- id: 1
+  name: [any]
+  email: [notnull]
+  phone: [null]
+  comment: [regexp, ^foo.*bar$]
+```
+
+#### 仕様詳細
+
+- YAML配列の値として `[null]` を指定した場合、そのカラム値がnullであることを検証
+- `[notnull]` はnull以外であれば一致
+- `[any]` はどんな値でも一致（値の有無は問わない）
+- `[regexp, ...]` は指定した正規表現で値が一致することを検証
+  - 例: `[regexp, ^foo.*bar$]` → `foo...bar` で始まり終わる文字列に一致
+
+#### 注意事項
+
+- YAML配列の値としてのみ利用可能（他の形式ではサポート外）
+- 配列・オブジェクト型の値には適用不可（スカラー値のみ）
+### Expected Results（DML結果比較・テーブル名指定）
+
+DML（update/insert/delete）クエリの結果比較には、テーブル名を明示して期待値を記述します。
+
+#### 記法
+
+- SELECT/RETURNING の場合：従来通り、無名の表（配列）で結果を比較
+  - 例：`**Expected Results:**`
+- UPDATE/INSERT/DELETE の場合：テーブル名を明示
+  - 例：`**Expected Results: users**`
+  - 期待値は「users」テーブルの内容・状態を比較
+
+#### 比較戦略（strategy）
+
+テストケースごとに、以下の比較戦略を選択可能です（デフォルトは「all」）。
+
+| 戦略名 | 概要 | 記法例 |
+|--------|------|--------|
+| all     | テーブルの内容が期待値と完全一致（行・主キー・値すべて） | `**Expected Results: users[all]**` |
+| pk-match | 指定主キーの行のみ内容一致（他の行は無視） | `**Expected Results: users[pk-match]**` |
+| pk-exists | 指定主キーの行が存在することのみ検証 | `**Expected Results: users[pk-exists]**` |
+| pk-not-exists | 指定主キーの行が存在しないことのみ検証 | `**Expected Results: users[pk-not-exists]**` |
+
+#### 期待値データの記述
+
+- YAML/JSON配列、または外部ファイル参照（Markdownリンク）で記述
+- 主キーはテーブル定義に従い自動判定
+
+#### 具体例
+
+```markdown
+**Expected Results: users[all]**
+```yaml
+- id: 1
+  name: "Alice"
+- id: 2
+  name: "Bob"
+```
+
+**Expected Results: users[pk-match]**
+```yaml
+- id: 2
+  name: "Bob"
+```
+
+**Expected Results: users[pk-exists]**
+```yaml
+- id: 2
+```
+
+**Expected Results: users[pk-not-exists]**
+```yaml
+- id: 3
+```
+
+**外部ファイル参照例**
+```markdown
+**Expected Results: users[all]**
+[期待値データ](../expected/expected_users.yaml)
+```
+
+#### 比較戦略の意味
+
+- **all**: テーブルの内容が期待値と完全一致（行数・主キー・値すべて）
+- **pk-match**: 指定主キーの行のみ内容一致（他の行は無視）
+- **pk-exists**: 指定主キーの行が存在することのみ検証（値は問わない）
+- **pk-not-exists**: 指定主キーの行が存在しないことのみ検証
+
+#### デフォルト動作
+
+- テーブル名のみ指定（`**Expected Results: users**`）の場合は「all」戦略と同じ扱い

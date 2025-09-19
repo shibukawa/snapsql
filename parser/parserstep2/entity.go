@@ -24,6 +24,7 @@ func (e *Entity) RawTokens() []tok.Token {
 
 func tokenToEntity(tokens []tok.Token) []pc.Token[Entity] {
 	results := make([]pc.Token[Entity], 0, len(tokens))
+
 	for _, token := range tokens {
 		if token.Type == tok.EOF {
 			continue

@@ -70,6 +70,7 @@ func (t *sqlTokenizer) allTokens() ([]Token, error) {
 		}
 
 		tokens = append(tokens, token)
+
 		if token.Type == EOF {
 			break
 		}

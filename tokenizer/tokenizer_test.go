@@ -112,6 +112,7 @@ func TestBasicTokens(t *testing.T) {
 				assert.NoError(t, err)
 
 				actualTypes = append(actualTypes, token.Type)
+
 				if token.Type == EOF {
 					break
 				}

@@ -88,6 +88,7 @@ func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
 
 	// Convert to the format expected by DetermineResponseType
 	result := make(map[string]*TableInfo)
+
 	for tableName, tableSchema := range yamlTableInfo.Tables {
 		tableInfo := &TableInfo{
 			Name:    tableName,

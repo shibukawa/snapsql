@@ -118,6 +118,7 @@ func (v *SchemaValidator) validateTableColumn(fieldIndex int, tableName, columnN
 
 	// Extract column name from table.column format if needed
 	realColumnName := columnName
+
 	if strings.Contains(columnName, ".") {
 		parts := strings.Split(columnName, ".")
 		if len(parts) == 2 {

@@ -117,6 +117,7 @@ func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.J
 		// Determine NATURAL variant
 		// Remove NATURAL from tokens
 		rest := make([]tok.TokenType, 0, len(joinTokens))
+
 		for _, jt := range joinTokens {
 			if jt != tok.NATURAL {
 				rest = append(rest, jt)

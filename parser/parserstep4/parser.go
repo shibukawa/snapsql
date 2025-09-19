@@ -111,6 +111,7 @@ func fieldIter(tokens []pc.Token[tok.Token]) iter.Seq2[int, pc.Consume[tok.Token
 		nest := 0
 
 		var skipped []pc.Token[tok.Token]
+
 		for _, part := range pc.FindIter(pc.NewParseContext[tok.Token](), splitter, tokens) {
 			if part.Last {
 				yield(count, pc.Consume[tok.Token]{
@@ -141,6 +142,7 @@ func fieldIter(tokens []pc.Token[tok.Token]) iter.Seq2[int, pc.Consume[tok.Token
 						Match:   part.Match,
 						Last:    part.Last,
 					})
+
 					skipped = nil
 					count++
 				}

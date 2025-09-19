@@ -58,6 +58,7 @@ func (e *PostgreSQLExtractor) ExtractSchemas(ctx context.Context, db *sql.DB, co
 	filteredSchemas := e.FilterSchemas(schemaNames, config)
 
 	schemas := make([]snapsql.DatabaseSchema, 0, len(filteredSchemas))
+
 	for _, schemaName := range filteredSchemas {
 		schema := snapsql.DatabaseSchema{
 			Name:         schemaName,
@@ -173,6 +174,7 @@ func (e *PostgreSQLExtractor) ExtractColumns(ctx context.Context, db *sql.DB, sc
 	defer rows.Close()
 
 	columns := map[string]*snapsql.ColumnInfo{}
+
 	for rows.Next() {
 		var (
 			columnName, dataType, isNullable string
@@ -366,6 +368,7 @@ func (e *PostgreSQLExtractor) getSchemaNames(db *sql.DB) ([]string, error) {
 	defer rows.Close()
 
 	var schemas []string
+
 	for rows.Next() {
 		var schema string
 

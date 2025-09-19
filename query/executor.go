@@ -559,6 +559,7 @@ func convertPlaceholdersForDriver(sql string, driver string) string {
 		if ch == '?' && !inSingle && !inDouble {
 			b.WriteByte('$')
 			b.WriteString(strconv.Itoa(n))
+
 			n++
 
 			continue

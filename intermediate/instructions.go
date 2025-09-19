@@ -815,7 +815,6 @@ func handleLimitOffsetClause(token tokenizer.Token, limitOffsetInfo *LimitOffset
 			Op:  OpElse,
 			Pos: getPos(token),
 		})
-
 		// The END instruction will be added after the value token is processed
 		// in the main loop, so we don't add it here
 	}

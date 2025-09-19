@@ -133,6 +133,7 @@ func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference) []T
 	}
 
 	out := make([]TableRef, len(base))
+
 	for i, t := range base {
 		if tr, ok := byAlias[t.Alias]; ok && t.Alias != "" {
 			out[i] = overrideFromStep7(t, tr)
@@ -243,6 +244,7 @@ func extractFromClause(with *cmn.WithClause, from *cmn.FromClause) []TableRef {
 	}
 
 	tmp := make([]TableRef, 0, len(from.Tables))
+
 	for _, t := range from.Tables {
 		src := "join"
 		jt := joinToString(t.JoinType)

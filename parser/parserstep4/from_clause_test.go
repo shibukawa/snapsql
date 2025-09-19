@@ -180,6 +180,7 @@ func TestFinalizeFromClause(t *testing.T) {
 					gotOrig := make([]string, len(got))
 
 					gotJoin := make([]cmn.JoinType, len(got))
+
 					for i := range got {
 						gotTable[i] = got[i].Name
 						gotOrig[i] = got[i].TableName

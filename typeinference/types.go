@@ -496,6 +496,7 @@ func (e *TypeInferenceEngine2) inferTableFieldType(field *parser.SelectField) (*
 
 	// Extract column name from table.column format if needed
 	realColumnName := field.OriginalField
+
 	if strings.Contains(field.OriginalField, ".") {
 		parts := strings.Split(field.OriginalField, ".")
 		if len(parts) == 2 {

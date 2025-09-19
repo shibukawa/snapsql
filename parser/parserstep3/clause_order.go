@@ -38,6 +38,7 @@ func clauseKeywordFromTokens(node cmn.ClauseNode) string {
 	}
 
 	tokens := node.RawTokens()
+
 	for _, typ := range types {
 		// Search from the end for multi-keyword (e.g. INTO)
 		for i := len(tokens) - 1; i >= 0; i-- {

@@ -127,6 +127,7 @@ func (da *DependencyAnalyzer) findAllCircularPaths() [][]string {
 func (da *DependencyAnalyzer) findCircularPathsDFS(nodeID string, visited, inStack map[string]bool, path []string, circularPaths *[][]string) {
 	visited[nodeID] = true
 	inStack[nodeID] = true
+
 	path = append(path, nodeID)
 
 	nodes := da.graph.GetAllNodes()

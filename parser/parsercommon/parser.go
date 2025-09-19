@@ -56,6 +56,7 @@ func WS2(token pc.Parser[tok.Token]) pc.Parser[tok.Token] {
 
 func FilterSpace(tokens []pc.Token[tok.Token]) []pc.Token[tok.Token] {
 	results := make([]pc.Token[tok.Token], 0, len(tokens))
+
 	for _, token := range tokens {
 		if token.Val.Type != tok.WHITESPACE && token.Val.Type != tok.BLOCK_COMMENT && token.Val.Type != tok.LINE_COMMENT {
 			results = append(results, token)
@@ -92,6 +93,7 @@ func KeywordType(typeName string, word ...string) pc.Parser[tok.Token] {
 
 func ToParserToken(tokens []tok.Token) []pc.Token[tok.Token] {
 	results := make([]pc.Token[tok.Token], len(tokens))
+
 	for i, token := range tokens {
 		pcToken := pc.Token[tok.Token]{
 			Type: "raw",

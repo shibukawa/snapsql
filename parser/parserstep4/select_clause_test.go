@@ -397,6 +397,7 @@ func TestFinalizeSelectClause(t *testing.T) {
 				gotTypeNames := make([]string, 0, len(selectClause.Fields))
 
 				gotImplicitTypes := make([]bool, 0, len(selectClause.Fields))
+
 				for _, field := range selectClause.Fields {
 					gotFieldTypes = append(gotFieldTypes, field.FieldKind)
 					gotFieldNames = append(gotFieldNames, field.FieldName)

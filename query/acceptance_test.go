@@ -29,8 +29,10 @@ type expectedResult struct {
 
 func toRowMaps(cols []string, rows [][]interface{}) []map[string]any {
 	out := make([]map[string]any, len(rows))
+
 	for i, r := range rows {
 		m := make(map[string]any, len(cols))
+
 		for j, c := range cols {
 			if j < len(r) {
 				m[c] = r[j]
@@ -64,6 +66,7 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 		t.Run(e.Name(), func(t *testing.T) {
 			// determine input file
 			var input string
+
 			for _, name := range []string{"input.snap.sql", "input.snap.md"} {
 				p := filepath.Join(caseDir, name)
 				if _, err := os.Stat(p); err == nil {
@@ -76,6 +79,7 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 
 			// load params if present
 			params := map[string]any{}
+
 			for _, fname := range []string{"param.yaml", "params.yaml"} {
 				p := filepath.Join(caseDir, fname)
 				if b, err := os.ReadFile(p); err == nil {
@@ -172,6 +176,7 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 			assert.NoError(t, err)
 
 			var exp expectedResult
+
 			assert.NoError(t, yaml.Unmarshal(b, &exp))
 
 			// compare

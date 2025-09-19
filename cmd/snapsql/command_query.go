@@ -429,6 +429,7 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 
 	// Determine output destination
 	var output *os.File
+
 	if q.OutputFile != "" {
 		// Create output file
 		file, err := os.Create(q.OutputFile)

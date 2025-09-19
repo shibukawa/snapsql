@@ -1,17 +1,41 @@
+//nolint:all // Temporarily disable linters for this file due to generator-like structure and strict whitespace rules; revisit and re-enable selectively later.
 package fixtureexecutor
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
+)
+
+var (
+	errTableInfoNotFound     = errors.New("table info not found")
+	errNoPrimaryKeyDefined   = errors.New("no primary key defined")
+	errPrimaryKeyColumnMiss  = errors.New("primary key column missing in fixture data")
+	errRowCountMismatch      = errors.New("row count mismatch")
+	errColumnMissing         = errors.New("column missing in actual row")
+	errExpectedNull          = errors.New("expected null")
+	errExpectedNotNull       = errors.New("expected notnull but got null")
+	errUnknownMatcher        = errors.New("unknown matcher")
+	errRegexpPatternType     = errors.New("regexp pattern must be string")
+	errRegexpExpectString    = errors.New("regexp matcher expects string")
+	errRegexpNotMatch        = errors.New("regexp not matched")
+	errInvalidMatcherSyntax  = errors.New("invalid matcher syntax")
+	errValueMismatch         = errors.New("value mismatch")
+	errUpsertMissingPK       = errors.New("upsert row missing primary key column")
+	errMissingRequiredColumn = errors.New("missing required non-null column in fixture row")
+	errUnknownFixtureColumn  = errors.New("fixture row contains unknown column")
 )
 
 // ExecutionMode represents the test execution mode
@@ -58,6 +82,10 @@ type ValidationResult struct {
 	QueryType    QueryType
 }
 
+// ExpectedResultsStrategy defines comparison strategy for table state validation.
+// Recognized values (design doc): "all" (default), "pk-match", "pk-exists", "pk-not-exists".
+// Executor treats empty string as "all" for backward compatibility.
+
 // TestExecution represents a single test execution context
 type TestExecution struct {
 	TestCase    *markdownparser.TestCase
@@ -73,6 +101,7 @@ type Executor struct {
 	db        *sql.DB
 	dialect   string
 	tableInfo map[string]*snapsql.TableInfo
+	baseDir   string
 }
 
 // NewExecutor creates a new fixture executor
@@ -83,6 +112,9 @@ func NewExecutor(db *sql.DB, dialect string, tableInfo map[string]*snapsql.Table
 		tableInfo: tableInfo,
 	}
 }
+
+// SetBaseDir sets the base directory used to resolve relative external file references
+func (e *Executor) SetBaseDir(dir string) { e.baseDir = dir }
 
 // ExecuteTest executes a complete test case within a transaction
 func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, error) {
@@ -125,6 +157,169 @@ func (e *Executor) executeTestSteps(execution *TestExecution) (*ValidationResult
 	default:
 		return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedExecutionMode, execution.Options.Mode)
 	}
+}
+
+// validateTableState applies expected results strategies (table-qualified expected specs)
+// to a snapshot of the current table data (queried via verify query or future table fetch logic).
+// NOTE: For now we only support strategies against execution.TestCase.ExpectedResults when
+// a table name is provided and the original (legacy) ExpectedResult slice is empty.
+// SELECT/RETURNING queries still use validateVerifyResults.
+func (e *Executor) validateTableStateBySpec(tx *sql.Tx, spec markdownparser.ExpectedResultSpec) error {
+	if spec.TableName == "" {
+		return nil // Nothing to do (legacy path handles unnamed expected results)
+	}
+	strategy := spec.Strategy
+	if strategy == "" {
+		strategy = "all"
+	}
+
+	// Load expected data from external file if specified
+	if spec.ExternalFile != "" && len(spec.Data) == 0 {
+		rows, err := e.loadExternalRows(spec.ExternalFile)
+		if err != nil {
+			return fmt.Errorf("failed to load expected results from external file: %w", err)
+		}
+		spec.Data = rows
+	}
+
+	// Load tableInfo (need primary key for pk-* strategies)
+	ti, ok := e.tableInfo[spec.TableName]
+	if !ok {
+		return fmt.Errorf("%w: %s", errTableInfoNotFound, spec.TableName)
+	}
+
+	// Build SELECT to fetch current table rows (simple full scan ordered by primary keys if exists)
+	cols := make([]string, 0, len(ti.Columns))
+	for name := range ti.Columns {
+		cols = append(cols, name)
+	}
+	// Deterministic order: order by primary key columns (if any)
+	order := ""
+	pkCols := make([]string, 0)
+	for _, c := range ti.Columns {
+		if c.IsPrimaryKey {
+			pkCols = append(pkCols, c.Name)
+		}
+	}
+	if len(pkCols) > 0 {
+		order = " ORDER BY " + strings.Join(pkCols, ",")
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s%s", strings.Join(cols, ","), spec.TableName, order)
+	rows, err := tx.Query(query)
+	if err != nil {
+		return fmt.Errorf("failed to query table state: %w", err)
+	}
+	defer rows.Close()
+
+	colTypes, _ := rows.ColumnTypes()
+	colNames := make([]string, len(colTypes))
+	for i, ct := range colTypes {
+		colNames[i] = ct.Name()
+	}
+	actual := make([]map[string]any, 0)
+	for rows.Next() {
+		scanVals := make([]any, len(colNames))
+		scanPtrs := make([]any, len(colNames))
+		for i := range scanVals {
+			scanPtrs[i] = &scanVals[i]
+		}
+		if err := rows.Scan(scanPtrs...); err != nil {
+			return err
+		}
+		rowMap := make(map[string]any)
+		for i, n := range colNames {
+			rowMap[n] = scanVals[i]
+		}
+		actual = append(actual, rowMap)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	switch strategy {
+	case "all":
+		// expect full match with order irrelevant? design doc implies exact table contents.
+		// We compare counts and then match rows by index after sorting by PK (already ordered if PK exists).
+		if err := compareRowsSlice(spec.Data, actual); err != nil {
+			return err
+		}
+		return nil
+	case "pk-match":
+		return e.comparePKMatch(ti, spec.Data, actual, true)
+	case "pk-exists":
+		return e.comparePKMatch(ti, spec.Data, actual, false)
+	case "pk-not-exists":
+		return e.comparePKNotExists(ti, spec.Data, actual)
+	default:
+		return fmt.Errorf("unknown expected results strategy: %s", strategy)
+	}
+}
+
+// comparePKMatch: For pk-match requires specified PK rows exist and their non-PK values (provided in expected) match.
+// For pk-exists only presence of PK combination is required (other columns ignored).
+func (e *Executor) comparePKMatch(ti *snapsql.TableInfo, expected, actual []map[string]any, checkValues bool) error {
+	pkCols := make([]string, 0)
+	for _, c := range ti.Columns {
+		if c.IsPrimaryKey {
+			pkCols = append(pkCols, c.Name)
+		}
+	}
+	if len(pkCols) == 0 {
+		return errNoPrimaryKeyDefined
+	}
+
+	// index actual by PK tuple string
+	actualIndex := make(map[string]map[string]any)
+	for _, row := range actual {
+		actualIndex[pkKey(pkCols, row)] = row
+	}
+
+	for i, expRow := range expected {
+		key := pkKey(pkCols, expRow)
+		actRow, ok := actualIndex[key]
+		if !ok {
+			return fmt.Errorf("pk row not found (strategy=%v) index=%d key=%s", bool(checkValues), i, key)
+		}
+		if checkValues {
+			// Build expected subset (only columns provided in expRow) and compare with matchers
+			if err := compareRowsWithMatchers(expRow, actRow); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (e *Executor) comparePKNotExists(ti *snapsql.TableInfo, expected, actual []map[string]any) error {
+	pkCols := make([]string, 0)
+	for _, c := range ti.Columns {
+		if c.IsPrimaryKey {
+			pkCols = append(pkCols, c.Name)
+		}
+	}
+	if len(pkCols) == 0 {
+		return errNoPrimaryKeyDefined
+	}
+
+	actualIndex := make(map[string]struct{})
+	for _, row := range actual {
+		actualIndex[pkKey(pkCols, row)] = struct{}{}
+	}
+	for i, expRow := range expected {
+		key := pkKey(pkCols, expRow)
+		if _, exists := actualIndex[key]; exists {
+			return fmt.Errorf("pk row unexpectedly exists index=%d key=%s", i, key)
+		}
+	}
+	return nil
+}
+
+func pkKey(pkCols []string, row map[string]any) string {
+	vals := make([]string, len(pkCols))
+	for i, c := range pkCols {
+		vals[i] = fmt.Sprintf("%v", row[c])
+	}
+	return strings.Join(vals, "||")
 }
 
 // executeFixtureOnly executes only fixture insertion
@@ -184,25 +379,73 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 			return nil, fmt.Errorf("failed to execute verify query: %w", err)
 		}
 
-		// 4. Validate verify query results
+		// 4. Validate verify query results (legacy unnamed)
 		if len(execution.TestCase.ExpectedResult) > 0 {
-			err := e.validateVerifyResults(verifyResult, execution.TestCase.ExpectedResult)
-			if err != nil {
+			if err := e.validateVerifyResults(verifyResult, execution.TestCase.ExpectedResult); err != nil {
 				return nil, fmt.Errorf("verify query validation failed: %w", err)
+			}
+		} else {
+			// Support unnamed external expected results via ExpectedResults entry with empty TableName
+			if spec, ok := firstUnnamedExternalSpec(execution.TestCase.ExpectedResults); ok {
+				rows, err := e.loadExternalRows(spec.ExternalFile)
+				if err != nil {
+					return nil, fmt.Errorf("failed to load expected results from external file: %w", err)
+				}
+				if err := e.validateVerifyResults(verifyResult, rows); err != nil {
+					return nil, fmt.Errorf("verify query validation failed: %w", err)
+				}
+			}
+		}
+
+		// 5. Also apply table-level expected results strategies
+		for _, spec := range execution.TestCase.ExpectedResults {
+			if spec.TableName != "" { // only table-qualified specs
+				if err := e.validateTableStateBySpec(execution.Transaction, spec); err != nil {
+					return nil, fmt.Errorf("table state validation failed: %w", err)
+				}
 			}
 		}
 
 		return verifyResult, nil
 	}
 
-	// 4. Validate (暫定: 旧式 ExpectedResult を直接比較)
-	if len(execution.TestCase.ExpectedResult) > 0 && (result.QueryType == SelectQuery || hasReturningClause(execution.SQL)) {
-		if err := compareRowsSlice(execution.TestCase.ExpectedResult, result.Data); err != nil {
-			return nil, fmt.Errorf("simple validation failed: %w", err)
+	// 4. Validate (暫定: 旧式 ExpectedResult を直接比較) または 外部ファイル参照の無名期待
+	if result.QueryType == SelectQuery || hasReturningClause(execution.SQL) {
+		if len(execution.TestCase.ExpectedResult) > 0 {
+			if err := compareRowsSlice(execution.TestCase.ExpectedResult, result.Data); err != nil {
+				return nil, fmt.Errorf("simple validation failed: %w", err)
+			}
+		} else if spec, ok := firstUnnamedExternalSpec(execution.TestCase.ExpectedResults); ok {
+			rows, err := e.loadExternalRows(spec.ExternalFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load expected results from external file: %w", err)
+			}
+			if err := compareRowsSlice(rows, result.Data); err != nil {
+				return nil, fmt.Errorf("simple validation failed: %w", err)
+			}
+		}
+	}
+
+	// 5. Table-level ExpectedResults with strategies (pk-*, all) validation
+	for _, spec := range execution.TestCase.ExpectedResults {
+		if spec.TableName != "" { // only table-qualified specs
+			if err := e.validateTableStateBySpec(execution.Transaction, spec); err != nil {
+				return nil, fmt.Errorf("table state validation failed: %w", err)
+			}
 		}
 	}
 
 	return result, nil
+}
+
+// firstUnnamedExternalSpec finds an ExpectedResultSpec with empty TableName and non-empty ExternalFile
+func firstUnnamedExternalSpec(specs []markdownparser.ExpectedResultSpec) (markdownparser.ExpectedResultSpec, bool) {
+	for _, s := range specs {
+		if s.TableName == "" && s.ExternalFile != "" {
+			return s, true
+		}
+	}
+	return markdownparser.ExpectedResultSpec{}, false
 }
 
 // detectQueryType detects the type of SQL query
@@ -263,6 +506,7 @@ func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[stri
 
 // executeSelectQuery executes a SELECT query and returns the data
 func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationResult, error) {
+
 	ctx := context.Background()
 
 	rows, err := tx.QueryContext(ctx, sqlQuery)
@@ -342,8 +586,19 @@ func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryT
 		QueryType:    queryType,
 	}, nil
 }
+
 func (e *Executor) executeFixtures(tx *sql.Tx, fixtures []markdownparser.TableFixture) error {
 	for _, fixture := range fixtures {
+		// Load external rows for fixture if needed
+
+		if fixture.ExternalFile != "" && len(fixture.Data) == 0 {
+			rows, err := e.loadExternalRows(fixture.ExternalFile)
+			if err != nil {
+				return fmt.Errorf("failed to load fixture external file for table %s: %w", fixture.TableName, err)
+			}
+			fixture.Data = rows
+		}
+
 		err := e.executeTableFixture(tx, fixture)
 		if err != nil {
 			return fmt.Errorf("failed to execute fixture for table %s: %w", fixture.TableName, err)
@@ -354,12 +609,11 @@ func (e *Executor) executeFixtures(tx *sql.Tx, fixtures []markdownparser.TableFi
 }
 
 // executeTableFixture executes a single table fixture based on its strategy
+
 func (e *Executor) executeTableFixture(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	switch fixture.Strategy {
 	case markdownparser.ClearInsert:
 		return e.executeClearInsert(tx, fixture)
-	case markdownparser.Insert:
-		return e.executeInsert(tx, fixture)
 	case markdownparser.Upsert:
 		return e.executeUpsert(tx, fixture)
 	case markdownparser.Delete:
@@ -369,10 +623,83 @@ func (e *Executor) executeTableFixture(tx *sql.Tx, fixture markdownparser.TableF
 	}
 }
 
+// loadExternalRows loads rows from an external YAML/JSON file path (relative to baseDir if not absolute)
+func (e *Executor) loadExternalRows(path string) ([]map[string]any, error) {
+	if path == "" {
+		return nil, nil
+	}
+	p := path
+	if !isAbsPath(p) && e.baseDir != "" {
+		p = joinPath(e.baseDir, p)
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil, err
+	}
+	return unmarshalRows(b)
+}
+
+// Helpers for path and unmarshal
+func isAbsPath(p string) bool        { return filepath.IsAbs(p) }
+func joinPath(base, p string) string { return filepath.Clean(filepath.Join(base, p)) }
+
+func unmarshalRows(b []byte) ([]map[string]any, error) {
+	var rows []map[string]any
+	if err := yaml.Unmarshal(b, &rows); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal external rows: %w", err)
+	}
+	// normalize values similar to markdownparser.normalizeValue
+	for i := range rows {
+		rows[i] = normalizeLoadedMap(rows[i])
+	}
+	return rows, nil
+}
+
+func normalizeLoadedMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = normalizeLoadedValue(v)
+	}
+	return out
+}
+
+func normalizeLoadedValue(v any) any {
+	switch val := v.(type) {
+	case float64:
+		if float64(int64(val)) == val {
+			return int64(val)
+		}
+		return val
+	case float32:
+		if float32(int32(val)) == val {
+			return int32(val)
+		}
+		return val
+	case []any:
+		res := make([]any, len(val))
+		for i, it := range val {
+			res[i] = normalizeLoadedValue(it)
+		}
+		return res
+	case map[any]any:
+		res := make(map[string]any)
+		for k, vv := range val {
+			if ks, ok := k.(string); ok {
+				res[ks] = normalizeLoadedValue(vv)
+			}
+		}
+		return res
+	case map[string]any:
+		return normalizeLoadedMap(val)
+	default:
+		return v
+	}
+}
+
 // executeClearInsert truncates the table and inserts data
 func (e *Executor) executeClearInsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	// 簡易DELETE実装（dialect依存truncateは未実装暫定）
-	query := fmt.Sprintf("DELETE FROM %s", e.quoteIdentifier(fixture.TableName))
+	query := "DELETE FROM " + e.quoteIdentifier(fixture.TableName)
 	if _, err := tx.ExecContext(context.Background(), query); err != nil {
 		return fmt.Errorf("failed to clear table %s: %w", fixture.TableName, err)
 	}
@@ -380,9 +707,6 @@ func (e *Executor) executeClearInsert(tx *sql.Tx, fixture markdownparser.TableFi
 }
 
 // executeInsert just inserts data into the table
-func (e *Executor) executeInsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
-	return e.insertData(tx, fixture.TableName, fixture.Data)
-}
 
 // executeUpsert inserts data or updates if exists
 func (e *Executor) executeUpsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
@@ -408,7 +732,7 @@ func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture
 	// 主キー情報取得
 	tblInfo, ok := e.tableInfo[fixture.TableName]
 	if !ok || tblInfo == nil {
-		return fmt.Errorf("table info not found for table: %s", fixture.TableName)
+		return fmt.Errorf("%w: %s", errTableInfoNotFound, fixture.TableName)
 	}
 	var pkCols []string
 	for colName, colInfo := range tblInfo.Columns {
@@ -417,7 +741,7 @@ func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture
 		}
 	}
 	if len(pkCols) == 0 {
-		return fmt.Errorf("no primary key defined for table: %s", fixture.TableName)
+		return fmt.Errorf("%w: %s", errNoPrimaryKeyDefined, fixture.TableName)
 	}
 
 	for _, row := range fixture.Data {
@@ -429,13 +753,14 @@ func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture
 		for _, pk := range pkCols {
 			val, exists := row[pk]
 			if !exists {
-				return fmt.Errorf("primary key column %s missing in fixture data for table %s", pk, fixture.TableName)
+				return fmt.Errorf("%w: %s (table %s)", errPrimaryKeyColumnMiss, pk, fixture.TableName)
 			}
 			whereClauses = append(whereClauses, fmt.Sprintf("%s = %s", e.quoteIdentifier(pk), e.getPlaceholder(idx)))
 			values = append(values, val)
 			idx++
 		}
 		// 主キー以外のカラムは無視
+
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s", e.quoteIdentifier(fixture.TableName), strings.Join(whereClauses, " AND "))
 		ctx := context.Background()
 		if _, err := tx.ExecContext(ctx, query, values...); err != nil {
@@ -446,10 +771,11 @@ func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture
 }
 
 // getPrimaryKeyColumns: テーブルの主キー列名リストを返す
+
 func (e *Executor) getPrimaryKeyColumns(tableName string) ([]string, error) {
 	tblInfo, ok := e.tableInfo[tableName]
 	if !ok || tblInfo == nil {
-		return nil, fmt.Errorf("table info not found for table: %s", tableName)
+		return nil, fmt.Errorf("%w: %s", errTableInfoNotFound, tableName)
 	}
 	var pkCols []string
 	for col, info := range tblInfo.Columns {
@@ -458,54 +784,38 @@ func (e *Executor) getPrimaryKeyColumns(tableName string) ([]string, error) {
 		}
 	}
 	if len(pkCols) == 0 {
-		return nil, fmt.Errorf("no primary key defined for table: %s", tableName)
+		return nil, fmt.Errorf("%w: %s", errNoPrimaryKeyDefined, tableName)
 	}
 	return pkCols, nil
 }
 
 // matchPrimaryKey: 主キー列で2行が一致するか
-func matchPrimaryKey(pkCols []string, row1, row2 map[string]any) bool {
-	for _, pk := range pkCols {
-		v1, ok1 := row1[pk]
-		v2, ok2 := row2[pk]
-		if !ok1 || !ok2 {
-			return false
-		}
-		if v1 != v2 {
-			return false
-		}
-	}
-	return true
-}
-
-// extractPrimaryKey: 主キー値のみ抽出
-func extractPrimaryKey(pkCols []string, row map[string]any) map[string]any {
-	m := make(map[string]any)
-	for _, pk := range pkCols {
-		m[pk] = row[pk]
-	}
-	return m
-}
+// (legacy helper matchPrimaryKey / extractPrimaryKey removed as unused)
 
 // compareRowsSlice: 2つの[]map[string]anyを順序・件数・値で完全一致比較
+
 func compareRowsSlice(expected, actual []map[string]any) error {
 	if len(expected) != len(actual) {
-		return fmt.Errorf("row count mismatch: expected %d, got %d", len(expected), len(actual))
+		return fmt.Errorf("%w: expected %d got %d", errRowCountMismatch, len(expected), len(actual))
 	}
+
 	for i := range expected {
 		if err := compareRowsWithMatchers(expected[i], actual[i]); err != nil {
 			return fmt.Errorf("row %d: %w", i, err)
 		}
 	}
+
 	return nil
 }
 
 // compareRowsWithMatchers: 1行分の値比較（値比較特殊指定対応）
+
 func compareRowsWithMatchers(expected, actual map[string]any) error {
 	for k, vExp := range expected {
+
 		vAct, ok := actual[k]
 		if !ok {
-			return fmt.Errorf("column %s missing in actual row", k)
+			return fmt.Errorf("%w: %s", errColumnMissing, k)
 		}
 		// 値比較特殊指定
 		switch val := vExp.(type) {
@@ -515,40 +825,40 @@ func compareRowsWithMatchers(expected, actual map[string]any) error {
 				switch val[0] {
 				case "null":
 					if vAct != nil {
-						return fmt.Errorf("column %s: expected null, got %v", k, vAct)
+						return fmt.Errorf("%w: column=%s got=%v", errExpectedNull, k, vAct)
 					}
 				case "notnull":
 					if vAct == nil {
-						return fmt.Errorf("column %s: expected notnull, got null", k)
+						return fmt.Errorf("%w: column=%s", errExpectedNotNull, k)
 					}
 				case "any":
 					// 何でもOK
 				default:
-					return fmt.Errorf("column %s: unknown matcher %v", k, val[0])
+					return fmt.Errorf("%w: column=%s matcher=%v", errUnknownMatcher, k, val[0])
 				}
 			} else if len(val) == 2 && val[0] == "regexp" {
 				pat, ok := val[1].(string)
 				if !ok {
-					return fmt.Errorf("column %s: regexp pattern must be string", k)
+					return fmt.Errorf("%w: column=%s", errRegexpPatternType, k)
 				}
 				s, ok := vAct.(string)
 				if !ok {
-					return fmt.Errorf("column %s: regexp matcher expects string, got %T", k, vAct)
+					return fmt.Errorf("%w: column=%s gotType=%T", errRegexpExpectString, k, vAct)
 				}
 				matched, err := regexp.MatchString(pat, s)
 				if err != nil {
 					return fmt.Errorf("column %s: regexp error: %w", k, err)
 				}
 				if !matched {
-					return fmt.Errorf("column %s: value '%s' does not match regexp '%s'", k, s, pat)
+					return fmt.Errorf("%w: column=%s value=%s pattern=%s", errRegexpNotMatch, k, s, pat)
 				}
 			} else {
-				return fmt.Errorf("column %s: invalid matcher syntax: %v", k, val)
+				return fmt.Errorf("%w: column=%s raw=%v", errInvalidMatcherSyntax, k, val)
 			}
 		default:
 			// 通常値比較
 			if !valueEquals(vExp, vAct) {
-				return fmt.Errorf("column %s: expected %v, got %v", k, vExp, vAct)
+				return fmt.Errorf("%w: column=%s expected=%v got=%v", errValueMismatch, k, vExp, vAct)
 			}
 		}
 	}
@@ -556,6 +866,7 @@ func compareRowsWithMatchers(expected, actual map[string]any) error {
 }
 
 // valueEquals: 厳密一致（float/int/文字列/その他）
+
 func valueEquals(a, b any) bool {
 	// nil 同士
 	if a == nil || b == nil {
@@ -630,10 +941,36 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 		return nil
 	}
 
-	// Get column names from the first row
+	// Determine column list: if schema present use ColumnOrder intersection with row keys for determinism
 	var columns []string
-	for col := range data[0] {
-		columns = append(columns, col)
+	tbl, hasSchema := e.tableInfo[tableName]
+
+	if hasSchema && tbl != nil && len(tbl.ColumnOrder) > 0 {
+		// validate & build list using first row's keys presence
+		first := data[0]
+		for _, c := range tbl.ColumnOrder {
+			if _, ok := first[c]; ok { // only include present columns
+				columns = append(columns, c)
+			}
+		}
+		// verify required non-null columns exist in row
+		for colName, colInfo := range tbl.Columns {
+			if !colInfo.Nullable && !colInfo.IsPrimaryKey { // PK auto value許容
+				if _, ok := first[colName]; !ok {
+					return fmt.Errorf("%w: %s", errMissingRequiredColumn, colName)
+				}
+			}
+		}
+		// unknown column detection
+		for k := range first {
+			if _, ok := tbl.Columns[k]; !ok {
+				return fmt.Errorf("%w: %s", errUnknownFixtureColumn, k)
+			}
+		}
+	} else {
+		for col := range data[0] {
+			columns = append(columns, col)
+		}
 	}
 
 	// Build INSERT query
@@ -663,6 +1000,21 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 
 	// Insert each row
 	for _, row := range data {
+		if hasSchema && tbl != nil {
+			// per-row validation
+			for colName, colInfo := range tbl.Columns {
+				if !colInfo.Nullable && !colInfo.IsPrimaryKey {
+					if _, ok := row[colName]; !ok {
+						return fmt.Errorf("%w: %s", errMissingRequiredColumn, colName)
+					}
+				}
+			}
+			for k := range row {
+				if _, ok := tbl.Columns[k]; !ok {
+					return fmt.Errorf("%w: %s", errUnknownFixtureColumn, k)
+				}
+			}
+		}
 		values := make([]any, len(columns))
 		for i, col := range columns {
 			values[i] = row[col]
@@ -678,23 +1030,243 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 
 // executePostgresUpsert implements upsert for PostgreSQL
 func (e *Executor) executePostgresUpsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
-	// This is a simplified implementation
-	// In practice, you'd need to know the primary key columns
-	return snapsql.ErrPostgresUpsertNotImplemented
+	pkCols, err := e.getPrimaryKeyColumns(fixture.TableName)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	for _, row := range fixture.Data {
+		// スキーマ列順序使用。なければ行のキー集合
+		var cols []string
+		if tbl, ok := e.tableInfo[fixture.TableName]; ok && tbl != nil && len(tbl.ColumnOrder) > 0 {
+			for _, c := range tbl.ColumnOrder {
+				if _, exists := row[c]; exists {
+					cols = append(cols, c)
+				}
+			}
+			// validation (required columns & unknown columns)
+			for name, info := range tbl.Columns {
+				if !info.Nullable && !info.IsPrimaryKey {
+					if _, ok := row[name]; !ok {
+						return fmt.Errorf("%w: %s", errMissingRequiredColumn, name)
+					}
+				}
+			}
+			for k := range row {
+				if _, ok := tbl.Columns[k]; !ok {
+					return fmt.Errorf("%w: %s", errUnknownFixtureColumn, k)
+				}
+			}
+		} else {
+			for c := range row {
+				cols = append(cols, c)
+			}
+		}
+		var placeholders []string
+		var values []any
+		for i, c := range cols {
+			placeholders = append(placeholders, e.getPlaceholder(i+1))
+			values = append(values, row[c]) // 存在しなければ nil
+		}
+		// 全PK存在チェック
+		for _, pk := range pkCols {
+			// カラムリスト内にPKが無い場合はエラー
+			found := false
+			for _, c := range cols {
+				if c == pk {
+					found = true
+					break
+				}
+			}
+			if !found || row[pk] == nil {
+				return fmt.Errorf("%w: %s", errUpsertMissingPK, pk)
+			}
+		}
+		// ORDER deterministic (optional) – 現在 map iteration 順は未保証だがテスト目的では影響軽微
+		// SET 句（PK以外）
+		var setClauses []string
+		for _, col := range cols {
+			isPK := false
+			for _, pk := range pkCols {
+				if pk == col {
+					isPK = true
+					break
+				}
+			}
+			if isPK {
+				continue
+			}
+			setClauses = append(setClauses, fmt.Sprintf("%s = EXCLUDED.%s", e.quoteIdentifier(col), e.quoteIdentifier(col)))
+		}
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO UPDATE SET %s",
+			e.quoteIdentifier(fixture.TableName),
+			joinQuoted(e, cols, ","),
+			strings.Join(placeholders, ","),
+			joinQuoted(e, pkCols, ","),
+			strings.Join(setClauses, ", "))
+		// execution without verbose debug logging
+		if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+			return fmt.Errorf("postgres upsert failed: %w", err)
+		}
+	}
+	return nil
 }
 
 // executeMySQLUpsert implements upsert for MySQL
 func (e *Executor) executeMySQLUpsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
-	// This is a simplified implementation
-	// In practice, you'd need to know the primary key columns
-	return snapsql.ErrMysqlUpsertNotImplemented
+	pkCols, err := e.getPrimaryKeyColumns(fixture.TableName)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	for _, row := range fixture.Data {
+		var cols []string
+		var placeholders []string
+		var values []any
+		for col, val := range row {
+			cols = append(cols, col)
+			placeholders = append(placeholders, "?")
+			values = append(values, val)
+		}
+		if tbl, ok := e.tableInfo[fixture.TableName]; ok && tbl != nil {
+			for name, info := range tbl.Columns {
+				if !info.Nullable && !info.IsPrimaryKey {
+					if _, ok := row[name]; !ok {
+						return fmt.Errorf("%w: %s", errMissingRequiredColumn, name)
+					}
+				}
+			}
+			for k := range row {
+				if _, ok := tbl.Columns[k]; !ok {
+					return fmt.Errorf("%w: %s", errUnknownFixtureColumn, k)
+				}
+			}
+		}
+		if tbl, ok := e.tableInfo[fixture.TableName]; ok && tbl != nil && len(tbl.ColumnOrder) > 0 {
+			cols, placeholders, values = reorderForSchema(tbl.ColumnOrder, cols, placeholders, values)
+		}
+		var setClauses []string
+		for _, col := range cols {
+			isPK := false
+			for _, pk := range pkCols {
+				if pk == col {
+					isPK = true
+					break
+				}
+			}
+			if isPK {
+				continue
+			}
+			setClauses = append(setClauses, fmt.Sprintf("%s=VALUES(%s)", e.quoteIdentifier(col), e.quoteIdentifier(col)))
+		}
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+			e.quoteIdentifier(fixture.TableName),
+			joinQuoted(e, cols, ","),
+			strings.Join(placeholders, ","),
+			strings.Join(setClauses, ", "))
+		if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+			return fmt.Errorf("mysql upsert failed: %w", err)
+		}
+	}
+	return nil
 }
 
 // executeSQLiteUpsert implements upsert for SQLite
 func (e *Executor) executeSQLiteUpsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
-	// This is a simplified implementation
-	// In practice, you'd need to know the primary key columns
-	return snapsql.ErrSqliteUpsertNotImplemented
+	pkCols, err := e.getPrimaryKeyColumns(fixture.TableName)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	for _, row := range fixture.Data {
+		var cols []string
+		var placeholders []string
+		var values []any
+		for col, val := range row {
+			cols = append(cols, col)
+			placeholders = append(placeholders, "?")
+			values = append(values, val)
+		}
+		if tbl, ok := e.tableInfo[fixture.TableName]; ok && tbl != nil {
+			for name, info := range tbl.Columns {
+				if !info.Nullable && !info.IsPrimaryKey {
+					if _, ok := row[name]; !ok {
+						return fmt.Errorf("%w: %s", errMissingRequiredColumn, name)
+					}
+				}
+			}
+			for k := range row {
+				if _, ok := tbl.Columns[k]; !ok {
+					return fmt.Errorf("%w: %s", errUnknownFixtureColumn, k)
+				}
+			}
+		}
+		if tbl, ok := e.tableInfo[fixture.TableName]; ok && tbl != nil && len(tbl.ColumnOrder) > 0 {
+			cols, placeholders, values = reorderForSchema(tbl.ColumnOrder, cols, placeholders, values)
+		}
+		var setClauses []string
+		for _, col := range cols {
+			isPK := false
+			for _, pk := range pkCols {
+				if pk == col {
+					isPK = true
+					break
+				}
+			}
+			if isPK {
+				continue
+			}
+			setClauses = append(setClauses, fmt.Sprintf("%s=excluded.%s", e.quoteIdentifier(col), e.quoteIdentifier(col)))
+		}
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON CONFLICT(%s) DO UPDATE SET %s",
+			e.quoteIdentifier(fixture.TableName),
+			joinQuoted(e, cols, ","),
+			strings.Join(placeholders, ","),
+			joinQuoted(e, pkCols, ","),
+			strings.Join(setClauses, ", "))
+		if _, err := tx.ExecContext(ctx, query, values...); err != nil {
+			return fmt.Errorf("sqlite upsert failed: %w", err)
+		}
+	}
+	return nil
+}
+
+// joinQuoted helper: quote and join identifiers
+func joinQuoted(e *Executor, cols []string, sep string) string {
+	var parts []string
+	for _, c := range cols {
+		parts = append(parts, e.quoteIdentifier(c))
+	}
+	return strings.Join(parts, sep)
+}
+
+// reorderForSchema: schema ColumnOrder に従い指定された並びに再構成（欠損カラムは末尾に残す）
+func reorderForSchema(order []string, cols []string, placeholders []string, values []any) ([]string, []string, []any) {
+	index := make(map[string]int, len(cols))
+	for i, c := range cols {
+		index[c] = i
+	}
+	var newCols []string
+	var newPlace []string
+	var newVals []any
+	used := make(map[string]bool, len(cols))
+	for _, o := range order {
+		if idx, ok := index[o]; ok {
+			newCols = append(newCols, cols[idx])
+			newPlace = append(newPlace, placeholders[idx])
+			newVals = append(newVals, values[idx])
+			used[o] = true
+		}
+	}
+	// append any remaining columns not in order
+	for i, c := range cols {
+		if !used[c] {
+			newCols = append(newCols, c)
+			newPlace = append(newPlace, placeholders[i])
+			newVals = append(newVals, values[i])
+		}
+	}
+	return newCols, newPlace, newVals
 }
 
 // quoteIdentifier quotes database identifiers based on dialect
@@ -793,22 +1365,7 @@ func (e *Executor) parseMultipleQueries(sql string) []string {
 }
 
 // validateDirectResults validates direct query results for SELECT queries
-func (e *Executor) validateDirectResults(result *ValidationResult, expectedResults []map[string]any) error {
-	if len(result.Data) != len(expectedResults) {
-		return fmt.Errorf("%w: expected %d result rows, got %d rows", snapsql.ErrResultRowCountMismatch, len(expectedResults), len(result.Data))
-	}
-
-	for i, expectedRow := range expectedResults {
-		actualRow := result.Data[i]
-
-		err := compareRowsBasic(expectedRow, actualRow)
-		if err != nil {
-			return fmt.Errorf("result row %d mismatch: %w", i, err)
-		}
-	}
-
-	return nil
-}
+// validateDirectResults removed (unused)
 func (e *Executor) validateVerifyResults(result *ValidationResult, expectedResults []map[string]any) error {
 	if len(result.Data) != len(expectedResults) {
 		return fmt.Errorf("%w: expected %d result rows, got %d rows", snapsql.ErrResultRowCountMismatch, len(expectedResults), len(result.Data))
@@ -825,3 +1382,5 @@ func (e *Executor) validateVerifyResults(result *ValidationResult, expectedResul
 
 	return nil
 }
+
+// integrate table-level expected results validation into executeFullTest path

@@ -425,7 +425,6 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 
 		generatedFiles = append(generatedFiles, outputFile)
 		processedCount++
-
 		// Output message is handled in processTemplateFile
 	}
 
