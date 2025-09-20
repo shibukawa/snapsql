@@ -78,11 +78,6 @@ func TestMarkdownAcceptance(t *testing.T) {
 
 			for _, name := range files {
 				t.Run(name, func(t *testing.T) {
-					t.Parallel()
-					// Parallelize file-level tests only for non-sqlite dialects to avoid :memory: quirks
-					//if d != "sqlite" && d != "sqlite3" {
-					//	t.Parallel()
-					//}
 					path := filepath.Join(baseDir, name)
 
 					f, err := os.Open(path)
