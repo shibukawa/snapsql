@@ -23,6 +23,14 @@ tables:
         name: status
         data_type: text
         nullable: true
+      note:
+        name: note
+        data_type: text
+        nullable: true
+      comment:
+        name: comment
+        data_type: text
+        nullable: true
       department_id:
         name: department_id
         data_type: integer
@@ -33,4 +41,6 @@ tables:
       - email
       - age
       - status
+      - note
+      - comment
       - department_id

@@ -61,7 +61,7 @@ func DefaultExecutionOptions() *ExecutionOptions {
 		Mode:     FullTest,
 		Commit:   false,
 		Parallel: runtime.NumCPU(),
-		Timeout:  time.Minute * 10,
+		Timeout:  2 * time.Minute,
 	}
 }
 
@@ -118,7 +118,8 @@ func (e *Executor) SetBaseDir(dir string) { e.baseDir = dir }
 
 // ExecuteTest executes a complete test case within a transaction
 func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -205,7 +206,10 @@ func (e *Executor) validateTableStateBySpec(tx *sql.Tx, spec markdownparser.Expe
 		order = " ORDER BY " + strings.Join(pkCols, ",")
 	}
 	query := fmt.Sprintf("SELECT %s FROM %s%s", strings.Join(cols, ","), spec.TableName, order)
-	rows, err := tx.Query(query)
+	// Use a bounded context to avoid indefinite blocking (especially on SQLite under edge cases)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query table state: %w", err)
 	}
@@ -366,10 +370,43 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 		return nil, fmt.Errorf("failed to execute fixtures: %w", err)
 	}
 
-	// 2. Execute main query
-	result, err := e.executeQuery(execution.Transaction, execution.SQL, execution.Parameters)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+	// 2. Execute main query (only when necessary)
+	// If we only validate table state (no verify query, no direct/unnamed expected result rows),
+	// and the main SQL is a side-effect-free SELECT (e.g., "SELECT 1"), we can skip executing it.
+	// This avoids unnecessary row iteration that can cause timeouts under certain drivers.
+	var result *ValidationResult
+	queryType := detectQueryType(execution.SQL)
+	_, hasUnnamedExternal := firstUnnamedExternalSpec(execution.TestCase.ExpectedResults)
+	onlyTableStateCheck := execution.TestCase.VerifyQuery == "" && len(execution.TestCase.ExpectedResult) == 0 && !hasUnnamedExternal
+	hasTableQualifiedSpecs := false
+	for _, spec := range execution.TestCase.ExpectedResults {
+		if spec.TableName != "" {
+			hasTableQualifiedSpecs = true
+			break
+		}
+	}
+	skipMainSelect := (queryType == SelectQuery) && onlyTableStateCheck && hasTableQualifiedSpecs
+
+	if skipMainSelect {
+		// Execute the SQL to honor potential side effects while avoiding row iteration cost.
+		// Prefer ExecContext; if driver doesn't allow Exec on SELECT, fall back to QueryContext and close immediately.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if _, err := execution.Transaction.ExecContext(ctx, execution.SQL); err != nil {
+			// Fallback: run as QueryContext then close immediately without iteration
+			if rows, qerr := execution.Transaction.QueryContext(ctx, execution.SQL); qerr == nil {
+				rows.Close()
+			} else {
+				return nil, fmt.Errorf("failed to execute main SQL (exec/query fallback): exec=%v query=%v", err, qerr)
+			}
+		}
+		result = &ValidationResult{Data: nil, RowsAffected: 0, QueryType: SelectQuery}
+	} else {
+		var err error
+		result, err = e.executeQuery(execution.Transaction, execution.SQL, execution.Parameters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute query: %w", err)
+		}
 	}
 
 	// 3. Execute verify query if present
@@ -506,8 +543,9 @@ func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[stri
 
 // executeSelectQuery executes a SELECT query and returns the data
 func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationResult, error) {
-
-	ctx := context.Background()
+	// Guard against indefinite blocking by bounding query duration
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	rows, err := tx.QueryContext(ctx, sqlQuery)
 	if err != nil {
@@ -568,7 +606,8 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 
 // executeDMLQuery executes INSERT/UPDATE/DELETE queries and returns affected rows
 func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryType) (*ValidationResult, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	result, err := tx.ExecContext(ctx, sqlQuery)
 	if err != nil {
@@ -700,7 +739,9 @@ func normalizeLoadedValue(v any) any {
 func (e *Executor) executeClearInsert(tx *sql.Tx, fixture markdownparser.TableFixture) error {
 	// 簡易DELETE実装（dialect依存truncateは未実装暫定）
 	query := "DELETE FROM " + e.quoteIdentifier(fixture.TableName)
-	if _, err := tx.ExecContext(context.Background(), query); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, err := tx.ExecContext(ctx, query); err != nil {
 		return fmt.Errorf("failed to clear table %s: %w", fixture.TableName, err)
 	}
 	return e.insertData(tx, fixture.TableName, fixture.Data)
@@ -762,7 +803,8 @@ func (e *Executor) executeDelete(tx *sql.Tx, fixture markdownparser.TableFixture
 		// 主キー以外のカラムは無視
 
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s", e.quoteIdentifier(fixture.TableName), strings.Join(whereClauses, " AND "))
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		if _, err := tx.ExecContext(ctx, query, values...); err != nil {
 			return fmt.Errorf("failed to execute delete for table %s: %w", fixture.TableName, err)
 		}
@@ -822,7 +864,15 @@ func compareRowsWithMatchers(expected, actual map[string]any) error {
 		case []any:
 			// [null], [notnull], [any], [regexp, ...]
 			if len(val) == 1 {
-				switch val[0] {
+				v0 := val[0]
+				// YAML's bare 'null' becomes nil; treat as ["null"] matcher
+				if v0 == nil {
+					if vAct != nil {
+						return fmt.Errorf("%w: column=%s got=%v", errExpectedNull, k, vAct)
+					}
+					break
+				}
+				switch v0 {
 				case "null":
 					if vAct != nil {
 						return fmt.Errorf("%w: column=%s got=%v", errExpectedNull, k, vAct)
@@ -834,7 +884,7 @@ func compareRowsWithMatchers(expected, actual map[string]any) error {
 				case "any":
 					// 何でもOK
 				default:
-					return fmt.Errorf("%w: column=%s matcher=%v", errUnknownMatcher, k, val[0])
+					return fmt.Errorf("%w: column=%s matcher=%v", errUnknownMatcher, k, v0)
 				}
 			} else if len(val) == 2 && val[0] == "regexp" {
 				pat, ok := val[1].(string)
@@ -990,8 +1040,8 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 		strings.Join(placeholders, ", "))
 
 	// Prepare statement
-	ctx := context.Background()
-
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to prepare insert statement: %w", err)
@@ -1118,7 +1168,8 @@ func (e *Executor) executeMySQLUpsert(tx *sql.Tx, fixture markdownparser.TableFi
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	for _, row := range fixture.Data {
 		var cols []string
 		var placeholders []string
@@ -1177,7 +1228,8 @@ func (e *Executor) executeSQLiteUpsert(tx *sql.Tx, fixture markdownparser.TableF
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	for _, row := range fixture.Data {
 		var cols []string
 		var placeholders []string

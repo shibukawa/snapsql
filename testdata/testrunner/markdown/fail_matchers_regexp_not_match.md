@@ -5,6 +5,9 @@ dialect: "sqlite"
 
 # Matcher Failure (regexp not match)
 
+## Description
+Expect a string to match the given regular expression, but it does not.
+
 ## SQL
 ```sql
 SELECT id, comment FROM users ORDER BY id;
@@ -14,9 +17,16 @@ SELECT id, comment FROM users ORDER BY id;
 
 ### Test: Regexp not matching
 
+**Parameters:**
+```yaml
+dummy: true
+```
+
 **Fixtures: users[clear-insert]**
 ```yaml
 - id: 1
+  name: "Carol"
+  email: "carol@example.com"
   comment: "abc"
 ```
 

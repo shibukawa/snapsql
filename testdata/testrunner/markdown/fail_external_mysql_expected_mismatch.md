@@ -1,4 +1,3 @@
-````markdown
 ---
 name: "external_expected_mismatch_mysql"
 dialect: "mysql"
@@ -33,5 +32,3 @@ note: mismatch
 ```yaml
 [users expected mismatch](expected_users_mysql_mismatch.yaml)
 ```
-
-````

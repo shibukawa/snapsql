@@ -5,6 +5,9 @@ dialect: "sqlite"
 
 # Expected Results pk-exists Strategy Test
 
+## Description
+Validate that specified primary keys exist in the table after executing the main SQL and fixtures.
+
 ## SQL
 ```sql
 SELECT 1;

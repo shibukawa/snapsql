@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL,
     age INTEGER,
     status TEXT,
+    note TEXT,
+    comment TEXT,
     department_id INTEGER
 );
 

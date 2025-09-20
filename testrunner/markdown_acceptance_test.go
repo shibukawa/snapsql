@@ -12,10 +12,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql"
@@ -69,6 +67,7 @@ func TestMarkdownAcceptance(t *testing.T) {
 	for dialect, files := range groups {
 		d := dialect
 		t.Run("dialect="+d, func(t *testing.T) {
+			// Run dialect groups in parallel to overlap container start times
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 			defer cancel()
 
@@ -79,6 +78,10 @@ func TestMarkdownAcceptance(t *testing.T) {
 
 			for _, name := range files {
 				t.Run(name, func(t *testing.T) {
+					// Parallelize file-level tests only for non-sqlite dialects to avoid :memory: quirks
+					//if d != "sqlite" && d != "sqlite3" {
+					//	t.Parallel()
+					//}
 					path := filepath.Join(baseDir, name)
 
 					f, err := os.Open(path)
@@ -113,7 +116,7 @@ func TestMarkdownAcceptance(t *testing.T) {
 
 						_, err := exec.ExecuteTest(c, doc.SQL, map[string]any{}, &fr.ExecutionOptions{Mode: fr.FullTest, Commit: false})
 						if err != nil {
-							if strings.Contains(err.Error(), "simple validation failed:") {
+							if strings.Contains(err.Error(), "simple validation failed:") || strings.Contains(err.Error(), "table state validation failed:") {
 								failedAny = true
 
 								if strings.HasPrefix(name, "ok_") {
@@ -154,11 +157,11 @@ func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB,
 	switch strings.ToLower(dialect) {
 	case "postgres", "postgresql":
 		cont, err := postgres.Run(ctx,
-			"postgres:15-alpine",
+			"postgres:17-alpine",
 			postgres.WithDatabase("testdb"),
 			postgres.WithUsername("testuser"),
 			postgres.WithPassword("testpass"),
-			testcontainers.WithWaitStrategy(wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second)),
+			postgres.BasicWaitStrategies(),
 		)
 		if err != nil {
 			t.Fatalf("start postgres: %v", err)
@@ -173,15 +176,17 @@ func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB,
 		if err != nil {
 			t.Fatalf("open pg: %v", err)
 		}
+		// Allow concurrency for parallel subtests
+		db.SetMaxOpenConns(10)
+		db.SetMaxIdleConns(10)
 
 		return db, func() { db.Close(); cont.Terminate(context.Background()) }
 	case "mysql":
 		cont, err := mysql.Run(ctx,
-			"mysql:8.0",
+			"mysql:8.4",
 			mysql.WithDatabase("testdb"),
 			mysql.WithUsername("testuser"),
 			mysql.WithPassword("testpass"),
-			testcontainers.WithWaitStrategy(wait.ForLog("port: 3306  MySQL Community Server").WithStartupTimeout(90*time.Second)),
 		)
 		if err != nil {
 			t.Fatalf("start mysql: %v", err)
@@ -196,6 +201,9 @@ func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB,
 		if err != nil {
 			t.Fatalf("open mysql: %v", err)
 		}
+		// Allow concurrency for parallel subtests
+		db.SetMaxOpenConns(10)
+		db.SetMaxIdleConns(10)
 
 		return db, func() { db.Close(); cont.Terminate(context.Background()) }
 	case "sqlite":
@@ -203,6 +211,9 @@ func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB,
 		if err != nil {
 			t.Fatalf("open sqlite: %v", err)
 		}
+		// Use a single connection for :memory: DB to avoid multiple independent databases
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
 
 		return db, func() { db.Close() }
 	default:

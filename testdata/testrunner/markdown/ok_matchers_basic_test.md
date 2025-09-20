@@ -10,27 +10,34 @@ All four matcher types ([null], [notnull], [any], [regexp, ...]) succeed.
 
 ## SQL
 ```sql
-SELECT id, name, email, note, comment FROM users ORDER BY id;
+SELECT id, name, email, note, comment, status FROM users ORDER BY id;
 ```
 
 ## Test Cases
 
 ### Test: All matcher types
 
+**Parameters:**
+```yaml
+dummy: true
+```
+
 **Fixtures: users[clear-insert]**
 ```yaml
 - id: 1
   name: "Alice"
-  email: null
+  email: "alice@example.com"
   note: "HasValue"
   comment: "foo-xyz-bar"
+  status: null
 ```
 
 **Expected Results:**
 ```yaml
 - id: 1
   name: [any]
-  email: [null]
+  email: "alice@example.com"
   note: [notnull]
   comment: [regexp, ^foo-.*-bar$]
+  status: [null]
 ```

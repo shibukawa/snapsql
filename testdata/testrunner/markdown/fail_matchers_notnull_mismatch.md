@@ -5,23 +5,33 @@ dialect: "sqlite"
 
 # Matcher Failure (notnull mismatch)
 
+## Description
+Expect notnull but data contains null to trigger a failure.
+
 ## SQL
 ```sql
-SELECT id, email FROM users ORDER BY id;
+SELECT id, status FROM users ORDER BY id;
 ```
 
 ## Test Cases
 
 ### Test: Expect notnull but got null
 
+**Parameters:**
+```yaml
+dummy: true
+```
+
 **Fixtures: users[clear-insert]**
 ```yaml
 - id: 1
-  email: null
+  name: "Alice"
+  email: "alice@example.com"
+  status: null
 ```
 
 **Expected Results:**
 ```yaml
 - id: 1
-  email: [notnull]
+  status: [notnull]
 ```

@@ -5,6 +5,9 @@ dialect: "sqlite"
 
 # Expected Results pk-match Failure (missing row)
 
+## Description
+Validate pk-match fails when a referenced PK row is missing in the table.
+
 ## SQL
 ```sql
 SELECT 1;

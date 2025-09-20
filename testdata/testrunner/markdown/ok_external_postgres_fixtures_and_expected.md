@@ -1,4 +1,3 @@
-````markdown
 ---
 name: "external_refs_postgres"
 dialect: "postgres"
@@ -33,5 +32,3 @@ dummy: 1
 ```yaml
 [users expected](expected_users_postgres.yaml)
 ```
-
-````

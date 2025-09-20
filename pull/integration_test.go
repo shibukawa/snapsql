@@ -11,10 +11,8 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver (pgx)
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // TestPostgreSQLIntegration tests the complete pull operation with a real PostgreSQL database
@@ -27,14 +25,11 @@ func TestPostgreSQLIntegration(t *testing.T) {
 
 	// Start PostgreSQL container
 	postgresContainer, err := postgres.Run(ctx,
-		"postgres:15-alpine",
+		"postgres:17-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30*time.Second)),
+		postgres.BasicWaitStrategies(),
 	)
 	assert.NoError(t, err)
 
@@ -162,13 +157,10 @@ func TestMySQLIntegration(t *testing.T) {
 
 	// Start MySQL container
 	mysqlContainer, err := mysql.Run(ctx,
-		"mysql:8.0",
+		"mysql:8.4",
 		mysql.WithDatabase("testdb"),
 		mysql.WithUsername("testuser"),
 		mysql.WithPassword("testpass"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("port: 3306  MySQL Community Server").
-				WithStartupTimeout(120*time.Second)),
 	)
 	assert.NoError(t, err)
 
@@ -425,14 +417,11 @@ func TestDatabaseConnectorWithRealDatabases(t *testing.T) {
 		ctx := t.Context()
 
 		postgresContainer, err := postgres.Run(ctx,
-			"postgres:15-alpine",
+			"postgres:17-alpine",
 			postgres.WithDatabase("testdb"),
 			postgres.WithUsername("testuser"),
 			postgres.WithPassword("testpass"),
-			testcontainers.WithWaitStrategy(
-				wait.ForLog("database system is ready to accept connections").
-					WithOccurrence(2).
-					WithStartupTimeout(30*time.Second)),
+			postgres.BasicWaitStrategies(),
 		)
 		assert.NoError(t, err)
 

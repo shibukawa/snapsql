@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shibukawa/snapsql"
 )
@@ -198,7 +199,9 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 
 	// Query the table to get current state
 	query := "SELECT * FROM " + spec.TableName
-	ctx := context.Background()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
@@ -317,7 +320,8 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 
 		var count int64
 
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
 
 		err := tx.QueryRowContext(ctx, query, args...).Scan(&count)
 		if err != nil {
@@ -344,7 +348,8 @@ func (e *Executor) validateCount(tx *sql.Tx, spec ValidationSpec) error {
 
 	var actualCount int64
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	err = tx.QueryRowContext(ctx, query).Scan(&actualCount)
 	if err != nil {

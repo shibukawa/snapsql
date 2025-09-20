@@ -5,6 +5,9 @@ dialect: "sqlite"
 
 # Expected Results pk-exists Failure (one row absent)
 
+## Description
+Validate pk-exists fails when one of the specified PK rows does not exist.
+
 ## SQL
 ```sql
 SELECT 1;

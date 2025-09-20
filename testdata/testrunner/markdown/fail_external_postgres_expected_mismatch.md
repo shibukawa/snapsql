@@ -1,4 +1,3 @@
-````markdown
 ---
 name: "external_expected_mismatch_postgres"
 dialect: "postgres"
@@ -33,5 +32,3 @@ note: mismatch
 ```yaml
 [users expected mismatch](expected_users_postgres_mismatch.yaml)
 ```
-
-````
