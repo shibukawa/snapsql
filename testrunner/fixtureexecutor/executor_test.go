@@ -7,6 +7,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,8 +30,18 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Create executor
-	executor := NewExecutor(db, "sqlite")
+	// Minimal table info (schema validation path tolerant of empty ColumnOrder)
+	tableInfo := map[string]*snapsql.TableInfo{
+		"users": {
+			Name: "users",
+			Columns: map[string]*snapsql.ColumnInfo{
+				"id":    {Name: "id", IsPrimaryKey: true},
+				"name":  {Name: "name"},
+				"email": {Name: "email"},
+			},
+		},
+	}
+	executor := NewExecutor(db, "sqlite", tableInfo)
 
 	// Create test case with fixtures
 	testCase := &markdownparser.TestCase{
@@ -38,7 +49,7 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 		Fixtures: []markdownparser.TableFixture{
 			{
 				TableName: "users",
-				Strategy:  markdownparser.Insert,
+				Strategy:  markdownparser.Upsert,
 				Data: []map[string]any{
 					{"id": 1, "name": "John Doe", "email": "john@example.com"},
 					{"id": 2, "name": "Jane Smith", "email": "jane@example.com"},
@@ -118,8 +129,17 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 	_, err = db.Exec("INSERT INTO users (id, name, email) VALUES (999, 'Old User', 'old@example.com')")
 	require.NoError(t, err)
 
-	// Create executor
-	executor := NewExecutor(db, "sqlite")
+	// Minimal table info for clear-insert test
+	executor := NewExecutor(db, "sqlite", map[string]*snapsql.TableInfo{
+		"users": {
+			Name: "users",
+			Columns: map[string]*snapsql.ColumnInfo{
+				"id":    {Name: "id", IsPrimaryKey: true},
+				"name":  {Name: "name"},
+				"email": {Name: "email"},
+			},
+		},
+	})
 
 	// Create test case with clear-insert strategy
 	testCase := &markdownparser.TestCase{
@@ -201,7 +221,7 @@ func TestTestRunner_RunTests(t *testing.T) {
 			Fixtures: []markdownparser.TableFixture{
 				{
 					TableName: "users",
-					Strategy:  markdownparser.Insert,
+					Strategy:  markdownparser.Upsert,
 					Data: []map[string]any{
 						{"id": 1, "name": "User 1", "email": "user1@example.com"},
 					},
@@ -213,7 +233,7 @@ func TestTestRunner_RunTests(t *testing.T) {
 			Fixtures: []markdownparser.TableFixture{
 				{
 					TableName: "users",
-					Strategy:  markdownparser.Insert,
+					Strategy:  markdownparser.Upsert,
 					Data: []map[string]any{
 						{"id": 2, "name": "User 2", "email": "user2@example.com"},
 					},
@@ -231,6 +251,16 @@ func TestTestRunner_RunTests(t *testing.T) {
 	}
 
 	runner := NewTestRunner(db, "sqlite", options)
+	runner.SetTableInfo(map[string]*snapsql.TableInfo{
+		"users": {
+			Name: "users",
+			Columns: map[string]*snapsql.ColumnInfo{
+				"id":    {Name: "id", IsPrimaryKey: true},
+				"name":  {Name: "name"},
+				"email": {Name: "email"},
+			},
+		},
+	})
 
 	// Run tests
 	ctx := context.Background()

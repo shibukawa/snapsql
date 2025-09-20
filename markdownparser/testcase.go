@@ -15,8 +15,6 @@ type InsertStrategy string
 const (
 	// ClearInsert truncates the table then inserts data (default)
 	ClearInsert InsertStrategy = "clear-insert"
-	// Insert just inserts data into the table
-	Insert InsertStrategy = "insert"
 	// Upsert inserts data into the table, or updates if the row already exists
 	Upsert InsertStrategy = "upsert"
 	// Delete deletes rows in the table that match the dataset's primary keys
@@ -25,19 +23,29 @@ const (
 
 // TableFixture represents fixture data for a single table with its insert strategy
 type TableFixture struct {
-	TableName string
-	Strategy  InsertStrategy
-	Data      []map[string]any
+	TableName    string
+	Strategy     InsertStrategy
+	Data         []map[string]any
+	ExternalFile string // when fixture rows are provided via external YAML/JSON link
+}
+
+// ExpectedResultSpec represents expected result for a table with strategy and data
+type ExpectedResultSpec struct {
+	TableName    string
+	Strategy     string           // "all", "pk-match", "pk-exists", "pk-not-exists"
+	Data         []map[string]any // 値比較特殊指定（[null],[notnull],[any],[regexp,...]）含む
+	ExternalFile string           // 外部ファイル参照時のパス
 }
 
 // TestCase represents a single test case
 type TestCase struct {
-	Name           string
-	Fixtures       []TableFixture              // テーブルごとのfixture情報
-	Fixture        map[string][]map[string]any // 後方互換性のため残す
-	Parameters     map[string]any
-	VerifyQuery    string // 検証用SELECTクエリ
-	ExpectedResult []map[string]any
+	Name            string
+	Fixtures        []TableFixture              // テーブルごとのfixture情報
+	Fixture         map[string][]map[string]any // 後方互換性のため残す
+	Parameters      map[string]any
+	VerifyQuery     string               // 検証用SELECTクエリ
+	ExpectedResult  []map[string]any     // 従来型（無名配列）
+	ExpectedResults []ExpectedResultSpec // 新型（テーブル名・戦略付き）
 }
 
 // TestSection represents a section within a test case
@@ -92,6 +100,12 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 						currentSection = TestSection{Type: "parameters"}
 					} else if strings.HasPrefix(text, "expected:") || strings.HasPrefix(text, "expected results:") || strings.HasPrefix(text, "expected result:") || text == "results:" {
 						currentSection = TestSection{Type: "expected"}
+						// Allow table-qualified expected results like: "Expected Results: users[pk-match]"
+						if i := strings.Index(text, ":"); i >= 0 {
+							if spec := strings.TrimSpace(text[i+1:]); spec != "" {
+								currentSection.TableName = spec
+							}
+						}
 					} else if strings.HasPrefix(text, "verify query:") || strings.HasPrefix(text, "verification query:") {
 						currentSection = TestSection{Type: "verify_query"}
 					} else if strings.HasPrefix(text, "fixtures") {
@@ -155,6 +169,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 	// If there were any errors, return them
 	if len(errors) > 0 {
 		var errMsg strings.Builder
+
 		errMsg.WriteString("errors in test cases:\n")
 
 		for _, err := range errors {
@@ -170,6 +185,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 // findFirstEmphasis finds the first emphasis node (italic or bold) in a paragraph
 func findFirstEmphasis(paragraph *ast.Paragraph) *ast.Emphasis {
 	var emphasis *ast.Emphasis
+
 	ast.Walk(paragraph, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering && n.Kind() == ast.KindEmphasis {
 			if emp, ok := n.(*ast.Emphasis); ok {
@@ -209,8 +225,8 @@ func validateTestCase(testCase *TestCase) error {
 		return fmt.Errorf("%w: %q parameters", snapsql.ErrTestCaseMissingData, testCase.Name)
 	}
 
-	// Expected Results are required
-	if len(testCase.ExpectedResult) == 0 {
+	// Expected Results are required (either legacy or table-qualified)
+	if len(testCase.ExpectedResult) == 0 && len(testCase.ExpectedResults) == 0 {
 		return fmt.Errorf("%w: %q expected results", snapsql.ErrTestCaseMissingData, testCase.Name)
 	}
 
@@ -221,7 +237,6 @@ func validateTestCase(testCase *TestCase) error {
 func processTestSection(testCase *TestCase, section TestSection, format string, content []byte) error {
 	switch section.Type {
 	case "parameters", "params":
-		// パラメータが既に設定されている場合はエラー
 		if len(testCase.Parameters) > 0 {
 			return fmt.Errorf("%w in test case %q", ErrDuplicateParameters, testCase.Name)
 		}
@@ -234,77 +249,130 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 		testCase.Parameters = params
 
 	case "expected", "expected results", "results":
-		// Expected Resultsが既に設定されている場合はエラー
-		if len(testCase.ExpectedResult) > 0 {
+		if len(testCase.ExpectedResult) > 0 || len(testCase.ExpectedResults) > 0 {
 			return fmt.Errorf("%w in test case %q", ErrDuplicateExpectedResults, testCase.Name)
 		}
 
-		results, err := parseExpectedResults(content)
-		if err != nil {
-			return fmt.Errorf("failed to parse expected results in test case %q: %w", testCase.Name, err)
+		// Extract tableName and table-level strategy from section.TableName if provided
+		tableName := ""
+		strategy := "all"
+
+		if section.TableName != "" {
+			re := regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)(?:\[([^\]]+)\])?$`)
+
+			matches := re.FindStringSubmatch(section.TableName)
+			if len(matches) > 0 {
+				tableName = matches[1]
+
+				if len(matches) > 2 && matches[2] != "" {
+					strategy = matches[2]
+				}
+			}
 		}
 
-		testCase.ExpectedResult = results
+		contentStr := strings.TrimSpace(string(content))
+
+		var results []map[string]any
+
+		externalFile := ""
+
+		if strings.HasPrefix(contentStr, "[") && strings.Contains(contentStr, "](") {
+			re := regexp.MustCompile(`\[.*?\]\((.*?)\)`)
+
+			matches := re.FindStringSubmatch(contentStr)
+			if len(matches) == 2 {
+				externalFile = matches[1]
+			} else {
+				return fmt.Errorf("%w in test case %q", ErrInvalidExpectedResultsExternalLinkFormat, testCase.Name)
+			}
+		} else {
+			var err error
+
+			results, err = parseExpectedResults(content)
+			if err != nil {
+				return fmt.Errorf("failed to parse expected results in test case %q: %w", testCase.Name, err)
+			}
+		}
+
+		testCase.ExpectedResults = append(testCase.ExpectedResults, ExpectedResultSpec{
+			TableName:    tableName,
+			Strategy:     strategy,
+			Data:         results,
+			ExternalFile: externalFile,
+		})
+
+		if tableName == "" {
+			testCase.ExpectedResult = results
+		}
 
 	case "verify_query":
-		// Verify Queryが既に設定されている場合はエラー
 		if testCase.VerifyQuery != "" {
 			return fmt.Errorf("%w: %q", snapsql.ErrDuplicateVerifyQuery, testCase.Name)
 		}
 
-		// SQLコードブロックの内容をそのまま設定
 		testCase.VerifyQuery = strings.TrimSpace(string(content))
 
 	case "fixtures":
-		// CSVの場合はテーブル名が必要
 		if format == "csv" {
 			if section.TableName == "" {
 				return fmt.Errorf("%w: %q", snapsql.ErrTableNameRequired, testCase.Name)
 			}
 		}
 
-		// Parse fixtures data
 		if format == "csv" {
-			// CSVの場合は単一のテーブル
 			rows, err := parseCSVData(content)
 			if err != nil {
 				return fmt.Errorf("failed to parse CSV fixtures in test case %q: %w", testCase.Name, err)
 			}
-			// 後方互換性のため既存のFixtureフィールドにも追加
-			testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
 
-			// 新しいFixturesフィールドに追加
+			testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
 			addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows)
 		} else {
-			// YAML/XMLの場合
+			// YAML/XML
 			if section.TableName != "" {
-				// テーブル名が指定されている場合（例: "Fixtures: users[insert]"）
-				// データを直接そのテーブルに割り当て
-				var rows []map[string]any
+				contentStr := strings.TrimSpace(string(content))
+				if strings.HasPrefix(contentStr, "[") && strings.Contains(contentStr, "](") {
+					re := regexp.MustCompile(`\[.*?\]\((.*?)\)`)
 
-				err := parseYAMLData(content, &rows)
-				if err != nil {
-					return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
+					matches := re.FindStringSubmatch(contentStr)
+					if len(matches) == 2 {
+						addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, nil)
+						last := len(testCase.Fixtures) - 1
+						testCase.Fixtures[last].ExternalFile = matches[1]
+					} else {
+						return fmt.Errorf("%w in test case %q", ErrInvalidFixturesExternalLinkFormat, testCase.Name)
+					}
+				} else {
+					var rows []map[string]any
+					if err := parseYAMLData(content, &rows); err != nil {
+						return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
+					}
+
+					testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
+					addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows)
 				}
-
-				// 後方互換性のため既存のFixtureフィールドにも追加
-				testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
-
-				// 新しいFixturesフィールドに追加
-				addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows)
 			} else {
-				// テーブル名が含まれている構造化データ
 				tableData, err := parseStructuredData(content, format)
 				if err != nil {
 					return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
 				}
 
+				strategy := section.Strategy
+				if strategy == "" {
+					strategy = ClearInsert
+				}
+
 				for tableName, rows := range tableData {
-					// 後方互換性のため既存のFixtureフィールドにも追加
 					testCase.Fixture[tableName] = append(testCase.Fixture[tableName], rows...)
 
-					// 新しいFixturesフィールドに追加（デフォルト戦略を使用）
-					addOrUpdateTableFixture(testCase, tableName, ClearInsert, rows)
+					switch strategy {
+					case Upsert:
+						addOrUpdateTableFixture(testCase, tableName, Upsert, rows)
+					case Delete:
+						addOrUpdateTableFixture(testCase, tableName, Delete, rows)
+					default:
+						addOrUpdateTableFixture(testCase, tableName, ClearInsert, rows)
+					}
 				}
 			}
 		}
@@ -331,8 +399,6 @@ func parseTableNameAndStrategy(spec string) (string, InsertStrategy) {
 
 	if len(matches) > 2 && matches[2] != "" {
 		switch InsertStrategy(matches[2]) {
-		case Insert:
-			strategy = Insert
 		case Upsert:
 			strategy = Upsert
 		case Delete:
@@ -340,7 +406,6 @@ func parseTableNameAndStrategy(spec string) (string, InsertStrategy) {
 		case ClearInsert:
 			strategy = ClearInsert
 		default:
-			// 無効な戦略の場合はデフォルトを使用し、テーブル名はそのまま
 			strategy = ClearInsert
 		}
 	}
@@ -350,19 +415,7 @@ func parseTableNameAndStrategy(spec string) (string, InsertStrategy) {
 
 // addOrUpdateTableFixture adds or updates fixture data for a table
 func addOrUpdateTableFixture(testCase *TestCase, tableName string, strategy InsertStrategy, rows []map[string]any) {
-	// 既存のTableFixtureを探す
-	for i := range testCase.Fixtures {
-		if testCase.Fixtures[i].TableName == tableName {
-			// 既存のテーブルが見つかった場合、データを追加
-			testCase.Fixtures[i].Data = append(testCase.Fixtures[i].Data, rows...)
-			return
-		}
-	}
-
-	// 新しいTableFixtureを作成
-	testCase.Fixtures = append(testCase.Fixtures, TableFixture{
-		TableName: tableName,
-		Strategy:  strategy,
-		Data:      rows,
-	})
+	// さらに仕様変更: clear-insert など同一戦略が複数回出現してもブロック境界を保持したい。
+	// => すべて常に新規追加し順序を厳密維持。マージは行わない。
+	testCase.Fixtures = append(testCase.Fixtures, TableFixture{TableName: tableName, Strategy: strategy, Data: rows})
 }

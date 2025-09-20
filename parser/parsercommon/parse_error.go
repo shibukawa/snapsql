@@ -17,6 +17,7 @@ func (e *ParseError) Error() string {
 	}
 
 	var sb strings.Builder
+
 	sb.WriteString("Multiple parse errors:")
 
 	for i, err := range e.Errors {

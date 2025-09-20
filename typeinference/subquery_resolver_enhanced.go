@@ -223,6 +223,7 @@ func (esr *EnhancedSubqueryResolver) calculateDepthWithDependencies(
 	}
 
 	maxDepth := currentDepth
+
 	for _, depID := range node.Dependencies {
 		depDepth := esr.calculateDepthWithDependencies(depID, depGraph, visited, currentDepth+1)
 		if depDepth > maxDepth {

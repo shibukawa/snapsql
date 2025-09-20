@@ -125,7 +125,6 @@ func TestSimplifiedConfigStructure(t *testing.T) {
 	//       package: "queries"
 	//       generate_tests: true
 	//       mock_path: "./testdata/mocks"
-
 	// New structure (flat):
 	// generators:
 	//   go:

@@ -51,6 +51,7 @@ func parseFieldItems(pctx *pc.ParseContext[tok.Token], tokens []pc.Token[tok.Tok
 
 	for _, part := range pc.FindIter(pctx, commaOrParenClose, tokens) {
 		consume = part.Consume + len(part.Skipped)
+
 		if len(part.Skipped) == 0 {
 			continue
 		}
@@ -149,6 +150,7 @@ func finalizeSelectClause(clause *cmn.SelectClause, perr *cmn.ParseError) {
 		}
 
 		v := match[0].Val
+
 		switch match[0].Type {
 		case "field": // identifier(column name)
 			switch len(match) {

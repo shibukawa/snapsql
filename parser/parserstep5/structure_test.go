@@ -299,6 +299,7 @@ func TestValidateAndLinkDirectives_MultipleErrors(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 
 			var parseErr cmn.ParseError
+
 			validateAndLinkDirectives(stmt, &parseErr)
 
 			assert.Equal(t, len(tc.expectedErrors), len(parseErr.Errors),
@@ -371,6 +372,7 @@ func TestValidateAndLinkDirectives_NextIndexLinking(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 
 			var parseErr cmn.ParseError
+
 			validateAndLinkDirectives(stmt, &parseErr)
 			assert.Equal(t, 0, len(parseErr.Errors), "validation should succeed: %v", parseErr.Errors)
 
@@ -492,6 +494,7 @@ func TestValidateAndLinkDirectives_ParenthesesBoundary(t *testing.T) {
 			stmt := parseFullPipeline(t, tc.sql)
 
 			var parseErr cmn.ParseError
+
 			validateAndLinkDirectives(stmt, &parseErr)
 
 			t.Logf("Test case: %s, Errors count: %d", tc.name, len(parseErr.Errors))

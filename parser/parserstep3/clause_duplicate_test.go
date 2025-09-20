@@ -33,6 +33,7 @@ func TestCheckClauseDuplicates(t *testing.T) {
 			clauses := parseClausesFromSQL(t, tt.sql)
 
 			var perr cmn.ParseError
+
 			ValidateClauseDuplicates(clauses, &perr)
 
 			if tt.wantErr {

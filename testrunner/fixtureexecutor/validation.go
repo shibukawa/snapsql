@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shibukawa/snapsql"
 )
@@ -134,7 +135,7 @@ func (e *Executor) validateDirectResult(result *ValidationResult, spec Validatio
 	for i, expectedRow := range expected {
 		actualRow := result.Data[i]
 
-		err := compareRows(expectedRow, actualRow)
+		err := compareRowsBasic(expectedRow, actualRow)
 		if err != nil {
 			return fmt.Errorf("row %d mismatch: %w", i, err)
 		}
@@ -198,7 +199,9 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 
 	// Query the table to get current state
 	query := "SELECT * FROM " + spec.TableName
-	ctx := context.Background()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
@@ -258,7 +261,7 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 			return fmt.Errorf("%w %d in table %s", snapsql.ErrMissingRowInTable, i, spec.TableName)
 		}
 
-		err := compareRows(expectedRow, actualData[i])
+		err := compareRowsBasic(expectedRow, actualData[i])
 		if err != nil {
 			return fmt.Errorf("table %s row %d mismatch: %w", spec.TableName, i, err)
 		}
@@ -317,7 +320,8 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 
 		var count int64
 
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
 
 		err := tx.QueryRowContext(ctx, query, args...).Scan(&count)
 		if err != nil {
@@ -344,7 +348,8 @@ func (e *Executor) validateCount(tx *sql.Tx, spec ValidationSpec) error {
 
 	var actualCount int64
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
 	err = tx.QueryRowContext(ctx, query).Scan(&actualCount)
 	if err != nil {
@@ -358,8 +363,8 @@ func (e *Executor) validateCount(tx *sql.Tx, spec ValidationSpec) error {
 	return nil
 }
 
-// compareRows compares two row maps with type tolerance
-func compareRows(expected, actual map[string]any) error {
+// compareRowsBasic compares two row maps with type tolerance (legacy basic comparison)
+func compareRowsBasic(expected, actual map[string]any) error {
 	for key, expectedValue := range expected {
 		actualValue, exists := actual[key]
 		if !exists {

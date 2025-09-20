@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
 )
 
@@ -44,10 +45,27 @@ func NewTestRunner(db *sql.DB, dialect string, options *ExecutionOptions) *TestR
 	}
 
 	return &TestRunner{
-		executor:   NewExecutor(db, dialect),
+		executor:   NewExecutor(db, dialect, make(map[string]*snapsql.TableInfo)), // schema info can be injected later via SetTableInfo
 		workerPool: make(chan struct{}, options.Parallel),
 		options:    options,
 		parameters: make(map[string]any),
+	}
+}
+
+// SetTableInfo injects or replaces the schema information used during fixture execution.
+// This is primarily used by unit tests that construct an in-memory database schema on the fly.
+// It is safe to call multiple times; the reference is replaced atomically without locking because
+// TestRunner / Executor instances are not expected to mutate tableInfo concurrently with active executions.
+func (tr *TestRunner) SetTableInfo(tableInfo map[string]*snapsql.TableInfo) {
+	if tr.executor != nil {
+		tr.executor.tableInfo = tableInfo
+	}
+}
+
+// SetBaseDir sets the base directory used to resolve external file references during execution.
+func (tr *TestRunner) SetBaseDir(dir string) {
+	if tr.executor != nil {
+		tr.executor.SetBaseDir(dir)
 	}
 }
 

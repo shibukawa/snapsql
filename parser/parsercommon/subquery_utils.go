@@ -240,6 +240,7 @@ func CreateDependencyVisualization(dg *SQDependencyGraph) string {
 	}
 
 	var result strings.Builder
+
 	result.WriteString("Dependency Graph:\n")
 
 	for _, node := range nodes {

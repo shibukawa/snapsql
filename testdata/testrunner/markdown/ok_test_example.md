@@ -28,7 +28,7 @@ SELECT id, name, email FROM users LIMIT /*= limit */10;
 limit: 5
 ```
 
-**Fixtures: users[insert]**
+**Fixtures: users[clear-insert]**
 ```yaml
 - id: 1
   name: "John Doe"

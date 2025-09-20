@@ -1,0 +1,6 @@
+- id: 1
+  name: "ALICE"
+  email: "alice@example.com"
+- id: 2
+  name: "Bob"
+  email: "bob+diff@example.com"

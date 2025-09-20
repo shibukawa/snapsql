@@ -20,6 +20,7 @@ func LoadTableFromYAMLFile(path string) (*snapsql.TableInfo, error) {
 		Metadata YAMLSchema `yaml:"metadata"`
 		Table    YAMLTable  `yaml:"table"`
 	}
+
 	if err := yaml.Unmarshal(data, &wrapper); err != nil {
 		return nil, err
 	}

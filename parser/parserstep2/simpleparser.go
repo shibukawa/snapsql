@@ -28,6 +28,7 @@ func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
 		),
 		func(pctx *pc.ParseContext[Entity], tokens []pc.Token[Entity]) ([]pc.Token[Entity], error) {
 			spaceStart := len(tokens)
+
 			for i := len(tokens) - 1; i >= 1; i-- {
 				if tokens[i].Type == "comment" || tokens[i].Type == "space" {
 					spaceStart--

@@ -15,12 +15,13 @@ type ColumnInfo struct {
 
 // TableInfo is a unified table definition
 type TableInfo struct {
-	Name        string                 `json:"name" yaml:"name"`               // Table name
-	Schema      string                 `json:"schema" yaml:"schema"`           // Schema name (optional)
-	Columns     map[string]*ColumnInfo `json:"columns" yaml:"columns"`         // Columns by name
-	Constraints []ConstraintInfo       `json:"constraints" yaml:"constraints"` // Constraints (optional)
-	Indexes     []IndexInfo            `json:"indexes" yaml:"indexes"`         // Indexes (optional)
-	Comment     string                 `json:"comment" yaml:"comment"`         // Table comment (optional)
+	Name        string                 `json:"name" yaml:"name"`                 // Table name
+	Schema      string                 `json:"schema" yaml:"schema"`             // Schema name (optional)
+	Columns     map[string]*ColumnInfo `json:"columns" yaml:"columns"`           // Columns by name
+	ColumnOrder []string               `json:"column_order" yaml:"column_order"` // Column order (optional, preserves original order)
+	Constraints []ConstraintInfo       `json:"constraints" yaml:"constraints"`   // Constraints (optional)
+	Indexes     []IndexInfo            `json:"indexes" yaml:"indexes"`           // Indexes (optional)
+	Comment     string                 `json:"comment" yaml:"comment"`           // Table comment (optional)
 }
 
 // DatabaseSchema is a unified database schema definition

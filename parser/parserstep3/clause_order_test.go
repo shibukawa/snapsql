@@ -56,6 +56,7 @@ func TestValidateClauseOrder(t *testing.T) {
 			clauses := parseClausesFromSQL(t, tt.sql)
 
 			var perr cmn.ParseError
+
 			ValidateClauseOrder(tt.statement, clauses, &perr)
 
 			if tt.wantErr {

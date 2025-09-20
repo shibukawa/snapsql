@@ -108,15 +108,16 @@ func parseJoinWithOptions(pToken []pc.Token[tok.Token], inspectMode bool) (cmn.J
 			return cmn.JoinInvalid, fmt.Errorf("%w: %s", ErrInvalidJoinType, pos.String())
 		}
 
-    // NATURAL + qualifier handling
+		// NATURAL + qualifier handling
 		// Allowed only with inspectMode
-    if !inspectMode {
+		if !inspectMode {
 			return cmn.JoinInvalid, fmt.Errorf("%w: %s", ErrNaturalJoin, pos.String())
 		}
 
 		// Determine NATURAL variant
 		// Remove NATURAL from tokens
 		rest := make([]tok.TokenType, 0, len(joinTokens))
+
 		for _, jt := range joinTokens {
 			if jt != tok.NATURAL {
 				rest = append(rest, jt)

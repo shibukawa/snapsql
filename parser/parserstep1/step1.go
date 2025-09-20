@@ -197,6 +197,7 @@ func processSemicolons(tokens []tok.Token) ([]tok.Token, error) {
 
 	// Remove the trailing semicolon
 	result := make([]tok.Token, 0, len(tokens)-1)
+
 	for i, token := range tokens {
 		if i != semicolonIndex {
 			result = append(result, token)

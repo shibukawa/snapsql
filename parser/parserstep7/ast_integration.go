@@ -184,6 +184,7 @@ func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) 
 	}
 
 	out := make([]*cmn.SQTableReference, 0, len(from.Tables))
+
 	for i, t := range from.Tables {
 		// Heuristic: some earlier steps don't flag IsSubquery; detect via Expression tokens
 		isSub := t.IsSubquery || looksLikeSubquery(t)

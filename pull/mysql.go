@@ -145,6 +145,7 @@ func (e *MySQLExtractor) ExtractColumns(ctx context.Context, db *sql.DB, schemaN
 	defer rows.Close()
 
 	columns := map[string]*snapsql.ColumnInfo{}
+
 	for rows.Next() {
 		var (
 			columnName, dataType, isNullable, columnKey        string
@@ -530,6 +531,7 @@ func (e *MySQLExtractor) HandleDatabaseError(err error) error {
 
 	// For debugging, return the original error wrapped
 	errStr := err.Error()
+
 	switch {
 	case strings.Contains(errStr, "connection"):
 		return fmt.Errorf("connection error: %w", err)

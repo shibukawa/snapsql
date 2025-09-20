@@ -83,6 +83,7 @@ func TestCheckClauseRequired(t *testing.T) {
 			}
 
 			var perr cmn.ParseError
+
 			ValidateClauseRequired(tt.statement, clauses, &perr)
 
 			if tt.wantErr {

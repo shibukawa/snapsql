@@ -90,6 +90,7 @@ func (p *PullCmd) resolveDatabaseConnection(config *Config) (string, string, err
 	if p.DB != "" {
 		// Use command line database URL
 		dbURL = p.DB
+
 		if p.Type != "" {
 			dbType = p.Type
 		} else {

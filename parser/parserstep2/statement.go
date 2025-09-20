@@ -77,6 +77,7 @@ func subQuery(pctx *pc.ParseContext[Entity], t []pc.Token[Entity]) (consumed int
 		}
 
 		current += len(part.Skipped) + part.Consume
+
 		switch part.Match[0].Val.Original.Type {
 		case tok.OPENED_PARENS:
 			stack++
@@ -220,6 +221,7 @@ func ParseStatement(perr *cmn.ParseError) pc.Parser[Entity] {
 		consumeForCTE, cte, _ := ws(parseCTE())(pctx, tokens)
 
 		var withClause *cmn.WithClause
+
 		if len(cte) > 0 {
 			if wc, ok := cte[0].Val.NewValue.(*cmn.WithClause); ok {
 				withClause = wc
@@ -411,6 +413,7 @@ func clauseIter(pctx *pc.ParseContext[Entity], tt tok.TokenType, tokens []pc.Tok
 		nest := 0
 
 		var skipped []pc.Token[Entity]
+
 		for _, part := range pc.FindIter(pctx, splitter(tt), tokens) {
 			if part.Last {
 				yield(count, pc.Consume[Entity]{
@@ -449,6 +452,7 @@ func clauseIter(pctx *pc.ParseContext[Entity], tt tok.TokenType, tokens []pc.Tok
 						Match:   part.Match,
 						Last:    part.Last,
 					})
+
 					skipped = nil
 					consume = 0
 					count++
@@ -476,6 +480,7 @@ func parseClauses(pctx *pc.ParseContext[Entity], tt tok.TokenType, withClause *c
 		consumes += clause.Consume + len(clause.Skipped)
 
 		clauseBody := clause.Skipped
+
 		if i == 0 {
 			clauseHead = clause.Match
 			prevClauseBody = clauseBody

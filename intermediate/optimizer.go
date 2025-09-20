@@ -176,6 +176,7 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 				Op:    "EMIT_STATIC",
 				Value: currentStatic.String(),
 			})
+
 			currentStatic.Reset()
 
 			hasStatic = false

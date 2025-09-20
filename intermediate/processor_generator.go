@@ -17,7 +17,6 @@ func (i *InstructionGenerator) Name() string {
 func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	// Use existing GenerateInstructions function for all advanced features
 	// The TokenTransformer should have already added system field tokens
-
 	// Extract expressions from CEL expressions for backward compatibility
 	expressions := make([]string, len(ctx.CELExpressions))
 	for j, celExpr := range ctx.CELExpressions {

@@ -81,6 +81,7 @@ func parseStructuredData(content []byte, format string) (map[string][]map[string
 			for tableName, tableContent := range data {
 				if rows, ok := tableContent.([]any); ok {
 					tableRows := make([]map[string]any, 0, len(rows))
+
 					for _, row := range rows {
 						if mapRow, ok := row.(map[string]any); ok {
 							// Normalize values
@@ -226,6 +227,7 @@ func normalizeValue(v any) any {
 	case map[any]any:
 		// Convert map keys to strings and normalize values
 		result := make(map[string]any)
+
 		for k, v := range val {
 			if strKey, ok := k.(string); ok {
 				result[strKey] = normalizeValue(v)
@@ -286,6 +288,7 @@ func parseDBUnitXML(content string) (*DBUnitXML, error) {
 
 		for _, attr := range elem.Attr {
 			row[attr.Key] = parseValue(attr.Value)
+
 			if attr.Key == "table" {
 				hasTableField = true
 			}

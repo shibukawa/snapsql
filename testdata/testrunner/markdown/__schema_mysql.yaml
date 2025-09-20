@@ -1,0 +1,36 @@
+name: testdb
+tables:
+  - name: users
+    columns:
+      id:
+        name: id
+        data_type: bigint
+        nullable: false
+        is_primary_key: true
+      name:
+        name: name
+        data_type: varchar
+        nullable: false
+      email:
+        name: email
+        data_type: varchar
+        nullable: false
+      age:
+        name: age
+        data_type: int
+        nullable: true
+      status:
+        name: status
+        data_type: varchar
+        nullable: true
+      department_id:
+        name: department_id
+        data_type: bigint
+        nullable: true
+    column_order:
+      - id
+      - name
+      - email
+      - age
+      - status
+      - department_id

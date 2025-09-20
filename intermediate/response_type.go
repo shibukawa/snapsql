@@ -21,6 +21,7 @@ func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*snap
 
 	// Convert InferredFieldInfo to Response format
 	var fields []Response
+
 	for _, field := range inferredFields {
 		response := Response{
 			Name: field.Name,

@@ -87,6 +87,7 @@ func TestStatementClausePresence(t *testing.T) {
 			var perr cmn.ParseError
 
 			clauses := ValidateClausePresence(node.Type(), node.Clauses(), &perr)
+
 			if tt.wantErr {
 				assert.NotZero(t, len(perr.Errors), "expected error but got none")
 			} else {

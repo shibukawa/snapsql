@@ -14,11 +14,13 @@ import (
 
 // Sentinel errors
 var (
-	ErrInvalidFrontMatter       = errors.New("invalid front matter")
-	ErrMissingRequiredSection   = errors.New("missing required section")
-	ErrInvalidTestCase          = errors.New("invalid test case")
-	ErrDuplicateParameters      = errors.New("duplicate parameters section")
-	ErrDuplicateExpectedResults = errors.New("duplicate expected results section")
+	ErrInvalidFrontMatter                       = errors.New("invalid front matter")
+	ErrMissingRequiredSection                   = errors.New("missing required section")
+	ErrInvalidTestCase                          = errors.New("invalid test case")
+	ErrDuplicateParameters                      = errors.New("duplicate parameters section")
+	ErrDuplicateExpectedResults                 = errors.New("duplicate expected results section")
+	ErrInvalidExpectedResultsExternalLinkFormat = errors.New("invalid expected results external file link format")
+	ErrInvalidFixturesExternalLinkFormat        = errors.New("invalid fixtures external file link format")
 )
 
 // ParseOptions contains options for parsing markdown documents

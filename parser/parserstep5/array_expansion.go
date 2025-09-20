@@ -544,6 +544,7 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 
 	// Generate VALUES clauses for each object in the array
 	var valuesClauses []string
+
 	for i := range arrayLength {
 		var fieldExpressions []string
 		for _, column := range info.ColumnOrder {
