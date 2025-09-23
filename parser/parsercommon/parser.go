@@ -9,34 +9,52 @@ import (
 )
 
 var (
-	Space      = PrimitiveType("space", tok.WHITESPACE)
-	Comment    = PrimitiveType("comment", tok.BLOCK_COMMENT, tok.LINE_COMMENT)
-	ParenOpen  = PrimitiveType("parenOpen", tok.OPENED_PARENS)
+	// Space parses a whitespace token.
+	Space = PrimitiveType("space", tok.WHITESPACE)
+	// Comment parses block or line comments.
+	Comment = PrimitiveType("comment", tok.BLOCK_COMMENT, tok.LINE_COMMENT)
+	// ParenOpen parses an opening parenthesis.
+	ParenOpen = PrimitiveType("parenOpen", tok.OPENED_PARENS)
+	// ParenClose parses a closing parenthesis.
 	ParenClose = PrimitiveType("parentClose", tok.CLOSED_PARENS)
-	Comma      = PrimitiveType("comma", tok.COMMA)
-	Dot        = PrimitiveType("Dot", tok.DOT)
+	// Comma parses a comma delimiter.
+	Comma = PrimitiveType("comma", tok.COMMA)
+	// Dot parses a dot token.
+	Dot = PrimitiveType("Dot", tok.DOT)
 
-	// Primitives
-	Number               = PrimitiveType("number", tok.NUMBER)
-	String               = PrimitiveType("string", tok.STRING)
-	Boolean              = PrimitiveType("boolean", tok.BOOLEAN)
-	Null                 = PrimitiveType("null", tok.NULL)
-	DummyLiteral         = PrimitiveType("dummy_literal", tok.DUMMY_LITERAL)
-	Literal              = pc.Or(Number, String, Boolean, Null, DummyLiteral)
-	Identifier           = PrimitiveType("identifier", tok.IDENTIFIER, tok.RESERVED_IDENTIFIER, tok.CONTEXTUAL_IDENTIFIER)
+	// Number parses a numeric literal.
+	Number = PrimitiveType("number", tok.NUMBER)
+	// String parses a string literal.
+	String = PrimitiveType("string", tok.STRING)
+	// Boolean parses a boolean literal.
+	Boolean = PrimitiveType("boolean", tok.BOOLEAN)
+	// Null parses a NULL literal.
+	Null = PrimitiveType("null", tok.NULL)
+	// DummyLiteral parses a SnapSQL dummy literal placeholder.
+	DummyLiteral = PrimitiveType("dummy_literal", tok.DUMMY_LITERAL)
+	// Literal parses any primitive literal or dummy literal.
+	Literal = pc.Or(Number, String, Boolean, Null, DummyLiteral)
+	// Identifier parses any identifier or contextual identifier.
+	Identifier = PrimitiveType("identifier", tok.IDENTIFIER, tok.RESERVED_IDENTIFIER, tok.CONTEXTUAL_IDENTIFIER)
+	// ContextualIdentifier parses a contextual identifier token.
 	ContextualIdentifier = PrimitiveType("contextualIdentifier", tok.CONTEXTUAL_IDENTIFIER)
 
-	// Operators
+	// Minus parses a minus operator token.
 	Minus = PrimitiveType("minus", tok.MINUS)
-	Not   = PrimitiveType("not", tok.NOT)
+	// Not parses a NOT operator token.
+	Not = PrimitiveType("not", tok.NOT)
 
+	// NumericOperator parses arithmetic operator tokens.
 	NumericOperator = PrimitiveType("numericOperator", tok.PLUS, tok.MINUS, tok.MULTIPLY, tok.DIVIDE)
 
-	// Keywords
-	Select  = PrimitiveType("select", tok.SELECT)
-	Keyword = PrimitiveType("keyword", tok.RESERVED_IDENTIFIER) // Any reserved keyword
+	// Select parses a SELECT keyword token.
+	Select = PrimitiveType("select", tok.SELECT)
+	// Keyword parses any reserved keyword token.
+	Keyword = PrimitiveType("keyword", tok.RESERVED_IDENTIFIER)
 
-	SP  = pc.Drop(pc.ZeroOrMore("comment or space", pc.Or(Space, Comment)))
+	// SP consumes zero or more space/comment tokens.
+	SP = pc.Drop(pc.ZeroOrMore("comment or space", pc.Or(Space, Comment)))
+	// EOS matches end of stream.
 	EOS = pc.EOS[tok.Token]()
 )
 

@@ -328,7 +328,7 @@ func convertSliceToCEL(rv reflect.Value) ref.Val {
 
 // Helper functions for creating CEL options with local registry
 
-// CreateCELOptionsWithTypes creates CEL options with a local type registry
+// CreateCELOptionsWithTypes creates CEL options with a local type registry.
 func CreateCELOptionsWithTypes(typeDefinitions map[string]map[string]FieldInfo) []cel.EnvOption {
 	registry := NewLocalTypeRegistry()
 
@@ -343,7 +343,7 @@ func CreateCELOptionsWithTypes(typeDefinitions map[string]map[string]FieldInfo) 
 	}
 }
 
-// Helper function to create FieldInfo with static accessor
+// CreateFieldInfo creates a FieldInfo with static accessor for a CEL field.
 func CreateFieldInfo(celName string, celType *types.Type, accessor func(interface{}) ref.Val) FieldInfo {
 	// Convert CEL name to Go name automatically
 	goName := celNameToGoName(celName)

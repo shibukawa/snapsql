@@ -243,7 +243,7 @@ func TestEnhancedSubqueryResolver_BasicFunctionality(t *testing.T) {
 			FROM categories c
 			JOIN category_tree ct ON c.parent_id = ct.id
 		)
-		SELECT * FROM category_tree
+		SELECT id, name, parent_id, level FROM category_tree
 		`
 
 		schemaResolver := NewSchemaResolver([]snapsql.DatabaseSchema{schema})

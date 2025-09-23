@@ -31,7 +31,7 @@ import (
 var (
 	ErrFixtureOnlyRequiresRunPattern            = errors.New("--fixture-only mode requires --run pattern to specify which test case to execute")
 	ErrFixtureOnlyAndQueryOnlyMutuallyExclusive = errors.New("--fixture-only and --query-only are mutually exclusive")
-	// Static sentinel errors (err113 compliant)
+	// ErrPathOutsideProjectRoot indicates a provided path escapes the project root.
 	ErrPathOutsideProjectRoot      = errors.New("path is outside the project root")
 	ErrUnsupportedPathType         = errors.New("unsupported path type")
 	ErrDialectNotConfigured        = errors.New("dialect not configured in snapsql.yaml; please run 'snapsql init' or set the dialect explicitly")

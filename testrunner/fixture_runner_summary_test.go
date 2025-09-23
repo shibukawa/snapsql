@@ -90,7 +90,7 @@ func TestFixtureTestRunnerPrintSummaryLabelsFailures(t *testing.T) {
 				ExecutedSQL: []fixtureexecutor.SQLTrace{
 					{
 						Label:      "main query",
-						Statement:  "SELECT * FROM comments WHERE card_id = 401 ORDER BY created_at",
+						Statement:  "SELECT id, card_id, body, created_at FROM comments WHERE card_id = 401 ORDER BY created_at",
 						Parameters: map[string]any{"card_id": 401},
 						Args:       []any{401},
 						QueryType:  fixtureexecutor.SelectQuery,
@@ -179,7 +179,7 @@ func TestFixtureTestRunnerPrintSummaryLabelsFailures(t *testing.T) {
 		t.Fatalf("expected SQL trace header in output, got: %s", output)
 	}
 
-	if !strings.Contains(output, "Statement: SELECT * FROM comments WHERE card_id = 401 ORDER BY created_at") {
+	if !strings.Contains(output, "Statement: SELECT id, card_id, body, created_at FROM comments WHERE card_id = 401 ORDER BY created_at") {
 		t.Fatalf("expected SQL statement in output, got: %s", output)
 	}
 

@@ -7,7 +7,7 @@ import (
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
-// Sentinel error for duplicate clause detection
+// ErrDuplicateClause is returned when a duplicate clause is detected.
 var ErrDuplicateClause = errors.New("duplicate clause detected")
 
 // ValidateClauseDuplicates checks for duplicate clauses in the clause list.

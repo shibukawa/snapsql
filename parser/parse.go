@@ -26,74 +26,112 @@ var (
 
 // Re-export common types for user convenience
 type (
+	// StatementNode is the core interface for all statement-level AST nodes (re-export).
 	// Core interfaces
 	StatementNode = cmn.StatementNode
+	// ClauseNode represents a clause-level AST node (re-export).
 	ClauseNode    = cmn.ClauseNode
+	// AstNode is the base interface for every parsed SQL AST node (re-export).
 	AstNode       = cmn.AstNode
 
-	// Statement types
+	// SelectStatement represents a parsed SELECT statement (re-export).
 	SelectStatement     = cmn.SelectStatement
+	// InsertIntoStatement represents a parsed INSERT ... INTO statement (re-export).
 	InsertIntoStatement = cmn.InsertIntoStatement
+	// UpdateStatement represents a parsed UPDATE statement (re-export).
 	UpdateStatement     = cmn.UpdateStatement
+	// DeleteFromStatement represents a parsed DELETE FROM statement (re-export).
 	DeleteFromStatement = cmn.DeleteFromStatement
 
-	// Clause types
+	// SelectClause represents the SELECT clause (re-export).
 	SelectClause     = cmn.SelectClause
+	// FromClause represents the FROM clause (re-export).
 	FromClause       = cmn.FromClause
+	// WhereClause represents the WHERE clause (re-export).
 	WhereClause      = cmn.WhereClause
+	// GroupByClause represents the GROUP BY clause (re-export).
 	GroupByClause    = cmn.GroupByClause
+	// HavingClause represents the HAVING clause (re-export).
 	HavingClause     = cmn.HavingClause
+	// OrderByClause represents the ORDER BY clause (re-export).
 	OrderByClause    = cmn.OrderByClause
+	// LimitClause represents the LIMIT clause (re-export).
 	LimitClause      = cmn.LimitClause
+	// OffsetClause represents the OFFSET clause (re-export).
 	OffsetClause     = cmn.OffsetClause
+	// WithClause represents the WITH clause (re-export).
 	WithClause       = cmn.WithClause
+	// ForClause represents the FOR clause (re-export).
 	ForClause        = cmn.ForClause
+	// InsertIntoClause represents the INSERT INTO clause (re-export).
 	InsertIntoClause = cmn.InsertIntoClause
+	// ValuesClause represents the VALUES clause (re-export).
 	ValuesClause     = cmn.ValuesClause
+	// UpdateClause represents the UPDATE clause (re-export).
 	UpdateClause     = cmn.UpdateClause
+	// SetClause represents the SET clause (re-export).
 	SetClause        = cmn.SetClause
+	// DeleteFromClause represents the DELETE FROM clause (re-export).
 	DeleteFromClause = cmn.DeleteFromClause
+	// OnConflictClause represents the ON CONFLICT clause (re-export).
 	OnConflictClause = cmn.OnConflictClause
+	// ReturningClause represents the RETURNING clause (re-export).
 	ReturningClause  = cmn.ReturningClause
 
-	// Element types
+	// FieldName represents a bare field name (re-export).
 	FieldName   = cmn.FieldName
+	// FieldType represents a categorized field type (re-export).
 	FieldType   = cmn.FieldType
+	// SelectField represents one field expression in a SELECT list (re-export).
 	SelectField = cmn.SelectField
 
-	// Schema and namespace types
+	// FunctionDefinition represents a function signature definition (re-export).
 	FunctionDefinition = cmn.FunctionDefinition
+	// Namespace represents a logical namespace grouping (re-export).
 	Namespace          = cmn.Namespace
+	// SetAssign represents a SET assignment expression (re-export).
 	SetAssign          = cmn.SetAssign
 
-	// Error types
+	// ParseError represents a parsing error (re-export).
 	ParseError = cmn.ParseError
 
-	// Subquery analysis types
+	// SubqueryAnalysisResult contains analysis metadata for subqueries (re-export).
 	SubqueryAnalysisResult = cmn.SubqueryAnalysisResult
+	// ValidationError represents a validation error (re-export).
 	ValidationError        = cmn.ValidationError
+	// SQDependencyGraph represents the subquery dependency graph (re-export).
 	SQDependencyGraph      = cmn.SQDependencyGraph
+	// SQFieldSource represents a field source in dependency analysis (re-export).
 	SQFieldSource          = cmn.SQFieldSource
+	// SQTableReference represents a table reference (re-export).
 	SQTableReference       = cmn.SQTableReference
+	// SQDependencyNode represents a node in dependency graph (re-export).
 	SQDependencyNode       = cmn.SQDependencyNode
+	// SQScopeManager manages scopes for dependency analysis (re-export).
 	SQScopeManager         = cmn.SQScopeManager
+	// SQDependencyType enumerates dependency relationship types (re-export).
 	SQDependencyType       = cmn.SQDependencyType
+	// SQSourceType enumerates source types for dependency nodes (re-export).
 	SQSourceType           = cmn.SQSourceType
+	// SQErrorType enumerates error categories used in parsing (re-export).
 	SQErrorType            = cmn.SQErrorType
+	// SQParseError represents a parse error enriched with context (re-export).
 	SQParseError           = cmn.SQParseError
 
-	// Node type constants
+	// NodeType is the re-export of cmn.NodeType.
 	NodeType = cmn.NodeType
+	// JoinType is the re-export of cmn.JoinType.
 	JoinType = cmn.JoinType
 )
 
 // Re-export constants
 const (
+	// UNKNOWN indicates unknown node type (re-export).
 	// SQL statement structures
 	UNKNOWN            = cmn.UNKNOWN
 	SUBQUERY_STATEMENT = cmn.SUBQUERY_STATEMENT
 
-	// Select statement
+	// SELECT_STATEMENT indicates a SELECT statement node type (re-export).
 	SELECT_STATEMENT = cmn.SELECT_STATEMENT
 	SELECT_CLAUSE    = cmn.SELECT_CLAUSE
 	FROM_CLAUSE      = cmn.FROM_CLAUSE
@@ -107,33 +145,42 @@ const (
 	FOR_CLAUSE       = cmn.FOR_CLAUSE
 	CTE_DEFINITION   = cmn.CTE_DEFINITION
 
-	// Insert statement
+	// INSERT_INTO_STATEMENT represents an INSERT statement node type.
 	INSERT_INTO_STATEMENT = cmn.INSERT_INTO_STATEMENT
 	INSERT_INTO_CLAUSE    = cmn.INSERT_INTO_CLAUSE
 	VALUES_CLAUSE         = cmn.VALUES_CLAUSE
 	ON_CONFLICT_CLAUSE    = cmn.ON_CONFLICT_CLAUSE
 
-	// Update statement
+	// UPDATE_STATEMENT represents an UPDATE statement node type.
 	UPDATE_STATEMENT = cmn.UPDATE_STATEMENT
 	UPDATE_CLAUSE    = cmn.UPDATE_CLAUSE
 	SET_CLAUSE       = cmn.SET_CLAUSE
 
-	// Delete statement
+	// DELETE_FROM_CLAUSE represents a DELETE FROM clause node type.
 	DELETE_FROM_CLAUSE    = cmn.DELETE_FROM_CLAUSE
+	// DELETE_FROM_STATEMENT represents a full DELETE statement node type.
 	DELETE_FROM_STATEMENT = cmn.DELETE_FROM_STATEMENT
 
-	// FieldType constants
+	// SingleField is a FieldType for single unqualified field names.
 	SingleField   = cmn.SingleField
-	TableField    = cmn.TableField
+	// TableField is a FieldType for qualified table.field names.
+	TableField = cmn.TableField
+	// FunctionField is a FieldType for function call expressions.
 	FunctionField = cmn.FunctionField
-	ComplexField  = cmn.ComplexField
-	LiteralField  = cmn.LiteralField
+	// ComplexField is a FieldType for complex expressions.
+	ComplexField = cmn.ComplexField
+	// LiteralField is a FieldType for literal values.
+	LiteralField = cmn.LiteralField
 
-	// parserstep7 dependency type constants
+	// DependencyCTE represents a dependency on a CTE.
 	DependencyCTE            = cmn.SQDependencyCTE
-	DependencySubquery       = cmn.SQDependencySubquery
-	DependencyMain           = cmn.SQDependencyMain
-	DependencyFromSubquery   = cmn.SQDependencyFromSubquery
+	// DependencySubquery represents a generic subquery dependency.
+	DependencySubquery = cmn.SQDependencySubquery
+	// DependencyMain represents the main query dependency.
+	DependencyMain = cmn.SQDependencyMain
+	// DependencyFromSubquery represents a FROM subquery dependency.
+	DependencyFromSubquery = cmn.SQDependencyFromSubquery
+	// DependencySelectSubquery represents a SELECT list subquery dependency.
 	DependencySelectSubquery = cmn.SQDependencySelectSubquery
 
 	JoinNone         = cmn.JoinNone
@@ -150,25 +197,32 @@ const (
 
 // Re-export sentinel errors
 var (
-	// Parser related errors
-	ErrInvalidSQL        = cmn.ErrInvalidSQL
+	// ErrInvalidSQL indicates the SQL was syntactically invalid.
+	ErrInvalidSQL = cmn.ErrInvalidSQL
+	// ErrInvalidForSnapSQL indicates the SQL uses features unsupported by SnapSQL.
 	ErrInvalidForSnapSQL = cmn.ErrInvalidForSnapSQL
 
-	// YAML/Schema related errors
-	ErrExpectedDocumentNode     = cmn.ErrExpectedDocumentNode
-	ErrExpectedMappingNode      = cmn.ErrExpectedMappingNode
+	// ErrExpectedDocumentNode indicates a YAML root document node was expected.
+	ErrExpectedDocumentNode = cmn.ErrExpectedDocumentNode
+	// ErrExpectedMappingForParams indicates a mapping node was expected for parameters.
 	ErrExpectedMappingForParams = cmn.ErrExpectedMappingForParams
-	ErrExpectedSequenceNode     = cmn.ErrExpectedSequenceNode
+	// ErrExpectedSequenceNode indicates a sequence node was expected.
+	ErrExpectedSequenceNode = cmn.ErrExpectedSequenceNode
+	// ErrUnsupportedParameterType indicates a parameter type is unsupported.
 	ErrUnsupportedParameterType = cmn.ErrUnsupportedParameterType
 
-	// CEL related errors
-	ErrEnvironmentCELNotInit      = cmn.ErrEnvironmentCELNotInit
-	ErrParameterCELNotInit        = cmn.ErrParameterCELNotInit
-	ErrNoOutputType               = cmn.ErrNoOutputType
+	// ErrEnvironmentCELNotInit indicates CEL environment wasn't initialized.
+	ErrEnvironmentCELNotInit = cmn.ErrEnvironmentCELNotInit
+	// ErrParameterCELNotInit indicates CEL parameter environment wasn't initialized.
+	ErrParameterCELNotInit = cmn.ErrParameterCELNotInit
+	// ErrNoOutputType indicates no output type was specified.
+	ErrNoOutputType = cmn.ErrNoOutputType
+	// ErrExpressionValidationFailed indicates expression failed validation.
 	ErrExpressionValidationFailed = cmn.ErrExpressionValidationFailed
-	ErrExpressionNotList          = cmn.ErrExpressionNotList
+	// ErrExpressionNotList indicates expression result wasn't a list.
+	ErrExpressionNotList = cmn.ErrExpressionNotList
 
-	// Other errors
+	// ErrParameterNotFound indicates a referenced parameter was not found.
 	ErrParameterNotFound = cmn.ErrParameterNotFound
 )
 

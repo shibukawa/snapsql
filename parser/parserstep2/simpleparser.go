@@ -1,4 +1,4 @@
-// --- SQL keyword primitive parsers for test coverage ---
+// Package parserstep2 provides primitive SQL keyword parser coverage helpers.
 package parserstep2
 
 import (
@@ -41,7 +41,7 @@ func ws(token pc.Parser[Entity]) pc.Parser[Entity] {
 		})
 }
 
-// LiteralAstNode is a minimal AST node for literals (number/string)
+// LiteralNode is a minimal AST node for literals (number/string).
 type LiteralNode struct {
 	LiteralType tokenizer.TokenType // "NUMBER", "STRING", "BOOLEAN" or "NULL"
 	Value       string
