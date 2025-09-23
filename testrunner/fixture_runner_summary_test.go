@@ -39,12 +39,14 @@ func captureStdout(t *testing.T, fn func()) string {
 
 	// Reader goroutine to collect output.
 	done := make(chan string, 1)
+
 	go func() {
 		var buf bytes.Buffer
 		if _, err := io.Copy(&buf, r); err != nil {
 			done <- ""
 			return
 		}
+
 		done <- buf.String()
 	}()
 
