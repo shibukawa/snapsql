@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,8 +13,18 @@ import (
 	"github.com/shibukawa/snapsql/testrunner/fixtureexecutor"
 )
 
+// stdoutCaptureMu guards global os.Stdout / color.Output swapping in captureStdout.
+// Parallel tests that simultaneously redirect Stdout without coordination can trigger
+// data races (detected under -race). A single mutex keeps the critical section small
+// while still allowing the captured function body to execute with redirected output.
+var stdoutCaptureMu sync.Mutex
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
+
+	// Serialize redirection of global writers.
+	stdoutCaptureMu.Lock()
+	defer stdoutCaptureMu.Unlock()
 
 	prevStdout := os.Stdout
 	prevColorOutput := color.Output
@@ -26,21 +37,23 @@ func captureStdout(t *testing.T, fn func()) string {
 	os.Stdout = w
 	color.Output = w
 
-	done := make(chan string)
-
+	// Reader goroutine to collect output.
+	done := make(chan string, 1)
 	go func() {
 		var buf bytes.Buffer
 		if _, err := io.Copy(&buf, r); err != nil {
 			done <- ""
 			return
 		}
-
 		done <- buf.String()
 	}()
 
+	// Execute user function while stdout is redirected.
 	fn()
-	w.Close()
+	// Close write end so reader goroutine finishes.
+	_ = w.Close()
 
+	// Restore globals before waiting (avoid holding stale descriptors if wait blocks).
 	os.Stdout = prevStdout
 	color.Output = prevColorOutput
 

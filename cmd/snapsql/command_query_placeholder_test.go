@@ -1,9 +1,10 @@
 package main
 
 import (
+	"testing"
+
 	"github.com/alecthomas/assert/v2"
 	"github.com/shibukawa/snapsql/query"
-	"testing"
 )
 
 func TestFormatSQLForDisplay_Postgres_BasicSpacing(t *testing.T) {

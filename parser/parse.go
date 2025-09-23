@@ -30,67 +30,67 @@ type (
 	// Core interfaces
 	StatementNode = cmn.StatementNode
 	// ClauseNode represents a clause-level AST node (re-export).
-	ClauseNode    = cmn.ClauseNode
+	ClauseNode = cmn.ClauseNode
 	// AstNode is the base interface for every parsed SQL AST node (re-export).
-	AstNode       = cmn.AstNode
+	AstNode = cmn.AstNode
 
 	// SelectStatement represents a parsed SELECT statement (re-export).
-	SelectStatement     = cmn.SelectStatement
+	SelectStatement = cmn.SelectStatement
 	// InsertIntoStatement represents a parsed INSERT ... INTO statement (re-export).
 	InsertIntoStatement = cmn.InsertIntoStatement
 	// UpdateStatement represents a parsed UPDATE statement (re-export).
-	UpdateStatement     = cmn.UpdateStatement
+	UpdateStatement = cmn.UpdateStatement
 	// DeleteFromStatement represents a parsed DELETE FROM statement (re-export).
 	DeleteFromStatement = cmn.DeleteFromStatement
 
 	// SelectClause represents the SELECT clause (re-export).
-	SelectClause     = cmn.SelectClause
+	SelectClause = cmn.SelectClause
 	// FromClause represents the FROM clause (re-export).
-	FromClause       = cmn.FromClause
+	FromClause = cmn.FromClause
 	// WhereClause represents the WHERE clause (re-export).
-	WhereClause      = cmn.WhereClause
+	WhereClause = cmn.WhereClause
 	// GroupByClause represents the GROUP BY clause (re-export).
-	GroupByClause    = cmn.GroupByClause
+	GroupByClause = cmn.GroupByClause
 	// HavingClause represents the HAVING clause (re-export).
-	HavingClause     = cmn.HavingClause
+	HavingClause = cmn.HavingClause
 	// OrderByClause represents the ORDER BY clause (re-export).
-	OrderByClause    = cmn.OrderByClause
+	OrderByClause = cmn.OrderByClause
 	// LimitClause represents the LIMIT clause (re-export).
-	LimitClause      = cmn.LimitClause
+	LimitClause = cmn.LimitClause
 	// OffsetClause represents the OFFSET clause (re-export).
-	OffsetClause     = cmn.OffsetClause
+	OffsetClause = cmn.OffsetClause
 	// WithClause represents the WITH clause (re-export).
-	WithClause       = cmn.WithClause
+	WithClause = cmn.WithClause
 	// ForClause represents the FOR clause (re-export).
-	ForClause        = cmn.ForClause
+	ForClause = cmn.ForClause
 	// InsertIntoClause represents the INSERT INTO clause (re-export).
 	InsertIntoClause = cmn.InsertIntoClause
 	// ValuesClause represents the VALUES clause (re-export).
-	ValuesClause     = cmn.ValuesClause
+	ValuesClause = cmn.ValuesClause
 	// UpdateClause represents the UPDATE clause (re-export).
-	UpdateClause     = cmn.UpdateClause
+	UpdateClause = cmn.UpdateClause
 	// SetClause represents the SET clause (re-export).
-	SetClause        = cmn.SetClause
+	SetClause = cmn.SetClause
 	// DeleteFromClause represents the DELETE FROM clause (re-export).
 	DeleteFromClause = cmn.DeleteFromClause
 	// OnConflictClause represents the ON CONFLICT clause (re-export).
 	OnConflictClause = cmn.OnConflictClause
 	// ReturningClause represents the RETURNING clause (re-export).
-	ReturningClause  = cmn.ReturningClause
+	ReturningClause = cmn.ReturningClause
 
 	// FieldName represents a bare field name (re-export).
-	FieldName   = cmn.FieldName
+	FieldName = cmn.FieldName
 	// FieldType represents a categorized field type (re-export).
-	FieldType   = cmn.FieldType
+	FieldType = cmn.FieldType
 	// SelectField represents one field expression in a SELECT list (re-export).
 	SelectField = cmn.SelectField
 
 	// FunctionDefinition represents a function signature definition (re-export).
 	FunctionDefinition = cmn.FunctionDefinition
 	// Namespace represents a logical namespace grouping (re-export).
-	Namespace          = cmn.Namespace
+	Namespace = cmn.Namespace
 	// SetAssign represents a SET assignment expression (re-export).
-	SetAssign          = cmn.SetAssign
+	SetAssign = cmn.SetAssign
 
 	// ParseError represents a parsing error (re-export).
 	ParseError = cmn.ParseError
@@ -98,25 +98,25 @@ type (
 	// SubqueryAnalysisResult contains analysis metadata for subqueries (re-export).
 	SubqueryAnalysisResult = cmn.SubqueryAnalysisResult
 	// ValidationError represents a validation error (re-export).
-	ValidationError        = cmn.ValidationError
+	ValidationError = cmn.ValidationError
 	// SQDependencyGraph represents the subquery dependency graph (re-export).
-	SQDependencyGraph      = cmn.SQDependencyGraph
+	SQDependencyGraph = cmn.SQDependencyGraph
 	// SQFieldSource represents a field source in dependency analysis (re-export).
-	SQFieldSource          = cmn.SQFieldSource
+	SQFieldSource = cmn.SQFieldSource
 	// SQTableReference represents a table reference (re-export).
-	SQTableReference       = cmn.SQTableReference
+	SQTableReference = cmn.SQTableReference
 	// SQDependencyNode represents a node in dependency graph (re-export).
-	SQDependencyNode       = cmn.SQDependencyNode
+	SQDependencyNode = cmn.SQDependencyNode
 	// SQScopeManager manages scopes for dependency analysis (re-export).
-	SQScopeManager         = cmn.SQScopeManager
+	SQScopeManager = cmn.SQScopeManager
 	// SQDependencyType enumerates dependency relationship types (re-export).
-	SQDependencyType       = cmn.SQDependencyType
+	SQDependencyType = cmn.SQDependencyType
 	// SQSourceType enumerates source types for dependency nodes (re-export).
-	SQSourceType           = cmn.SQSourceType
+	SQSourceType = cmn.SQSourceType
 	// SQErrorType enumerates error categories used in parsing (re-export).
-	SQErrorType            = cmn.SQErrorType
+	SQErrorType = cmn.SQErrorType
 	// SQParseError represents a parse error enriched with context (re-export).
-	SQParseError           = cmn.SQParseError
+	SQParseError = cmn.SQParseError
 
 	// NodeType is the re-export of cmn.NodeType.
 	NodeType = cmn.NodeType
@@ -157,12 +157,12 @@ const (
 	SET_CLAUSE       = cmn.SET_CLAUSE
 
 	// DELETE_FROM_CLAUSE represents a DELETE FROM clause node type.
-	DELETE_FROM_CLAUSE    = cmn.DELETE_FROM_CLAUSE
+	DELETE_FROM_CLAUSE = cmn.DELETE_FROM_CLAUSE
 	// DELETE_FROM_STATEMENT represents a full DELETE statement node type.
 	DELETE_FROM_STATEMENT = cmn.DELETE_FROM_STATEMENT
 
 	// SingleField is a FieldType for single unqualified field names.
-	SingleField   = cmn.SingleField
+	SingleField = cmn.SingleField
 	// TableField is a FieldType for qualified table.field names.
 	TableField = cmn.TableField
 	// FunctionField is a FieldType for function call expressions.
@@ -173,7 +173,7 @@ const (
 	LiteralField = cmn.LiteralField
 
 	// DependencyCTE represents a dependency on a CTE.
-	DependencyCTE            = cmn.SQDependencyCTE
+	DependencyCTE = cmn.SQDependencyCTE
 	// DependencySubquery represents a generic subquery dependency.
 	DependencySubquery = cmn.SQDependencySubquery
 	// DependencyMain represents the main query dependency.
