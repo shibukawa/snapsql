@@ -160,43 +160,9 @@ func (tr *TestRunner) findTestPackages() ([]string, error) {
 }
 
 func (tr *TestRunner) collectTestPackages(path string, seen map[string]struct{}, packages *[]string, allowSkipRoot bool) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		return filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-
-			if info.IsDir() {
-				if !allowSkipRoot && p == path {
-					return nil
-				}
-
-				name := info.Name()
-				if name == "vendor" || name == ".git" || name == "node_modules" || strings.HasPrefix(name, ".") {
-					if p == path {
-						return nil
-					}
-
-					return filepath.SkipDir
-				}
-
-				return nil
-			}
-
-			tr.maybeAddTestPackage(p, info, seen, packages)
-
-			return nil
-		})
-	}
-
-	tr.maybeAddTestPackage(path, info, seen, packages)
-
-	return nil
+	return walkAndProcessFiles(path, allowSkipRoot, func(p string, info os.FileInfo) {
+		tr.maybeAddTestPackage(p, info, seen, packages)
+	})
 }
 
 func (tr *TestRunner) maybeAddTestPackage(path string, info os.FileInfo, seen map[string]struct{}, packages *[]string) {

@@ -31,6 +31,12 @@ import (
 var (
 	ErrFixtureOnlyRequiresRunPattern            = errors.New("--fixture-only mode requires --run pattern to specify which test case to execute")
 	ErrFixtureOnlyAndQueryOnlyMutuallyExclusive = errors.New("--fixture-only and --query-only are mutually exclusive")
+	// Static sentinel errors (err113 compliant)
+	ErrPathOutsideProjectRoot      = errors.New("path is outside the project root")
+	ErrUnsupportedPathType         = errors.New("unsupported path type")
+	ErrDialectNotConfigured        = errors.New("dialect not configured in snapsql.yaml; please run 'snapsql init' or set the dialect explicitly")
+	ErrUnsupportedEphemeralDialect = errors.New("unsupported dialect for ephemeral database mode")
+	ErrSchemaOutputNotDirectory    = errors.New("schema output path is not a directory")
 )
 
 // Context represents the global context for commands
@@ -206,7 +212,7 @@ func (cmd *TestCmd) resolveTargetPaths(projectRoot string) ([]string, error) {
 		}
 
 		if strings.HasPrefix(rel, "..") {
-			return nil, fmt.Errorf("path '%s' is outside the project root", p)
+			return nil, fmt.Errorf("%w: %s", ErrPathOutsideProjectRoot, p)
 		}
 
 		info, err := os.Stat(absPath)
@@ -215,7 +221,7 @@ func (cmd *TestCmd) resolveTargetPaths(projectRoot string) ([]string, error) {
 		}
 
 		if !info.IsDir() && !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("unsupported path type for '%s'", p)
+			return nil, fmt.Errorf("%w: %s", ErrUnsupportedPathType, p)
 		}
 
 		if _, ok := seen[absPath]; ok {
@@ -252,7 +258,7 @@ func (cmd *TestCmd) runWithExistingDatabase(projectRoot string, config *snapsql.
 
 func (cmd *TestCmd) runWithEphemeralDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool) error {
 	if strings.TrimSpace(config.Dialect) == "" {
-		return errors.New("dialect not configured in snapsql.yaml; please run 'snapsql init' or set the dialect explicitly")
+		return ErrDialectNotConfigured
 	}
 
 	ctx := context.Background()
@@ -357,7 +363,7 @@ func (cmd *TestCmd) provisionEphemeralDatabase(ctx context.Context, config *snap
 	case "mysql":
 		return cmd.provisionMySQLDatabase(ctx, verbose)
 	default:
-		return nil, fmt.Errorf("unsupported dialect '%s' for ephemeral database mode; specify --use-existing-db to use a configured connection", config.Dialect)
+		return nil, fmt.Errorf("%w: %s; specify --use-existing-db to use a configured connection", ErrUnsupportedEphemeralDialect, config.Dialect)
 	}
 }
 
@@ -615,7 +621,7 @@ func (cmd *TestCmd) loadTableInfo(root string, verbose bool) (map[string]*snapsq
 	}
 
 	if !info.IsDir() {
-		return nil, fmt.Errorf("schema output path %s is not a directory", root)
+		return nil, fmt.Errorf("%w: %s", ErrSchemaOutputNotDirectory, root)
 	}
 
 	tableInfo := make(map[string]*snapsql.TableInfo)

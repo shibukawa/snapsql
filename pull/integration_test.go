@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/alecthomas/assert/v2"
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver (pgx)
@@ -178,8 +177,7 @@ func TestMySQLIntegration(t *testing.T) {
 
 	defer db.Close()
 
-	// Wait for MySQL to be ready
-	time.Sleep(5 * time.Second)
+	// MySQL module waits for readiness; fixed sleep is unnecessary and slows tests
 
 	// Create test schema and tables
 	err = setupMySQLTestData(db)
@@ -219,6 +217,7 @@ func TestMySQLIntegration(t *testing.T) {
 
 // TestSQLiteIntegration tests the complete pull operation with SQLite
 func TestSQLiteIntegration(t *testing.T) {
+	// Removed short guard to allow execution in short mode
 	// Create temporary SQLite database
 	tempDir := t.TempDir()
 

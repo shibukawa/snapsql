@@ -3,6 +3,7 @@ package testrunner
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,11 @@ import (
 )
 
 const verboseListLimit = 200
+
+// Static errors for err113 compliance
+var (
+	ErrMissingMarkdownDocumentContext = errors.New("missing markdown document context")
+)
 
 // FixtureTestRunner manages fixture-based test execution
 type FixtureTestRunner struct {
@@ -286,43 +292,9 @@ func (ftr *FixtureTestRunner) findMarkdownTestFiles() ([]string, error) {
 }
 
 func (ftr *FixtureTestRunner) collectMarkdownFiles(path string, seen map[string]struct{}, files *[]string, allowSkipRoot bool) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		return filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-
-			if info.IsDir() {
-				if !allowSkipRoot && p == path {
-					return nil
-				}
-
-				name := info.Name()
-				if name == "vendor" || name == ".git" || name == "node_modules" || strings.HasPrefix(name, ".") {
-					if p == path {
-						return nil
-					}
-
-					return filepath.SkipDir
-				}
-
-				return nil
-			}
-
-			ftr.maybeAddMarkdownFile(p, info, seen, files)
-
-			return nil
-		})
-	}
-
-	ftr.maybeAddMarkdownFile(path, info, seen, files)
-
-	return nil
+	return walkAndProcessFiles(path, allowSkipRoot, func(p string, info os.FileInfo) {
+		ftr.maybeAddMarkdownFile(p, info, seen, files)
+	})
 }
 
 func (ftr *FixtureTestRunner) maybeAddMarkdownFile(path string, info os.FileInfo, seen map[string]struct{}, files *[]string) {
@@ -418,7 +390,7 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 			for _, tc := range summary.cases {
 				issues = append(issues, preparationIssue{
 					testCase: tc,
-					err:      fmt.Errorf("missing markdown document context for %s", tc.Name),
+					err:      fmt.Errorf("%w: %s", ErrMissingMarkdownDocumentContext, tc.Name),
 				})
 			}
 

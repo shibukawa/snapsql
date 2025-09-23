@@ -38,15 +38,24 @@ var (
 	actualSeparatorFmt = color.New(color.FgRed).SprintFunc()
 )
 
-// FixtureFailure is an error wrapper that retains the failure classification and optional context.
-type FixtureFailure struct {
+// Sentinel errors for wrapping (err113 compliant)
+var (
+	ErrUnknownFixtureFailure = errors.New("unknown fixture failure")
+	ErrFixtureFailureMessage = errors.New("fixture failure")
+)
+
+// FixtureError is an error wrapper that retains the failure classification and optional context.
+type FixtureError struct {
 	kind    FailureKind
 	err     error
 	context map[string]string
 }
 
+// NOTE: Historical alias "FixtureFailure" was removed to satisfy errname linter.
+// Keep helper functions to avoid breaking call sites while returning *FixtureError.
+
 // Error implements the error interface.
-func (f *FixtureFailure) Error() string {
+func (f *FixtureError) Error() string {
 	if f == nil || f.err == nil {
 		return "fixture failure"
 	}
@@ -55,7 +64,7 @@ func (f *FixtureFailure) Error() string {
 }
 
 // Unwrap returns the underlying error.
-func (f *FixtureFailure) Unwrap() error {
+func (f *FixtureError) Unwrap() error {
 	if f == nil {
 		return nil
 	}
@@ -64,7 +73,7 @@ func (f *FixtureFailure) Unwrap() error {
 }
 
 // Kind returns the FailureKind classification.
-func (f *FixtureFailure) Kind() FailureKind {
+func (f *FixtureError) Kind() FailureKind {
 	if f == nil {
 		return FailureKindUnknown
 	}
@@ -73,7 +82,7 @@ func (f *FixtureFailure) Kind() FailureKind {
 }
 
 // Context returns a copy of the contextual metadata attached to the failure.
-func (f *FixtureFailure) Context() map[string]string {
+func (f *FixtureError) Context() map[string]string {
 	if f == nil || len(f.context) == 0 {
 		return nil
 	}
@@ -121,9 +130,9 @@ func NewFixtureFailure(kind FailureKind, err error) error {
 	return newFixtureFailure(kind, err, nil)
 }
 
-// AsFixtureFailure attempts to extract a FixtureFailure from the error chain.
-func AsFixtureFailure(err error) (*FixtureFailure, bool) {
-	var ff *FixtureFailure
+// AsFixtureFailure attempts to extract a FixtureError from the error chain.
+func AsFixtureFailure(err error) (*FixtureError, bool) {
+	var ff *FixtureError
 	if errors.As(err, &ff) {
 		return ff, true
 	}
@@ -197,10 +206,10 @@ func ClassifyFailure(err error) FailureKind {
 
 func newFixtureFailure(kind FailureKind, err error, ctx map[string]string) error {
 	if err == nil {
-		err = errors.New("unknown fixture failure")
+		err = ErrUnknownFixtureFailure
 	}
 
-	return &FixtureFailure{kind: kind, err: err, context: copyContext(ctx)}
+	return &FixtureError{kind: kind, err: err, context: copyContext(ctx)}
 }
 
 func wrapFailure(kind FailureKind, err error, ctx map[string]string, format string, args ...any) error {
@@ -222,7 +231,7 @@ func wrapFailure(kind FailureKind, err error, ctx map[string]string, format stri
 	}
 
 	if err == nil {
-		return newFixtureFailure(kind, errors.New(message), merged)
+		return newFixtureFailure(kind, fmt.Errorf("%w: %s", ErrFixtureFailureMessage, message), merged)
 	}
 
 	return newFixtureFailure(kind, fmt.Errorf("%s: %w", message, err), merged)
@@ -230,10 +239,6 @@ func wrapFailure(kind FailureKind, err error, ctx map[string]string, format stri
 
 func wrapAssertionFailure(err error, format string, args ...any) error {
 	return wrapFailure(FailureKindAssertion, err, nil, format, args...)
-}
-
-func wrapAssertionFailureWithContext(ctx map[string]string, err error, format string, args ...any) error {
-	return wrapFailure(FailureKindAssertion, err, ctx, format, args...)
 }
 
 func wrapDefinitionFailure(err error, format string, args ...any) error {

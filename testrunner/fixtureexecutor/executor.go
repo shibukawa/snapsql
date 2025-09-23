@@ -465,7 +465,7 @@ func (e *Executor) validateTableStateBySpec(tx *sql.Tx, spec markdownparser.Expe
 	case "all":
 		// expect full match with order irrelevant? design doc implies exact table contents.
 		// We compare counts and then match rows by index after sorting by PK (already ordered if PK exists).
-		if err := compareRowsSlice(spec.Data, actual, spec.TableName, pkCols, false); err != nil {
+		if err := compareRowsSlice(spec.Data, actual, spec.TableName, pkCols, false, false); err != nil {
 			return err
 		}
 		return nil
@@ -673,7 +673,7 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 	// 4. Validate (暫定: 旧式 ExpectedResult を直接比較) または 外部ファイル参照の無名期待
 	if result.QueryType == SelectQuery || hasReturningClause(execution.SQL) {
 		if len(execution.TestCase.ExpectedResult) > 0 {
-			if err := compareRowsSlice(execution.TestCase.ExpectedResult, result.Data, "", nil, execution.TestCase.ResultOrdered); err != nil {
+			if err := compareRowsSlice(execution.TestCase.ExpectedResult, result.Data, "", nil, execution.TestCase.ResultOrdered, true); err != nil {
 				return nil, wrapAssertionFailure(err, "simple validation failed")
 			}
 		} else if spec, ok := firstUnnamedExternalSpec(execution.TestCase.ExpectedResults); ok {
@@ -681,7 +681,7 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 			if err != nil {
 				return nil, wrapDefinitionFailure(err, "failed to load expected results from external file")
 			}
-			if err := compareRowsSlice(rows, result.Data, "", nil, execution.TestCase.ResultOrdered); err != nil {
+			if err := compareRowsSlice(rows, result.Data, "", nil, execution.TestCase.ResultOrdered, true); err != nil {
 				return nil, wrapAssertionFailure(err, "simple validation failed")
 			}
 		}
@@ -1087,11 +1087,13 @@ func (e *Executor) getPrimaryKeyColumns(tableName string) ([]string, error) {
 // matchPrimaryKey: 主キー列で2行が一致するか
 // (legacy helper matchPrimaryKey / extractPrimaryKey removed as unused)
 
-// compareRowsSlice: 2つの[]map[string]anyを順序・件数・値で完全一致比較
+// compareRowsSlice: 2つの[]map[string]anyを比較
+// - orderSensitive: 並び順も検証
+// - ignoreUnexpected: 実際の行に期待にない余分なカラムがあっても許容（シンプル検証用）
 
-func compareRowsSlice(expected, actual []map[string]any, table string, pkCols []string, orderSensitive bool) error {
+func compareRowsSlice(expected, actual []map[string]any, table string, pkCols []string, orderSensitive bool, ignoreUnexpected bool) error {
 	if orderSensitive {
-		return compareRowsSliceOrdered(expected, actual, table, pkCols)
+		return compareRowsSliceOrdered(expected, actual, table, pkCols, ignoreUnexpected)
 	}
 
 	diff := &DiffError{Table: table, PrimaryKeys: pkCols}
@@ -1103,7 +1105,7 @@ func compareRowsSlice(expected, actual []map[string]any, table string, pkCols []
 			if used[j] {
 				continue
 			}
-			if len(collectRowDiffs(exp, act)) == 0 {
+			if len(collectRowDiffs(exp, act, ignoreUnexpected)) == 0 {
 				matchIdx = j
 				used[j] = true
 				break
@@ -1152,7 +1154,7 @@ func compareRowsSlice(expected, actual []map[string]any, table string, pkCols []
 	return nil
 }
 
-func compareRowsSliceOrdered(expected, actual []map[string]any, table string, pkCols []string) error {
+func compareRowsSliceOrdered(expected, actual []map[string]any, table string, pkCols []string, ignoreUnexpected bool) error {
 	diff := &DiffError{Table: table, PrimaryKeys: pkCols}
 	minLen := len(expected)
 	if len(actual) < minLen {
@@ -1160,7 +1162,7 @@ func compareRowsSliceOrdered(expected, actual []map[string]any, table string, pk
 	}
 
 	for i := 0; i < minLen; i++ {
-		colDiffs := collectRowDiffs(expected[i], actual[i])
+		colDiffs := collectRowDiffs(expected[i], actual[i], ignoreUnexpected)
 		if len(colDiffs) > 0 {
 			key := buildRowKey(pkCols, expected[i], actual[i], i)
 			diff.RowDiffs = append(diff.RowDiffs, RowDiff{Key: key, Diffs: colDiffs})
@@ -1208,7 +1210,7 @@ func compareRowsSliceOrdered(expected, actual []map[string]any, table string, pk
 	return nil
 }
 
-func collectRowDiffs(expected, actual map[string]any) []ColumnDiff {
+func collectRowDiffs(expected, actual map[string]any, ignoreUnexpected bool) []ColumnDiff {
 	diffs := make([]ColumnDiff, 0)
 	seen := make(map[string]struct{})
 	for k, vExp := range expected {
@@ -1226,7 +1228,9 @@ func collectRowDiffs(expected, actual map[string]any) []ColumnDiff {
 		if _, ok := seen[k]; ok {
 			continue
 		}
-		diffs = append(diffs, ColumnDiff{Column: k, Expected: "<not provided>", Actual: formatValueForDiff(vAct), Reason: "unexpected column"})
+		if !ignoreUnexpected {
+			diffs = append(diffs, ColumnDiff{Column: k, Expected: "<not provided>", Actual: formatValueForDiff(vAct), Reason: "unexpected column"})
+		}
 	}
 	return diffs
 }

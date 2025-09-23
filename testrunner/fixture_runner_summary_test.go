@@ -13,6 +13,8 @@ import (
 )
 
 func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
 	prevStdout := os.Stdout
 	prevColorOutput := color.Output
 

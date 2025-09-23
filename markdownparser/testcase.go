@@ -145,7 +145,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte, mapper *indexToLine
 				var codeContent strings.Builder
 
 				lines := n.Lines()
-				for i := 0; i < lines.Len(); i++ {
+				for i := range lines.Len() {
 					line := lines.At(i)
 					codeContent.Write(line.Value(content))
 

@@ -111,15 +111,15 @@ func TestPullResult(t *testing.T) {
 				{
 					Name: "public",
 					Tables: []*snapsql.TableInfo{
-						&snapsql.TableInfo{Name: "users", Schema: "public", Columns: map[string]*snapsql.ColumnInfo{}},
-						&snapsql.TableInfo{Name: "posts", Schema: "public", Columns: map[string]*snapsql.ColumnInfo{}},
+						{Name: "users", Schema: "public", Columns: map[string]*snapsql.ColumnInfo{}},
+						{Name: "posts", Schema: "public", Columns: map[string]*snapsql.ColumnInfo{}},
 					},
 				},
 				{
 					Name: "auth",
 					Tables: []*snapsql.TableInfo{
-						&snapsql.TableInfo{Name: "sessions", Schema: "auth", Columns: map[string]*snapsql.ColumnInfo{}},
-						&snapsql.TableInfo{Name: "permissions", Schema: "auth", Columns: map[string]*snapsql.ColumnInfo{}},
+						{Name: "sessions", Schema: "auth", Columns: map[string]*snapsql.ColumnInfo{}},
+						{Name: "permissions", Schema: "auth", Columns: map[string]*snapsql.ColumnInfo{}},
 					},
 				},
 			},
