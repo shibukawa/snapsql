@@ -11,12 +11,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
+	"github.com/shibukawa/snapsql/query"
 )
 
 var (
@@ -38,6 +41,20 @@ var (
 	errUnknownFixtureColumn  = errors.New("fixture row contains unknown column")
 )
 
+const maxTraceRows = 20
+
+// SQLTrace captures executed statements for verbose output.
+type SQLTrace struct {
+	Label         string
+	Statement     string
+	Parameters    map[string]any
+	QueryType     QueryType
+	Rows          []map[string]any
+	RowsTruncated bool
+	TotalRows     int
+	Args          []any
+}
+
 // ExecutionMode represents the test execution mode
 type ExecutionMode string
 
@@ -53,6 +70,7 @@ type ExecutionOptions struct {
 	Commit   bool
 	Parallel int
 	Timeout  time.Duration
+	Verbose  bool
 }
 
 // DefaultExecutionOptions returns default execution options
@@ -62,6 +80,7 @@ func DefaultExecutionOptions() *ExecutionOptions {
 		Commit:   false,
 		Parallel: runtime.NumCPU(),
 		Timeout:  2 * time.Minute,
+		Verbose:  false,
 	}
 }
 
@@ -74,6 +93,21 @@ const (
 	UpdateQuery
 	DeleteQuery
 )
+
+func (qt QueryType) String() string {
+	switch qt {
+	case SelectQuery:
+		return "SELECT"
+	case InsertQuery:
+		return "INSERT"
+	case UpdateQuery:
+		return "UPDATE"
+	case DeleteQuery:
+		return "DELETE"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 // ValidationResult contains the result of query execution and validation
 type ValidationResult struct {
@@ -91,9 +125,186 @@ type TestExecution struct {
 	TestCase    *markdownparser.TestCase
 	SQL         string         // SQL query from document
 	Parameters  map[string]any // Parameters from test case
+	Args        []any          // Positional arguments for PreparedSQL
 	Options     *ExecutionOptions
 	Transaction *sql.Tx
 	Executor    *Executor
+	Trace       []SQLTrace
+}
+
+func (te *TestExecution) addTrace(label, statement string, params map[string]any, args []any, result *ValidationResult) {
+	if te == nil || te.Options == nil || !te.Options.Verbose {
+		return
+	}
+
+	trace := SQLTrace{
+		Label:      label,
+		Statement:  statement,
+		Parameters: copyParameters(params),
+		QueryType:  SelectQuery,
+	}
+
+	if len(args) > 0 {
+		trace.Args = copyArgs(args)
+	}
+
+	if result != nil {
+		trace.QueryType = result.QueryType
+		trace.TotalRows = len(result.Data)
+		if rows, truncated := sanitizeRows(result.Data); len(rows) > 0 {
+			trace.Rows = rows
+			trace.RowsTruncated = truncated
+		} else if result.QueryType != SelectQuery && result.RowsAffected != 0 {
+			trace.Rows = []map[string]any{{"rows_affected": result.RowsAffected}}
+			trace.TotalRows = 1
+		}
+	}
+
+	te.Trace = append(te.Trace, trace)
+}
+
+func copyParameters(params map[string]any) map[string]any {
+	if len(params) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(params))
+	for k, v := range params {
+		out[k] = v
+	}
+	return out
+}
+
+func copyArgs(args []any) []any {
+	if len(args) == 0 {
+		return nil
+	}
+	out := make([]any, len(args))
+	copy(out, args)
+	return out
+}
+
+// resolveExecutableSQL returns the statement actually executed against database/sql.
+// The same string is propagated into SQL traces so verbose output mirrors the real execution.
+func (e *Executor) resolveExecutableSQL(testCase *markdownparser.TestCase, rawSQL string) (string, []any) {
+	if testCase == nil {
+		return rawSQL, nil
+	}
+
+	if strings.TrimSpace(testCase.PreparedSQL) == "" {
+		return rawSQL, nil
+	}
+
+	formatted := query.FormatSQLForDialect(testCase.PreparedSQL, e.dialect)
+	args := copyArgs(testCase.SQLArgs)
+
+	if strings.TrimSpace(formatted) == "" {
+		return rawSQL, args
+	}
+
+	return formatted, args
+}
+
+func sanitizeRows(rows []map[string]any) ([]map[string]any, bool) {
+	if len(rows) == 0 {
+		return nil, false
+	}
+	truncated := false
+	if len(rows) > maxTraceRows {
+		rows = rows[:maxTraceRows]
+		truncated = true
+	}
+	out := make([]map[string]any, len(rows))
+	for i, row := range rows {
+		copyRow := make(map[string]any, len(row))
+		for k, v := range row {
+			copyRow[k] = v
+		}
+		out[i] = copyRow
+	}
+	return out, truncated
+}
+
+func normalizeFixtureRows(rows []map[string]any) ([]map[string]any, error) {
+	if len(rows) == 0 {
+		return rows, nil
+	}
+
+	result := make([]map[string]any, len(rows))
+	for i, row := range rows {
+		conv, err := normalizeFixtureRow(row)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = conv
+	}
+
+	return result, nil
+}
+
+func normalizeFixtureRow(row map[string]any) (map[string]any, error) {
+	if row == nil {
+		return nil, nil
+	}
+
+	result := make(map[string]any, len(row))
+	for k, v := range row {
+		nv, err := resolveFixtureValue(v)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve fixture value for %s: %w", k, err)
+		}
+		result[k] = nv
+	}
+
+	return result, nil
+}
+
+func resolveFixtureValue(value any) (any, error) {
+	switch v := value.(type) {
+	case []any:
+		if len(v) == 0 {
+			return value, nil
+		}
+		if first, ok := v[0].(string); ok {
+			matcher := strings.ToLower(strings.TrimSpace(first))
+			switch matcher {
+			case "currentdate", "current_date":
+				base := time.Now().UTC()
+				offset := time.Duration(0)
+				if len(v) >= 2 {
+					if durStr, ok := v[1].(string); ok && strings.TrimSpace(durStr) != "" {
+						d, err := parseFlexibleDuration(durStr)
+						if err != nil {
+							return nil, err
+						}
+						offset = d
+					}
+				}
+				return base.Add(offset), nil
+			}
+		}
+
+		resolved := make([]any, len(v))
+		for i, elem := range v {
+			val, err := resolveFixtureValue(elem)
+			if err != nil {
+				return nil, err
+			}
+			resolved[i] = val
+		}
+		return resolved, nil
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, elem := range v {
+			val, err := resolveFixtureValue(elem)
+			if err != nil {
+				return nil, err
+			}
+			out[key] = val
+		}
+		return out, nil
+	default:
+		return value, nil
+	}
 }
 
 // Executor handles fixture data insertion and query execution
@@ -117,13 +328,13 @@ func NewExecutor(db *sql.DB, dialect string, tableInfo map[string]*snapsql.Table
 func (e *Executor) SetBaseDir(dir string) { e.baseDir = dir }
 
 // ExecuteTest executes a complete test case within a transaction
-func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, error) {
+func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, []SQLTrace, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+		return nil, nil, wrapDefinitionFailure(err, "failed to begin transaction")
 	}
 
 	defer func() {
@@ -134,16 +345,20 @@ func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, pa
 		}
 	}()
 
+	finalSQL, args := e.resolveExecutableSQL(testCase, sql)
+
 	execution := &TestExecution{
 		TestCase:    testCase,
-		SQL:         sql,
+		SQL:         finalSQL,
 		Parameters:  parameters,
+		Args:        args,
 		Options:     opts,
 		Transaction: tx,
 		Executor:    e,
 	}
 
-	return e.executeTestSteps(execution)
+	result, err := e.executeTestSteps(execution)
+	return result, execution.Trace, err
 }
 
 // executeTestSteps executes the test steps based on execution mode
@@ -244,7 +459,7 @@ func (e *Executor) validateTableStateBySpec(tx *sql.Tx, spec markdownparser.Expe
 	case "all":
 		// expect full match with order irrelevant? design doc implies exact table contents.
 		// We compare counts and then match rows by index after sorting by PK (already ordered if PK exists).
-		if err := compareRowsSlice(spec.Data, actual); err != nil {
+		if err := compareRowsSlice(spec.Data, actual, spec.TableName, pkCols, false); err != nil {
 			return err
 		}
 		return nil
@@ -343,20 +558,20 @@ func (e *Executor) executeFixtureOnly(execution *TestExecution) (*ValidationResu
 // executeQueryOnly executes only the query without fixtures
 func (e *Executor) executeQueryOnly(execution *TestExecution) (*ValidationResult, error) {
 	// Execute the SQL query
-	result, err := e.executeQuery(execution.Transaction, execution.SQL, execution.Parameters)
+	result, err := e.executeQuery(execution, execution.SQL, execution.Parameters, execution.Args)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, wrapDefinitionFailure(err, "failed to execute query")
 	}
 
 	// Validate results if expected results are provided
 	if len(execution.TestCase.ExpectedResult) > 0 {
 		specs, err := parseValidationSpecs(execution.TestCase.ExpectedResult)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse validation specs: %w", err)
+			return nil, wrapDefinitionFailure(err, "failed to parse validation specs")
 		}
 
 		if err := e.validateResult(execution.Transaction, result, specs); err != nil {
-			return nil, fmt.Errorf("validation failed: %w", err)
+			return nil, wrapAssertionFailure(err, "validation failed")
 		}
 	}
 
@@ -367,7 +582,7 @@ func (e *Executor) executeQueryOnly(execution *TestExecution) (*ValidationResult
 func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult, error) {
 	// 1. Execute fixtures
 	if err := e.executeFixtures(execution.Transaction, execution.TestCase.Fixtures); err != nil {
-		return nil, fmt.Errorf("failed to execute fixtures: %w", err)
+		return nil, wrapDefinitionFailure(err, "failed to execute fixtures")
 	}
 
 	// 2. Execute main query (only when necessary)
@@ -392,44 +607,46 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 		// Prefer ExecContext; if driver doesn't allow Exec on SELECT, fall back to QueryContext and close immediately.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if _, err := execution.Transaction.ExecContext(ctx, execution.SQL); err != nil {
+		if _, err := execution.Transaction.ExecContext(ctx, execution.SQL, execution.Args...); err != nil {
 			// Fallback: run as QueryContext then close immediately without iteration
-			if rows, qerr := execution.Transaction.QueryContext(ctx, execution.SQL); qerr == nil {
+			if rows, qerr := execution.Transaction.QueryContext(ctx, execution.SQL, execution.Args...); qerr == nil {
 				rows.Close()
 			} else {
-				return nil, fmt.Errorf("failed to execute main SQL (exec/query fallback): exec=%v query=%v", err, qerr)
+				combined := fmt.Errorf("exec=%v query=%v", err, qerr)
+				return nil, wrapDefinitionFailure(combined, "failed to execute main SQL (exec/query fallback)")
 			}
 		}
 		result = &ValidationResult{Data: nil, RowsAffected: 0, QueryType: SelectQuery}
+		execution.addTrace("main query", execution.SQL, execution.Parameters, execution.Args, result)
 	} else {
 		var err error
-		result, err = e.executeQuery(execution.Transaction, execution.SQL, execution.Parameters)
+		result, err = e.executeQuery(execution, execution.SQL, execution.Parameters, execution.Args)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute query: %w", err)
+			return nil, wrapDefinitionFailure(err, "failed to execute query")
 		}
 	}
 
 	// 3. Execute verify query if present
 	if execution.TestCase.VerifyQuery != "" {
-		verifyResult, err := e.executeVerifyQuery(execution.Transaction, execution.TestCase.VerifyQuery)
+		verifyResult, err := e.executeVerifyQuery(execution, execution.TestCase.VerifyQuery)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute verify query: %w", err)
+			return nil, wrapDefinitionFailure(err, "failed to execute verify query")
 		}
 
 		// 4. Validate verify query results (legacy unnamed)
 		if len(execution.TestCase.ExpectedResult) > 0 {
 			if err := e.validateVerifyResults(verifyResult, execution.TestCase.ExpectedResult); err != nil {
-				return nil, fmt.Errorf("verify query validation failed: %w", err)
+				return nil, wrapAssertionFailure(err, "verify query validation failed")
 			}
 		} else {
 			// Support unnamed external expected results via ExpectedResults entry with empty TableName
 			if spec, ok := firstUnnamedExternalSpec(execution.TestCase.ExpectedResults); ok {
 				rows, err := e.loadExternalRows(spec.ExternalFile)
 				if err != nil {
-					return nil, fmt.Errorf("failed to load expected results from external file: %w", err)
+					return nil, wrapDefinitionFailure(err, "failed to load expected results from external file")
 				}
 				if err := e.validateVerifyResults(verifyResult, rows); err != nil {
-					return nil, fmt.Errorf("verify query validation failed: %w", err)
+					return nil, wrapAssertionFailure(err, "verify query validation failed")
 				}
 			}
 		}
@@ -438,7 +655,7 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 		for _, spec := range execution.TestCase.ExpectedResults {
 			if spec.TableName != "" { // only table-qualified specs
 				if err := e.validateTableStateBySpec(execution.Transaction, spec); err != nil {
-					return nil, fmt.Errorf("table state validation failed: %w", err)
+					return nil, wrapAssertionFailure(err, "table state validation failed")
 				}
 			}
 		}
@@ -449,16 +666,16 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 	// 4. Validate (暫定: 旧式 ExpectedResult を直接比較) または 外部ファイル参照の無名期待
 	if result.QueryType == SelectQuery || hasReturningClause(execution.SQL) {
 		if len(execution.TestCase.ExpectedResult) > 0 {
-			if err := compareRowsSlice(execution.TestCase.ExpectedResult, result.Data); err != nil {
-				return nil, fmt.Errorf("simple validation failed: %w", err)
+			if err := compareRowsSlice(execution.TestCase.ExpectedResult, result.Data, "", nil, execution.TestCase.ResultOrdered); err != nil {
+				return nil, wrapAssertionFailure(err, "simple validation failed")
 			}
 		} else if spec, ok := firstUnnamedExternalSpec(execution.TestCase.ExpectedResults); ok {
 			rows, err := e.loadExternalRows(spec.ExternalFile)
 			if err != nil {
-				return nil, fmt.Errorf("failed to load expected results from external file: %w", err)
+				return nil, wrapDefinitionFailure(err, "failed to load expected results from external file")
 			}
-			if err := compareRowsSlice(rows, result.Data); err != nil {
-				return nil, fmt.Errorf("simple validation failed: %w", err)
+			if err := compareRowsSlice(rows, result.Data, "", nil, execution.TestCase.ResultOrdered); err != nil {
+				return nil, wrapAssertionFailure(err, "simple validation failed")
 			}
 		}
 	}
@@ -467,7 +684,7 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 	for _, spec := range execution.TestCase.ExpectedResults {
 		if spec.TableName != "" { // only table-qualified specs
 			if err := e.validateTableStateBySpec(execution.Transaction, spec); err != nil {
-				return nil, fmt.Errorf("table state validation failed: %w", err)
+				return nil, wrapAssertionFailure(err, "table state validation failed")
 			}
 		}
 	}
@@ -512,8 +729,9 @@ func hasReturningClause(sql string) bool {
 }
 
 // executeQuery executes the SQL query and returns the result
-func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[string]any) (*ValidationResult, error) {
+func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, parameters map[string]any, args []any) (*ValidationResult, error) {
 	queryType := detectQueryType(sqlQuery)
+	trx := execution.Transaction
 
 	// Parameter replacement in SQL query is handled by the template engine
 	// For now, execute the query as-is
@@ -521,33 +739,44 @@ func (e *Executor) executeQuery(tx *sql.Tx, sqlQuery string, parameters map[stri
 	// Check for RETURNING clause in DML queries
 	if (queryType == InsertQuery || queryType == UpdateQuery || queryType == DeleteQuery) && hasReturningClause(sqlQuery) {
 		// Execute as SELECT query to get returned data
-		result, err := e.executeSelectQuery(tx, sqlQuery)
+		result, err := e.executeSelectQuery(trx, sqlQuery, args)
 		if err != nil {
 			return nil, err
 		}
 		// Keep the original query type for validation logic
 		result.QueryType = queryType
+		execution.addTrace("main query", sqlQuery, parameters, args, result)
 
 		return result, nil
 	}
 
 	switch queryType {
 	case SelectQuery:
-		return e.executeSelectQuery(tx, sqlQuery)
+		result, err := e.executeSelectQuery(trx, sqlQuery, args)
+		if err != nil {
+			return nil, err
+		}
+		execution.addTrace("main query", sqlQuery, parameters, args, result)
+		return result, nil
 	case InsertQuery, UpdateQuery, DeleteQuery:
-		return e.executeDMLQuery(tx, sqlQuery, queryType)
+		result, err := e.executeDMLQuery(trx, sqlQuery, queryType, args)
+		if err != nil {
+			return nil, err
+		}
+		execution.addTrace("main query", sqlQuery, parameters, args, result)
+		return result, nil
 	default:
 		return nil, snapsql.ErrUnsupportedQueryType
 	}
 }
 
 // executeSelectQuery executes a SELECT query and returns the data
-func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationResult, error) {
+func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string, args []any) (*ValidationResult, error) {
 	// Guard against indefinite blocking by bounding query duration
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	rows, err := tx.QueryContext(ctx, sqlQuery)
+	rows, err := tx.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute SELECT query: %w", err)
 	}
@@ -605,18 +834,18 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string) (*ValidationR
 }
 
 // executeDMLQuery executes INSERT/UPDATE/DELETE queries and returns affected rows
-func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryType) (*ValidationResult, error) {
+func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryType, args []any) (*ValidationResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	result, err := tx.ExecContext(ctx, sqlQuery)
+	result, err := tx.ExecContext(ctx, sqlQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute DML query: %w", err)
+		return nil, wrapDefinitionFailure(err, "failed to execute DML query")
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get rows affected: %w", err)
+		return nil, wrapDefinitionFailure(err, "failed to get rows affected")
 	}
 
 	return &ValidationResult{
@@ -629,18 +858,26 @@ func (e *Executor) executeDMLQuery(tx *sql.Tx, sqlQuery string, queryType QueryT
 func (e *Executor) executeFixtures(tx *sql.Tx, fixtures []markdownparser.TableFixture) error {
 	for _, fixture := range fixtures {
 		// Load external rows for fixture if needed
+		ctx := map[string]string{"table": fixture.TableName}
+		if fixture.Strategy != "" {
+			ctx["strategy"] = string(fixture.Strategy)
+		}
+
+		if fixture.Line > 0 {
+			ctx["line"] = strconv.Itoa(fixture.Line)
+		}
 
 		if fixture.ExternalFile != "" && len(fixture.Data) == 0 {
 			rows, err := e.loadExternalRows(fixture.ExternalFile)
 			if err != nil {
-				return fmt.Errorf("failed to load fixture external file for table %s: %w", fixture.TableName, err)
+				return wrapDefinitionFailureWithContext(ctx, err, "failed to load fixture external file for table %s", fixture.TableName)
 			}
 			fixture.Data = rows
 		}
 
 		err := e.executeTableFixture(tx, fixture)
 		if err != nil {
-			return fmt.Errorf("failed to execute fixture for table %s: %w", fixture.TableName, err)
+			return wrapDefinitionFailureWithContext(ctx, err, "failed to execute fixture for table %s", fixture.TableName)
 		}
 	}
 
@@ -742,7 +979,7 @@ func (e *Executor) executeClearInsert(tx *sql.Tx, fixture markdownparser.TableFi
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := tx.ExecContext(ctx, query); err != nil {
-		return fmt.Errorf("failed to clear table %s: %w", fixture.TableName, err)
+		return wrapDefinitionFailureWithContext(map[string]string{"table": fixture.TableName, "operation": "clear"}, err, "failed to clear table %s", fixture.TableName)
 	}
 	return e.insertData(tx, fixture.TableName, fixture.Data)
 }
@@ -836,18 +1073,258 @@ func (e *Executor) getPrimaryKeyColumns(tableName string) ([]string, error) {
 
 // compareRowsSlice: 2つの[]map[string]anyを順序・件数・値で完全一致比較
 
-func compareRowsSlice(expected, actual []map[string]any) error {
-	if len(expected) != len(actual) {
-		return fmt.Errorf("%w: expected %d got %d", errRowCountMismatch, len(expected), len(actual))
+func compareRowsSlice(expected, actual []map[string]any, table string, pkCols []string, orderSensitive bool) error {
+	if orderSensitive {
+		return compareRowsSliceOrdered(expected, actual, table, pkCols)
 	}
 
-	for i := range expected {
-		if err := compareRowsWithMatchers(expected[i], actual[i]); err != nil {
-			return fmt.Errorf("row %d: %w", i, err)
+	diff := &DiffError{Table: table, PrimaryKeys: pkCols}
+	used := make([]bool, len(actual))
+
+	for idx, exp := range expected {
+		matchIdx := -1
+		for j, act := range actual {
+			if used[j] {
+				continue
+			}
+			if len(collectRowDiffs(exp, act)) == 0 {
+				matchIdx = j
+				used[j] = true
+				break
+			}
+		}
+		if matchIdx == -1 {
+			key := buildRowKey(pkCols, exp, nil, idx)
+			diff.RowDiffs = append(diff.RowDiffs, RowDiff{
+				Key:       key,
+				RowStatus: "missing",
+				Diffs: []ColumnDiff{{
+					Column:   "__row__",
+					Expected: formatRowForDiff(exp),
+					Actual:   "<missing>",
+				}},
+			})
 		}
 	}
 
+	for j, act := range actual {
+		if used[j] {
+			continue
+		}
+		key := buildRowKey(pkCols, nil, act, len(expected)+j)
+		diff.RowDiffs = append(diff.RowDiffs, RowDiff{
+			Key:       key,
+			RowStatus: "unexpected",
+			Diffs: []ColumnDiff{{
+				Column:   "__row__",
+				Expected: "<missing>",
+				Actual:   formatRowForDiff(act),
+			}},
+		})
+	}
+
+	if len(expected) != len(actual) {
+		diff.RowCountMismatch = true
+		diff.ExpectedRows = len(expected)
+		diff.ActualRows = len(actual)
+	}
+
+	if diff.RowCountMismatch || len(diff.RowDiffs) > 0 {
+		return diff
+	}
+
 	return nil
+}
+
+func compareRowsSliceOrdered(expected, actual []map[string]any, table string, pkCols []string) error {
+	diff := &DiffError{Table: table, PrimaryKeys: pkCols}
+	minLen := len(expected)
+	if len(actual) < minLen {
+		minLen = len(actual)
+	}
+
+	for i := 0; i < minLen; i++ {
+		colDiffs := collectRowDiffs(expected[i], actual[i])
+		if len(colDiffs) > 0 {
+			key := buildRowKey(pkCols, expected[i], actual[i], i)
+			diff.RowDiffs = append(diff.RowDiffs, RowDiff{Key: key, Diffs: colDiffs})
+		}
+	}
+
+	if len(expected) != len(actual) {
+		diff.RowCountMismatch = true
+		diff.ExpectedRows = len(expected)
+		diff.ActualRows = len(actual)
+	}
+
+	if len(expected) > len(actual) {
+		for i := len(actual); i < len(expected); i++ {
+			key := buildRowKey(pkCols, expected[i], nil, i)
+			diff.RowDiffs = append(diff.RowDiffs, RowDiff{
+				Key:       key,
+				RowStatus: "missing",
+				Diffs: []ColumnDiff{{
+					Column:   "__row__",
+					Expected: formatRowForDiff(expected[i]),
+					Actual:   "<missing>",
+				}},
+			})
+		}
+	} else if len(actual) > len(expected) {
+		for i := len(expected); i < len(actual); i++ {
+			key := buildRowKey(pkCols, nil, actual[i], i)
+			diff.RowDiffs = append(diff.RowDiffs, RowDiff{
+				Key:       key,
+				RowStatus: "unexpected",
+				Diffs: []ColumnDiff{{
+					Column:   "__row__",
+					Expected: "<missing>",
+					Actual:   formatRowForDiff(actual[i]),
+				}},
+			})
+		}
+	}
+
+	if diff.RowCountMismatch || len(diff.RowDiffs) > 0 {
+		return diff
+	}
+
+	return nil
+}
+
+func collectRowDiffs(expected, actual map[string]any) []ColumnDiff {
+	diffs := make([]ColumnDiff, 0)
+	seen := make(map[string]struct{})
+	for k, vExp := range expected {
+		seen[k] = struct{}{}
+		vAct, ok := actual[k]
+		if !ok {
+			diffs = append(diffs, ColumnDiff{Column: k, Expected: formatValueForDiff(vExp), Actual: "<missing>", Reason: "missing column"})
+			continue
+		}
+		if matchDiff := evaluateMatcherDiff(k, vExp, vAct); matchDiff != nil {
+			diffs = append(diffs, *matchDiff)
+		}
+	}
+	for k, vAct := range actual {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		diffs = append(diffs, ColumnDiff{Column: k, Expected: "<not provided>", Actual: formatValueForDiff(vAct), Reason: "unexpected column"})
+	}
+	return diffs
+}
+
+func evaluateMatcherDiff(column string, expected any, actual any) *ColumnDiff {
+	switch val := expected.(type) {
+	case []any:
+		if len(val) >= 1 {
+			switch first := val[0].(type) {
+			case nil:
+				if actual != nil {
+					return &ColumnDiff{Column: column, Expected: "[null]", Actual: formatValueForDiff(actual), Reason: "expected null"}
+				}
+				return nil
+			case string:
+				matcher := strings.ToLower(first)
+				switch matcher {
+				case "currentdate", "current_date":
+					tolerance := time.Minute
+					if len(val) >= 2 {
+						if durStr, ok := val[1].(string); ok && durStr != "" {
+							if parsed, err := time.ParseDuration(durStr); err == nil {
+								tolerance = parsed
+							}
+						}
+					}
+
+					actualTime, ok := parseTimeValue(actual)
+					if !ok {
+						return &ColumnDiff{Column: column, Expected: "[currentdate]", Actual: formatValueForDiff(actual), Reason: "invalid time value"}
+					}
+
+					if durationAbs(time.Since(actualTime)) > tolerance {
+						return &ColumnDiff{Column: column, Expected: fmt.Sprintf("[currentdate,%s]", tolerance.String()), Actual: actualTime.UTC().Format(time.RFC3339), Reason: "timestamp outside tolerance"}
+					}
+					return nil
+				case "null":
+					if actual != nil {
+						return &ColumnDiff{Column: column, Expected: "[null]", Actual: formatValueForDiff(actual), Reason: "expected null"}
+					}
+					return nil
+				case "notnull":
+					if actual == nil {
+						return &ColumnDiff{Column: column, Expected: "[notnull]", Actual: "<null>", Reason: "expected value"}
+					}
+					return nil
+				case "any":
+					return nil
+				case "regexp":
+					if len(val) == 2 {
+						pat, _ := val[1].(string)
+						s, ok := actual.(string)
+						if !ok {
+							return &ColumnDiff{Column: column, Expected: fmt.Sprintf("[regexp,%s]", pat), Actual: formatValueForDiff(actual), Reason: "expected string"}
+						}
+						matched, err := regexp.MatchString(pat, s)
+						if err != nil || !matched {
+							return &ColumnDiff{Column: column, Expected: fmt.Sprintf("[regexp,%s]", pat), Actual: s, Reason: "regex mismatch"}
+						}
+						return nil
+					}
+				}
+			default:
+				return &ColumnDiff{Column: column, Expected: formatValueForDiff(expected), Actual: formatValueForDiff(actual), Reason: "invalid matcher"}
+			}
+		}
+		return &ColumnDiff{Column: column, Expected: formatValueForDiff(expected), Actual: formatValueForDiff(actual), Reason: "invalid matcher"}
+	default:
+		if !valueEquals(expected, actual) {
+			return &ColumnDiff{Column: column, Expected: formatValueForDiff(expected), Actual: formatValueForDiff(actual), Reason: "value mismatch"}
+		}
+	}
+	return nil
+}
+
+func buildRowKey(pkCols []string, expected, actual map[string]any, index int) map[string]any {
+	key := make(map[string]any)
+	if len(pkCols) == 0 {
+		key["row_index"] = index
+		return key
+	}
+	source := expected
+	if source == nil {
+		source = actual
+	}
+	for _, col := range pkCols {
+		if source != nil {
+			key[col] = formatValueForDiff(source[col])
+		} else {
+			key[col] = "<nil>"
+		}
+	}
+	return key
+}
+
+func formatRowForDiff(row map[string]any) string {
+	if row == nil {
+		return "<nil>"
+	}
+	parts := make([]string, 0, len(row))
+	for k, v := range row {
+		parts = append(parts, fmt.Sprintf("%s=%v", k, formatValueForDiff(v)))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
+}
+
+func formatValueForDiff(v any) any {
+	switch val := v.(type) {
+	case []byte:
+		return string(val)
+	default:
+		return val
+	}
 }
 
 // compareRowsWithMatchers: 1行分の値比較（値比較特殊指定対応）
@@ -862,49 +1339,71 @@ func compareRowsWithMatchers(expected, actual map[string]any) error {
 		// 値比較特殊指定
 		switch val := vExp.(type) {
 		case []any:
-			// [null], [notnull], [any], [regexp, ...]
-			if len(val) == 1 {
-				v0 := val[0]
-				// YAML's bare 'null' becomes nil; treat as ["null"] matcher
-				if v0 == nil {
+			if len(val) >= 1 {
+				switch first := val[0].(type) {
+				case nil:
 					if vAct != nil {
 						return fmt.Errorf("%w: column=%s got=%v", errExpectedNull, k, vAct)
 					}
-					break
-				}
-				switch v0 {
-				case "null":
-					if vAct != nil {
-						return fmt.Errorf("%w: column=%s got=%v", errExpectedNull, k, vAct)
+				case string:
+					matcher := strings.ToLower(first)
+					switch matcher {
+					case "currentdate", "current_date":
+						tolerance := time.Minute
+						if len(val) >= 2 {
+							if durStr, ok := val[1].(string); ok && durStr != "" {
+								if parsed, err := time.ParseDuration(durStr); err == nil {
+									tolerance = parsed
+								}
+							}
+						}
+
+						actualTime, ok := parseTimeValue(vAct)
+						if !ok {
+							return fmt.Errorf("%w: column=%s value=%v", errInvalidMatcherSyntax, k, vAct)
+						}
+						if durationAbs(time.Since(actualTime)) > tolerance {
+							return fmt.Errorf("%w: column=%s value=%s tolerance=%s", errValueMismatch, k, actualTime.UTC().Format(time.RFC3339), tolerance.String())
+						}
+						break
+					case "null":
+						if vAct != nil {
+							return fmt.Errorf("%w: column=%s got=%v", errExpectedNull, k, vAct)
+						}
+					case "notnull":
+						if vAct == nil {
+							return fmt.Errorf("%w: column=%s", errExpectedNotNull, k)
+						}
+					case "any":
+					// anything ok
+					case "regexp":
+						if len(val) != 2 {
+							return fmt.Errorf("%w: column=%s raw=%v", errInvalidMatcherSyntax, k, val)
+						}
+						pat, ok := val[1].(string)
+						if !ok {
+							return fmt.Errorf("%w: column=%s", errRegexpPatternType, k)
+						}
+						s, ok := vAct.(string)
+						if !ok {
+							return fmt.Errorf("%w: column=%s gotType=%T", errRegexpExpectString, k, vAct)
+						}
+						matched, err := regexp.MatchString(pat, s)
+						if err != nil {
+							return fmt.Errorf("column %s: regexp error: %w", k, err)
+						}
+						if !matched {
+							return fmt.Errorf("%w: column=%s value=%s pattern=%s", errRegexpNotMatch, k, s, pat)
+						}
+					default:
+						return fmt.Errorf("%w: column=%s matcher=%v", errUnknownMatcher, k, matcher)
 					}
-				case "notnull":
-					if vAct == nil {
-						return fmt.Errorf("%w: column=%s", errExpectedNotNull, k)
-					}
-				case "any":
-					// 何でもOK
 				default:
-					return fmt.Errorf("%w: column=%s matcher=%v", errUnknownMatcher, k, v0)
+					return fmt.Errorf("%w: column=%s raw=%v", errInvalidMatcherSyntax, k, val)
 				}
-			} else if len(val) == 2 && val[0] == "regexp" {
-				pat, ok := val[1].(string)
-				if !ok {
-					return fmt.Errorf("%w: column=%s", errRegexpPatternType, k)
-				}
-				s, ok := vAct.(string)
-				if !ok {
-					return fmt.Errorf("%w: column=%s gotType=%T", errRegexpExpectString, k, vAct)
-				}
-				matched, err := regexp.MatchString(pat, s)
-				if err != nil {
-					return fmt.Errorf("column %s: regexp error: %w", k, err)
-				}
-				if !matched {
-					return fmt.Errorf("%w: column=%s value=%s pattern=%s", errRegexpNotMatch, k, s, pat)
-				}
-			} else {
-				return fmt.Errorf("%w: column=%s raw=%v", errInvalidMatcherSyntax, k, val)
+				break
 			}
+			return fmt.Errorf("%w: column=%s raw=%v", errInvalidMatcherSyntax, k, val)
 		default:
 			// 通常値比較
 			if !valueEquals(vExp, vAct) {
@@ -938,15 +1437,19 @@ func valueEquals(a, b any) bool {
 	// 数値型の包括比較
 	if fa, ok := toFloat(a); ok {
 		if fb, ok2 := toFloat(b); ok2 {
-			// ここは整数同士なら誤差不要だが一律で扱う
 			if fa == fb {
 				return true
 			}
-			// 浮動小数点誤差吸収（将来拡張用）
 			if math.Abs(fa-fb) < 1e-9 {
 				return true
 			}
 			return false
+		}
+	}
+
+	if ta, ok := parseTimeValue(a); ok {
+		if tb, ok2 := parseTimeValue(b); ok2 {
+			return ta.Equal(tb)
 		}
 	}
 
@@ -985,10 +1488,96 @@ func toFloat(v any) (float64, bool) {
 	}
 }
 
+var timeLayouts = []string{
+	time.RFC3339Nano,
+	time.RFC3339,
+	"2006-01-02 15:04:05Z07:00",
+	"2006-01-02 15:04:05 -0700 MST",
+	"2006-01-02 15:04:05 -0700",
+	"2006-01-02 15:04:05",
+}
+
+func parseTimeValue(v any) (time.Time, bool) {
+	switch val := v.(type) {
+	case time.Time:
+		return val, true
+	case string:
+		return parseTimeString(val)
+	case []byte:
+		return parseTimeString(string(val))
+	default:
+		return time.Time{}, false
+	}
+}
+
+func parseTimeString(raw string) (time.Time, bool) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range timeLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+	if strings.Contains(s, " ") && !strings.Contains(s, "T") {
+		replaced := strings.Replace(s, " ", "T", 1)
+		if t, err := time.Parse(time.RFC3339Nano, replaced); err == nil {
+			return t, true
+		}
+		if t, err := time.Parse(time.RFC3339, replaced); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func durationAbs(d time.Duration) time.Duration {
+	if d < 0 {
+		return -d
+	}
+	return d
+}
+
+func parseFlexibleDuration(raw string) (time.Duration, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return 0, nil
+	}
+	sign := 1
+	if s[0] == '+' {
+		s = s[1:]
+	} else if s[0] == '-' {
+		sign = -1
+		s = s[1:]
+	}
+
+	if strings.HasSuffix(s, "d") {
+		val := strings.TrimSuffix(s, "d")
+		f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid day duration: %s", raw)
+		}
+		d := time.Duration(f * 24 * float64(time.Hour))
+		return time.Duration(sign) * d, nil
+	}
+
+	if dur, err := time.ParseDuration(s); err == nil {
+		return time.Duration(sign) * dur, nil
+	}
+
+	return 0, fmt.Errorf("invalid duration: %s", raw)
+}
+
 // insertData inserts data into a table
 func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]any) error {
 	if len(data) == 0 {
 		return nil
+	}
+
+	data, err := normalizeFixtureRows(data)
+	if err != nil {
+		return wrapDefinitionFailureWithContext(map[string]string{"table": tableName, "operation": "normalize"}, err, "failed to normalize fixture row")
 	}
 
 	// Determine column list: if schema present use ColumnOrder intersection with row keys for determinism
@@ -1044,7 +1633,7 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 	defer cancel()
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement: %w", err)
+		return wrapDefinitionFailureWithContext(map[string]string{"table": tableName, "operation": "prepare"}, err, "failed to prepare insert statement")
 	}
 	defer stmt.Close()
 
@@ -1071,7 +1660,7 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 		}
 
 		if _, err := stmt.ExecContext(ctx, values...); err != nil {
-			return fmt.Errorf("failed to insert row: %w", err)
+			return wrapDefinitionFailureWithContext(map[string]string{"table": tableName, "operation": "insert"}, err, "failed to insert row")
 		}
 	}
 
@@ -1085,7 +1674,11 @@ func (e *Executor) executePostgresUpsert(tx *sql.Tx, fixture markdownparser.Tabl
 		return err
 	}
 	ctx := context.Background()
-	for _, row := range fixture.Data {
+	rows, err := normalizeFixtureRows(fixture.Data)
+	if err != nil {
+		return fmt.Errorf("postgres upsert failed: %w", err)
+	}
+	for _, row := range rows {
 		// スキーマ列順序使用。なければ行のキー集合
 		var cols []string
 		if tbl, ok := e.tableInfo[fixture.TableName]; ok && tbl != nil && len(tbl.ColumnOrder) > 0 {
@@ -1170,7 +1763,11 @@ func (e *Executor) executeMySQLUpsert(tx *sql.Tx, fixture markdownparser.TableFi
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	for _, row := range fixture.Data {
+	rows, err := normalizeFixtureRows(fixture.Data)
+	if err != nil {
+		return fmt.Errorf("mysql upsert failed: %w", err)
+	}
+	for _, row := range rows {
 		var cols []string
 		var placeholders []string
 		var values []any
@@ -1230,7 +1827,11 @@ func (e *Executor) executeSQLiteUpsert(tx *sql.Tx, fixture markdownparser.TableF
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	for _, row := range fixture.Data {
+	rows, err := normalizeFixtureRows(fixture.Data)
+	if err != nil {
+		return fmt.Errorf("sqlite upsert failed: %w", err)
+	}
+	for _, row := range rows {
 		var cols []string
 		var placeholders []string
 		var values []any
@@ -1348,7 +1949,7 @@ func (e *Executor) getPlaceholder(position int) string {
 }
 
 // executeVerifyQuery executes the verify query and returns the result
-func (e *Executor) executeVerifyQuery(tx *sql.Tx, verifyQuery string) (*ValidationResult, error) {
+func (e *Executor) executeVerifyQuery(execution *TestExecution, verifyQuery string) (*ValidationResult, error) {
 	// Split multiple queries by semicolon
 	queries := e.parseMultipleQueries(verifyQuery)
 
@@ -1359,12 +1960,13 @@ func (e *Executor) executeVerifyQuery(tx *sql.Tx, verifyQuery string) (*Validati
 			continue
 		}
 
-		result, err := e.executeSelectQuery(tx, query)
+		result, err := e.executeSelectQuery(execution.Transaction, query, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute verify query: %w", err)
 		}
 
 		allResults = append(allResults, result.Data...)
+		execution.addTrace("verify query", query, nil, nil, result)
 	}
 
 	return &ValidationResult{

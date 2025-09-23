@@ -17,6 +17,7 @@ type TestResult struct {
 	Success  bool
 	Duration time.Duration
 	Result   *ValidationResult
+	Trace    []SQLTrace
 	Error    error
 }
 
@@ -77,6 +78,13 @@ func (tr *TestRunner) SetSQL(sql string) {
 // SetParameters sets the default parameters for test execution
 func (tr *TestRunner) SetParameters(parameters map[string]any) {
 	tr.parameters = parameters
+}
+
+// SetVerbose toggles verbose SQL tracing.
+func (tr *TestRunner) SetVerbose(verbose bool) {
+	if tr.options != nil {
+		tr.options.Verbose = verbose
+	}
 }
 
 // RunTests executes multiple test cases in parallel
@@ -147,23 +155,24 @@ func (tr *TestRunner) executeTestWithTimeout(ctx context.Context, testCase *mark
 	startTime := time.Now()
 
 	// Execute test
-	result, err := tr.executeTestWithContext(testCtx, testCase)
+	result, trace, err := tr.executeTestWithContext(testCtx, testCase)
 
 	return TestResult{
 		TestCase: testCase,
 		Success:  err == nil,
 		Duration: time.Since(startTime),
 		Result:   result,
+		Trace:    trace,
 		Error:    err,
 	}
 }
 
 // executeTestWithContext executes a test within a context
-func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *markdownparser.TestCase) (*ValidationResult, error) {
+func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *markdownparser.TestCase) (*ValidationResult, []SQLTrace, error) {
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, nil, ctx.Err()
 	default:
 	}
 
@@ -177,8 +186,13 @@ func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *mark
 		parameters[k] = v
 	}
 
+	sql := testCase.SQL
+	if sql == "" {
+		sql = tr.sql
+	}
+
 	// Execute the test
-	return tr.executor.ExecuteTest(testCase, tr.sql, parameters, tr.options)
+	return tr.executor.ExecuteTest(testCase, sql, parameters, tr.options)
 }
 
 // RunSingleTest executes a single test case
@@ -217,10 +231,14 @@ func (tr *TestRunner) PrintSummary(summary *TestSummary) {
 }
 
 // SetOptions updates the execution options
+
 func (tr *TestRunner) SetOptions(options *ExecutionOptions) {
+	if options == nil {
+		options = DefaultExecutionOptions()
+	}
 	tr.options = options
 	// Recreate worker pool if parallel count changed
-	if cap(tr.workerPool) != options.Parallel {
+	if tr.workerPool == nil || cap(tr.workerPool) != options.Parallel {
 		tr.workerPool = make(chan struct{}, options.Parallel)
 	}
 }

@@ -152,6 +152,9 @@ type IntermediateFormat struct {
 
 	// Implicit parameters that should be obtained from context/TLS
 	ImplicitParameters []ImplicitParameter `json:"implicit_parameters,omitempty"`
+
+	// Indicates whether the main statement guarantees ordered results via ORDER BY
+	HasOrderedResult bool `json:"has_ordered_result,omitempty"`
 }
 
 // MarshalJSON implements custom JSON marshaling for IntermediateFormat
@@ -229,6 +232,14 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 
 		result["cel_environments"] = celEnvironments
+	}
+
+	if f.HasOrderedResult {
+		ordered, err := json.Marshal(f.HasOrderedResult)
+		if err != nil {
+			return nil, err
+		}
+		result["has_ordered_result"] = ordered
 	}
 
 	// Marshal the modified map back to JSON

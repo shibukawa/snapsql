@@ -27,6 +27,7 @@ type TableFixture struct {
 	Strategy     InsertStrategy
 	Data         []map[string]any
 	ExternalFile string // when fixture rows are provided via external YAML/JSON link
+	Line         int    // Source line of the fixture block
 }
 
 // ExpectedResultSpec represents expected result for a table with strategy and data
@@ -40,12 +41,18 @@ type ExpectedResultSpec struct {
 // TestCase represents a single test case
 type TestCase struct {
 	Name            string
+	SQL             string
 	Fixtures        []TableFixture              // テーブルごとのfixture情報
 	Fixture         map[string][]map[string]any // 後方互換性のため残す
 	Parameters      map[string]any
 	VerifyQuery     string               // 検証用SELECTクエリ
 	ExpectedResult  []map[string]any     // 従来型（無名配列）
 	ExpectedResults []ExpectedResultSpec // 新型（テーブル名・戦略付き）
+	SourceFile      string               // 元となるMarkdownファイルのパス
+	Line            int                  // 見出し行番号（1-origin）
+	PreparedSQL     string               // 方言・条件適用後に評価されたSQL
+	SQLArgs         []any                // PreparedSQLに対応するパラメータ
+	ResultOrdered   bool
 }
 
 // TestSection represents a section within a test case
@@ -56,7 +63,7 @@ type TestSection struct {
 }
 
 // parseTestCasesFromAST parses test cases from AST nodes
-func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error) {
+func parseTestCasesFromAST(nodes []ast.Node, content []byte, mapper *indexToLine) ([]TestCase, error) {
 	var (
 		testCases       []TestCase
 		currentTestCase *TestCase
@@ -79,6 +86,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 
 			// Start new test case
 			testName := extractTextFromHeadingNode(n, content)
+
 			currentTestCase = &TestCase{
 				Name:           testName,
 				Fixtures:       make([]TableFixture, 0),
@@ -86,6 +94,10 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 				Parameters:     make(map[string]any),
 				ExpectedResult: make([]map[string]any, 0),
 			}
+			if lines := n.Lines(); lines != nil && lines.Len() > 0 {
+				currentTestCase.Line = mapper.lineFor(lines.At(0).Start)
+			}
+
 			currentSection = TestSection{}
 
 		case *ast.Paragraph:
@@ -125,17 +137,15 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 
 		case *ast.FencedCodeBlock:
 			if currentTestCase != nil && currentSection.Type != "" {
-				// Get code block info
 				var info string
 				if n.Info != nil {
 					info = strings.ToLower(strings.TrimSpace(string(n.Info.Value(content))))
 				}
 
-				// Get code block content
 				var codeContent strings.Builder
 
 				lines := n.Lines()
-				for i := range lines.Len() {
+				for i := 0; i < lines.Len(); i++ {
 					line := lines.At(i)
 					codeContent.Write(line.Value(content))
 
@@ -144,8 +154,12 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte) ([]TestCase, error)
 					}
 				}
 
-				// Process the section
-				err := processTestSection(currentTestCase, currentSection, info, []byte(codeContent.String()))
+				sectionLine := -1
+				if lines != nil && lines.Len() > 0 {
+					sectionLine = mapper.lineFor(lines.At(0).Start)
+				}
+
+				err := processTestSection(currentTestCase, currentSection, info, []byte(codeContent.String()), sectionLine)
 				if err != nil {
 					errors = append(errors, fmt.Errorf("in test case %q: %w", currentTestCase.Name, err))
 				}
@@ -234,7 +248,7 @@ func validateTestCase(testCase *TestCase) error {
 }
 
 // processTestSection processes a section of a test case
-func processTestSection(testCase *TestCase, section TestSection, format string, content []byte) error {
+func processTestSection(testCase *TestCase, section TestSection, format string, content []byte, line int) error {
 	switch section.Type {
 	case "parameters", "params":
 		if len(testCase.Parameters) > 0 {
@@ -326,7 +340,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 			}
 
 			testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
-			addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows)
+			addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows, line)
 		} else {
 			// YAML/XML
 			if section.TableName != "" {
@@ -336,7 +350,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 
 					matches := re.FindStringSubmatch(contentStr)
 					if len(matches) == 2 {
-						addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, nil)
+						addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, nil, line)
 						last := len(testCase.Fixtures) - 1
 						testCase.Fixtures[last].ExternalFile = matches[1]
 					} else {
@@ -349,10 +363,10 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 					}
 
 					testCase.Fixture[section.TableName] = append(testCase.Fixture[section.TableName], rows...)
-					addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows)
+					addOrUpdateTableFixture(testCase, section.TableName, section.Strategy, rows, line)
 				}
 			} else {
-				tableData, err := parseStructuredData(content, format)
+				entries, err := parseStructuredData(content, format)
 				if err != nil {
 					return fmt.Errorf("failed to parse fixtures in test case %q: %w", testCase.Name, err)
 				}
@@ -362,16 +376,16 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 					strategy = ClearInsert
 				}
 
-				for tableName, rows := range tableData {
-					testCase.Fixture[tableName] = append(testCase.Fixture[tableName], rows...)
+				for _, entry := range entries {
+					testCase.Fixture[entry.Name] = append(testCase.Fixture[entry.Name], entry.Rows...)
 
 					switch strategy {
 					case Upsert:
-						addOrUpdateTableFixture(testCase, tableName, Upsert, rows)
+						addOrUpdateTableFixture(testCase, entry.Name, Upsert, entry.Rows, line)
 					case Delete:
-						addOrUpdateTableFixture(testCase, tableName, Delete, rows)
+						addOrUpdateTableFixture(testCase, entry.Name, Delete, entry.Rows, line)
 					default:
-						addOrUpdateTableFixture(testCase, tableName, ClearInsert, rows)
+						addOrUpdateTableFixture(testCase, entry.Name, ClearInsert, entry.Rows, line)
 					}
 				}
 			}
@@ -414,8 +428,8 @@ func parseTableNameAndStrategy(spec string) (string, InsertStrategy) {
 }
 
 // addOrUpdateTableFixture adds or updates fixture data for a table
-func addOrUpdateTableFixture(testCase *TestCase, tableName string, strategy InsertStrategy, rows []map[string]any) {
+func addOrUpdateTableFixture(testCase *TestCase, tableName string, strategy InsertStrategy, rows []map[string]any, line int) {
 	// さらに仕様変更: clear-insert など同一戦略が複数回出現してもブロック境界を保持したい。
 	// => すべて常に新規追加し順序を厳密維持。マージは行わない。
-	testCase.Fixtures = append(testCase.Fixtures, TableFixture{TableName: tableName, Strategy: strategy, Data: rows})
+	testCase.Fixtures = append(testCase.Fixtures, TableFixture{TableName: tableName, Strategy: strategy, Data: rows, Line: line})
 }

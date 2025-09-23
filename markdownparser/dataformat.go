@@ -10,6 +10,7 @@ import (
 	"github.com/beevik/etree"
 	"github.com/goccy/go-yaml"
 	snapsql "github.com/shibukawa/snapsql"
+	yamlv3 "gopkg.in/yaml.v3"
 )
 
 // parseParameters parses parameter data in various formats into a single map
@@ -61,62 +62,72 @@ func parseYAMLData(content []byte, result *[]map[string]any) error {
 	return nil
 }
 
-// parseStructuredData parses data in various formats into a map of table names to rows
-func parseStructuredData(content []byte, format string) (map[string][]map[string]any, error) {
+type tableDataEntry struct {
+	Name string
+	Rows []map[string]any
+}
+
+// parseStructuredData parses data in various formats while preserving table order.
+func parseStructuredData(content []byte, format string) ([]tableDataEntry, error) {
 	content = bytes.TrimSpace(content)
 	if len(content) == 0 {
 		return nil, snapsql.ErrEmptyContent
 	}
 
-	result := make(map[string][]map[string]any)
-
 	switch format {
 	case "yaml", "json":
-		// Try YAML/JSON array format first
-		var data map[string]any
-
-		err := yaml.Unmarshal(content, &data)
-		if err == nil {
-			// データがテーブル名をキーとしたマップの場合
-			for tableName, tableContent := range data {
-				if rows, ok := tableContent.([]any); ok {
-					tableRows := make([]map[string]any, 0, len(rows))
-
-					for _, row := range rows {
-						if mapRow, ok := row.(map[string]any); ok {
-							// Normalize values
-							normalizedRow := make(map[string]any)
-							for k, v := range mapRow {
-								normalizedRow[k] = normalizeValue(v)
-							}
-
-							tableRows = append(tableRows, normalizedRow)
-						}
-					}
-
-					result[tableName] = tableRows
-				}
+		var node yamlv3.Node
+		if err := yamlv3.Unmarshal(content, &node); err == nil {
+			root := &node
+			if node.Kind == yamlv3.DocumentNode && len(node.Content) > 0 {
+				root = node.Content[0]
 			}
 
-			if len(result) > 0 {
-				return result, nil
+			if root != nil && root.Kind == yamlv3.MappingNode {
+				entries := make([]tableDataEntry, 0, len(root.Content)/2)
+				for i := 0; i+1 < len(root.Content); i += 2 {
+					keyNode := root.Content[i]
+
+					valueNode := root.Content[i+1]
+					if keyNode == nil || valueNode == nil || keyNode.Kind != yamlv3.ScalarNode {
+						continue
+					}
+
+					var rows []map[string]any
+					if err := valueNode.Decode(&rows); err == nil {
+						for ri, row := range rows {
+							for k, v := range row {
+								row[k] = normalizeValue(v)
+							}
+
+							rows[ri] = row
+						}
+
+						entries = append(entries, tableDataEntry{Name: keyNode.Value, Rows: rows})
+					}
+				}
+
+				if len(entries) > 0 {
+					return entries, nil
+				}
 			}
 		}
 
 	case "xml":
 		// Try DBUnit XML
 		if dataset, err := parseDBUnitXML(string(content)); err == nil {
+			entries := make([]tableDataEntry, 0, len(dataset.Tables))
 			for _, table := range dataset.Tables {
 				rows := make([]map[string]any, len(table.Rows))
 				for i, row := range table.Rows {
 					rows[i] = row.Data
 				}
 
-				result[table.Name] = rows
+				entries = append(entries, tableDataEntry{Name: table.Name, Rows: rows})
 			}
 
-			if len(result) > 0 {
-				return result, nil
+			if len(entries) > 0 {
+				return entries, nil
 			}
 		}
 	}
