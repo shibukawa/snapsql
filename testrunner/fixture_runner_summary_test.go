@@ -56,6 +56,7 @@ func TestFixtureTestRunnerPrintSummaryLabelsFailures(t *testing.T) {
 
 	runner := &FixtureTestRunner{}
 	runner.SetVerbose(true)
+
 	diffErr := &fixtureexecutor.DiffError{
 		Table:       "lists",
 		PrimaryKeys: []string{"id"},
@@ -108,6 +109,15 @@ func TestFixtureTestRunnerPrintSummaryLabelsFailures(t *testing.T) {
 				FailureKind: fixtureexecutor.FailureKindDefinition,
 				SourceFile:  "tests/case.md",
 				SourceLine:  108,
+				ExecutedSQL: []fixtureexecutor.SQLTrace{
+					{
+						Label:      "main query",
+						Statement:  "UPDATE cards SET title = ? WHERE id = ? 0",
+						Parameters: map[string]any{"id": 99},
+						Args:       []any{"New Title", 99},
+						QueryType:  fixtureexecutor.UpdateQuery,
+					},
+				},
 			},
 			{
 				TestName:    "Unknown failure case",
@@ -154,30 +164,43 @@ func TestFixtureTestRunnerPrintSummaryLabelsFailures(t *testing.T) {
 	if !strings.Contains(output, "Table: lists") {
 		t.Fatalf("expected table header in output, got: %s", output)
 	}
+
 	if !strings.Contains(output, "- Expected") || !strings.Contains(output, "+ Actual") {
 		t.Fatalf("expected legend lines in output, got: %s", output)
 	}
+
 	if !strings.Contains(output, "id: 10 [mismatch]") || !strings.Contains(output, "+ name: Todo") || !strings.Contains(output, "- name: Todo!") {
 		t.Fatalf("expected diff body in output, got: %s", output)
 	}
+
 	if !strings.Contains(output, "SQL Trace:") {
 		t.Fatalf("expected SQL trace header in output, got: %s", output)
 	}
+
 	if !strings.Contains(output, "Statement: SELECT * FROM comments WHERE card_id = 401 ORDER BY created_at") {
 		t.Fatalf("expected SQL statement in output, got: %s", output)
 	}
+
 	if !strings.Contains(output, "Params:") {
 		t.Fatalf("expected params section in output, got: %s", output)
 	}
+
 	if !strings.Contains(output, "Args:") {
 		t.Fatalf("expected args section in output, got: %s", output)
 	}
+
 	if !strings.Contains(output, "[1]: 401") {
 		t.Fatalf("expected positional args in output, got: %s", output)
 	}
+
+	if !strings.Contains(output, "Statement: UPDATE cards SET title = ? WHERE id = ? 0") {
+		t.Fatalf("expected definition failure SQL statement in output, got: %s", output)
+	}
+
 	if strings.Contains(output, "detail:") {
 		t.Fatalf("diff output should not include detail field: %s", output)
 	}
+
 	if strings.Contains(output, "row_index") {
 		t.Fatalf("diff output should not include row_index: %s", output)
 	}

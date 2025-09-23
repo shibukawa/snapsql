@@ -236,6 +236,7 @@ func (tr *TestRunner) SetOptions(options *ExecutionOptions) {
 	if options == nil {
 		options = DefaultExecutionOptions()
 	}
+
 	tr.options = options
 	// Recreate worker pool if parallel count changed
 	if tr.workerPool == nil || cap(tr.workerPool) != options.Parallel {

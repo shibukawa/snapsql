@@ -116,6 +116,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 
 	// Parse test cases from filtered markdown files
 	var allTestCases []*markdownparser.TestCase
+
 	fileSummaries := make([]fileTestSummary, 0, len(testFiles))
 
 	for _, file := range testFiles {
@@ -134,19 +135,23 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 			if tc == nil {
 				continue
 			}
+
 			if tc.SQL == "" {
 				tc.SQL = fileInfo.SQL
 			}
+
 			if len(fileInfo.Parameters) > 0 {
 				if tc.Parameters == nil {
 					tc.Parameters = make(map[string]any, len(fileInfo.Parameters))
 				}
+
 				for k, v := range fileInfo.Parameters {
 					if _, exists := tc.Parameters[k]; !exists {
 						tc.Parameters[k] = v
 					}
 				}
 			}
+
 			allTestCases = append(allTestCases, tc)
 			casesForFile = append(casesForFile, tc)
 		}
@@ -416,6 +421,7 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 					err:      fmt.Errorf("missing markdown document context for %s", tc.Name),
 				})
 			}
+
 			continue
 		}
 
@@ -427,6 +433,7 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 					err:      fmt.Errorf("failed to compile SQL for %s: %w", tc.Name, err),
 				})
 			}
+
 			continue
 		}
 
@@ -444,6 +451,7 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 					testCase: tc,
 					err:      fmt.Errorf("failed to render SQL for %s: %w", tc.Name, err),
 				})
+
 				continue
 			}
 
@@ -466,6 +474,7 @@ func (pi preparationIssue) toFixtureResult() FixtureTestResult {
 		if pi.testCase.Name != "" {
 			name = pi.testCase.Name
 		}
+
 		file = pi.testCase.SourceFile
 		line = pi.testCase.Line
 	}
@@ -484,6 +493,7 @@ func (ftr *FixtureTestRunner) printVerboseDiscovery(summaries []fileTestSummary)
 	if len(summaries) == 0 {
 		fmt.Println("Discovered markdown tests (files: 0, cases: 0)")
 		fmt.Println()
+
 		return
 	}
 
@@ -493,17 +503,20 @@ func (ftr *FixtureTestRunner) printVerboseDiscovery(summaries []fileTestSummary)
 	}
 
 	fmt.Printf("Discovered markdown tests (files: %d, cases: %d):\n", len(summaries), totalCases)
+
 	fileLimit := len(summaries)
 	if fileLimit > verboseListLimit {
 		fileLimit = verboseListLimit
 	}
 
-	for i := 0; i < fileLimit; i++ {
+	for i := range fileLimit {
 		summary := summaries[i]
+
 		path := summary.path
 		if rel, err := filepath.Rel(ftr.projectRoot, path); err == nil {
 			path = rel
 		}
+
 		fmt.Printf("  %s\n", filepath.ToSlash(path))
 
 		if len(summary.cases) == 0 {
@@ -516,15 +529,17 @@ func (ftr *FixtureTestRunner) printVerboseDiscovery(summaries []fileTestSummary)
 			caseLimit = verboseListLimit
 		}
 
-		for j := 0; j < caseLimit; j++ {
+		for j := range caseLimit {
 			tc := summary.cases[j]
 			if tc == nil {
 				continue
 			}
+
 			name := strings.TrimSpace(tc.Name)
 			if name == "" {
 				name = "<unnamed>"
 			}
+
 			fmt.Printf("    - %s\n", name)
 		}
 
@@ -607,19 +622,24 @@ func (ftr *FixtureTestRunner) PrintSummary(summary *FixtureTestSummary) {
 		copy(sortedResults, summary.Results)
 		sort.Slice(sortedResults, func(i, j int) bool {
 			a := sortedResults[i]
+
 			b := sortedResults[j]
 			if a.SourceFile != b.SourceFile {
 				return a.SourceFile < b.SourceFile
 			}
+
 			if a.SourceLine != b.SourceLine {
 				if a.SourceLine == 0 {
 					return false
 				}
+
 				if b.SourceLine == 0 {
 					return true
 				}
+
 				return a.SourceLine < b.SourceLine
 			}
+
 			return a.TestName < b.TestName
 		})
 
@@ -710,11 +730,13 @@ func printColoredDiff(diffText string) {
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
+
 	for _, line := range lines {
 		if line == "" {
 			fmt.Fprintln(color.Output)
 			continue
 		}
+
 		fmt.Fprintln(color.Output, formatDiffLine(line))
 	}
 }
@@ -723,14 +745,17 @@ func formatDiffLine(line string) string {
 	if line == "" {
 		return line
 	}
+
 	if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
 		return color.New(color.Bold, color.FgCyan).Sprint(line)
 	}
+
 	if strings.HasPrefix(line, "@@") {
 		return color.New(color.FgCyan).Sprint(line)
 	}
 
 	attrs := make([]color.Attribute, 0, 3)
+
 	switch {
 	case strings.HasPrefix(line, "+"):
 		attrs = append(attrs, color.FgGreen)
@@ -748,6 +773,7 @@ func formatDiffLine(line string) string {
 		if len(attrs) == 0 {
 			return line
 		}
+
 		return color.New(attrs...).Sprint(line)
 	}
 
@@ -760,6 +786,7 @@ func formatDiffLine(line string) string {
 	if len(attrs) == 0 {
 		return line
 	}
+
 	return color.New(attrs...).Sprint(line)
 }
 
@@ -769,37 +796,49 @@ func printSQLTrace(traces []fixtureexecutor.SQLTrace) {
 		if label == "" {
 			label = "query"
 		}
+
 		fmt.Fprintf(color.Output, "      (%s)\n", label)
 		fmt.Fprintf(color.Output, "        Statement: %s\n", trace.Statement)
+
 		if len(trace.Parameters) > 0 {
 			fmt.Fprintln(color.Output, "        Params:")
+
 			keys := make([]string, 0, len(trace.Parameters))
 			for k := range trace.Parameters {
 				keys = append(keys, k)
 			}
+
 			sort.Strings(keys)
+
 			for _, k := range keys {
 				fmt.Fprintf(color.Output, "          %s: %v\n", k, trace.Parameters[k])
 			}
 		}
+
 		if len(trace.Args) > 0 {
 			fmt.Fprintln(color.Output, "        Args:")
+
 			for idx, arg := range trace.Args {
 				fmt.Fprintf(color.Output, "          [%d]: %v\n", idx+1, arg)
 			}
 		}
+
 		fmt.Fprintf(color.Output, "        Query Type: %s\n", trace.QueryType.String())
+
 		if len(trace.Rows) > 0 {
 			fmt.Fprintln(color.Output, "        Rows:")
+
 			for _, row := range trace.Rows {
 				fmt.Fprintf(color.Output, "          - %s\n", formatTraceRow(row))
 			}
+
 			if trace.RowsTruncated && trace.TotalRows > len(trace.Rows) {
 				fmt.Fprintf(color.Output, "          ... (%d more rows)\n", trace.TotalRows-len(trace.Rows))
 			}
 		} else if trace.TotalRows > 0 {
 			fmt.Fprintln(color.Output, "        Rows: (empty)")
 		}
+
 		if i < len(traces)-1 {
 			fmt.Fprintln(color.Output)
 		}
@@ -810,14 +849,18 @@ func formatTraceRow(row map[string]any) string {
 	if len(row) == 0 {
 		return "{}"
 	}
+
 	keys := make([]string, 0, len(row))
 	for k := range row {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
+
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
 		parts = append(parts, fmt.Sprintf("%s=%v", k, row[k]))
 	}
+
 	return strings.Join(parts, ", ")
 }

@@ -177,9 +177,64 @@ func TestExecutor_ExecuteTest_UsesPreparedSQL(t *testing.T) {
 	assert.Equal(t, map[string]any{"id": 2}, trace[0].Parameters)
 }
 
+func TestExecutor_ExecuteTest_TraceCapturedOnExecutionError(t *testing.T) {
+	// Create in-memory SQLite database
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	_, err = db.Exec(`
+		CREATE TABLE users (
+			id INTEGER PRIMARY KEY,
+			name TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	executor := NewExecutor(db, "sqlite", map[string]*snapsql.TableInfo{
+		"users": {
+			Name: "users",
+			Columns: map[string]*snapsql.ColumnInfo{
+				"id":   {Name: "id", IsPrimaryKey: true},
+				"name": {Name: "name"},
+			},
+		},
+	})
+
+	testCase := &markdownparser.TestCase{
+		Name:        "Update With Syntax Error",
+		PreparedSQL: "UPDATE users SET name = ? WHERE id = ? 0",
+		SQLArgs:     []any{"Alice", 1},
+	}
+
+	options := &ExecutionOptions{
+		Mode:     FullTest,
+		Commit:   false,
+		Parallel: 1,
+		Timeout:  time.Minute,
+		Verbose:  true,
+	}
+
+	_, trace, err := executor.ExecuteTest(
+		testCase,
+		"UPDATE users SET name = 'Alice' WHERE id = 1 0",
+		map[string]any{"name": "Alice", "id": 1},
+		options,
+	)
+
+	require.Error(t, err)
+	require.Len(t, trace, 1)
+	assert.Equal(t, "UPDATE users SET name = ? WHERE id = ? 0", trace[0].Statement)
+	assert.Equal(t, []any{"Alice", 1}, trace[0].Args)
+	assert.Equal(t, map[string]any{"name": "Alice", "id": 1}, trace[0].Parameters)
+	assert.Equal(t, UpdateQuery, trace[0].QueryType)
+}
+
 func TestExecutor_FixtureCurrentDateValue(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	_, err = db.Exec(`
@@ -227,6 +282,7 @@ func TestExecutor_FixtureCurrentDateValue(t *testing.T) {
 	require.Empty(t, trace)
 
 	var created time.Time
+
 	err = db.QueryRow("SELECT created_at FROM logs WHERE id = 1").Scan(&created)
 	require.NoError(t, err)
 

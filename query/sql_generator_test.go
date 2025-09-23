@@ -237,6 +237,7 @@ func TestSQLGenerator_SystemValueDefaults(t *testing.T) {
 	sql, args, err := generator.Generate(params)
 	assert.NoError(t, err)
 	assert.Equal(t, "INSERT INTO logs (created_at, created_by) VALUES (?, ?)", sql)
+
 	if len(args) != 2 {
 		t.Fatalf("expected 2 args, got %d", len(args))
 	}
@@ -244,6 +245,7 @@ func TestSQLGenerator_SystemValueDefaults(t *testing.T) {
 	if _, ok := args[0].(time.Time); !ok {
 		t.Fatalf("expected time.Time for created_at, got %T", args[0])
 	}
+
 	if _, ok := args[1].(string); !ok {
 		t.Fatalf("expected string for created_by, got %T", args[1])
 	}

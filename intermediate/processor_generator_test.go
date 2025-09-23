@@ -150,6 +150,11 @@ func TestDetectDialectPatterns(t *testing.T) {
 			expected: 1,
 		},
 		{
+			name:     "Dummy literal after directive is ignored",
+			sql:      "/*#\nfunction_name: test\nparameters:\n  flag: bool\n*/\nUPDATE lists SET is_archived = /*= flag */ FALSE WHERE id = 1",
+			expected: 0,
+		},
+		{
 			name:     "Multiple patterns",
 			sql:      "/*# function_name: test */\nSELECT CAST(age AS INTEGER), NOW(), TRUE FROM users",
 			expected: 3,

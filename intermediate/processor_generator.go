@@ -60,8 +60,48 @@ type DialectConversion struct {
 func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 	var conversions []DialectConversion
 
+	dummyDepth := 0
+
+	isDummyLiteral := func(idx int) bool {
+		for j := idx - 1; j >= 0; j-- {
+			t := tokens[j]
+			switch t.Type {
+			case tok.WHITESPACE:
+				continue
+			case tok.DUMMY_END:
+				return true
+			case tok.BLOCK_COMMENT:
+				if t.Directive != nil && (t.Directive.Type == "variable" || t.Directive.Type == "const") {
+					return true
+				}
+
+				return false
+			default:
+				return false
+			}
+		}
+
+		return false
+	}
+
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
+
+		switch token.Type {
+		case tok.DUMMY_START:
+			dummyDepth++
+			continue
+		case tok.DUMMY_END:
+			if dummyDepth > 0 {
+				dummyDepth--
+			}
+
+			continue
+		}
+
+		if dummyDepth > 0 {
+			continue
+		}
 
 		// Skip header comments and directives
 		if token.Type == tok.BLOCK_COMMENT && isHeaderComment(token.Value) {
@@ -124,6 +164,10 @@ func detectDialectPatterns(tokens []tok.Token) []DialectConversion {
 
 		// Check for TRUE/FALSE literals
 		if token.Type == tok.BOOLEAN {
+			if isDummyLiteral(i) {
+				continue
+			}
+
 			upperValue := strings.ToUpper(strings.TrimSpace(token.Value))
 
 			boolValue := "1"

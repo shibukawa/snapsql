@@ -239,6 +239,7 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		result["has_ordered_result"] = ordered
 	}
 

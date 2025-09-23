@@ -9,6 +9,7 @@ import (
 
 func TestFormatDiffUnifiedYAML(t *testing.T) {
 	color.NoColor = true
+
 	t.Cleanup(func() {
 		color.NoColor = false
 	})

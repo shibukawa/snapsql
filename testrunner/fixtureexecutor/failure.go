@@ -302,6 +302,7 @@ func writePrimaryKeyLine(b *strings.Builder, row RowDiff, index int) {
 		if k == "row_index" {
 			continue
 		}
+
 		keys = append(keys, k)
 	}
 
@@ -311,14 +312,17 @@ func writePrimaryKeyLine(b *strings.Builder, row RowDiff, index int) {
 	}
 
 	sort.Strings(keys)
+
 	for i, key := range keys {
 		if i > 0 {
 			b.WriteString(primaryKeyValueFmt(", "))
 		}
+
 		b.WriteString(primaryKeyNameFmt("%s", key))
 		val := formatDiffScalar(formatValueForDiff(row.Key[key]))
 		b.WriteString(primaryKeyValueFmt(": %s", val))
 	}
+
 	b.WriteString(rowStatusSuffix(row))
 	b.WriteString("\n")
 }
@@ -349,6 +353,7 @@ func writeRowDifferences(b *strings.Builder, row RowDiff) {
 	if includeExpected {
 		writeFieldLine(b, expectPrefixFmt, "+", expectSeparatorFmt, expectedFields)
 	}
+
 	if includeActual {
 		writeFieldLine(b, actualPrefixFmt, "-", actualSeparatorFmt, actualFields)
 	}
@@ -356,15 +361,18 @@ func writeRowDifferences(b *strings.Builder, row RowDiff) {
 
 func rowStatusSuffix(row RowDiff) string {
 	status := ""
+
 	switch row.RowStatus {
 	case "missing":
 		status = " [missing]"
 	case "unexpected":
 		status = " [unexpected]"
 	}
+
 	if status == "" && len(row.Diffs) > 0 {
 		status = " [mismatch]"
 	}
+
 	return status
 }
 
@@ -375,13 +383,16 @@ func buildFieldList(columns []ColumnDiff, expected bool) []string {
 		if label == "__row__" {
 			label = "row"
 		}
+
 		var value any
 		if expected {
 			value = col.Expected
 		} else {
 			value = col.Actual
 		}
+
 		value = formatValueForDiff(value)
+
 		valStr := formatDiffScalar(value)
 		if expected {
 			fields = append(fields, expectFieldFmt("%s: %s", label, expectValueFmt("%s", valStr)))
@@ -389,6 +400,7 @@ func buildFieldList(columns []ColumnDiff, expected bool) []string {
 			fields = append(fields, actualFieldFmt("%s: %s", label, actualValueFmt("%s", valStr)))
 		}
 	}
+
 	return fields
 }
 
@@ -399,12 +411,15 @@ func writeFieldLine(b *strings.Builder, prefix func(...any) string, sign string,
 
 	b.WriteString(prefix(sign))
 	b.WriteString(" ")
+
 	for i, field := range fields {
 		if i > 0 {
 			b.WriteString(sep(", "))
 		}
+
 		b.WriteString(field)
 	}
+
 	b.WriteString("\n")
 }
 
@@ -412,6 +427,7 @@ func formatDiffScalar(v any) string {
 	if v == nil {
 		return "<nil>"
 	}
+
 	return fmt.Sprintf("%v", v)
 }
 
@@ -425,6 +441,7 @@ func formatKey(key map[string]any) string {
 		if k == "row_index" {
 			continue
 		}
+
 		keys = append(keys, k)
 	}
 

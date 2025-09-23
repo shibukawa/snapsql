@@ -137,11 +137,18 @@ func (te *TestExecution) addTrace(label, statement string, params map[string]any
 		return
 	}
 
+	queryType := SelectQuery
+	if result != nil {
+		queryType = result.QueryType
+	} else {
+		queryType = detectQueryType(statement)
+	}
+
 	trace := SQLTrace{
 		Label:      label,
 		Statement:  statement,
 		Parameters: copyParameters(params),
-		QueryType:  SelectQuery,
+		QueryType:  queryType,
 	}
 
 	if len(args) > 0 {
@@ -149,7 +156,6 @@ func (te *TestExecution) addTrace(label, statement string, params map[string]any
 	}
 
 	if result != nil {
-		trace.QueryType = result.QueryType
 		trace.TotalRows = len(result.Data)
 		if rows, truncated := sanitizeRows(result.Data); len(rows) > 0 {
 			trace.Rows = rows
@@ -612,6 +618,7 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 			if rows, qerr := execution.Transaction.QueryContext(ctx, execution.SQL, execution.Args...); qerr == nil {
 				rows.Close()
 			} else {
+				execution.addTrace("main query", execution.SQL, execution.Parameters, execution.Args, nil)
 				combined := fmt.Errorf("exec=%v query=%v", err, qerr)
 				return nil, wrapDefinitionFailure(combined, "failed to execute main SQL (exec/query fallback)")
 			}
@@ -739,8 +746,10 @@ func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, param
 	// Check for RETURNING clause in DML queries
 	if (queryType == InsertQuery || queryType == UpdateQuery || queryType == DeleteQuery) && hasReturningClause(sqlQuery) {
 		// Execute as SELECT query to get returned data
-		result, err := e.executeSelectQuery(trx, sqlQuery, args)
+		label := fmt.Sprintf("%s query with RETURNING", queryType.String())
+		result, err := e.executeSelectQuery(trx, sqlQuery, args, label)
 		if err != nil {
+			execution.addTrace("main query", sqlQuery, parameters, args, nil)
 			return nil, err
 		}
 		// Keep the original query type for validation logic
@@ -752,8 +761,9 @@ func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, param
 
 	switch queryType {
 	case SelectQuery:
-		result, err := e.executeSelectQuery(trx, sqlQuery, args)
+		result, err := e.executeSelectQuery(trx, sqlQuery, args, "SELECT query")
 		if err != nil {
+			execution.addTrace("main query", sqlQuery, parameters, args, nil)
 			return nil, err
 		}
 		execution.addTrace("main query", sqlQuery, parameters, args, result)
@@ -761,6 +771,7 @@ func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, param
 	case InsertQuery, UpdateQuery, DeleteQuery:
 		result, err := e.executeDMLQuery(trx, sqlQuery, queryType, args)
 		if err != nil {
+			execution.addTrace("main query", sqlQuery, parameters, args, nil)
 			return nil, err
 		}
 		execution.addTrace("main query", sqlQuery, parameters, args, result)
@@ -770,22 +781,27 @@ func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, param
 	}
 }
 
-// executeSelectQuery executes a SELECT query and returns the data
-func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string, args []any) (*ValidationResult, error) {
+// executeSelectQuery executes a query expected to return rows and returns the data.
+// label describes the originating statement (e.g., "SELECT query", "UPDATE query with RETURNING").
+func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string, args []any, label string) (*ValidationResult, error) {
 	// Guard against indefinite blocking by bounding query duration
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	if label == "" {
+		label = "SELECT query"
+	}
+
 	rows, err := tx.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute SELECT query: %w", err)
+		return nil, fmt.Errorf("failed to execute %s: %w", label, err)
 	}
 	defer rows.Close()
 
 	// Get column names
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get column names: %w", err)
+		return nil, fmt.Errorf("failed to get column names for %s: %w", label, err)
 	}
 
 	// Prepare result data
@@ -803,7 +819,7 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string, args []any) (
 		// Scan the row
 		err := rows.Scan(valuePtrs...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
+			return nil, fmt.Errorf("failed to scan row for %s: %w", label, err)
 		}
 
 		// Convert to map
@@ -823,7 +839,7 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string, args []any) (
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
+		return nil, fmt.Errorf("error iterating rows for %s: %w", label, err)
 	}
 
 	return &ValidationResult{
@@ -1960,8 +1976,9 @@ func (e *Executor) executeVerifyQuery(execution *TestExecution, verifyQuery stri
 			continue
 		}
 
-		result, err := e.executeSelectQuery(execution.Transaction, query, nil)
+		result, err := e.executeSelectQuery(execution.Transaction, query, nil, "verify query")
 		if err != nil {
+			execution.addTrace("verify query", query, nil, nil, nil)
 			return nil, fmt.Errorf("failed to execute verify query: %w", err)
 		}
 

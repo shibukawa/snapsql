@@ -37,10 +37,12 @@ type SQLGenerator struct {
 
 // NewSQLGenerator creates a new SQL generator
 func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect string) *SQLGenerator {
-	var instructions []intermediate.Instruction
-	var expressions []intermediate.CELExpression
-	var systemFields map[string]intermediate.SystemFieldInfo
-	var implicitMap map[string]intermediate.ImplicitParameter
+	var (
+		instructions []intermediate.Instruction
+		expressions  []intermediate.CELExpression
+		systemFields map[string]intermediate.SystemFieldInfo
+		implicitMap  map[string]intermediate.ImplicitParameter
+	)
 
 	if format != nil {
 		instructions = format.Instructions
@@ -64,6 +66,7 @@ func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect string) *S
 	if systemFields == nil {
 		systemFields = make(map[string]intermediate.SystemFieldInfo)
 	}
+
 	if implicitMap == nil {
 		implicitMap = make(map[string]intermediate.ImplicitParameter)
 	}
@@ -218,7 +221,9 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			if err != nil {
 				return "", nil, err
 			}
+
 			result.WriteString("?")
+
 			sqlParams = append(sqlParams, value)
 
 		default:
@@ -238,6 +243,7 @@ func (g *SQLGenerator) shouldEmitSystemClause(params map[string]interface{}, key
 	if params == nil {
 		return true
 	}
+
 	if val, ok := params[key]; ok {
 		switch v := val.(type) {
 		case nil:
@@ -252,6 +258,7 @@ func (g *SQLGenerator) shouldEmitSystemClause(params map[string]interface{}, key
 			return true
 		}
 	}
+
 	return true
 }
 
@@ -261,11 +268,14 @@ func (g *SQLGenerator) resolveSystemNumeric(defaultValue string, kind string) st
 		if kind == "limit" {
 			return "1000"
 		}
+
 		return "0"
 	}
+
 	if _, err := strconv.Atoi(value); err == nil {
 		return value
 	}
+
 	return value
 }
 
@@ -290,11 +300,14 @@ func (g *SQLGenerator) resolveSystemValue(fieldName string, params map[string]in
 			value := g.normalizeSystemDefault(implicit.Default, implicit.Type, name)
 			g.generated[name] = value
 			params[name] = value
+
 			return value, nil
 		}
+
 		value := g.generateFallbackValue(implicit.Type, name)
 		g.generated[name] = value
 		params[name] = value
+
 		return value, nil
 	}
 
@@ -303,12 +316,15 @@ func (g *SQLGenerator) resolveSystemValue(fieldName string, params map[string]in
 			value := g.normalizeSystemDefault(field.OnInsert.Default, "", name)
 			g.generated[name] = value
 			params[name] = value
+
 			return value, nil
 		}
+
 		if field.OnUpdate != nil && field.OnUpdate.Default != nil {
 			value := g.normalizeSystemDefault(field.OnUpdate.Default, "", name)
 			g.generated[name] = value
 			params[name] = value
+
 			return value, nil
 		}
 	}
@@ -316,6 +332,7 @@ func (g *SQLGenerator) resolveSystemValue(fieldName string, params map[string]in
 	value := g.generateFallbackValue("", name)
 	g.generated[name] = value
 	params[name] = value
+
 	return value, nil
 }
 
@@ -336,6 +353,7 @@ func (g *SQLGenerator) normalizeSystemDefault(raw any, typeName, fieldName strin
 			if num, err := strconv.Atoi(upper); err == nil {
 				return num
 			}
+
 			return v
 		}
 	default:
