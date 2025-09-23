@@ -179,10 +179,12 @@ func (e *BaseExtractor) FilterTables(tables []string, config ExtractConfig) []st
 
 // Common SQL queries and patterns used across different database types
 const (
-	// Common system schema names to exclude by default
+	// PostgreSQLSystemSchemas lists common PostgreSQL system schemas to exclude by default.
 	PostgreSQLSystemSchemas = "information_schema,pg_catalog,pg_toast"
-	MySQLSystemSchemas      = "information_schema,mysql,performance_schema,sys"
-	SQLiteSystemTables      = "sqlite_%"
+	// MySQLSystemSchemas lists common MySQL system schemas to exclude by default.
+	MySQLSystemSchemas = "information_schema,mysql,performance_schema,sys"
+	// SQLiteSystemTables is a pattern matching SQLite system tables.
+	SQLiteSystemTables = "sqlite_%"
 )
 
 // GetDefaultExcludeSchemas returns default schemas to exclude for each database type

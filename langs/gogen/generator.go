@@ -245,6 +245,7 @@ func (g *Generator) Generate(w io.Writer) error {
 					return true
 				}
 			}
+
 			return false
 		},
 		"celTypeConvert": func(typeName string) string {
@@ -252,6 +253,7 @@ func (g *Generator) Generate(w io.Writer) error {
 			if strings.HasPrefix(typeName, "[]") {
 				elementType := strings.TrimPrefix(typeName, "[]")
 				elementCELType := convertSingleType(elementType)
+
 				return fmt.Sprintf("types.NewListType(%s)", elementCELType)
 			}
 
@@ -288,6 +290,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		"celNameToGoName": func(celName string) string {
 			parts := strings.Split(celName, "_")
 			caser := cases.Title(language.English)
+
 			for i, part := range parts {
 				if part == "id" {
 					parts[i] = "ID"
@@ -295,6 +298,7 @@ func (g *Generator) Generate(w io.Writer) error {
 					parts[i] = caser.String(part)
 				}
 			}
+
 			return strings.Join(parts, "")
 		},
 	}).Parse(goTemplate)
@@ -666,8 +670,7 @@ type implicitParam struct {
 	DefaultValueLiteral string
 }
 
-// convertTypeToGo converts intermediate format type to Go type
-// UnsupportedTypeError represents an error for unsupported types with helpful hints
+// UnsupportedTypeError represents an error for unsupported types with helpful hints.
 type UnsupportedTypeError struct {
 	Type    string
 	Context string

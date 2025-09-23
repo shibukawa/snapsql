@@ -4,17 +4,23 @@ import "errors"
 
 // Sentinel errors - Parser related
 var (
-	// YAML/Schema related errors
-	ErrExpectedDocumentNode     = errors.New("expected document node")
-	ErrExpectedMappingNode      = errors.New("expected mapping node")
+	// ErrExpectedDocumentNode indicates the root YAML document node was not found.
+	ErrExpectedDocumentNode = errors.New("expected document node")
+	// ErrExpectedMappingForParams indicates parameters section should be a mapping node.
 	ErrExpectedMappingForParams = errors.New("expected mapping node for parameters")
-	ErrExpectedSequenceNode     = errors.New("expected sequence node")
+	// ErrExpectedSequenceNode indicates a YAML sequence node was required.
+	ErrExpectedSequenceNode = errors.New("expected sequence node")
+	// ErrUnsupportedParameterType indicates an unsupported parameter node type.
 	ErrUnsupportedParameterType = errors.New("unsupported parameter node type")
 
-	// CEL related errors
-	ErrEnvironmentCELNotInit      = errors.New("environment CEL not initialized")
-	ErrParameterCELNotInit        = errors.New("parameter CEL not initialized")
-	ErrNoOutputType               = errors.New("no output type for expression")
+	// ErrEnvironmentCELNotInit indicates the CEL environment was not initialized.
+	ErrEnvironmentCELNotInit = errors.New("environment CEL not initialized")
+	// ErrParameterCELNotInit indicates the CEL parameter environment was not initialized.
+	ErrParameterCELNotInit = errors.New("parameter CEL not initialized")
+	// ErrNoOutputType indicates no output type was found for an expression.
+	ErrNoOutputType = errors.New("no output type for expression")
+	// ErrExpressionValidationFailed indicates validation failed in both environment and parameter contexts.
 	ErrExpressionValidationFailed = errors.New("expression validation failed for both environment and parameter contexts")
-	ErrExpressionNotList          = errors.New("expression result is not a list")
+	// ErrExpressionNotList indicates the expression result was not a list.
+	ErrExpressionNotList = errors.New("expression result is not a list")
 )

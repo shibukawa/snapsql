@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/shibukawa/snapsql/intermediate"
@@ -94,7 +95,11 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			generator := NewSQLGenerator(tc.instructions, tc.expressions, "postgresql")
+			format := &intermediate.IntermediateFormat{
+				Instructions:   tc.instructions,
+				CELExpressions: tc.expressions,
+			}
+			generator := NewSQLGenerator(format, "postgresql")
 
 			sql, args, err := generator.Generate(tc.params)
 
@@ -179,7 +184,11 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			generator := NewSQLGenerator(tc.instructions, tc.expressions, "postgresql")
+			format := &intermediate.IntermediateFormat{
+				Instructions:   tc.instructions,
+				CELExpressions: tc.expressions,
+			}
+			generator := NewSQLGenerator(format, "postgresql")
 
 			sql, args, err := generator.Generate(tc.params)
 
@@ -192,6 +201,57 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSQLGenerator_SystemValueDefaults(t *testing.T) {
+	format := &intermediate.IntermediateFormat{
+		Instructions: []intermediate.Instruction{
+			{Op: intermediate.OpEmitStatic, Value: "INSERT INTO logs (created_at, created_by) VALUES ("},
+			{Op: intermediate.OpEmitSystemValue, SystemField: "created_at"},
+			{Op: intermediate.OpEmitStatic, Value: ", "},
+			{Op: intermediate.OpEmitSystemValue, SystemField: "created_by"},
+			{Op: intermediate.OpEmitStatic, Value: ")"},
+		},
+		SystemFields: []intermediate.SystemFieldInfo{
+			{
+				Name: "created_at",
+				OnInsert: &intermediate.SystemFieldOperationInfo{
+					Default: "NOW()",
+				},
+			},
+			{
+				Name: "created_by",
+				OnInsert: &intermediate.SystemFieldOperationInfo{
+					Parameter: "implicit",
+				},
+			},
+		},
+		ImplicitParameters: []intermediate.ImplicitParameter{
+			{Name: "created_by", Type: "string"},
+		},
+	}
+
+	generator := NewSQLGenerator(format, "postgresql")
+	params := map[string]interface{}{}
+
+	sql, args, err := generator.Generate(params)
+	assert.NoError(t, err)
+	assert.Equal(t, "INSERT INTO logs (created_at, created_by) VALUES (?, ?)", sql)
+
+	if len(args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(args))
+	}
+
+	if _, ok := args[0].(time.Time); !ok {
+		t.Fatalf("expected time.Time for created_at, got %T", args[0])
+	}
+
+	if _, ok := args[1].(string); !ok {
+		t.Fatalf("expected string for created_by, got %T", args[1])
+	}
+
+	assert.Equal(t, args[0], params["created_at"])
+	assert.Equal(t, args[1], params["created_by"])
 }
 
 func TestLoadIntermediateFormat_SupportedFileTypes(t *testing.T) {

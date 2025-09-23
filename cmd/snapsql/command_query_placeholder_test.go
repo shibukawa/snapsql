@@ -1,9 +1,10 @@
 package main
 
 import (
+	"testing"
+
 	"github.com/alecthomas/assert/v2"
 	"github.com/shibukawa/snapsql/query"
-	"testing"
 )
 
 func TestFormatSQLForDisplay_Postgres_BasicSpacing(t *testing.T) {
@@ -19,10 +20,10 @@ func TestFormatSQLForDisplay_Postgres_ParenNoExtraSpace(t *testing.T) {
 }
 
 func TestFormatSQLForDisplay_MySQL_NoConversion(t *testing.T) {
-	in := "SELECT * FROM t WHERE id=?AND flag=?"
+	in := "SELECT id,flag FROM t WHERE id=?AND flag=?"
 	out := query.FormatSQLForDialect(in, "mysql")
 	// mysqlは?のまま。直後スペース補正は方言に依らず行う
-	assert.Equal(t, "SELECT * FROM t WHERE id=? AND flag=?", out)
+	assert.Equal(t, "SELECT id,flag FROM t WHERE id=? AND flag=?", out)
 }
 
 func TestFormatSQLForDisplay_SQLite_NoConversion(t *testing.T) {

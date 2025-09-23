@@ -114,12 +114,14 @@ FROM users`,
 				t.Helper()
 				// Find EMIT_UNLESS_BOUNDARY instruction
 				var boundaryInstr *Instruction
+
 				for i := range instructions {
 					if instructions[i].Op == "EMIT_UNLESS_BOUNDARY" {
 						boundaryInstr = &instructions[i]
 						break
 					}
 				}
+
 				assert.True(t, boundaryInstr != nil, "Should have EMIT_UNLESS_BOUNDARY instruction")
 				assert.Equal(t, ",", boundaryInstr.Value, "Should contain comma delimiter")
 			},
@@ -140,11 +142,13 @@ FROM users`,
 				t.Helper()
 				// Count BOUNDARY instructions
 				boundaryCount := 0
+
 				for _, instr := range instructions {
 					if instr.Op == "BOUNDARY" {
 						boundaryCount++
 					}
 				}
+
 				assert.True(t, boundaryCount > 0, "Should have at least one BOUNDARY instruction")
 			},
 		},
@@ -173,11 +177,13 @@ WHERE id = 1`,
 				t.Helper()
 				// Count EMIT_UNLESS_BOUNDARY instructions
 				boundaryCount := 0
+
 				for _, instr := range instructions {
 					if instr.Op == "EMIT_UNLESS_BOUNDARY" {
 						boundaryCount++
 					}
 				}
+
 				assert.Equal(t, 3, boundaryCount, "Should have 3 EMIT_UNLESS_BOUNDARY instructions for 3 conditional commas")
 			},
 		},
@@ -341,12 +347,14 @@ WHERE id = 1`,
 				t.Helper()
 				// Should find EMIT_UNLESS_BOUNDARY for the comma
 				found := false
+
 				for _, instr := range instructions {
 					if instr.Op == "EMIT_UNLESS_BOUNDARY" && strings.Contains(instr.Value, ",") {
 						found = true
 						break
 					}
 				}
+
 				assert.True(t, found, "Should have EMIT_UNLESS_BOUNDARY instruction for comma")
 			},
 		},
@@ -366,12 +374,14 @@ AND name = /*= name */'John'
 				t.Helper()
 				// Should find EMIT_UNLESS_BOUNDARY for the AND
 				found := false
+
 				for _, instr := range instructions {
 					if instr.Op == "EMIT_UNLESS_BOUNDARY" && strings.Contains(instr.Value, "AND") {
 						found = true
 						break
 					}
 				}
+
 				assert.True(t, found, "Should have EMIT_UNLESS_BOUNDARY instruction for AND")
 			},
 		},
@@ -392,12 +402,14 @@ OR name = /*= name */'John'
 				t.Helper()
 				// Should find EMIT_UNLESS_BOUNDARY for the OR
 				found := false
+
 				for _, instr := range instructions {
 					if instr.Op == "EMIT_UNLESS_BOUNDARY" && strings.Contains(instr.Value, "OR") {
 						found = true
 						break
 					}
 				}
+
 				assert.True(t, found, "Should have EMIT_UNLESS_BOUNDARY instruction for OR")
 			},
 		},
@@ -442,19 +454,24 @@ WHERE id = 1`,
 					if instr.Op == "EMIT_STATIC" && strings.Contains(instr.Value, "WHERE") {
 						// Check if there's a BOUNDARY instruction before this
 						foundBoundary := false
+
 						for j := i - 1; j >= 0; j-- {
 							if instructions[j].Op == "BOUNDARY" {
 								foundBoundary = true
 								break
 							}
+
 							if instructions[j].Op == "IF" {
 								break // Stop searching when we hit the IF block
 							}
 						}
+
 						assert.True(t, foundBoundary, "Should have BOUNDARY before WHERE clause")
+
 						return
 					}
 				}
+
 				t.Error("WHERE clause not found in instructions")
 			},
 		},
@@ -478,19 +495,24 @@ FROM users`,
 					if instr.Op == "EMIT_STATIC" && strings.Contains(instr.Value, "FROM") {
 						// Check if there's a BOUNDARY instruction before this
 						foundBoundary := false
+
 						for j := i - 1; j >= 0; j-- {
 							if instructions[j].Op == "BOUNDARY" {
 								foundBoundary = true
 								break
 							}
+
 							if instructions[j].Op == "IF" {
 								break // Stop searching when we hit the IF block
 							}
 						}
+
 						assert.True(t, foundBoundary, "Should have BOUNDARY before FROM clause")
+
 						return
 					}
 				}
+
 				t.Error("FROM clause not found in instructions")
 			},
 		},

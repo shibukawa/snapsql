@@ -7,8 +7,7 @@ import (
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
-// Check for required (mandatory) clauses for a given statement type
-// Sentinel error for required clause missing
+// ErrRequiredClauseMissing is returned when a required clause is not present.
 var ErrRequiredClauseMissing = errors.New("required clause missing")
 
 var required = map[string][]cmn.NodeType{

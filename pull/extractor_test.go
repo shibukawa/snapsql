@@ -343,16 +343,16 @@ func TestMockDatabase(t *testing.T) {
 		assert.NotZero(t, mockDB)
 
 		// Set up mock data
-		mockDB.SetQueryResult("SELECT * FROM users", [][]any{
+		mockDB.SetQueryResult("SELECT id, email, name FROM users", [][]any{
 			{"1", "john@example.com", "John Doe"},
 			{"2", "jane@example.com", "Jane Smith"},
 		})
 
 		// Set up mock error
-		mockDB.SetQueryError("SELECT * FROM nonexistent", ErrTableNotFound)
+		mockDB.SetQueryError("SELECT id, email, name FROM nonexistent", ErrTableNotFound)
 
 		// Verify mock setup
-		assert.Equal(t, 2, len(mockDB.queries["SELECT * FROM users"]))
-		assert.Equal(t, ErrTableNotFound, mockDB.errors["SELECT * FROM nonexistent"])
+		assert.Equal(t, 2, len(mockDB.queries["SELECT id, email, name FROM users"]))
+		assert.Equal(t, ErrTableNotFound, mockDB.errors["SELECT id, email, name FROM nonexistent"])
 	})
 }

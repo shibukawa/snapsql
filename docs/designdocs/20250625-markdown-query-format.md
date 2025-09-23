@@ -19,19 +19,24 @@ SnapSQL supports literate programming through Markdown-based query definition fi
 | - Expected Results | Required | YAML/JSON (array) | - | 1 per test |
 | - Verify Query | Optional | Fenced code: language `sql` | - | 0-1 per test |
 
+> **Note:** `function_name` is derived from the file name (without extension). Do not keep front matter solely to repeat the same value. Additional metadata such as `response_affinity` is currently ignored by the parser and should be omitted.
+
+
 ## Section Details
 
 ### Front Matter (Optional)
 
-YAML format metadata. Can be replaced by Function Name and Description sections.
+YAML metadata used only when you need to override defaults. Because the parser automatically derives `function_name` from the file name, omit front matter when it would merely repeat the same value. Use it for cases like dialect overrides or additional descriptions only.
 
 ```yaml
 ---
-function_name: "get_user_data"  # Explicit function name (optional)
-description: "Get user data"    # Description (optional)
-dialect: postgres                # Dialect hint (optional)
+function_name: "get_user_data"  # Specify only when different from file name
+description: "Get user data"    # Optional documentation
+dialect: postgres                # Optional dialect hint
 ---
 ```
+
+> Legacy metadata such as `response_affinity` is not read by the current parser and should not be declared.
 
 ### Function Name (Automatic)
 

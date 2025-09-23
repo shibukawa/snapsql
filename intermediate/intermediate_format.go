@@ -6,34 +6,44 @@ import (
 	"strings"
 )
 
-// Instruction operation types
+// OpEmitStatic and related constants define the instruction operation types for the intermediate query format.
 const (
-	// Basic output instructions
+	// OpEmitStatic is a basic output instruction that outputs static text.
 	OpEmitStatic = "EMIT_STATIC" // Output static text
-	OpEmitEval   = "EMIT_EVAL"   // Output evaluated expression
+	// OpEmitEval outputs an evaluated expression.
+	OpEmitEval = "EMIT_EVAL" // Output evaluated expression
 
-	// Boundary instructions for conditional delimiter handling
+	// OpEmitUnlessBoundary outputs text unless followed by a boundary delimiter.
 	OpEmitUnlessBoundary = "EMIT_UNLESS_BOUNDARY" // Output text unless followed by boundary
-	OpBoundary           = "BOUNDARY"             // Mark boundary for delimiter removal
+	// OpBoundary marks a boundary for delimiter removal.
+	OpBoundary = "BOUNDARY" // Mark boundary for delimiter removal
 
-	// Control flow instructions
-	OpIf     = "IF"      // Start of if block
+	// OpIf starts an if control block.
+	OpIf = "IF" // Start of if block
+	// OpElseIf represents an else-if branch in control flow.
 	OpElseIf = "ELSE_IF" // Else if condition
-	OpElse   = "ELSE"    // Else block
-	OpEnd    = "END"     // End of control block (if, for)
+	// OpElse represents an else branch in control flow.
+	OpElse = "ELSE" // Else block
+	// OpEnd ends a control block (if, for, loop).
+	OpEnd = "END" // End of control block (if, for)
 
-	// Loop instructions
+	// OpLoopStart marks the beginning of a loop block.
 	OpLoopStart = "LOOP_START" // Start of for loop block
-	OpLoopEnd   = "LOOP_END"   // End of for loop block
+	// OpLoopEnd marks the end of a loop block.
+	OpLoopEnd = "LOOP_END" // End of for loop block
 
-	// System directive instructions
-	OpIfSystemLimit    = "IF_SYSTEM_LIMIT"    // Conditional based on system limit
-	OpIfSystemOffset   = "IF_SYSTEM_OFFSET"   // Conditional based on system offset
-	OpEmitSystemLimit  = "EMIT_SYSTEM_LIMIT"  // Output system limit value
+	// OpIfSystemLimit conditionally emits content based on presence of system limit.
+	OpIfSystemLimit = "IF_SYSTEM_LIMIT" // Conditional based on system limit
+	// OpIfSystemOffset conditionally emits content based on presence of system offset.
+	OpIfSystemOffset = "IF_SYSTEM_OFFSET" // Conditional based on system offset
+	// OpEmitSystemLimit outputs the system limit value.
+	OpEmitSystemLimit = "EMIT_SYSTEM_LIMIT" // Output system limit value
+	// OpEmitSystemOffset outputs the system offset value.
 	OpEmitSystemOffset = "EMIT_SYSTEM_OFFSET" // Output system offset value
-	OpEmitSystemValue  = "EMIT_SYSTEM_VALUE"  // Output system value for specific field
+	// OpEmitSystemValue outputs a specific system field value.
+	OpEmitSystemValue = "EMIT_SYSTEM_VALUE" // Output system value for specific field
 
-	// Database dialect instructions
+	// OpEmitIfDialect outputs a SQL fragment if current dialect matches one of the given dialects.
 	OpEmitIfDialect = "EMIT_IF_DIALECT" // Output SQL fragment if current dialect matches
 )
 
@@ -152,6 +162,9 @@ type IntermediateFormat struct {
 
 	// Implicit parameters that should be obtained from context/TLS
 	ImplicitParameters []ImplicitParameter `json:"implicit_parameters,omitempty"`
+
+	// Indicates whether the main statement guarantees ordered results via ORDER BY
+	HasOrderedResult bool `json:"has_ordered_result,omitempty"`
 }
 
 // MarshalJSON implements custom JSON marshaling for IntermediateFormat
@@ -229,6 +242,15 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 
 		result["cel_environments"] = celEnvironments
+	}
+
+	if f.HasOrderedResult {
+		ordered, err := json.Marshal(f.HasOrderedResult)
+		if err != nil {
+			return nil, err
+		}
+
+		result["has_ordered_result"] = ordered
 	}
 
 	// Marshal the modified map back to JSON

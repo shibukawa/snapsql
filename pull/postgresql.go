@@ -387,7 +387,7 @@ func (e *PostgreSQLExtractor) getSchemaNames(db *sql.DB) ([]string, error) {
 	return schemas, nil
 }
 
-// Query builders
+// BuildSchemasQuery returns the SQL to list non-system schema names.
 func (e *PostgreSQLExtractor) BuildSchemasQuery() string {
 	return `
 		SELECT schema_name 

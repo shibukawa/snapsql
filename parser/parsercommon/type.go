@@ -7,61 +7,91 @@ import "github.com/shibukawa/snapsql/tokenizer"
 type NodeType int
 
 const (
-	// SQL statement structures
+	// UNKNOWN represents an unspecified node type.
 	UNKNOWN NodeType = iota
+	// SUBQUERY_STATEMENT represents a subquery container statement.
 	SUBQUERY_STATEMENT
 
-	// Select statement
+	// SELECT_STATEMENT represents a full SELECT statement.
 	SELECT_STATEMENT
+	// SELECT_CLAUSE represents a SELECT clause.
 	SELECT_CLAUSE
+	// FROM_CLAUSE represents a FROM clause.
 	FROM_CLAUSE
+	// WHERE_CLAUSE represents a WHERE clause.
 	WHERE_CLAUSE
+	// ORDER_BY_CLAUSE represents an ORDER BY clause.
 	ORDER_BY_CLAUSE
+	// GROUP_BY_CLAUSE represents a GROUP BY clause.
 	GROUP_BY_CLAUSE
+	// HAVING_CLAUSE represents a HAVING clause.
 	HAVING_CLAUSE
+	// LIMIT_CLAUSE represents a LIMIT clause.
 	LIMIT_CLAUSE
+	// OFFSET_CLAUSE represents an OFFSET clause.
 	OFFSET_CLAUSE
+	// WITH_CLAUSE represents a WITH (CTE) clause.
 	WITH_CLAUSE
+	// FOR_CLAUSE represents a FOR (locking) clause.
 	FOR_CLAUSE
+	// CTE_DEFINITION represents an individual CTE definition.
 	CTE_DEFINITION
 
-	// Insert statement
+	// INSERT_INTO_STATEMENT represents an INSERT statement.
 	INSERT_INTO_STATEMENT
+	// INSERT_INTO_CLAUSE represents an INSERT INTO clause.
 	INSERT_INTO_CLAUSE
+	// VALUES_CLAUSE represents a VALUES clause.
 	VALUES_CLAUSE
+	// ON_CONFLICT_CLAUSE represents an ON CONFLICT clause.
 	ON_CONFLICT_CLAUSE
 
-	// Update statement
+	// UPDATE_STATEMENT represents an UPDATE statement.
 	UPDATE_STATEMENT
+	// UPDATE_CLAUSE represents an UPDATE clause.
 	UPDATE_CLAUSE
+	// SET_CLAUSE represents a SET clause.
 	SET_CLAUSE
 
-	// Delete statement
+	// DELETE_FROM_CLAUSE represents a DELETE FROM clause.
 	DELETE_FROM_CLAUSE
+	// DELETE_FROM_STATEMENT represents a DELETE statement.
 	DELETE_FROM_STATEMENT
 
-	// SnapSQL extensions
+	// TEMPLATE_IF_BLOCK represents a template IF block.
 	TEMPLATE_IF_BLOCK
+	// TEMPLATE_ELSEIF_BLOCK represents a template ELSEIF block.
 	TEMPLATE_ELSEIF_BLOCK
+	// TEMPLATE_ELSE_BLOCK represents a template ELSE block.
 	TEMPLATE_ELSE_BLOCK
+	// TEMPLATE_FOR_BLOCK represents a template FOR block.
 	TEMPLATE_FOR_BLOCK
+	// VARIABLE_SUBSTITUTION represents a variable substitution node.
 	VARIABLE_SUBSTITUTION
+	// DEFERRED_VARIABLE_SUBSTITUTION represents deferred variable substitution.
 	DEFERRED_VARIABLE_SUBSTITUTION
+	// BULK_VARIABLE_SUBSTITUTION represents bulk variable substitution.
 	BULK_VARIABLE_SUBSTITUTION
+	// ENVIRONMENT_REFERENCE represents an environment reference node.
 	ENVIRONMENT_REFERENCE
+	// IMPLICIT_CONDITIONAL represents an implicit conditional node.
 	IMPLICIT_CONDITIONAL
 
-	// Expressions and literals
+	// IDENTIFIER represents an identifier node.
 	IDENTIFIER
+	// LITERAL represents a literal node.
 	LITERAL
+	// EXPRESSION represents an expression node.
 	EXPRESSION
 
-	// Others
+	// OTHER_NODE represents a miscellaneous node type.
 	OTHER_NODE
+	// RETURNING_CLAUSE represents a RETURNING clause node.
 	RETURNING_CLAUSE
 
-	// Column reference
+	// COLUMN_REFERENCE represents a column reference node.
 	COLUMN_REFERENCE
+	// LAST_NODE_TYPE marks the upper bound (sentinel) for node types.
 	LAST_NODE_TYPE
 )
 

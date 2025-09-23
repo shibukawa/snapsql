@@ -20,7 +20,8 @@ func isDummyLiteral(token tokenizer.Token) bool {
 	// ディレクティブ直後にある通常のリテラルはダミーとして扱う
 	if token.Type == tokenizer.NUMBER ||
 		token.Type == tokenizer.STRING ||
-		token.Type == tokenizer.IDENTIFIER {
+		token.Type == tokenizer.IDENTIFIER ||
+		token.Type == tokenizer.BOOLEAN {
 		return true
 	}
 

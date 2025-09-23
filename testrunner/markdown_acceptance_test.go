@@ -28,6 +28,10 @@ import (
 // - ok_: すべて成功 expected, ng_: 1つ以上の比較失敗 expected, skip_: 無視
 // まだ ng_ ケースは未投入でも動作するようにしている
 func TestMarkdownAcceptance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping markdown acceptance tests in short mode")
+	}
+
 	baseDir := filepath.Join("..", "testdata", "testrunner", "markdown")
 
 	entries, err := os.ReadDir(baseDir)
@@ -110,7 +114,7 @@ func TestMarkdownAcceptance(t *testing.T) {
 					for i := range doc.TestCases {
 						c := &doc.TestCases[i]
 
-						_, err := exec.ExecuteTest(c, doc.SQL, map[string]any{}, &fr.ExecutionOptions{Mode: fr.FullTest, Commit: false})
+						_, _, err := exec.ExecuteTest(c, doc.SQL, map[string]any{}, &fr.ExecutionOptions{Mode: fr.FullTest, Commit: false})
 						if err != nil {
 							if strings.Contains(err.Error(), "simple validation failed:") || strings.Contains(err.Error(), "table state validation failed:") {
 								failedAny = true

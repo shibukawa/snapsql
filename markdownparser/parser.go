@@ -52,6 +52,7 @@ func Parse(reader io.Reader) (*SnapSQLDocument, error) {
 }
 
 // ParseWithOptions parses a markdown query file with custom options
+
 func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument, error) {
 	// Read all content
 	content, err := io.ReadAll(reader)
@@ -86,11 +87,12 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 		),
 	)
 
-	// Parse markdown document
-	doc := md.Parser().Parse(text.NewReader([]byte(contentWithoutFrontMatter)))
+	contentBytes := []byte(contentWithoutFrontMatter)
+	doc := md.Parser().Parse(text.NewReader(contentBytes))
+	lineMapper := newIndexToLine(contentBytes)
 
 	// Extract title and sections
-	title, sections := extractSectionsFromAST(doc, []byte(contentWithoutFrontMatter))
+	title, sections := extractSectionsFromAST(doc, contentBytes)
 
 	// Validate required sections
 	if err := validateRequiredSections(sections); err != nil {
@@ -109,15 +111,15 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 
 	// Extract SQL
 	if sqlSection, exists := sections["sql"]; exists {
-		sql, startLine := extractSQLFromASTNodes(sqlSection.Content, []byte(contentWithoutFrontMatter))
+		sql, startIdx := extractSQLFromASTNodes(sqlSection.Content, contentBytes)
 		document.SQL = sql
-		document.SQLStartLine = startLine
+		document.SQLStartLine = lineMapper.lineFor(startIdx)
 	}
 
 	// Extract description if present and not already in metadata
 	if document.Metadata["description"] == nil {
 		if descSection, exists := sections["description"]; exists {
-			descText, err := extractTextFromASTNodes(descSection.Content, []byte(contentWithoutFrontMatter))
+			descText, err := extractTextFromASTNodes(descSection.Content, contentBytes)
 			if err == nil && strings.TrimSpace(descText) != "" {
 				document.Metadata["description"] = strings.TrimSpace(descText)
 			}
@@ -128,7 +130,7 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 	parameterSectionNames := []string{"parameters", "params", "parameter"}
 	for _, sectionName := range parameterSectionNames {
 		if paramSection, exists := sections[sectionName]; exists {
-			paramText, paramType, err := extractParameterTextFromASTNodes(paramSection.Content, []byte(contentWithoutFrontMatter))
+			paramText, paramType, err := extractParameterTextFromASTNodes(paramSection.Content, contentBytes)
 			if err != nil {
 				return nil, fmt.Errorf("failed to extract parameters: %w", err)
 			}
@@ -142,7 +144,7 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 
 	// Parse test cases
 	if testSection, exists := sections["test cases"]; exists {
-		testCases, err := parseTestCasesFromAST(testSection.Content, []byte(contentWithoutFrontMatter))
+		testCases, err := parseTestCasesFromAST(testSection.Content, contentBytes, lineMapper)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse test cases: %w", err)
 		}

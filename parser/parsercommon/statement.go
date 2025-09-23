@@ -163,7 +163,7 @@ func (s *SelectStatement) Type() NodeType {
 	return SELECT_STATEMENT
 }
 
-// CTEs implements BlockNode.
+// CTE returns the WITH clause (CTE definitions) for the SELECT statement.
 func (s *SelectStatement) CTE() *WithClause {
 	return s.with
 }
@@ -174,7 +174,7 @@ func (s *SelectStatement) String() string {
 	return "SELECT"
 }
 
-// InsertStatement represents INSERT statement
+// InsertIntoStatement represents an INSERT INTO SQL statement.
 type InsertIntoStatement struct {
 	baseStatement
 
@@ -240,7 +240,7 @@ func (n *InsertIntoStatement) String() string {
 	return "INSERT INTO"
 }
 
-// CTEs implements BlockNode.
+// CTE returns the WITH clause (CTE definitions) for the INSERT statement.
 func (n *InsertIntoStatement) CTE() *WithClause {
 	return n.with
 }
@@ -293,14 +293,14 @@ func (n *UpdateStatement) String() string {
 	return "UPDATE"
 }
 
-// CTEs implements BlockNode.
+// CTE returns the WITH clause (CTE definitions) for the UPDATE statement.
 func (n *UpdateStatement) CTE() *WithClause {
 	return n.with
 }
 
 var _ StatementNode = (*UpdateStatement)(nil)
 
-// DeleteStatement represents DELETE statement
+// DeleteFromStatement represents a DELETE FROM statement.
 type DeleteFromStatement struct {
 	baseStatement
 
@@ -345,7 +345,7 @@ func (n *DeleteFromStatement) String() string {
 	return "DELETE_FROM"
 }
 
-// CTEs implements BlockNode.
+// CTE returns the WITH clause (CTE definitions) for the DELETE statement.
 func (n *DeleteFromStatement) CTE() *WithClause {
 	return n.with
 }

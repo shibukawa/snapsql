@@ -19,8 +19,9 @@ var (
 type TokenType int
 
 const (
-	// --- Basic tokens ---
+	// EOF represents end of file token.
 	EOF TokenType = iota + 1
+	// WHITESPACE represents whitespace.
 	WHITESPACE
 
 	STRING            // string literals ('text')
@@ -37,145 +38,221 @@ const (
 	SEMICOLON         // ;
 	DOT               // .
 
-	// --- Comments ---
-	LINE_COMMENT  // -- line comment
-	BLOCK_COMMENT // /* block comment */ (including SnapSQL extensions)
+	// LINE_COMMENT represents a line comment starting with --.
+	LINE_COMMENT
+	// BLOCK_COMMENT represents a block comment including SnapSQL extensions.
+	BLOCK_COMMENT
 
-	// --- Arithmetic operators ---
-	PLUS     // +
-	MINUS    // -
+	// PLUS represents '+'.
+	PLUS // +
+	// MINUS represents '-'.
+	MINUS // -
+	// MULTIPLY represents '*'.
 	MULTIPLY // *
-	DIVIDE   // /
-	MODULO   // %
+	// DIVIDE represents '/'.
+	DIVIDE // /
+	// MODULO represents '%'.
+	MODULO // %
 
-	// --- Comparison operators ---
-	EQUAL         // =
-	NOT_EQUAL     // <>, !=
-	LESS_THAN     // <
-	GREATER_THAN  // >
-	LESS_EQUAL    // <=
+	// EQUAL represents '='.
+	EQUAL // =
+	// NOT_EQUAL represents '<>' or '!='.
+	NOT_EQUAL // <>, !=
+	// LESS_THAN represents '<'.
+	LESS_THAN // <
+	// GREATER_THAN represents '>'.
+	GREATER_THAN // >
+	// LESS_EQUAL represents '<='.
+	LESS_EQUAL // <=
+	// GREATER_EQUAL represents '>='.
 	GREATER_EQUAL // >=
 
-	// --- Special operators ---
-	JSON_OPERATOR // PostgreSQL JSON operators (->, ->>, #>, #>>)
+	// JSON_OPERATOR represents PostgreSQL JSON operators (->, ->>, #>, #>>).
+	JSON_OPERATOR
 
-	// --- Type cast ---
-	DOUBLE_COLON // :: (PostgreSQL cast)
+	// DOUBLE_COLON represents PostgreSQL type cast '::'.
+	DOUBLE_COLON
 
-	// --- Logical/conditional operators ---
-	AND     // AND keyword
-	OR      // OR keyword
-	NOT     // NOT keyword
-	IN      // IN keyword
-	EXISTS  // EXISTS keyword
+	// AND represents logical AND.
+	AND // AND keyword
+	// OR represents logical OR.
+	OR // OR keyword
+	// NOT represents logical NOT.
+	NOT // NOT keyword
+	// IN represents IN operator.
+	IN // IN keyword
+	// EXISTS represents EXISTS keyword.
+	EXISTS // EXISTS keyword
+	// BETWEEN represents BETWEEN operator.
 	BETWEEN // BETWEEN keyword
-	LIKE    // LIKE keyword
+	// LIKE represents LIKE operator.
+	LIKE // LIKE keyword
+	// SIMILAR represents SIMILAR keyword (PostgreSQL).
 	SIMILAR // SIMILAR keyword (PostgreSQL)
-	TO      // TO keyword (PostgreSQL)
-	REGEXP  // REGEXP keyword (MySQL/SQLite)
-	RLIKE   // RLIKE keyword (MySQL)
-	ILIKE   // ILIKE keyword (PostgreSQL)
-	IS      // IS keyword
-	NULL    // NULL keyword
+	// TO represents TO keyword (PostgreSQL).
+	TO // TO keyword (PostgreSQL)
+	// REGEXP represents REGEXP keyword (MySQL/SQLite).
+	REGEXP // REGEXP keyword (MySQL/SQLite)
+	// RLIKE represents RLIKE keyword (MySQL).
+	RLIKE // RLIKE keyword (MySQL)
+	// ILIKE represents ILIKE keyword (PostgreSQL).
+	ILIKE // ILIKE keyword (PostgreSQL)
+	// IS represents IS keyword.
+	IS // IS keyword
+	// NULL represents NULL keyword.
+	NULL // NULL keyword
 
-	// --- Typed literal tokens ---
-	DATE_LITERAL      // DATE '...'
-	TIMESTAMP_LITERAL // TIMESTAMP '...'
-	CAST              // CAST expression (CAST(... AS type))
+	// DATE_LITERAL represents DATE '...'.
+	DATE_LITERAL
+	// TIMESTAMP_LITERAL represents TIMESTAMP '...'.
+	TIMESTAMP_LITERAL
+	// CAST represents a CAST expression token.
+	CAST
 
-	// --- Window function related ---
-	OVER      // OVER keyword
-	PARTITION // PARTITION keyword
-	ORDER     // ORDER keyword
-	BY        // BY keyword
-	ROWS      // ROWS keyword
-	RANGE     // RANGE keyword
-	UNBOUNDED // UNBOUNDED keyword
-	PRECEDING // PRECEDING keyword
-	FOLLOWING // FOLLOWING keyword
-	CURRENT   // CURRENT keyword
-	ROW       // ROW keyword
+	// OVER represents OVER keyword.
+	OVER
+	// PARTITION represents PARTITION keyword.
+	PARTITION
+	// ORDER represents ORDER keyword in window context.
+	ORDER
+	// BY represents BY keyword in window context.
+	BY
+	// ROWS represents ROWS keyword.
+	ROWS
+	// RANGE represents RANGE keyword.
+	RANGE
+	// UNBOUNDED represents UNBOUNDED keyword.
+	UNBOUNDED
+	// PRECEDING represents PRECEDING keyword.
+	PRECEDING
+	// FOLLOWING represents FOLLOWING keyword.
+	FOLLOWING
+	// CURRENT represents CURRENT keyword.
+	CURRENT
+	// ROW represents ROW keyword.
+	ROW
 
-	// --- CTE related ---
-	WITH      // WITH keyword
-	RECURSIVE // RECURSIVE keyword
-	AS        // AS keyword
+	// WITH represents WITH keyword.
+	WITH
+	// RECURSIVE represents RECURSIVE keyword.
+	RECURSIVE
+	// AS represents AS keyword.
+	AS
 
-	// --- Select ---
+	// SELECT represents SELECT keyword.
 	SELECT // SELECT keyword
 
-	ALL      // ALL keyword
-	DISTINCT // DISTINCT keyword
+	// ALL represents ALL keyword.
+	ALL
+	// DISTINCT represents DISTINCT keyword.
+	DISTINCT
 
-	WHERE     // WHERE keyword
-	GROUP     // GROUP keyword
-	HAVING    // HAVING keyword
-	LIMIT     // LIMIT keyword
-	OFFSET    // OFFSET keyword
-	RETURNING // RETURNING keyword
+	// WHERE represents WHERE keyword.
+	WHERE
+	// GROUP represents GROUP keyword.
+	GROUP
+	// HAVING represents HAVING keyword.
+	HAVING
+	// LIMIT represents LIMIT keyword.
+	LIMIT
+	// OFFSET represents OFFSET keyword.
+	OFFSET
+	// RETURNING represents RETURNING keyword.
+	RETURNING
 
-	// --- Insert ---
+	// INSERT represents INSERT keyword.
+	INSERT
+	// INTO represents INTO keyword.
+	INTO
+	// VALUES represents VALUES keyword.
+	VALUES
 
-	INSERT // INSERT keyword
-	INTO   // INTO keyword
-	VALUES // VALUES keyword
+	// UPDATE represents UPDATE keyword.
+	UPDATE
+	// SET represents SET keyword.
+	SET
+	// ON represents ON keyword.
+	ON
+	// DUPLICATE represents DUPLICATE keyword.
+	DUPLICATE
+	// KEY represents KEY keyword.
+	KEY
+	// CONFLICT represents CONFLICT keyword.
+	CONFLICT
 
-	// --- Update ---
-	UPDATE    // UPDATE keyword
-	SET       // SET keyword
-	ON        // ON keyword
-	DUPLICATE // DUPLICATE keyword
-	KEY       // KEY keyword
-	CONFLICT  // CONFLICT keyword
+	// DELETE represents DELETE keyword.
+	DELETE
+	// FROM represents FROM keyword.
+	FROM
 
-	// --- Delete ---
-	DELETE // DELETE keyword
-	FROM   // FROM keyword
+	// FOR represents FOR row locking keyword.
+	FOR
+	// SHARE represents SHARE keyword.
+	SHARE
+	// NO represents NO keyword.
+	NO
+	// NOWAIT represents NOWAIT keyword.
+	NOWAIT
+	// SKIP represents SKIP keyword.
+	SKIP
+	// LOCKED represents LOCKED keyword.
+	LOCKED
 
-	// --- Row locking and concurrency control ---
-	FOR    // FOR keyword
-	SHARE  // SHARE keyword
-	NO     // NO keyword
-	NOWAIT // NOWAIT keyword
-	SKIP   // SKIP keyword
-	LOCKED // LOCKED keyword
+	// JOIN represents JOIN keyword.
+	JOIN
+	// INNER represents INNER keyword.
+	INNER
+	// OUTER represents OUTER keyword.
+	OUTER
+	// LEFT represents LEFT keyword.
+	LEFT
+	// RIGHT represents RIGHT keyword.
+	RIGHT
+	// FULL represents FULL keyword.
+	FULL
+	// CROSS represents CROSS keyword.
+	CROSS
+	// USING represents USING keyword for join conditions.
+	USING
+	// NATURAL represents NATURAL keyword for natural joins.
+	NATURAL
 
-	// --- Join ---
-	JOIN    // JOIN keyword
-	INNER   // INNER keyword
-	OUTER   // OUTER keyword
-	LEFT    // LEFT keyword
-	RIGHT   // RIGHT keyword
-	FULL    // FULL keyword
-	CROSS   // CROSS keyword
-	USING   // USING keyword (for join conditions)
-	NATURAL // NATURAL keyword (for natural joins)
+	// ASC represents ASC keyword.
+	ASC
+	// DESC represents DESC keyword.
+	DESC
+	// COLLATE represents COLLATE keyword.
+	COLLATE
 
-	// --- Order By ---
-	ASC     // ASC keyword
-	DESC    // DESC keyword
-	COLLATE // COLLATE keyword
+	// OTHER represents other complex expressions.
+	OTHER
+	// UNION represents UNION keyword.
+	UNION
 
-	// --- Others ---
-	OTHER // complex expressions, database-specific syntax
-	UNION // UNION keyword
+	// CASE represents CASE expression keyword.
+	CASE
+	// WHEN represents WHEN keyword.
+	WHEN
+	// THEN represents THEN keyword.
+	THEN
+	// ELSE represents ELSE keyword.
+	ELSE
+	// END represents END keyword.
+	END
 
-	// --- Expression ---
-	CASE // CASE expression
-	WHEN // WHEN keyword
-	THEN // THEN keyword
-	ELSE // ELSE keyword
-	END  // END keyword
-
-	// --- Group By ---
+	// ROLLUP represents ROLLUP keyword.
 	ROLLUP
+	// CUBE represents CUBE keyword.
 	CUBE
+	// GROUPING represents GROUPING keyword.
 	GROUPING
+	// SETS represents SETS keyword.
 	SETS
 
-	// --- Extended token types ---
-	CONTEXTUAL_IDENTIFIER // Non-reserved keyword used as identifier
-	RESERVED_IDENTIFIER   // Strictly reserved keyword used as identifier (quoted)
+	// CONTEXTUAL_IDENTIFIER represents a non-reserved word used as identifier.
+	CONTEXTUAL_IDENTIFIER
+	// RESERVED_IDENTIFIER represents a reserved word used as identifier.
+	RESERVED_IDENTIFIER
 )
 
 // String returns the string representation of TokenType
@@ -437,7 +514,7 @@ func (t Token) String() string {
 	return t.Type.String() + ": " + t.Value
 }
 
-// SnapSQL directive structure
+// Directive represents a SnapSQL inline directive extracted from comments.
 type Directive struct {
 	Type        string // "if", "elseif", "else", "for", "end", "const", "variable", "system_value"
 	NextIndex   int    // Index of next directive token in block chain (if->elseif->else->end, for->end)

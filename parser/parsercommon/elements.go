@@ -14,6 +14,7 @@ func (n FieldName) String() string {
 	return "FIELD"
 }
 
+// FieldType represents the classification of a SELECT field.
 type FieldType int
 
 const (
@@ -74,7 +75,7 @@ const (
 	JoinRight
 	JoinFull
 	JoinCross
-	// Natural join family (inspect mode only; generation mode treats it as invalid)
+	// JoinNatural and related constants represent NATURAL join variants (inspect mode only; generation treats them as invalid).
 	JoinNatural
 	JoinNaturalLeft
 	JoinNaturalRight
@@ -125,6 +126,7 @@ func (n TableReferenceForFrom) String() string {
 	return "TABLE_REF"
 }
 
+// TableReference represents a table name or alias information.
 type TableReference struct {
 	Name         string // Table name or alias (if present, otherwise original name)
 	SchemaName   string // Optional schema name (e.g., "schema.table")
@@ -132,6 +134,7 @@ type TableReference struct {
 	ExplicitName bool   // true if table name is explicitly specified (e.g., "AS alias")
 }
 
+// SetAssign represents a field assignment used in SET clause.
 type SetAssign struct {
 	FieldName string
 	Value     []tok.Token

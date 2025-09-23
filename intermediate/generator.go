@@ -251,7 +251,20 @@ func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parser
 		return nil, fmt.Errorf("pipeline execution failed: %w", err)
 	}
 
+	result.HasOrderedResult = statementHasOrderBy(stmt)
+
 	return result, nil
+}
+
+func statementHasOrderBy(stmt parsercommon.StatementNode) bool {
+	switch s := stmt.(type) {
+	case *parsercommon.SelectStatement:
+		return s.OrderBy != nil && len(s.OrderBy.Fields) > 0
+	case *parsercommon.InsertIntoStatement:
+		return s.OrderBy != nil && len(s.OrderBy.Fields) > 0
+	default:
+		return false
+	}
 }
 
 // extractParameterType extracts the type from a parameter value

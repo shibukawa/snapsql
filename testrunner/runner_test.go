@@ -163,3 +163,35 @@ func TestRunPatternMatching(t *testing.T) {
 	assert.True(t, runner.runPattern.MatchString("TestExampleTwo"))
 	assert.False(t, runner.runPattern.MatchString("TestOther"))
 }
+
+func TestFindTestPackagesWithIncludePaths(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	makePkg := func(dir string) string {
+		pkgDir := filepath.Join(projectRoot, dir)
+		require.NoError(t, os.MkdirAll(pkgDir, 0o755))
+		testFile := filepath.Join(pkgDir, "sample_test.go")
+		require.NoError(t, os.WriteFile(testFile, []byte("package main\nfunc TestSample(t *testing.T){}"), 0o644))
+
+		return testFile
+	}
+
+	testFileA := makePkg("pkgA")
+	_ = makePkg("pkgB/sub")
+
+	runner := NewTestRunner(projectRoot)
+
+	packagesAll, err := runner.findTestPackages()
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"./pkgA", "./pkgB/sub"}, packagesAll)
+
+	runner.SetIncludePaths([]string{filepath.Dir(testFileA)})
+	packagesDir, err := runner.findTestPackages()
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"./pkgA"}, packagesDir)
+
+	runner.SetIncludePaths([]string{testFileA})
+	packagesFile, err := runner.findTestPackages()
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"./pkgA"}, packagesFile)
+}

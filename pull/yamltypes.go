@@ -4,7 +4,7 @@ import (
 	"github.com/shibukawa/snapsql"
 )
 
-// YAML output structure for a single file (database_schema.yaml)
+// YAMLSingleFileSchema is the YAML output structure for a single database_schema.yaml file.
 type YAMLSingleFileSchema struct {
 	DatabaseInfo snapsql.DatabaseInfo `yaml:"database_info"`
 	Schemas      []YAMLSchema         `yaml:"schemas"`

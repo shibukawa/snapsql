@@ -13,9 +13,10 @@ import (
 
 // TestRunner manages test execution across the project
 type TestRunner struct {
-	projectRoot string
-	verbose     bool
-	runPattern  *regexp.Regexp
+	projectRoot  string
+	verbose      bool
+	runPattern   *regexp.Regexp
+	includePaths []string
 }
 
 // TestResult represents the result of a single test package
@@ -65,6 +66,25 @@ func (tr *TestRunner) SetRunPattern(pattern string) error {
 	tr.runPattern = regex
 
 	return nil
+}
+
+// SetIncludePaths restricts package discovery to the provided paths.
+func (tr *TestRunner) SetIncludePaths(paths []string) {
+	tr.includePaths = tr.includePaths[:0]
+
+	for _, p := range paths {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+
+		clean := p
+		if !filepath.IsAbs(clean) {
+			clean = filepath.Join(tr.projectRoot, clean)
+		}
+
+		clean = filepath.Clean(clean)
+		tr.includePaths = append(tr.includePaths, clean)
+	}
 }
 
 // RunAllTests executes all tests in the project
@@ -119,55 +139,55 @@ func (tr *TestRunner) RunAllTests(ctx context.Context) (*TestSummary, error) {
 
 // findTestPackages discovers all packages with test files
 func (tr *TestRunner) findTestPackages() ([]string, error) {
-	var packages []string
+	packages := make([]string, 0)
+	seen := make(map[string]struct{})
 
-	err := filepath.Walk(tr.projectRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	if len(tr.includePaths) == 0 {
+		if err := tr.collectTestPackages(tr.projectRoot, seen, &packages, true); err != nil {
+			return nil, err
 		}
 
-		// Skip vendor, .git, and other common directories
-		if info.IsDir() {
-			name := info.Name()
-			if name == "vendor" || name == ".git" || name == "node_modules" ||
-				strings.HasPrefix(name, ".") {
-				return filepath.SkipDir
-			}
+		return packages, nil
+	}
 
-			return nil
+	for _, p := range tr.includePaths {
+		if err := tr.collectTestPackages(p, seen, &packages, false); err != nil {
+			return nil, err
 		}
+	}
 
-		// Look for test files
-		if strings.HasSuffix(info.Name(), "_test.go") {
-			dir := filepath.Dir(path)
+	return packages, nil
+}
 
-			relDir, err := filepath.Rel(tr.projectRoot, dir)
-			if err != nil {
-				return err
-			}
-
-			// Convert to Go package path
-			pkgPath := "./" + filepath.ToSlash(relDir)
-
-			// Add to packages if not already present
-			found := false
-
-			for _, existing := range packages {
-				if existing == pkgPath {
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				packages = append(packages, pkgPath)
-			}
-		}
-
-		return nil
+func (tr *TestRunner) collectTestPackages(path string, seen map[string]struct{}, packages *[]string, allowSkipRoot bool) error {
+	return walkAndProcessFiles(path, allowSkipRoot, func(p string, info os.FileInfo) {
+		tr.maybeAddTestPackage(p, info, seen, packages)
 	})
+}
 
-	return packages, err
+func (tr *TestRunner) maybeAddTestPackage(path string, info os.FileInfo, seen map[string]struct{}, packages *[]string) {
+	if info.IsDir() {
+		return
+	}
+
+	if !strings.HasSuffix(info.Name(), "_test.go") {
+		return
+	}
+
+	dir := filepath.Dir(path)
+
+	relDir, err := filepath.Rel(tr.projectRoot, dir)
+	if err != nil || strings.HasPrefix(relDir, "..") {
+		return
+	}
+
+	pkgPath := "./" + filepath.ToSlash(relDir)
+	if _, ok := seen[pkgPath]; ok {
+		return
+	}
+
+	seen[pkgPath] = struct{}{}
+	*packages = append(*packages, pkgPath)
 }
 
 // runPackageTests executes tests for a single package
