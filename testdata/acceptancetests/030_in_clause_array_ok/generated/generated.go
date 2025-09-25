@@ -19,9 +19,8 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,16 +38,20 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("department_ids", cel.ListType(cel.IntType)),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetUsersByDepartments CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("department_ids", cel.ListType(cel.IntType)),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetUsersByDepartments CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getusersbydepartmentsPrograms = make([]cel.Program, 1)
@@ -69,6 +72,9 @@ func init() {
 func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departmentIds []int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getusersbydepartments", "sql.result")
 
@@ -88,7 +94,7 @@ func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, d
 	}
 
 	// Build SQL
-	query := "SELECT id, name FROM users WHERE department_id IN ($1, 2, 3)"
+	query := "SELECT id, name FROM users  WHERE department_id IN ($1, 2, 3)"
 	args := []any{
 		departmentIds,
 	}
@@ -99,7 +105,7 @@ func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, d
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 	    return result, fmt.Errorf("failed to execute query: %w", err)

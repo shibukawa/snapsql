@@ -1,1 +1,143 @@
-{"cel_environments":[{"index":0,"additional_variables":[]},{"index":1,"additional_variables":[{"name":"dept","type":"any"}]},{"index":2,"additional_variables":[{"name":"sub","type":"any"}]}],"cel_expressions":[{"id":"expr_001","expression":"departments","environment_index":0,"position":{"line":0,"column":0}},{"id":"expr_002","expression":"dept.sub_departments","environment_index":1,"position":{"line":0,"column":0}},{"id":"expr_003","expression":"dept.department_code + \"-\" + sub.id","environment_index":2,"position":{"line":0,"column":0}},{"id":"expr_004","expression":"sub.name","environment_index":2,"position":{"line":0,"column":0}},{"id":"expr_005","expression":"dept.department_code","environment_index":2,"position":{"line":0,"column":0}},{"id":"expr_006","expression":"dept.department_name","environment_index":2,"position":{"line":0,"column":0}}],"envs":[[],[{"name":"dept","type":"any"}],[{"name":"dept","type":"any"},{"name":"dept","type":"any"}],[{"name":"dept","type":"any"},{"name":"dept","type":"any"},{"name":"sub","type":"any"}]],"format_version":"1","function_name":"insert_all_sub_departments","instructions":[{"op":"EMIT_STATIC","pos":"14:1","value":"INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"},{"op":"LOOP_START","pos":"16:1","variable":"dept","collection_expr_index":0,"env_index":2},{"op":"LOOP_START","pos":"17:5","variable":"sub","collection_expr_index":1,"env_index":4},{"op":"EMIT_STATIC","pos":"18:5","value":"("},{"op":"EMIT_EVAL","pos":"18:6","expr_index":2},{"op":"EMIT_STATIC","pos":"18:55","value":","},{"op":"EMIT_EVAL","pos":"18:57","expr_index":3},{"op":"EMIT_STATIC","pos":"18:92","value":","},{"op":"EMIT_EVAL","pos":"18:94","expr_index":4},{"op":"EMIT_STATIC","pos":"18:124","value":","},{"op":"EMIT_EVAL","pos":"18:126","expr_index":5},{"op":"EMIT_STATIC","pos":"18:166","value":")"},{"op":"LOOP_END","pos":"19:5","env_index":2},{"op":"LOOP_END","pos":"20:1","env_index":0}],"parameters":[{"name":"departments","type":"any"}],"response_affinity":"none","responses":[{"name":"affected_rows","type":"int"}]}
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": []
+    },
+    {
+      "index": 1,
+      "additional_variables": [
+    {"name": "dept", "type": "any"}
+      ]
+    },
+    {
+      "index": 2,
+      "additional_variables": [
+        {"name": "sub", "type": "any"}
+      ]
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "departments",
+      "environment_index": 0,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_002",
+      "expression": "dept.sub_departments",
+      "environment_index": 1,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_003",
+      "expression": "dept.department_code + \"-\" + sub.id",
+      "environment_index": 2,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_004",
+      "expression": "sub.name",
+      "environment_index": 2,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_005",
+      "expression": "dept.department_code",
+      "environment_index": 2,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_006",
+      "expression": "dept.department_name",
+      "environment_index": 2,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    }
+  ],
+  "envs": [
+    [],
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      }
+    ],
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      },
+      {
+        "name": "dept",
+        "type": "any"
+      }
+    ],
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      },
+      {
+        "name": "dept",
+        "type": "any"
+      },
+      {
+        "name": "sub",
+        "type": "any"
+      }
+    ]
+  ],
+  "format_version": "1",
+  "function_name": "insert_all_sub_departments",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "14:1", "value": "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"},
+    {
+      "op": "LOOP_START",
+      "pos": "16:1",
+      "variable": "dept",
+      "collection_expr_index": 0,
+      "env_index": 2
+    },
+    {
+      "op": "LOOP_START",
+      "pos": "17:5",
+      "variable": "sub",
+      "collection_expr_index": 1,
+      "env_index": 4
+    },
+    {"op": "EMIT_STATIC", "pos": "18:5", "value": "("},
+    {"op": "EMIT_EVAL", "pos": "18:6", "expr_index": 2},
+    {"op": "EMIT_STATIC", "pos": "18:55", "value": ","},
+    {"op": "EMIT_EVAL", "pos": "18:57", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "18:92", "value": ","},
+    {"op": "EMIT_EVAL", "pos": "18:94", "expr_index": 4},
+    {"op": "EMIT_STATIC", "pos": "18:124", "value": ","},
+    {"op": "EMIT_EVAL", "pos": "18:126", "expr_index": 5},
+    {"op": "EMIT_STATIC", "pos": "18:166", "value": ")"},
+    {"op": "LOOP_END", "pos": "19:5", "env_index": 2},
+    {"op": "LOOP_END", "pos": "20:1", "env_index": 0}
+  ],
+  "parameters": [
+    {"name": "departments", "type": "any"}
+  ],
+  "response_affinity": "none"
+}

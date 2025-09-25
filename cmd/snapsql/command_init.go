@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 )
@@ -17,11 +18,23 @@ func (i *InitCmd) Run(ctx *Context) error {
 		color.Blue("Initializing SnapSQL project")
 	}
 
-	// Create project structure
+	// Detect if we are inside examples/kanban (special scaffolding for sample)
+	pwd, _ := os.Getwd()
+
+	var isKanban bool
+	if strings.Contains(filepath.ToSlash(pwd), "/examples/kanban") {
+		isKanban = true
+	}
+
+	// Create project structure (kanban uses internal/query as output)
 	dirs := []string{
 		"queries",
 		"constants",
-		"generated",
+	}
+	if isKanban {
+		dirs = append(dirs, filepath.Join("internal", "query"))
+	} else {
+		dirs = append(dirs, "generated")
 	}
 
 	for _, dir := range dirs {
@@ -35,8 +48,14 @@ func (i *InitCmd) Run(ctx *Context) error {
 		}
 	}
 
-	// Create sample configuration file
-	err := createSampleConfig()
+	// Create sample configuration file (kanban variant if in examples/kanban)
+	var err error
+	if isKanban {
+		err = createKanbanConfig()
+	} else {
+		err = createSampleConfig()
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create sample configuration: %w", err)
 	}
@@ -121,30 +140,55 @@ validation:
 	return writeFile("snapsql.yaml", configContent)
 }
 
+// createKanbanConfig writes a snapsql.yaml tailored for the kanban example with Go generator
+// output directed to internal/query and package name `query`.
+func createKanbanConfig() error {
+	// Build YAML with only spaces to ensure parser compatibility
+	var b strings.Builder
+	b.WriteString("dialect: \"sqlite\"\n")
+	b.WriteString("input_dir: \"./queries\"\n\n")
+	b.WriteString("generation:\n")
+	b.WriteString("  validate: true\n")
+	b.WriteString("  generators:\n")
+	b.WriteString("    json:\n")
+	b.WriteString("      output: \"./generated\"\n")
+	b.WriteString("      enabled: true\n")
+	b.WriteString("      preserve_hierarchy: true\n")
+	b.WriteString("      settings:\n")
+	b.WriteString("        pretty: true\n")
+	b.WriteString("        include_metadata: true\n")
+	b.WriteString("    go:\n")
+	b.WriteString("      output: \"./internal/query\"\n")
+	b.WriteString("      enabled: true\n")
+	b.WriteString("      preserve_hierarchy: true\n")
+	b.WriteString("      settings:\n")
+	b.WriteString("        package: \"query\"\n\n")
+	b.WriteString("system:\n")
+	b.WriteString("  fields:\n")
+	b.WriteString("    - name: created_at\n")
+	b.WriteString("      type: timestamp\n")
+	b.WriteString("      exclude_from_select: false\n")
+	b.WriteString("      on_insert:\n")
+	b.WriteString("        default: NOW()\n")
+	b.WriteString("    - name: updated_at\n")
+	b.WriteString("      type: timestamp\n")
+	b.WriteString("      exclude_from_select: false\n")
+	b.WriteString("      on_insert:\n")
+	b.WriteString("        default: NOW()\n")
+	b.WriteString("      on_update:\n")
+	b.WriteString("        default: NOW()\n")
+
+	return writeFile("snapsql.yaml", b.String())
+}
+
 func createSampleFiles() error {
 	// Create sample SQL template
-	sampleSQL := `-- Sample SnapSQL template
-SELECT 
-    id,
-    name,
-    /*# if include_email */
-    email,
-    /*# end */
-    created_at
-FROM users_/*= table_suffix */dev
-WHERE active = /*= filters.active */true
-    /*# if filters.departments */
-    AND department IN (/*= filters.departments */'engineering', 'design')
-    /*# end */
-ORDER BY created_at DESC
-LIMIT /*= pagination.limit */10
-OFFSET /*= pagination.offset */0;
-`
+	// (Kanban example) We don't create a default users query because the schema doesn't define users table.
+	// Leaving placeholder file creation out intentionally.
+	// If needed in future examples, add sample templates here.
+	// No query file written in this initialization step now.
 
-	err := writeFile(filepath.Join("queries", "users.snap.sql"), sampleSQL)
-	if err != nil {
-		return err
-	}
+	// No sample query file created; proceed to constants file creation.
 
 	// Create sample constants file
 	sampleConstants := `# Database constants

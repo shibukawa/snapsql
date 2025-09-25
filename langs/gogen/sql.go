@@ -52,6 +52,30 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 		parameterIndex = 1
 	)
 
+	// helper: 直前のパーツの末尾と次のパーツの先頭が共に単語/識別子の場合は間に空白を入れる
+	needsSpaceBetween := func(left, right string) bool {
+		if left == "" || right == "" {
+			return false
+		}
+		// 左の末尾が英数字/アンダースコア/閉じ括弧
+		le := left[len(left)-1]
+		// 先頭の空白をスキップ
+		k := 0
+		for k < len(right) && (right[k] == ' ' || right[k] == '\n' || right[k] == '\t') {
+			k++
+		}
+
+		if k >= len(right) {
+			return false
+		}
+
+		rs := right[k]
+		isWordTail := (le >= 'A' && le <= 'Z') || (le >= 'a' && le <= 'z') || (le >= '0' && le <= '9') || le == '_' || le == ')'
+		isWordHead := (rs >= 'A' && rs <= 'Z') || (rs >= 'a' && rs <= 'z') || rs == '_' || rs == '(' || rs == '$'
+
+		return isWordTail && isWordHead
+	}
+
 	for _, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
@@ -60,6 +84,13 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 			for strings.Contains(value, "?") {
 				value = strings.Replace(value, "?", fmt.Sprintf("$%d", parameterIndex), 1)
 				parameterIndex++
+			}
+			// WHERE/RETURNING の前に必ずスペースを入れる（既にスペースがある場合はそのまま）
+			value = strings.ReplaceAll(value, "WHERE", " WHERE")
+			value = strings.ReplaceAll(value, "RETURNING", " RETURNING")
+			// 直前のパーツと単語が連結してしまう場合のスペース付与
+			if len(sqlParts) > 0 && needsSpaceBetween(sqlParts[len(sqlParts)-1], value) {
+				sqlParts[len(sqlParts)-1] = sqlParts[len(sqlParts)-1] + " "
 			}
 
 			sqlParts = append(sqlParts, value)
@@ -128,7 +159,28 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	for _, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
-			code = append(code, fmt.Sprintf("builder.WriteString(%q)", inst.Value))
+			// WHERE/RETURNING の前にスペースを強制する
+			val := inst.Value
+			val = strings.ReplaceAll(val, "WHERE", " WHERE")
+			val = strings.ReplaceAll(val, "RETURNING", " RETURNING")
+			frag := fmt.Sprintf("%q", val)
+			// ひとつ前が単語で終わり、今回が単語で始まるなら、直前にスペースを追記する
+			code = append(code, fmt.Sprintf(`{ // safe append static with spacing
+	_frag := %s
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}`, frag))
 			code = append(code, "boundaryNeeded = true")
 
 		case "ADD_PARAM":

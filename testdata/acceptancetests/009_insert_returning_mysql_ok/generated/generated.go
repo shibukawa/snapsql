@@ -19,9 +19,8 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,17 +38,21 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_name", cel.StringType),
-		cel.Variable("user_email", cel.StringType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUserWithReturningMysql CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_name", cel.StringType),
+			cel.Variable("user_email", cel.StringType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertUserWithReturningMysql CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	insertuserwithreturningmysqlPrograms = make([]cel.Program, 2)
@@ -82,6 +85,9 @@ func init() {
 func InsertUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExecutor, userName string, userEmail string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuserwithreturningmysql", "sql.result")
 
@@ -101,7 +107,7 @@ func InsertUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 	}
 
 	// Build SQL
-	query := "INSERT INTO users (name, email, created_at) VALUES ($1,$2, NOW()) RETURNING id, name, email, created_at"
+	query := "INSERT INTO users (name, email, created_at) VALUES ($1,$2, NOW())  RETURNING id, name, email, created_at"
 	args := []any{
 		userName,
 		userEmail,
@@ -113,10 +119,11 @@ func InsertUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan single row
-	row := stmt.QueryRowContext(ctx, args...)
-	// Generic scan for interface{} result - not implemented
-	// This would require runtime reflection or predefined column mapping
+	// Execute statement (no response struct available)
+	_, err = stmt.ExecContext(ctx, args...)
+	if err != nil {
+	    return result, fmt.Errorf("failed to execute statement: %w", err)
+	}
 
 	return result, nil
 }

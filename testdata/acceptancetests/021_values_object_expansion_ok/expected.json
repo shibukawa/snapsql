@@ -1,1 +1,30 @@
-{"cel_environments":[{"index":0,"additional_variables":[]}],"cel_expressions":[{"id":"expr_001","expression":"user","environment_index":0,"position":{"line":0,"column":0}}],"format_version":"1","function_name":"insertUser","instructions":[{"op":"EMIT_STATIC","pos":"6:1","value":"INSERT INTO users (id, name, email) VALUES ("},{"op":"EMIT_EVAL","pos":"6:45","expr_index":0},{"op":"EMIT_STATIC","pos":"6:56","value":")"}],"parameters":[{"name":"user","type":"../testdata/acceptancetests/021_values_object_expansion_ok/User"}],"response_affinity":"none"}
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": []
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "user",
+      "environment_index": 0,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    }
+  ],
+  "format_version": "1",
+  "function_name": "insertUser",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "INSERT INTO users (id, name, email) VALUES ("},
+    {"op": "EMIT_EVAL", "pos": "6:45", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "6:56", "value": ")"}
+  ],
+  "parameters": [
+    {"name": "user", "type": "../testdata/acceptancetests/021_values_object_expansion_ok/User"}
+  ],
+  "response_affinity": "none"
+}

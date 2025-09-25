@@ -19,19 +19,12 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
-// GetUsersWithLimitOffsetResult represents the response structure for GetUsersWithLimitOffset
-type GetUsersWithLimitOffsetResult struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
-	Age int `json:"age"`
-}
 
 // GetUsersWithLimitOffset specific CEL programs and mock path
 var (
@@ -45,17 +38,21 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("min_age", cel.IntType),
-		cel.Variable("max_age", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetUsersWithLimitOffset CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("min_age", cel.IntType),
+			cel.Variable("max_age", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetUsersWithLimitOffset CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getuserswithlimitoffsetPrograms = make([]cel.Program, 2)
@@ -84,12 +81,15 @@ func init() {
 		getuserswithlimitoffsetPrograms[1] = program
 	}
 }
-// GetUsersWithLimitOffset - []GetUsersWithLimitOffsetResult Affinity
-func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, opts ...snapsqlgo.FuncOpt) ([]GetUsersWithLimitOffsetResult, error) {
-	var result []GetUsersWithLimitOffsetResult
+// GetUsersWithLimitOffset - sql.Result Affinity
+func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
+
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithlimitoffset", "[]getuserswithlimitoffsetresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithlimitoffset", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -98,16 +98,16 @@ func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor,
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[[]GetUsersWithLimitOffsetResult](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to []GetUsersWithLimitOffsetResult struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name, age FROM users WHERE age >=$1AND age <=$2LIMIT OFFSET "
+	query := "SELECT id, name, age FROM users  WHERE age >=$1 AND age <=$2 LIMIT OFFSET "
 	args := []any{
 		minAge,
 		maxAge,
@@ -119,29 +119,15 @@ func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor,
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 	    return result, fmt.Errorf("failed to execute query: %w", err)
 	}
 	defer rows.Close()
 	
-	for rows.Next() {
-	    var item GetUsersWithLimitOffsetResult
-	    err := rows.Scan(
-	        &item.Id,
-	        &item.Name,
-	        &item.Age
-	    )
-	    if err != nil {
-	        return result, fmt.Errorf("failed to scan row: %w", err)
-	    }
-	    result = append(result, item)
-	}
-	
-	if err = rows.Err(); err != nil {
-	    return result, fmt.Errorf("error iterating rows: %w", err)
-	}
+	// Generic scan for interface{} result - not implemented
+	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }

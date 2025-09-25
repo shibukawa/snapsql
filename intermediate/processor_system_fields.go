@@ -53,7 +53,7 @@ func CheckSystemFields(stmt StatementTypeProvider, config *snapsql.Config, param
 	// For INSERT statements, extract existing column names for explicit field validation
 	var existingColumns map[string]bool
 
-	if stmt.Type() == parser.SELECT_STATEMENT {
+	if stmt.Type() == parser.INSERT_INTO_STATEMENT {
 		if insertStmt, ok := stmt.(*parser.InsertIntoStatement); ok {
 			existingColumns = extractInsertColumnNames(insertStmt)
 		}
@@ -389,6 +389,12 @@ func AddSystemFieldsToUpdate(stmt parser.StatementNode, implicitParams []Implici
 
 // addSystemValueToSetClause adds a system value assignment to the SET clause
 func addSystemValueToSetClause(setClause *parser.SetClause, columnName string) {
+	// Guard: avoid duplicate insertion if already present
+	for _, a := range setClause.Assigns {
+		if a.FieldName == columnName {
+			return
+		}
+	}
 	// Create tokens for EMIT_SYSTEM_VALUE(column_name)
 	valueTokens := []tok.Token{
 		{Type: tok.IDENTIFIER, Value: "EMIT_SYSTEM_VALUE"},

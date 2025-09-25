@@ -19,25 +19,12 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
-type GetUserWithJobsResultJobs struct {
-	ID int `json:"id"`
-	Title string `json:"title"`
-	Company string `json:"company"`
-}
-// GetUserWithJobsResult represents the response structure for GetUserWithJobs
-type GetUserWithJobsResult struct {
-	Jobs []GetUserWithJobsResultJobs `json:"jobs"`
-	Uid int `json:"u.id"`
-	Uname string `json:"u.name"`
-	Uemail string `json:"u.email"`
-}
 
 // GetUserWithJobs specific CEL programs and mock path
 var (
@@ -47,69 +34,24 @@ var (
 const getuserwithjobsMockPath = ""
 
 func init() {
-	// Static accessor functions for each type
-	getuserwithjobsresultjobsCompanyAccessor := func(value interface{}) ref.Val {
-		v := value.(*GetUserWithJobsResultJobs)
-		return snapsqlgo.ConvertGoValueToCEL(v.Company)
-	}
-	getuserwithjobsresultjobsIDAccessor := func(value interface{}) ref.Val {
-		v := value.(*GetUserWithJobsResultJobs)
-		return snapsqlgo.ConvertGoValueToCEL(v.ID)
-	}
-	getuserwithjobsresultjobsTitleAccessor := func(value interface{}) ref.Val {
-		v := value.(*GetUserWithJobsResultJobs)
-		return snapsqlgo.ConvertGoValueToCEL(v.Title)
-	}
-
-	// Create type definitions for local type store
-	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
-		"GetUserWithJobsResultJobs": {
-			"company": snapsqlgo.CreateFieldInfo(
-				"company", 
-				types.StringType, 
-				getuserwithjobsresultjobsCompanyAccessor,
-			),
-			"id": snapsqlgo.CreateFieldInfo(
-				"id", 
-				types.IntType, 
-				getuserwithjobsresultjobsIDAccessor,
-			),
-			"title": snapsqlgo.CreateFieldInfo(
-				"title", 
-				types.StringType, 
-				getuserwithjobsresultjobsTitleAccessor,
-			),
-		},
-	}
-
-	// Create and set up local type store
-	registry := snapsqlgo.NewLocalTypeRegistry()
-	for typeName, fields := range typeDefinitions {
-		structInfo := &snapsqlgo.StructInfo{
-			Name:    typeName,
-			CelType: types.NewObjectType(typeName),
-			Fields:  fields,
-		}
-		registry.RegisterStruct(typeName, structInfo)
-	}
-	
-	// Set global registry for nested type resolution
-	snapsqlgo.SetGlobalRegistry(registry)
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
-		cel.Variable("user_id", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetUserWithJobs CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_id", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetUserWithJobs CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getuserwithjobsPrograms = make([]cel.Program, 1)
@@ -126,12 +68,15 @@ func init() {
 		getuserwithjobsPrograms[0] = program
 	}
 }
-// GetUserWithJobs - GetUserWithJobsResult Affinity
-func GetUserWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (GetUserWithJobsResult, error) {
-	var result GetUserWithJobsResult
+// GetUserWithJobs - sql.Result Affinity
+func GetUserWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
+
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserwithjobs", "getuserwithjobsresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserwithjobs", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -140,16 +85,16 @@ func GetUserWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, userID 
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[GetUserWithJobsResult](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to GetUserWithJobsResult struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT u.id, u.name, u.email, j.id AS jobs__id, j.title AS jobs__title, j.company AS jobs__company FROM users u LEFT JOIN jobs j ON u.id = j.user_id WHERE u.id =$1"
+	query := "SELECT u.id, u.name, u.email, j.id AS jobs__id, j.title AS jobs__title, j.company AS jobs__company FROM users u LEFT JOIN jobs j ON u.id = j.user_id  WHERE u.id =$1"
 	args := []any{
 		userID,
 	}
@@ -160,17 +105,15 @@ func GetUserWithJobs(ctx context.Context, executor snapsqlgo.DBExecutor, userID 
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan single row
-	row := stmt.QueryRowContext(ctx, args...)
-	err = row.Scan(
-	    &result.Jobs,
-	    &result.Uid,
-	    &result.Uname,
-	    &result.Uemail
-	)
+	// Execute query and scan multiple rows (many affinity)
+	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to scan row: %w", err)
+	    return result, fmt.Errorf("failed to execute query: %w", err)
 	}
+	defer rows.Close()
+	
+	// Generic scan for interface{} result - not implemented
+	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }

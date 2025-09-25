@@ -19,9 +19,9 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,27 +39,35 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 2)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("users", cel.ListType(types.NewObjectType("User"))),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("users", cel.ListType(types.NewObjectType("User"))),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 	// Environment 1: Base environment
-	env1, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 1: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user", cel.AnyType),
+		}
+		env1, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 1: %v", err))
+		}
+		celEnvironments[1] = env1
 	}
-	celEnvironments[1] = env1
 
 	// Create programs for each expression using the corresponding environment
 	insertusertagsPrograms = make([]cel.Program, 3)
@@ -104,6 +112,9 @@ func init() {
 func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []User, user interface{}, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertusertags", "sql.result")
 
@@ -129,7 +140,22 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 	paramMap := map[string]interface{}{
 	    "users": users,
 	}
-	builder.WriteString("INSERT INTO user_tags (user_id, tag) VALUES")
+	{ // safe append static with spacing
+	_frag := "INSERT INTO user_tags (user_id, tag) VALUES"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// FOR loop: evaluate collection expression 0
 	collectionResult0, err := insertusertagsPrograms[0].Eval(paramMap)
@@ -139,7 +165,22 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 	collection0 := collectionResult0.Value().([]interface{})
 	for _, userLoopVar := range collection0 {
 	    paramMap["user"] = userLoopVar
-	builder.WriteString("(?")
+	{ // safe append static with spacing
+	_frag := "(?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 1
 	result, err := insertusertagsPrograms[1].Eval(paramMap)
@@ -147,7 +188,22 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString(",?")
+	{ // safe append static with spacing
+	_frag := ",?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 2
 	result, err := insertusertagsPrograms[2].Eval(paramMap)
@@ -155,7 +211,22 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString(")")
+	{ // safe append static with spacing
+	_frag := ")"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	}
 	

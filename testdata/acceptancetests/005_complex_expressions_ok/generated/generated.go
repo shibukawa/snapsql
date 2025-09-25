@@ -19,19 +19,13 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
-// GetComplexDataResult represents the response structure for GetComplexData
-type GetComplexDataResult struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
-	Field interface{} `json:"field"`
-}
 
 // GetComplexData specific CEL programs and mock path
 var (
@@ -45,24 +39,28 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_id", cel.IntType),
-		cel.Variable("username", cel.StringType),
-		cel.Variable("display_name", cel.BoolType),
-		cel.Variable("start_date", cel.StringType),
-		cel.Variable("end_date", cel.StringType),
-		cel.Variable("sort_field", cel.StringType),
-		cel.Variable("sort_direction", cel.StringType),
-		cel.Variable("page_size", cel.IntType),
-		cel.Variable("page", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetComplexData CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_id", cel.IntType),
+			cel.Variable("username", cel.StringType),
+			cel.Variable("display_name", cel.BoolType),
+			cel.Variable("start_date", cel.StringType),
+			cel.Variable("end_date", cel.StringType),
+			cel.Variable("sort_field", cel.StringType),
+			cel.Variable("sort_direction", cel.StringType),
+			cel.Variable("page_size", cel.IntType),
+			cel.Variable("page", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetComplexData CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getcomplexdataPrograms = make([]cel.Program, 7)
@@ -151,12 +149,15 @@ func init() {
 		getcomplexdataPrograms[6] = program
 	}
 }
-// GetComplexData - []GetComplexDataResult Affinity
-func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, username string, displayName bool, startDate string, endDate string, sortField string, sortDirection string, pageSize int, page int, opts ...snapsqlgo.FuncOpt) ([]GetComplexDataResult, error) {
-	var result []GetComplexDataResult
+// GetComplexData - sql.Result Affinity
+func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, username string, displayName bool, startDate string, endDate string, sortField string, sortDirection string, pageSize int, page int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
+
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomplexdata", "[]getcomplexdataresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomplexdata", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -165,9 +166,9 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[[]GetComplexDataResult](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to []GetComplexDataResult struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
@@ -188,7 +189,22 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	    "page_size": pageSize,
 	    "page": page,
 	}
-	builder.WriteString("SELECT id, name,?")
+	{ // safe append static with spacing
+	_frag := "SELECT id, name,?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 0
 	result, err := getcomplexdataPrograms[0].Eval(paramMap)
@@ -196,7 +212,22 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString("FROM users WHERE")
+	{ // safe append static with spacing
+	_frag := "FROM users  WHERE"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// IF condition: expression 1
 	condResult, err := getcomplexdataPrograms[1].Eval(paramMap)
@@ -204,7 +235,22 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	    return result, fmt.Errorf("failed to evaluate condition: %w", err)
 	}
 	if condResult.Value().(bool) {
-	builder.WriteString("created_at BETWEEN?")
+	{ // safe append static with spacing
+	_frag := "created_at BETWEEN?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 2
 	result, err := getcomplexdataPrograms[2].Eval(paramMap)
@@ -216,7 +262,22 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	    builder.WriteString("AND")
 	}
 	boundaryNeeded = true
-	builder.WriteString("?")
+	{ // safe append static with spacing
+	_frag := "?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 3
 	result, err := getcomplexdataPrograms[3].Eval(paramMap)
@@ -225,7 +286,22 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	}
 	args = append(args, result.Value())
 	}
-	builder.WriteString("ORDER BY?")
+	{ // safe append static with spacing
+	_frag := "ORDER BY?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 4
 	result, err := getcomplexdataPrograms[4].Eval(paramMap)
@@ -234,7 +310,22 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	}
 	args = append(args, result.Value())
 	boundaryNeeded = false
-	builder.WriteString("LIMIT OFFSET ")
+	{ // safe append static with spacing
+	_frag := "LIMIT OFFSET "
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	
 	query := builder.String()
@@ -245,29 +336,15 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 	    return result, fmt.Errorf("failed to execute query: %w", err)
 	}
 	defer rows.Close()
 	
-	for rows.Next() {
-	    var item GetComplexDataResult
-	    err := rows.Scan(
-	        &item.Id,
-	        &item.Name,
-	        &item.Field
-	    )
-	    if err != nil {
-	        return result, fmt.Errorf("failed to scan row: %w", err)
-	    }
-	    result = append(result, item)
-	}
-	
-	if err = rows.Err(); err != nil {
-	    return result, fmt.Errorf("error iterating rows: %w", err)
-	}
+	// Generic scan for interface{} result - not implemented
+	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }

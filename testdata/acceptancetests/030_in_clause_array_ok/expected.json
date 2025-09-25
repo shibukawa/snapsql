@@ -1,1 +1,41 @@
-{"cel_environments":[{"index":0,"additional_variables":[]}],"cel_expressions":[{"id":"expr_001","expression":"department_ids","environment_index":0,"position":{"line":0,"column":0}}],"format_version":"1","function_name":"getUsersByDepartments","instructions":[{"op":"EMIT_STATIC","pos":"6:1","value":"SELECT id, name FROM users WHERE department_id IN ("},{"op":"EMIT_EVAL","pos":"6:52","expr_index":0},{"op":"EMIT_STATIC","pos":"6:74","value":", 2, 3)"},{"op":"IF_SYSTEM_LIMIT","pos":"0:0"},{"op":"EMIT_STATIC","pos":"0:0","value":" LIMIT "},{"op":"EMIT_SYSTEM_LIMIT","pos":"0:0"},{"op":"END","pos":"0:0"},{"op":"IF_SYSTEM_OFFSET","pos":"0:0"},{"op":"EMIT_STATIC","pos":"0:0","value":" OFFSET "},{"op":"EMIT_SYSTEM_OFFSET","pos":"0:0"},{"op":"END","pos":"0:0"}],"parameters":[{"name":"department_ids","type":"int[]"}],"response_affinity":"many"}
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": []
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "department_ids",
+      "environment_index": 0,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    }
+  ],
+  "format_version": "1",
+  "function_name": "getUsersByDepartments",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name FROM users WHERE department_id IN ("},
+    {"op": "EMIT_EVAL", "pos": "6:52", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "6:74", "value": ", 2, 3)"},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
+  ],
+  "parameters": [
+    {
+      "name": "department_ids",
+      "type": "int[]"
+    }
+  ],
+  "response_affinity": "many"
+}

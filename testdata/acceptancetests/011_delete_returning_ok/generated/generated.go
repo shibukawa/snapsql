@@ -19,9 +19,8 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,16 +38,20 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_id", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create DeleteUserWithReturning CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_id", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create DeleteUserWithReturning CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	deleteuserwithreturningPrograms = make([]cel.Program, 1)
@@ -69,6 +72,9 @@ func init() {
 func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteuserwithreturning", "sql.result")
 
@@ -88,7 +94,7 @@ func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 	}
 
 	// Build SQL
-	query := "DELETE FROM users WHERE id =$1RETURNING id, name, email"
+	query := "DELETE FROM users  WHERE id =$1  RETURNING id, name, email"
 	args := []any{
 		userID,
 	}
@@ -99,7 +105,7 @@ func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 	    return result, fmt.Errorf("failed to execute query: %w", err)

@@ -17,13 +17,14 @@ import (
 
 // Generator generates Go code from intermediate format
 type Generator struct {
-	PackageName string
-	OutputPath  string
-	Format      *intermediate.IntermediateFormat
-	MockPath    string
-	Dialect     string         // Target database dialect (postgres, mysql, sqlite)
-	Hierarchy   *FileHierarchy // File hierarchy information (optional)
-	BaseImport  string         // Base import path for hierarchical packages
+	PackageName       string
+	OutputPath        string
+	Format            *intermediate.IntermediateFormat
+	MockPath          string
+	Dialect           string                  // Target database dialect (postgres, mysql, sqlite)
+	Hierarchy         *FileHierarchy          // File hierarchy information (optional)
+	BaseImport        string                  // Base import path for hierarchical packages
+	hierarchicalMetas []*hierarchicalNodeMeta // internal: prepared metas for hierarchical aggregation
 }
 
 // Option is a function that configures Generator
@@ -91,6 +92,9 @@ func New(format *intermediate.IntermediateFormat, opts ...Option) *Generator {
 
 // Generate generates Go code and writes it to the writer
 func (g *Generator) Generate(w io.Writer) error {
+	// Reset per-file state to avoid leaking hierarchical metas across files
+	g.hierarchicalMetas = nil
+
 	// Process CEL environments
 	celEnvs, err := processCELEnvironments(g.Format)
 	if err != nil {
@@ -138,6 +142,15 @@ func (g *Generator) Generate(w io.Writer) error {
 		}
 
 		structDefinitions = append(structDefinitions, hierarchicalStructs...)
+
+		// Build metadata for future hierarchical aggregation code generation (now injected into template for static expansion later)
+		metas, metaErr := buildHierarchicalNodeMetas(g.Format.FunctionName, g.Format.Responses)
+		if metaErr != nil {
+			fmt.Printf("[warn] hierarchical meta build skipped: %v\n", metaErr)
+		} else {
+			// Attach metas to generator for template usage
+			g.hierarchicalMetas = metas
+		}
 	}
 
 	// Generate type registrations for custom types
@@ -150,7 +163,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	}
 
 	// Process query execution
-	queryExecution, err := generateQueryExecution(g.Format, responseStruct)
+	queryExecution, err := generateQueryExecution(g.Format, responseStruct, g.hierarchicalMetas)
 	if err != nil {
 		return fmt.Errorf("failed to generate query execution: %w", err)
 	}
@@ -187,6 +200,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		ImportSlice       []string
 		NumCELEnvs        int
 		NumCELPrograms    int
+		HierarchicalMetas []*hierarchicalNodeMeta
 	}{
 		Timestamp:         time.Now(),
 		PackageName:       g.PackageName,
@@ -208,6 +222,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		NumCELEnvs:        len(g.Format.CELEnvironments),
 		NumCELPrograms:    len(g.Format.CELExpressions),
 		Imports:           make(map[string]struct{}),
+		HierarchicalMetas: g.hierarchicalMetas,
 	}
 
 	// Collect imports from all environments
@@ -225,6 +240,27 @@ func (g *Generator) Generate(w io.Writer) error {
 		}
 	}
 
+	// Add time import if any struct field uses time.Time
+	if data.ResponseStruct != nil {
+		for _, f := range data.ResponseStruct.Fields {
+			if strings.Contains(f.Type, "time.Time") {
+				data.Imports["time"] = struct{}{}
+				break
+			}
+		}
+	}
+
+	// Add time/decimal imports if appear in struct definitions
+	for _, def := range structDefinitions {
+		if strings.Contains(def, "time.Time") {
+			data.Imports["time"] = struct{}{}
+		}
+
+		if strings.Contains(def, "decimal.Decimal") {
+			data.Imports["github.com/shopspring/decimal"] = struct{}{}
+		}
+	}
+
 	// Convert imports map to slice for template
 	var importSlice []string
 	for imp := range data.Imports {
@@ -238,6 +274,11 @@ func (g *Generator) Generate(w io.Writer) error {
 		"toLower":  strings.ToLower,
 		"backtick": func() string { return "`" },
 		"title":    cases.Title(language.English).String,
+		"needStringsImport": func(isStatic bool, metas []*hierarchicalNodeMeta) bool {
+			// strings is only necessary for dynamic SQL builder (non-static).
+			// Hierarchical metas do not require strings import on their own.
+			return !isStatic
+		},
 		"isSystemColumn": func(paramName string) bool {
 			systemColumns := []string{"created_at", "updated_at", "created_by", "updated_by", "version"}
 			for _, col := range systemColumns {
@@ -248,10 +289,25 @@ func (g *Generator) Generate(w io.Writer) error {
 
 			return false
 		},
+		"hasAnySystemParam": func(names []string) bool {
+			systemColumns := map[string]struct{}{"created_at": {}, "updated_at": {}, "created_by": {}, "updated_by": {}, "version": {}}
+			for _, n := range names {
+				if _, ok := systemColumns[n]; ok {
+					return true
+				}
+			}
+
+			return false
+		},
 		"celTypeConvert": func(typeName string) string {
 			// Handle array types
 			if strings.HasPrefix(typeName, "[]") {
 				elementType := strings.TrimPrefix(typeName, "[]")
+				// Drop pointer for element types in CEL object representation
+				if strings.HasPrefix(elementType, "*") {
+					elementType = strings.TrimPrefix(elementType, "*")
+				}
+
 				elementCELType := convertSingleType(elementType)
 
 				return fmt.Sprintf("types.NewListType(%s)", elementCELType)
@@ -287,16 +343,30 @@ func (g *Generator) Generate(w io.Writer) error {
 				return fmt.Sprintf("types.NewObjectType(\"%s\")", typeName)
 			}
 		},
+		// celNameToGoName はテンプレート内で Raw なフィールド名 (snake_case) を単回変換するときのみ使用。
+		// responseStruct.Fields には既に PascalCase 済み Name が入っているため再適用しないこと。
 		"celNameToGoName": func(celName string) string {
+			if strings.Contains(celName, "__") { // 階層用は末端のみ変換
+				segs := strings.Split(celName, "__")
+				last := segs[len(segs)-1]
+				celName = last
+			}
+
 			parts := strings.Split(celName, "_")
 			caser := cases.Title(language.English)
 
 			for i, part := range parts {
 				if part == "id" {
 					parts[i] = "ID"
-				} else {
-					parts[i] = caser.String(part)
+					continue
 				}
+
+				if part == "url" {
+					parts[i] = "URL"
+					continue
+				}
+
+				parts[i] = caser.String(part)
 			}
 
 			return strings.Join(parts, "")
@@ -489,12 +559,15 @@ func convertToGoType(snapType string) (string, error) {
 	case "bool":
 		return "bool", nil
 	case "float", "float32", "float64":
-		return snapType, nil
+		// Normalize all float variants to Go's float64
+		return "float64", nil
 	case "decimal":
 		return "decimal.Decimal", nil
 	case "*decimal.decimal":
 		return "*decimal.Decimal", nil
 	case "timestamp", "date", "time", "time.time":
+		return "time.Time", nil
+	case "datetime":
 		return "time.Time", nil
 	case "*time.time":
 		return "*time.Time", nil
@@ -515,33 +588,28 @@ func convertToGoType(snapType string) (string, error) {
 // processResponseType determines the response type based on response affinity and responses
 func processResponseType(format *intermediate.IntermediateFormat) (string, error) {
 	if len(format.Responses) == 0 {
-		// No response fields - return sql.Result for INSERT/UPDATE/DELETE statements
+		// No response fields -> plain write without RETURNING
 		return "sql.Result", nil
 	}
 
-	// Check for hierarchical structure
+	// Rely solely on pipeline-determined ResponseAffinity (generator no longer mutates it)
 	hierarchicalGroups, _, err := detectHierarchicalStructure(format.Responses)
 	if err != nil {
 		return "", fmt.Errorf("failed to detect hierarchical structure: %w", err)
 	}
 
 	structName := generateStructName(format.FunctionName)
-
 	if len(hierarchicalGroups) > 0 {
-		// Hierarchical response
 		switch format.ResponseAffinity {
 		case "one":
 			return structName, nil
 		case "many":
 			return "[]" + structName, nil
-		case "none":
-			return "interface{}", nil
 		default:
 			return structName, nil
 		}
 	}
 
-	// Regular flat response
 	switch format.ResponseAffinity {
 	case "one":
 		return structName, nil
@@ -553,6 +621,10 @@ func processResponseType(format *intermediate.IntermediateFormat) (string, error
 		return structName, nil
 	}
 }
+
+// hasReturningClause performs a lightweight detection of RETURNING in the SQL build instructions.
+// It checks emitted static fragments for the keyword. This mirrors logic in query_execution.go.
+// hasReturningClause removed: pipeline decides affinity; local heuristic deleted.
 
 // generateStructName generates a struct name from function name
 func generateStructName(functionName string) string {
@@ -577,6 +649,8 @@ func generateStructName(functionName string) string {
 type responseStructData struct {
 	Name   string
 	Fields []responseFieldData
+	// RawResponses keeps original intermediate.Response slice for advanced generation (hierarchical, PK, etc.)
+	RawResponses []intermediate.Response
 }
 
 // responseFieldData represents a field in a response struct
@@ -610,6 +684,8 @@ func processResponseStruct(format *intermediate.IntermediateFormat) (*responseSt
 			return nil, fmt.Errorf("failed to generate hierarchical structs: %w", err)
 		}
 
+		mainStruct.RawResponses = format.Responses
+
 		return mainStruct, nil
 	}
 
@@ -631,16 +707,17 @@ func processResponseStruct(format *intermediate.IntermediateFormat) (*responseSt
 		}
 
 		fields[i] = responseFieldData{
-			Name:      celNameToGoName(response.Name), // Convert snake_case to PascalCase
+			Name:      celNameToGoName(response.Name), // 一度だけ変換
 			Type:      goType,
-			JSONTag:   response.Name, // Keep original snake_case for JSON tags
+			JSONTag:   response.Name,
 			IsPointer: isPointer,
 		}
 	}
 
 	return &responseStructData{
-		Name:   structName,
-		Fields: fields,
+		Name:         structName,
+		Fields:       fields,
+		RawResponses: format.Responses,
 	}, nil
 }
 
@@ -812,9 +889,22 @@ func processImplicitParameters(format *intermediate.IntermediateFormat) ([]impli
 	var implicitParams []implicitParam
 
 	for _, param := range format.ImplicitParameters {
-		goType, err := convertTypeToGo(param.Type)
+		ptype := param.Type
+		if ptype == "" {
+			// Fallback by convention for common system fields when type is missing
+			switch param.Name {
+			case "created_at", "updated_at":
+				ptype = "timestamp"
+			case "created_by", "updated_by":
+				ptype = "string"
+			default:
+				ptype = "any"
+			}
+		}
+
+		goType, err := convertTypeToGo(ptype)
 		if err != nil {
-			return nil, newUnsupportedTypeError(param.Type, fmt.Sprintf("implicit parameter '%s'", param.Name))
+			return nil, newUnsupportedTypeError(ptype, fmt.Sprintf("implicit parameter '%s'", param.Name))
 		}
 
 		// Determine if parameter is required (no default value and not nullable)
@@ -893,14 +983,29 @@ package {{ .PackageName }}
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	{{- /* strings is needed only for dynamic SQL builder outputs or when join operations are emitted */}}
+	{{- if not .SQLBuilder.IsStatic }}
 	"strings"
+	{{- end }}
+	{{- /* database/sql only when used in response type */}}
+	{{- if eq .ResponseType "sql.Result" }}
+	"database/sql"
+	{{- end }}
+	{{- /* bring in snapsql root when hierarchical aggregation path or query execution requires it */}}
+	{{- if or (gt (len .HierarchicalMetas) 0) (.QueryExecution.NeedsSnapsqlImport) }}
+	"github.com/shibukawa/snapsql"
+	{{- end }}
 	{{- range .ImportSlice }}
 	"{{ . }}"
 	{{- end }}
 
 	"github.com/google/cel-go/cel"
+	{{- /* types/ref are needed when type definitions exist or CreateCELOptionsWithTypes is used */}}
+	{{- if .TypeDefinitions }}
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
+	{{- end }}
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 {{- range .StructDefinitions }}
@@ -911,7 +1016,7 @@ import (
 // {{ .ResponseStruct.Name }} represents the response structure for {{ .FunctionName }}
 type {{ .ResponseStruct.Name }} struct {
 	{{- range .ResponseStruct.Fields }}
-	{{ .Name | celNameToGoName }} {{ .Type }} {{backtick}}json:"{{ .JSONTag }}"{{backtick}}
+	{{ .Name }} {{ .Type }} {{backtick}}json:"{{ .JSONTag }}"{{backtick}}
 	{{- end }}
 }
 {{- end }}
@@ -953,14 +1058,9 @@ func init() {
 	// Create and set up local type store
 	registry := snapsqlgo.NewLocalTypeRegistry()
 	for typeName, fields := range typeDefinitions {
-		structInfo := &snapsqlgo.StructInfo{
-			Name:    typeName,
-			CelType: types.NewObjectType(typeName),
-			Fields:  fields,
-		}
-		registry.RegisterStruct(typeName, structInfo)
+		registry.RegisterStructWithFields(typeName, fields)
 	}
-	
+    
 	// Set global registry for nested type resolution
 	snapsqlgo.SetGlobalRegistry(registry)
 	{{- end }}
@@ -970,21 +1070,25 @@ func init() {
 	
 	{{- range .CELEnvironments }}
 	// Environment {{ .Index }}: Base environment
-	env{{ .Index }}, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			{{- range .Variables }}
+			cel.Variable("{{ .Name }}", cel.{{ .CelType }}),
+			{{- end }}
+		}
 		{{- if $.TypeDefinitions }}
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
+		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
 		{{- end }}
-		{{- range .Variables }}
-		cel.Variable("{{ .Name }}", cel.{{ .CelType }}),
-		{{- end }}
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create {{ $.FunctionName }} CEL environment {{ .Index }}: %v", err))
+		env{{ .Index }}, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create {{ $.FunctionName }} CEL environment {{ .Index }}: %v", err))
+		}
+		celEnvironments[{{ .Index }}] = env{{ .Index }}
 	}
-	celEnvironments[{{ .Index }}] = env{{ .Index }}
 	{{- end }}
 
 	// Create programs for each expression using the corresponding environment
@@ -1014,6 +1118,9 @@ func init() {
 func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- range .Parameters }}, {{ .Name }} {{ .Type }}{{- end }}, opts ...snapsqlgo.FuncOpt) ({{ .ResponseType }}, error) {
 	var result {{ .ResponseType }}
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: {{ if .HierarchicalMetas }}{{ len .HierarchicalMetas }}{{ else }}0{{ end }}
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "{{ .LowerFuncName }}", "{{ .ResponseType | toLower }}")
 
@@ -1032,7 +1139,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 		return result, nil
 	}
 
-	{{- if .ImplicitParams }}
+	{{- if and .ImplicitParams (hasAnySystemParam .SQLBuilder.ParameterNames) }}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{{- range .ImplicitParams }}
@@ -1040,6 +1147,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 		{{- end }}
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
+	_ = systemValues // avoid unused if not referenced in args
 	{{- end }}
 
 	// Build SQL

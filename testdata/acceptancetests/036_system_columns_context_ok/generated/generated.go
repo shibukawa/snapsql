@@ -19,9 +19,8 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,17 +38,21 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("name", cel.StringType),
-		cel.Variable("email", cel.StringType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create Input CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("name", cel.StringType),
+			cel.Variable("email", cel.StringType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create Input CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	inputPrograms = make([]cel.Program, 2)
@@ -82,6 +85,9 @@ func init() {
 func Input(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "input", "sql.result")
 
@@ -107,6 +113,7 @@ func Input(ctx context.Context, executor snapsqlgo.DBExecutor, name string, emai
 		{Name: "version", Type: "int", Required: false, DefaultValue: 1},
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
+	_ = systemValues // avoid unused if not referenced in args
 
 	// Build SQL
 	query := "INSERT INTO users (name, email, created_at, updated_at, created_by, version) VALUES ($1,$2, $3, $4, $5, $6)"

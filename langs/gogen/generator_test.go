@@ -6,6 +6,27 @@ import (
 	"testing"
 )
 
+func TestConvertToGoTypeFloatNormalization(t *testing.T) {
+	cases := []struct {
+		in  string
+		out string
+	}{
+		{"float", "float64"},
+		{"float32", "float64"},
+		{"float64", "float64"},
+	}
+	for _, c := range cases {
+		got, err := convertToGoType(c.in)
+		if err != nil {
+			t.Fatalf("convertToGoType(%s) unexpected error: %v", c.in, err)
+		}
+
+		if got != c.out {
+			t.Errorf("convertToGoType(%s) = %s, want %s", c.in, got, c.out)
+		}
+	}
+}
+
 func TestConvertToGoType_UnknownType(t *testing.T) {
 	tests := []struct {
 		name        string

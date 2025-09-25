@@ -14,6 +14,7 @@ package gogen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -31,130 +32,185 @@ type hierarchicalField struct {
 	IsPointer bool
 }
 
-// hierarchicalGroup represents a group of fields with the same prefix
-type hierarchicalGroup struct {
-	Prefix string
-	Fields []hierarchicalField
+// node represents a hierarchical group (path of prefixes) collecting its fields and children
+type node struct {
+	PathSegments []string            // e.g. ["board", "list"]
+	Fields       []hierarchicalField // columns whose name == path + "__" + field
+	Children     map[string]*node    // key = next segment
 }
 
+func newNode(path []string) *node {
+	return &node{PathSegments: append([]string{}, path...), Children: map[string]*node{}}
+}
+
+// pathKey joins segments with "__" for stable map keys
+func pathKey(segs []string) string { return strings.Join(segs, "__") }
+
 // detectHierarchicalStructure analyzes response fields for hierarchical patterns
-func detectHierarchicalStructure(responses []intermediate.Response) (map[string]hierarchicalGroup, []hierarchicalField, error) {
-	groups := make(map[string]hierarchicalGroup)
+// detectHierarchicalStructure builds a multi-level tree of hierarchical fields.
+// Field naming rule assumed: level1__level2__...__column
+// Each path (without final column segment) becomes a node; columns attach to that node.
+func detectHierarchicalStructure(responses []intermediate.Response) (map[string]*node, []hierarchicalField, error) {
+	roots := map[string]*node{} // top-level nodes keyed by first segment
+	allNodes := map[string]*node{}
 	rootFields := make([]hierarchicalField, 0)
 
-	for _, response := range responses {
-		if strings.Contains(response.Name, "__") {
-			// This is a hierarchical field
-			parts := strings.SplitN(response.Name, "__", 2)
-			if len(parts) != 2 {
+	var getOrCreate func(path []string) *node
+
+	getOrCreate = func(path []string) *node {
+		k := pathKey(path)
+		if n, ok := allNodes[k]; ok {
+			return n
+		}
+
+		n := newNode(path)
+
+		allNodes[k] = n
+		if len(path) == 1 {
+			roots[path[0]] = n
+		} else {
+			parent := getOrCreate(path[:len(path)-1])
+			parent.Children[path[len(path)-1]] = n
+		}
+
+		return n
+	}
+
+	for _, r := range responses {
+		if strings.Contains(r.Name, "__") {
+			segs := strings.Split(r.Name, "__")
+			if len(segs) < 2 { // safety
 				continue
 			}
 
-			prefix := parts[0]
-			fieldName := parts[1]
+			fieldName := segs[len(segs)-1]
+			groupPath := segs[:len(segs)-1]
+			n := getOrCreate(groupPath)
 
-			goType, err := convertToGoType(response.Type)
+			goType, err := convertToGoType(r.Type)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to convert type for field %s: %w", response.Name, err)
+				return nil, nil, fmt.Errorf("failed to convert type for field %s: %w", r.Name, err)
 			}
 
-			isPointer := response.IsNullable
+			isPointer := r.IsNullable
 			if isPointer && !strings.HasPrefix(goType, "*") {
 				goType = "*" + goType
 			}
 
-			field := hierarchicalField{
+			n.Fields = append(n.Fields, hierarchicalField{
 				Name:      celNameToGoName(fieldName),
-				Type:      response.Type,
+				Type:      r.Type,
 				JSONTag:   fieldName,
 				GoType:    goType,
 				IsPointer: isPointer,
-			}
-
-			if group, exists := groups[prefix]; exists {
-				group.Fields = append(group.Fields, field)
-				groups[prefix] = group
-			} else {
-				groups[prefix] = hierarchicalGroup{
-					Prefix: prefix,
-					Fields: []hierarchicalField{field},
-				}
-			}
+			})
 		} else {
-			// This is a root field
-			goType, err := convertToGoType(response.Type)
+			goType, err := convertToGoType(r.Type)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to convert type for field %s: %w", response.Name, err)
+				return nil, nil, fmt.Errorf("failed to convert type for field %s: %w", r.Name, err)
 			}
 
-			isPointer := response.IsNullable
+			isPointer := r.IsNullable
 			if isPointer && !strings.HasPrefix(goType, "*") {
 				goType = "*" + goType
 			}
 
-			field := hierarchicalField{
-				Name:      celNameToGoName(response.Name), // Use full name for root fields
-				Type:      response.Type,
-				JSONTag:   response.Name,
+			rootFields = append(rootFields, hierarchicalField{
+				Name:      celNameToGoName(r.Name),
+				Type:      r.Type,
+				JSONTag:   r.Name,
 				GoType:    goType,
 				IsPointer: isPointer,
-			}
-
-			rootFields = append(rootFields, field)
+			})
 		}
 	}
 
-	return groups, rootFields, nil
+	return allNodes, rootFields, nil
 }
 
 // generateHierarchicalStructs generates struct definitions for hierarchical data
-func generateHierarchicalStructs(functionName string, groups map[string]hierarchicalGroup, rootFields []hierarchicalField) ([]string, *responseStructData, error) {
-	if len(groups) == 0 {
-		// No hierarchical structure detected
+func generateHierarchicalStructs(functionName string, nodes map[string]*node, rootFields []hierarchicalField) ([]string, *responseStructData, error) {
+	if len(nodes) == 0 {
 		return nil, nil, nil
 	}
 
-	structs := make([]string, 0)
-	mainStructFields := make([]responseFieldData, 0)
+	// Collect nodes sorted by path length (children before parents for slice pointer approach)
+	nodeList := make([]*node, 0, len(nodes))
+	for _, n := range nodes {
+		nodeList = append(nodeList, n)
+	}
 
-	// Generate nested structs for each group
-	for prefix, group := range groups {
-		structName := fmt.Sprintf("%s%s", generateStructName(functionName), celNameToGoName(prefix))
-
-		var structDef strings.Builder
-
-		structDef.WriteString(fmt.Sprintf("type %s struct {\n", structName))
-
-		for _, field := range group.Fields {
-			structDef.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n",
-				field.Name, field.GoType, field.JSONTag))
+	sort.Slice(nodeList, func(i, j int) bool {
+		if len(nodeList[i].PathSegments) == len(nodeList[j].PathSegments) {
+			return strings.Join(nodeList[i].PathSegments, "__") < strings.Join(nodeList[j].PathSegments, "__")
 		}
 
-		structDef.WriteString("}")
-		structs = append(structs, structDef.String())
+		return len(nodeList[i].PathSegments) > len(nodeList[j].PathSegments) // deeper first
+	})
 
-		// Add this as a field in the main struct
-		mainStructFields = append(mainStructFields, responseFieldData{
-			Name:    celNameToGoName(prefix),
-			Type:    "[]" + structName, // Array of nested structs
-			JSONTag: prefix,
+	mainStructName := generateStructName(functionName)
+
+	// Map pathKey -> structName for reference
+	structNames := map[string]string{}
+	for _, n := range nodeList {
+		suffixParts := make([]string, len(n.PathSegments))
+		for i, s := range n.PathSegments {
+			suffixParts[i] = celNameToGoName(s)
+		}
+
+		structNames[pathKey(n.PathSegments)] = mainStructName + strings.Join(suffixParts, "")
+	}
+
+	var structs []string
+	// Generate struct definitions (children first ensures availability)
+	for _, n := range nodeList {
+		structName := structNames[pathKey(n.PathSegments)]
+
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("type %s struct {\n", structName))
+		// Fields
+		for _, f := range n.Fields {
+			b.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", f.Name, f.GoType, f.JSONTag))
+		}
+		// Child slice fields (pointer slices to allow later in-place mutation)
+		// We add after fields for stability
+		for childSeg := range n.Children {
+			childPath := append(append([]string{}, n.PathSegments...), childSeg)
+			childStruct := structNames[pathKey(childPath)]
+			b.WriteString(fmt.Sprintf("\t%s []*%s `json:\"%s\"`\n", celNameToGoName(childSeg), childStruct, childSeg))
+		}
+
+		b.WriteString("}")
+		structs = append(structs, b.String())
+	}
+
+	// Main struct fields: rootFields + top-level group slices
+	mainFields := make([]responseFieldData, 0, len(rootFields)+8)
+	for _, rf := range rootFields {
+		mainFields = append(mainFields, responseFieldData{Name: rf.Name, Type: rf.GoType, JSONTag: rf.JSONTag, IsPointer: rf.IsPointer})
+	}
+	// top-level nodes have path length 1
+	topKeys := make([]string, 0)
+
+	for _, n := range nodes {
+		if len(n.PathSegments) == 1 {
+			topKeys = append(topKeys, pathKey(n.PathSegments))
+		}
+	}
+
+	sort.Strings(topKeys)
+
+	for _, k := range topKeys {
+		n := nodes[k]
+		structName := structNames[k]
+		mainFields = append(mainFields, responseFieldData{
+			Name:    celNameToGoName(n.PathSegments[0]),
+			Type:    "[]*" + structName,
+			JSONTag: n.PathSegments[0],
 		})
 	}
 
-	// Add root fields to main struct
-	for _, field := range rootFields {
-		mainStructFields = append(mainStructFields, responseFieldData{
-			Name:      field.Name,
-			Type:      field.GoType,
-			JSONTag:   field.JSONTag,
-			IsPointer: field.IsPointer,
-		})
-	}
-
-	mainStruct := &responseStructData{
-		Name:   generateStructName(functionName), // Remove duplicate "Result"
-		Fields: mainStructFields,
-	}
+	mainStruct := &responseStructData{Name: mainStructName, Fields: mainFields}
 
 	return structs, mainStruct, nil
 }

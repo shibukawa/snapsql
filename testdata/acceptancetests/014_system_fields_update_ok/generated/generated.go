@@ -19,9 +19,8 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,18 +38,22 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("name", cel.StringType),
-		cel.Variable("email", cel.StringType),
-		cel.Variable("lock_no", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create UpdateUser CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("name", cel.StringType),
+			cel.Variable("email", cel.StringType),
+			cel.Variable("lock_no", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create UpdateUser CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	updateuserPrograms = make([]cel.Program, 3)
@@ -95,6 +98,9 @@ func init() {
 func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, lockNo int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuser", "sql.result")
 
@@ -112,15 +118,9 @@ func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string,
 
 		return result, nil
 	}
-	// Extract implicit parameters
-	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-		{Name: "updated_by", Type: "string", Required: true},
-	}
-	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 
 	// Build SQL
-	query := "UPDATE users SET name =$1, email =$2, lock_no =$3, updated_at = /*= updated_at */CURRENT_TIMESTAMP, updated_by = /*= updated_by */CURRENT_TIMESTAMPWHERE id = 1"
+	query := "UPDATE users SET name =$1, email =$2, lock_no =$3, updated_at = /*= updated_at */CURRENT_TIMESTAMP, updated_by = /*= updated_by */CURRENT_TIMESTAMP WHERE id = 1"
 	args := []any{
 		name,
 		email,

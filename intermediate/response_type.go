@@ -8,36 +8,44 @@ import (
 
 // determineResponseType analyzes the statement and determines the response type
 func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*snapsql.TableInfo) []Response {
-	// Convert tableInfo to DatabaseSchema format for typeinference package
+	// First attempt with provided schema
 	schemas := convertTableInfoToSchemas(tableInfo)
-
-	// Use typeinference package for complete type inference
 	inferredFields, err := typeinference.InferFieldTypes(schemas, stmt, nil)
-	if err != nil {
-		// Log error but continue with empty response
-		// In production, you might want to handle this differently
+
+	// Inline schema fallbackは開発用に残されていたが、正式運用では schema YAML か tableInfo が必須。
+	// schema 未提供で推論できない場合は即エラー扱い (上位で検出) するため空 slice を返す。
+	if (err != nil || len(inferredFields) == 0) && len(tableInfo) == 0 {
 		return []Response{}
 	}
 
-	// Convert InferredFieldInfo to Response format
-	var fields []Response
+	if err == nil && len(inferredFields) > 0 {
+		var fields []Response
+		for _, field := range inferredFields {
+			response := Response{Name: field.Name}
+			if field.Type != nil {
+				response.Type = field.Type.BaseType
+				response.BaseType = field.Type.BaseType
+				response.IsNullable = field.Type.IsNullable
+				response.Precision = field.Type.Precision
+				response.Scale = field.Type.Scale
+				response.MaxLength = field.Type.MaxLength
+			} else {
+				response.Type = "any"
+			}
 
-	for _, field := range inferredFields {
-		response := Response{
-			Name: field.Name,
+			if field.Source.Type == "column" {
+				response.SourceTable = field.Source.Table
+				response.SourceColumn = field.Source.Column
+			}
+
+			fields = append(fields, response)
 		}
 
-		// Convert TypeInfo to string type
-		if field.Type != nil {
-			response.Type = field.Type.BaseType
-		} else {
-			response.Type = "any"
-		}
-
-		fields = append(fields, response)
+		return fields
 	}
 
-	return fields
+	// 最終手段の alias ベース fallback は廃止 (型解像しないまま進めると階層キー判定が壊れるため)
+	return []Response{}
 }
 
 // convertTableInfoToSchemas converts intermediate.TableInfo to typeinference.DatabaseSchema

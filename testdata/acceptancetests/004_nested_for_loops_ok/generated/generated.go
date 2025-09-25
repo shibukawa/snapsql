@@ -19,11 +19,13 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 type InsertAllSubDepartmentsSubDepartment struct {
@@ -34,10 +36,6 @@ type InsertAllSubDepartmentsDepartment struct {
 	DepartmentName string                                      `json:"department_name"`
 	DepartmentCode string                                      `json:"department_code"`
 	SubDepartments []InsertAllSubDepartmentsSubDepartment     `json:"sub_departments"`
-}
-// InsertAllSubDepartmentsResult represents the response structure for InsertAllSubDepartments
-type InsertAllSubDepartmentsResult struct {
-	Affectedrows int `json:"affected_rows"`
 }
 
 // InsertAllSubDepartments specific CEL programs and mock path
@@ -106,55 +104,62 @@ func init() {
 	// Create and set up local type store
 	registry := snapsqlgo.NewLocalTypeRegistry()
 	for typeName, fields := range typeDefinitions {
-		structInfo := &snapsqlgo.StructInfo{
-			Name:    typeName,
-			CelType: types.NewObjectType(typeName),
-			Fields:  fields,
-		}
-		registry.RegisterStruct(typeName, structInfo)
+		registry.RegisterStructWithFields(typeName, fields)
 	}
-	
+    
 	// Set global registry for nested type resolution
 	snapsqlgo.SetGlobalRegistry(registry)
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 3)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
-		cel.Variable("departments", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("departments", cel.AnyType),
+		}
+		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 	// Environment 1: Base environment
-	env1, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
-		cel.Variable("dept", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 1: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("dept", cel.AnyType),
+		}
+		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
+		env1, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 1: %v", err))
+		}
+		celEnvironments[1] = env1
 	}
-	celEnvironments[1] = env1
 	// Environment 2: Base environment
-	env2, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
-		cel.Variable("sub", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 2: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("sub", cel.AnyType),
+		}
+		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
+		env2, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 2: %v", err))
+		}
+		celEnvironments[2] = env2
 	}
-	celEnvironments[2] = env2
 
 	// Create programs for each expression using the corresponding environment
 	insertallsubdepartmentsPrograms = make([]cel.Program, 6)
@@ -231,12 +236,15 @@ func init() {
 		insertallsubdepartmentsPrograms[5] = program
 	}
 }
-// InsertAllSubDepartments - interface{} Affinity
-func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departments []InsertAllSubDepartmentsDepartment, dept interface{}, sub interface{}, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
+// InsertAllSubDepartments - sql.Result Affinity
+func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departments []InsertAllSubDepartmentsDepartment, dept interface{}, sub interface{}, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
+
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertallsubdepartments", "interface{}")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertallsubdepartments", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -245,9 +253,9 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
@@ -260,7 +268,22 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	paramMap := map[string]interface{}{
 	    "departments": departments,
 	}
-	builder.WriteString("INSERT INTO sub_departments (id, name, department_code, department_name) VALUES")
+	{ // safe append static with spacing
+	_frag := "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// FOR loop: evaluate collection expression 0
 	collectionResult0, err := insert_all_sub_departmentsPrograms[0].Eval(paramMap)
@@ -278,7 +301,22 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	collection1 := collectionResult1.Value().([]interface{})
 	for _, subLoopVar := range collection1 {
 	    paramMap["sub"] = subLoopVar
-	builder.WriteString("(?")
+	{ // safe append static with spacing
+	_frag := "(?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 2
 	result, err := insert_all_sub_departmentsPrograms[2].Eval(paramMap)
@@ -286,7 +324,22 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString(",?")
+	{ // safe append static with spacing
+	_frag := ",?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 3
 	result, err := insert_all_sub_departmentsPrograms[3].Eval(paramMap)
@@ -294,7 +347,22 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString(",?")
+	{ // safe append static with spacing
+	_frag := ",?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 4
 	result, err := insert_all_sub_departmentsPrograms[4].Eval(paramMap)
@@ -302,7 +370,22 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString(",?")
+	{ // safe append static with spacing
+	_frag := ",?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 5
 	result, err := insert_all_sub_departmentsPrograms[5].Eval(paramMap)
@@ -310,7 +393,22 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString(")")
+	{ // safe append static with spacing
+	_frag := ")"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	}
 	}

@@ -1,1 +1,23 @@
-{"cel_environments":[{"index":0,"additional_variables":[]}],"cel_expressions":[],"format_version":"1","function_name":"get_current_time","instructions":[{"op":"EMIT_STATIC","pos":"4:1","value":"SELECT id, name, CURRENT_TIMESTAMP as current_time_now, CURRENT_TIMESTAMP as current_time_standard FROM users"},{"op":"IF_SYSTEM_LIMIT","pos":"0:0"},{"op":"EMIT_STATIC","pos":"0:0","value":" LIMIT "},{"op":"EMIT_SYSTEM_LIMIT","pos":"0:0"},{"op":"END","pos":"0:0"},{"op":"IF_SYSTEM_OFFSET","pos":"0:0"},{"op":"EMIT_STATIC","pos":"0:0","value":" OFFSET "},{"op":"EMIT_SYSTEM_OFFSET","pos":"0:0"},{"op":"END","pos":"0:0"}],"response_affinity":"many"}
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": []
+    }
+  ],
+  "cel_expressions": [],
+  "format_version": "1",
+  "function_name": "get_current_time",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "4:1", "value": "SELECT id, name, CURRENT_TIMESTAMP as current_time_now, CURRENT_TIMESTAMP as current_time_standard FROM users"},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
+  ],
+  "response_affinity": "many"
+}

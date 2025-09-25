@@ -19,21 +19,13 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
-// GetUsersWithConditionsResult represents the response structure for GetUsersWithConditions
-type GetUsersWithConditionsResult struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Email string `json:"email"`
-	Age int `json:"age"`
-}
 
 // GetUsersWithConditions specific CEL programs and mock path
 var (
@@ -47,18 +39,22 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("min_age", cel.IntType),
-		cel.Variable("max_age", cel.IntType),
-		cel.Variable("include_email", cel.BoolType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetUsersWithConditions CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("min_age", cel.IntType),
+			cel.Variable("max_age", cel.IntType),
+			cel.Variable("include_email", cel.BoolType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetUsersWithConditions CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getuserswithconditionsPrograms = make([]cel.Program, 3)
@@ -99,12 +95,15 @@ func init() {
 		getuserswithconditionsPrograms[2] = program
 	}
 }
-// GetUsersWithConditions - []GetUsersWithConditionsResult Affinity
-func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, includeEmail bool, opts ...snapsqlgo.FuncOpt) ([]GetUsersWithConditionsResult, error) {
-	var result []GetUsersWithConditionsResult
+// GetUsersWithConditions - sql.Result Affinity
+func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, includeEmail bool, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
+
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
 	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithconditions", "[]getuserswithconditionsresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithconditions", "sql.result")
 
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
@@ -113,9 +112,9 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[[]GetUsersWithConditionsResult](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to []GetUsersWithConditionsResult struct: %w", err)
+			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
@@ -130,7 +129,22 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	    "max_age": maxAge,
 	    "include_email": includeEmail,
 	}
-	builder.WriteString("SELECT id, name,")
+	{ // safe append static with spacing
+	_frag := "SELECT id, name,"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// IF condition: expression 0
 	condResult, err := get_users_with_conditionsPrograms[0].Eval(paramMap)
@@ -138,24 +152,84 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	    return result, fmt.Errorf("failed to evaluate condition: %w", err)
 	}
 	if condResult.Value().(bool) {
-	builder.WriteString("email")
+	{ // safe append static with spacing
+	_frag := "email"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	if boundaryNeeded {
 	    builder.WriteString(",")
 	}
 	boundaryNeeded = true
 	} else {
-	builder.WriteString("'N/A' as email")
+	{ // safe append static with spacing
+	_frag := "'N/A' as email"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	if boundaryNeeded {
 	    builder.WriteString(",")
 	}
 	boundaryNeeded = true
 	}
-	builder.WriteString("age")
+	{ // safe append static with spacing
+	_frag := "age"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	boundaryNeeded = false
-	builder.WriteString("FROM users WHERE age >=?")
+	{ // safe append static with spacing
+	_frag := "FROM users  WHERE age >=?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 1
 	result, err := get_users_with_conditionsPrograms[1].Eval(paramMap)
@@ -163,7 +237,22 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
 	}
 	args = append(args, result.Value())
-	builder.WriteString("AND age <=?")
+	{ // safe append static with spacing
+	_frag := "AND age <=?"
+	if builder.Len() > 0 {
+		_b := builder.String()
+		_last := _b[len(_b)-1]
+		// 単語or識別子の末尾判定
+		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+		// 先頭の空白をスキップ
+		_k := 0
+		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
+		_startsWord := false
+		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
+		if _endsWord && _startsWord { builder.WriteByte(' ') }
+	}
+	builder.WriteString(_frag)
+}
 	boundaryNeeded = true
 	// Evaluate expression 2
 	result, err := get_users_with_conditionsPrograms[2].Eval(paramMap)
@@ -180,31 +269,15 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 	    return result, fmt.Errorf("failed to execute query: %w", err)
 	}
 	defer rows.Close()
 	
-	for rows.Next() {
-	    var item GetUsersWithConditionsResult
-	    err := rows.Scan(
-	        &item.Id,
-	        &item.Name,
-	        &item.Email,
-	        &item.Email,
-	        &item.Age
-	    )
-	    if err != nil {
-	        return result, fmt.Errorf("failed to scan row: %w", err)
-	    }
-	    result = append(result, item)
-	}
-	
-	if err = rows.Err(); err != nil {
-	    return result, fmt.Errorf("error iterating rows: %w", err)
-	}
+	// Generic scan for interface{} result - not implemented
+	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }

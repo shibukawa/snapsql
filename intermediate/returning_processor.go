@@ -1,6 +1,7 @@
 package intermediate
 
 import (
+	"github.com/shibukawa/snapsql/parser"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -45,6 +46,8 @@ func (p *ReturningProcessor) Process(ctx *ProcessingContext) error {
 	//   RETURNING <any tokens until statement terminator or end>
 	// Simplicity: once we encounter RETURNING keyword at top-level (parenDepth==0), drop it and all following tokens.
 	// This assumes RETURNING appears at the tail of UPDATE/DELETE in supported syntax (which is standard).
+	// IMPORTANT: Also clear the AST Returning field so downstream affinity detector / type inference
+	// does not treat this as a RETURNING DML (avoids producing responses & row scans for unsupported dialects).
 	filtered := make([]tok.Token, 0, len(ctx.Tokens))
 	parenDepth := 0
 	skipping := false
@@ -71,6 +74,18 @@ func (p *ReturningProcessor) Process(ctx *ProcessingContext) error {
 	}
 
 	ctx.Tokens = filtered
+
+	// Clear AST Returning pointer based on statement kind (safe: field exported)
+	switch s := ctx.Statement.(type) {
+	case *parser.UpdateStatement:
+		if !updateSupported { // we actually removed it
+			s.Returning = nil
+		}
+	case *parser.DeleteFromStatement:
+		if !deleteSupported {
+			s.Returning = nil
+		}
+	}
 
 	return nil
 }

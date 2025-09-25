@@ -19,9 +19,8 @@ package generated
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
+	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,16 +38,20 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_id", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetComprehensiveDialectTestMysql CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_id", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetComprehensiveDialectTestMysql CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getcomprehensivedialecttestmysqlPrograms = make([]cel.Program, 1)
@@ -69,6 +72,9 @@ func init() {
 func GetComprehensiveDialectTestMysql(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
 	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomprehensivedialecttestmysql", "sql.result")
 
@@ -88,7 +94,7 @@ func GetComprehensiveDialectTestMysql(ctx context.Context, executor snapsqlgo.DB
 	}
 
 	// Build SQL
-	query := "SELECT id, name, CAST(age AS INTEGER) as age_cast_standard, CAST(price AS DECIMAL(10,2)) as price_cast_postgresql, CAST(salary + bonus AS NUMERIC(12,2)) as total_cast_complex, CONCAT(first_name, ' ', last_name) as full_name_mysql, CONCAT(first_name, ' ', last_name) as full_name_postgresql, NOW() as time_mysql, NOW() as time_standard, 1 as bool_true, 0 as bool_false, RAND() as random_mysql, RAND() as random_postgresql, CAST(NOW() AS CHAR) as nested_cast_time, CONCAT('ID: ', CAST(id AS CHAR)) as nested_concat_cast FROM users WHERE id =$1AND active = 1 AND created_at > NOW()"
+	query := "SELECT id, name, CAST(age AS INTEGER) as age_cast_standard, CAST(price AS DECIMAL(10,2)) as price_cast_postgresql, CAST(salary + bonus AS NUMERIC(12,2)) as total_cast_complex, CONCAT(first_name, ' ', last_name) as full_name_mysql, CONCAT(first_name, ' ', last_name) as full_name_postgresql, NOW() as time_mysql, NOW() as time_standard, 1 as bool_true, 0 as bool_false, RAND() as random_mysql, RAND() as random_postgresql, CAST(NOW() AS CHAR) as nested_cast_time, CONCAT('ID: ', CAST(id AS CHAR)) as nested_concat_cast FROM users  WHERE id =$1 AND active = 1 AND created_at > NOW()"
 	args := []any{
 		userID,
 	}
@@ -99,7 +105,7 @@ func GetComprehensiveDialectTestMysql(ctx context.Context, executor snapsqlgo.DB
 		return result, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 	    return result, fmt.Errorf("failed to execute query: %w", err)
