@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -542,21 +543,24 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 	// Process each file
 	processedCount := 0
 	generatedFiles := make([]string, 0, len(files))
+	var encounteredErr error
 
 	for _, file := range files {
 		// Generate intermediate file
 		outputFile, err := g.processTemplateFile(file, outputDir, inputPath, constantFiles, config, ctx)
 		if err != nil {
-			if ctx.Verbose {
-				color.Red("Failed to process %s: %v", file, err)
-			}
-
+			color.Red("Failed to process %s: %v", file, err)
+			encounteredErr = errors.Join(encounteredErr, err)
 			continue
 		}
 
 		generatedFiles = append(generatedFiles, outputFile)
 		processedCount++
 		// Output message is handled in processTemplateFile
+	}
+
+	if encounteredErr != nil {
+		return nil, encounteredErr
 	}
 
 	return generatedFiles, nil

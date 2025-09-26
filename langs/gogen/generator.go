@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -177,52 +178,71 @@ func (g *Generator) Generate(w io.Writer) error {
 	// Convert function name to CamelCase
 	funcName := snakeToCamel(g.Format.FunctionName)
 
+	functionReturnType := fmt.Sprintf("(%s, error)", responseType)
+	declareResult := true
+	iteratorYieldType := ""
+	if queryExecution.IsIterator && responseStruct != nil {
+		functionReturnType = fmt.Sprintf("iter.Seq2[*%s, error]", responseStruct.Name)
+		declareResult = false
+		iteratorYieldType = queryExecution.IteratorYieldType
+	}
+
 	data := struct {
-		Timestamp         time.Time
-		PackageName       string
-		FunctionName      string
-		LowerFuncName     string
-		Description       string
-		MockPath          string
-		CELEnvironments   []celEnvironmentData
-		CELPrograms       []celProgramData
-		Instructions      []instruction
-		ResponseType      string
-		ResponseStruct    *responseStructData
-		SQLBuilder        *sqlBuilderData
-		QueryExecution    *queryExecutionData
-		Parameters        []parameterData
-		StructDefinitions []string
-		TypeRegistrations []string
-		TypeDefinitions   map[string]map[string]string
-		ImplicitParams    []implicitParam
-		Imports           map[string]struct{}
-		ImportSlice       []string
-		NumCELEnvs        int
-		NumCELPrograms    int
-		HierarchicalMetas []*hierarchicalNodeMeta
+		Timestamp          time.Time
+		PackageName        string
+		FunctionName       string
+		LowerFuncName      string
+		Description        string
+		MockPath           string
+		CELEnvironments    []celEnvironmentData
+		CELPrograms        []celProgramData
+		Instructions       []instruction
+		ResponseType       string
+		FunctionReturnType string
+		ResponseStruct     *responseStructData
+		SQLBuilder         *sqlBuilderData
+		QueryExecution     *queryExecutionData
+		Parameters         []parameterData
+		StructDefinitions  []string
+		TypeRegistrations  []string
+		TypeDefinitions    map[string]map[string]string
+		ImplicitParams     []implicitParam
+		Imports            map[string]struct{}
+		ImportSlice        []string
+		NumCELEnvs         int
+		NumCELPrograms     int
+		HierarchicalMetas  []*hierarchicalNodeMeta
+		IteratorYieldType  string
+		DeclareResult      bool
 	}{
-		Timestamp:         time.Now(),
-		PackageName:       g.PackageName,
-		FunctionName:      funcName,
-		LowerFuncName:     strings.ToLower(funcName),
-		Description:       g.Format.Description,
-		MockPath:          g.MockPath,
-		CELEnvironments:   celEnvs,
-		CELPrograms:       celPrograms,
-		Parameters:        parameters,
-		ResponseType:      responseType,
-		ResponseStruct:    responseStruct,
-		SQLBuilder:        sqlBuilder,
-		QueryExecution:    queryExecution,
-		StructDefinitions: structDefinitions,
-		TypeRegistrations: typeRegistrations,
-		TypeDefinitions:   typeDefinitions,
-		ImplicitParams:    implicitParams,
-		NumCELEnvs:        len(g.Format.CELEnvironments),
-		NumCELPrograms:    len(g.Format.CELExpressions),
-		Imports:           make(map[string]struct{}),
-		HierarchicalMetas: g.hierarchicalMetas,
+		Timestamp:          time.Now(),
+		PackageName:        g.PackageName,
+		FunctionName:       funcName,
+		LowerFuncName:      strings.ToLower(funcName),
+		Description:        g.Format.Description,
+		MockPath:           g.MockPath,
+		CELEnvironments:    celEnvs,
+		CELPrograms:        celPrograms,
+		Parameters:         parameters,
+		ResponseType:       responseType,
+		ResponseStruct:     responseStruct,
+		SQLBuilder:         sqlBuilder,
+		QueryExecution:     queryExecution,
+		StructDefinitions:  structDefinitions,
+		TypeRegistrations:  typeRegistrations,
+		TypeDefinitions:    typeDefinitions,
+		ImplicitParams:     implicitParams,
+		NumCELEnvs:         len(g.Format.CELEnvironments),
+		NumCELPrograms:     len(g.Format.CELExpressions),
+		Imports:            make(map[string]struct{}),
+		HierarchicalMetas:  g.hierarchicalMetas,
+		FunctionReturnType: functionReturnType,
+		IteratorYieldType:  iteratorYieldType,
+		DeclareResult:      declareResult,
+	}
+
+	if queryExecution.IsIterator && responseStruct != nil {
+		data.Imports["iter"] = struct{}{}
 	}
 
 	// Collect imports from all environments
@@ -266,6 +286,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	for imp := range data.Imports {
 		importSlice = append(importSlice, imp)
 	}
+	sort.Strings(importSlice)
 
 	data.ImportSlice = importSlice
 
@@ -700,10 +721,16 @@ func processResponseStruct(format *intermediate.IntermediateFormat) (*responseSt
 			return nil, fmt.Errorf("failed to convert response field %s type: %w", response.Name, err)
 		}
 
+		forceNonNullable := response.HierarchyKeyLevel == 1 && !strings.Contains(response.Name, "__")
+
 		// Handle nullable fields
-		isPointer := response.IsNullable
+		isPointer := response.IsNullable && !forceNonNullable
 		if isPointer && !strings.HasPrefix(goType, "*") {
 			goType = "*" + goType
+		}
+
+		if forceNonNullable && strings.HasPrefix(goType, "*") {
+			goType = strings.TrimPrefix(goType, "*")
 		}
 
 		fields[i] = responseFieldData{
@@ -1115,15 +1142,17 @@ func init() {
 {{- else }}
 // {{ .FunctionName }} - {{ .ResponseType }} Affinity
 {{- end }}
-func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- range .Parameters }}, {{ .Name }} {{ .Type }}{{- end }}, opts ...snapsqlgo.FuncOpt) ({{ .ResponseType }}, error) {
+func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- range .Parameters }}, {{ .Name }} {{ .Type }}{{- end }}, opts ...snapsqlgo.FuncOpt) {{ .FunctionReturnType }} {
+	{{- if .DeclareResult }}
 	var result {{ .ResponseType }}
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: {{ if .HierarchicalMetas }}{{ len .HierarchicalMetas }}{{ else }}0{{ end }}
+	{{- end }}
 
-	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "{{ .LowerFuncName }}", "{{ .ResponseType | toLower }}")
 
+	{{- if not .QueryExecution.IsIterator }}
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
@@ -1138,6 +1167,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 
 		return result, nil
 	}
+	{{- end }}
 
 	{{- if and .ImplicitParams (hasAnySystemParam .SQLBuilder.ParameterNames) }}
 	// Extract implicit parameters
@@ -1177,18 +1207,49 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	query := builder.String()
 	{{- end }}
 
-	// Execute query
-	stmt, err := executor.PrepareContext(ctx, query)
-	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+{{- if .QueryExecution.IsIterator }}
+	return func(yield func({{ .IteratorYieldType }}, error) bool) {
+		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
+			mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
+			if err != nil {
+				_ = yield(nil, fmt.Errorf("failed to get mock data: %w", err))
+				return
+			}
+
+			rows, err := snapsqlgo.MapMockDataToStruct[{{ .ResponseType }}](mockData)
+			if err != nil {
+				_ = yield(nil, fmt.Errorf("failed to map mock data to {{ .ResponseType }} struct: %w", err))
+				return
+			}
+
+			for i := range rows {
+				item := rows[i]
+				if !yield(&item, nil) {
+					return
+				}
+			}
+
+			return
+		}
+
+		{{- range .QueryExecution.IteratorBody }}
+		{{ . }}
+		{{- end }}
 	}
-	defer stmt.Close()
+		{{- else }}
+		// Execute query
+		stmt, err := executor.PrepareContext(ctx, query)
+		if err != nil {
+			return result, fmt.Errorf("failed to prepare statement: %w", err)
+		}
+		defer stmt.Close()
 
-	{{- range .QueryExecution.Code }}
-	{{ . }}
-	{{- end }}
+		{{- range .QueryExecution.Code }}
+		{{ . }}
+		{{- end }}
 
-	return result, nil
+		return result, nil
+		{{- end }}
 }
 `
 

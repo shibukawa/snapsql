@@ -45,6 +45,7 @@ type TestCase struct {
 	Fixtures        []TableFixture              // テーブルごとのfixture情報
 	Fixture         map[string][]map[string]any // 後方互換性のため残す
 	Parameters      map[string]any
+	HasParameters   bool
 	VerifyQuery     string               // 検証用SELECTクエリ
 	ExpectedResult  []map[string]any     // 従来型（無名配列）
 	ExpectedResults []ExpectedResultSpec // 新型（テーブル名・戦略付き）
@@ -234,11 +235,6 @@ func extractTextFromNode(node ast.Node, content []byte) string {
 
 // validateTestCase validates a test case for required sections and format
 func validateTestCase(testCase *TestCase) error {
-	// Parameters are required
-	if len(testCase.Parameters) == 0 {
-		return fmt.Errorf("%w: %q parameters", snapsql.ErrTestCaseMissingData, testCase.Name)
-	}
-
 	// Expected Results are required (either legacy or table-qualified)
 	if len(testCase.ExpectedResult) == 0 && len(testCase.ExpectedResults) == 0 {
 		return fmt.Errorf("%w: %q expected results", snapsql.ErrTestCaseMissingData, testCase.Name)
@@ -251,7 +247,7 @@ func validateTestCase(testCase *TestCase) error {
 func processTestSection(testCase *TestCase, section TestSection, format string, content []byte, line int) error {
 	switch section.Type {
 	case "parameters", "params":
-		if len(testCase.Parameters) > 0 {
+		if testCase.HasParameters {
 			return fmt.Errorf("%w in test case %q", ErrDuplicateParameters, testCase.Name)
 		}
 
@@ -261,6 +257,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 		}
 
 		testCase.Parameters = params
+		testCase.HasParameters = true
 
 	case "expected", "expected results", "results":
 		if len(testCase.ExpectedResult) > 0 || len(testCase.ExpectedResults) > 0 {

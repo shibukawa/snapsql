@@ -14,6 +14,10 @@ type queryExecutionData struct {
 	Code []string
 	// NeedsSnapsqlImport indicates whether generated code references snapsql errors
 	NeedsSnapsqlImport bool
+	// Iterator generation for many affinity
+	IsIterator        bool
+	IteratorBody      []string
+	IteratorYieldType string
 }
 
 // generateQueryExecution generates query execution and result mapping code
@@ -76,6 +80,35 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 			// Nothing to scan; already executed above when no struct
 		}
 	case "many":
+		needsAggregation := false
+
+		if responseStruct != nil {
+			if len(metas) > 0 {
+				needsAggregation = true
+			} else {
+				for _, r := range responseStruct.RawResponses {
+					if strings.Contains(r.Name, "__") {
+						needsAggregation = true
+						break
+					}
+				}
+			}
+		}
+
+		if responseStruct != nil && !needsAggregation {
+			iteratorBody, err := generateIteratorBody(responseStruct)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate iterator body: %w", err)
+			}
+
+			return &queryExecutionData{
+				NeedsSnapsqlImport: needsSnapsql,
+				IsIterator:         true,
+				IteratorBody:       iteratorBody,
+				IteratorYieldType:  "*" + responseStruct.Name,
+			}, nil
+		}
+
 		code = append(code, "// Execute query and scan multiple rows (many affinity)")
 		code = append(code, "rows, err := stmt.QueryContext(ctx, args...)")
 		code = append(code, "if err != nil {")
@@ -173,6 +206,51 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 		code = append(code, "    return result, fmt.Errorf(\"failed to scan row: %w\", err)")
 		code = append(code, "}")
 	}
+
+	return code, nil
+}
+
+// generateIteratorBody builds the body of an iterator for non-aggregated many responses.
+func generateIteratorBody(responseStruct *responseStructData) ([]string, error) {
+	if responseStruct == nil {
+		return nil, fmt.Errorf("iterator generation requires a response struct")
+	}
+
+	var code []string
+
+	code = append(code, "stmt, err := executor.PrepareContext(ctx, query)")
+	code = append(code, "if err != nil {")
+	code = append(code, "\t_ = yield(nil, fmt.Errorf(\"failed to prepare statement: %w\", err))")
+	code = append(code, "\treturn")
+	code = append(code, "}")
+	code = append(code, "defer stmt.Close()")
+	code = append(code, "")
+	code = append(code, "rows, err := stmt.QueryContext(ctx, args...)")
+	code = append(code, "if err != nil {")
+	code = append(code, "\t_ = yield(nil, fmt.Errorf(\"failed to execute query: %w\", err))")
+	code = append(code, "\treturn")
+	code = append(code, "}")
+	code = append(code, "defer rows.Close()")
+	code = append(code, "")
+	code = append(code, "for rows.Next() {")
+	code = append(code, fmt.Sprintf("\titem := new(%s)", responseStruct.Name))
+	code = append(code, "\tif err := rows.Scan(")
+	for _, field := range responseStruct.Fields {
+		code = append(code, fmt.Sprintf("\t\t&item.%s,", field.Name))
+	}
+	code = append(code, "\t); err != nil {")
+	code = append(code, "\t\t_ = yield(nil, fmt.Errorf(\"failed to scan row: %w\", err))")
+	code = append(code, "\t\treturn")
+	code = append(code, "\t}")
+	code = append(code, "\tif !yield(item, nil) {")
+	code = append(code, "\t\treturn")
+	code = append(code, "\t}")
+	code = append(code, "}")
+	code = append(code, "")
+	code = append(code, "if err := rows.Err(); err != nil {")
+	code = append(code, "\t_ = yield(nil, fmt.Errorf(\"error iterating rows: %w\", err))")
+	code = append(code, "\treturn")
+	code = append(code, "}")
 
 	return code, nil
 }
@@ -373,7 +451,7 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 	if len(parentPK) == 1 {
 		if parentPK[0].Resp.IsNullable {
 			code = append(code, "    var parentKey string")
-			code = append(code, fmt.Sprintf("    if %s != nil { parentKey = fmt.Sprintf(\\\"%%v\\\", *%s) } else { parentKey = \"<nil>\" }", parentPK[0].VarName, parentPK[0].VarName))
+			code = append(code, fmt.Sprintf("    if %s != nil { parentKey = fmt.Sprintf(\"%%v\", *%s) } else { parentKey = \"<nil>\" }", parentPK[0].VarName, parentPK[0].VarName))
 		} else {
 			code = append(code, fmt.Sprintf("    parentKey := fmt.Sprintf(\"%%v\", %s)", parentPK[0].VarName))
 		}
@@ -481,7 +559,15 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 		// Assign columns for this node
 		for _, c := range n.Columns {
 			goField := celNameToGoName(c.ColName)
-			code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.ReplaceAll(depthPathKey, "__", "_"), goField, c.VarName))
+			if c.Resp.IsNullable {
+				code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.ReplaceAll(depthPathKey, "__", "_"), goField, c.VarName))
+			} else if strings.Contains(c.Resp.Name, "__") {
+				code = append(code, fmt.Sprintf("            if %s != nil {", c.VarName))
+				code = append(code, fmt.Sprintf("                node_%s.%s = *%s", strings.ReplaceAll(depthPathKey, "__", "_"), goField, c.VarName))
+				code = append(code, "            }")
+			} else {
+				code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.ReplaceAll(depthPathKey, "__", "_"), goField, c.VarName))
+			}
 		}
 		// Append to parent slice
 		if len(n.Path) == 1 {
@@ -526,6 +612,11 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 
 	if len(metas) == 0 {
 		return nil, snapsql.ErrHierarchicalNoGroups
+	}
+
+	respByName := make(map[string]intermediate.Response, len(responseStruct.RawResponses))
+	for _, r := range responseStruct.RawResponses {
+		respByName[r.Name] = r
 	}
 	// Determine root fields (no __ in JSON tag). RawResponses keeps original names.
 	type col struct {
@@ -602,6 +693,9 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 	// Declare column vars
 	for _, c := range allCols {
 		goType, _ := convertToGoType(c.resp.Type)
+		if strings.Contains(c.resp.Name, "__") && !strings.HasPrefix(goType, "*") {
+			goType = "*" + goType
+		}
 		if c.resp.IsNullable && !strings.HasPrefix(goType, "*") {
 			goType = "*" + goType
 		}
@@ -633,7 +727,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 	if len(parentPK) == 1 {
 		if parentPK[0].resp.IsNullable {
 			code = append(code, "    var pk_parent string")
-			code = append(code, fmt.Sprintf("    if %s != nil { pk_parent = fmt.Sprintf(\\\"%%v\\\", *%s) } else { pk_parent = \"<nil>\" }", parentPK[0].varName, parentPK[0].varName))
+			code = append(code, fmt.Sprintf("    if %s != nil { pk_parent = fmt.Sprintf(\"%%v\", *%s) } else { pk_parent = \"<nil>\" }", parentPK[0].varName, parentPK[0].varName))
 		} else {
 			code = append(code, fmt.Sprintf("    pk_parent := fmt.Sprintf(\"%%v\", %s)", parentPK[0].varName))
 		}
@@ -679,15 +773,31 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 		code = append(code, fmt.Sprintf("    if !(%s) {", strings.Join(condNil, " || ")))
 		// Build node key (key fields are scanned as pointers when nullable; safe to deref due to nil guard)
 		if len(m.KeyFields) == 1 {
-			k := strings.ToLower(celNameToGoName(m.KeyFields[0]))
-			code = append(code, fmt.Sprintf("        _k_%s := fmt.Sprintf(\"%%v\", col_%s)", strings.Join(m.Path, "_"), k))
+			kf := m.KeyFields[0]
+			k := strings.ToLower(celNameToGoName(kf))
+			expr := "col_" + k
+			if strings.Contains(kf, "__") {
+				expr = "*" + expr
+			} else if resp, ok := respByName[kf]; ok {
+				if resp.IsNullable {
+					expr = "*" + expr
+				}
+			}
+			code = append(code, fmt.Sprintf("        _k_%s := fmt.Sprintf(\"%%v\", %s)", strings.Join(m.Path, "_"), expr))
 		} else {
 			fmtParts := make([]string, len(m.KeyFields))
-
 			args := make([]string, len(m.KeyFields))
 			for i, kf := range m.KeyFields {
 				fmtParts[i] = "%v"
-				args[i] = "col_" + strings.ToLower(celNameToGoName(kf))
+				arg := "col_" + strings.ToLower(celNameToGoName(kf))
+				if strings.Contains(kf, "__") {
+					arg = "*" + arg
+				} else if resp, ok := respByName[kf]; ok {
+					if resp.IsNullable {
+						arg = "*" + arg
+					}
+				}
+				args[i] = arg
 			}
 
 			code = append(code, fmt.Sprintf("        _k_%s := fmt.Sprintf(\"%s\", %s)", strings.Join(m.Path, "_"), strings.Join(fmtParts, "|"), strings.Join(args, ", ")))
@@ -710,7 +820,17 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 			}
 
 			leaf := df[strings.LastIndex(df, "__")+1:]
-			code = append(code, fmt.Sprintf("            node_%s.%s = col_%s", strings.Join(m.Path, "_"), celNameToGoName(leaf), strings.ToLower(celNameToGoName(df))))
+			resp := respByName[df]
+			colVar := "col_" + strings.ToLower(celNameToGoName(df))
+			if resp.IsNullable {
+				code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.Join(m.Path, "_"), celNameToGoName(leaf), colVar))
+			} else if strings.Contains(df, "__") {
+				code = append(code, fmt.Sprintf("            if %s != nil {", colVar))
+				code = append(code, fmt.Sprintf("                node_%s.%s = *%s", strings.Join(m.Path, "_"), celNameToGoName(leaf), colVar))
+				code = append(code, "            }")
+			} else {
+				code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.Join(m.Path, "_"), celNameToGoName(leaf), colVar))
+			}
 		}
 		// Append to parent slice
 		if len(m.ParentPath) == 0 { // top-level

@@ -41,8 +41,6 @@ var (
 	ErrNoParameterFound = errors.New("no parameter code block or list found")
 	// ErrEmptyContent indicates the Markdown or SQL content was empty.
 	ErrEmptyContent = errors.New("empty content")
-	// ErrEmptyParameters indicates the parameters block exists but is empty.
-	ErrEmptyParameters = errors.New("empty parameters object")
 	// ErrFailedToParse indicates a generic parsing failure on input data.
 	ErrFailedToParse = errors.New("failed to parse data")
 	// ErrEmptyExpectedResults indicates an Expected Results block was present but empty.

@@ -102,9 +102,7 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithconditions", "sql.result")
-
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(getuserswithconditionsMockPath, funcConfig.MockDataNames)
@@ -262,22 +260,21 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	args = append(args, result.Value())
 	
 	query := builder.String()
+		// Execute query
+		stmt, err := executor.PrepareContext(ctx, query)
+		if err != nil {
+			return result, fmt.Errorf("failed to prepare statement: %w", err)
+		}
+		defer stmt.Close()
+		// Execute query and scan multiple rows (many affinity)
+		rows, err := stmt.QueryContext(ctx, args...)
+		if err != nil {
+		    return result, fmt.Errorf("failed to execute query: %w", err)
+		}
+		defer rows.Close()
+		
+		// Generic scan for interface{} result - not implemented
+		// This would require runtime reflection or predefined column mapping
 
-	// Execute query
-	stmt, err := executor.PrepareContext(ctx, query)
-	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-	// Execute query and scan multiple rows (many affinity)
-	rows, err := stmt.QueryContext(ctx, args...)
-	if err != nil {
-	    return result, fmt.Errorf("failed to execute query: %w", err)
-	}
-	defer rows.Close()
-	
-	// Generic scan for interface{} result - not implemented
-	// This would require runtime reflection or predefined column mapping
-
-	return result, nil
+		return result, nil
 }

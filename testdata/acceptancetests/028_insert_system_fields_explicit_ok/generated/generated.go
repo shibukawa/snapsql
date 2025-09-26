@@ -114,9 +114,7 @@ func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, user User, c
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	// Extract function configuration
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuser", "sql.result")
-
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserMockPath, funcConfig.MockDataNames)
@@ -140,18 +138,17 @@ func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, user User, c
 		createdAt,
 		updatedAt,
 	}
+		// Execute query
+		stmt, err := executor.PrepareContext(ctx, query)
+		if err != nil {
+			return result, fmt.Errorf("failed to prepare statement: %w", err)
+		}
+		defer stmt.Close()
+		// Execute query (no result expected)
+		_, err = stmt.ExecContext(ctx, args...)
+		if err != nil {
+		    return result, fmt.Errorf("failed to execute statement: %w", err)
+		}
 
-	// Execute query
-	stmt, err := executor.PrepareContext(ctx, query)
-	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
-	if err != nil {
-	    return result, fmt.Errorf("failed to execute statement: %w", err)
-	}
-
-	return result, nil
+		return result, nil
 }

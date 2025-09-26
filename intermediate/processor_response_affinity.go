@@ -1,6 +1,7 @@
 package intermediate
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/shibukawa/snapsql"
@@ -305,15 +306,17 @@ func areAllPrimaryKeysInWhereForTableWithAlias(primaryKeys []string, whereText s
 	for _, key := range primaryKeys {
 		lowerKey := strings.ToLower(key)
 
-		// Check for table-qualified, alias-qualified, and unqualified field names
-		// e.g., "users.id = ", "u.id = ", or "id = "
-		tableQualifiedPattern := lowerTableName + "." + lowerKey + " ="
-		aliasQualifiedPattern := lowerTableAlias + "." + lowerKey + " ="
-		unqualifiedPattern := lowerKey + " ="
+		// Regex patterns to avoid substring false positives
+		tableQualifiedRe := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(lowerTableName) + `\.` + wordBoundary(lowerKey) + `\s*=`)
+		var aliasQualifiedRe *regexp.Regexp
+		if lowerTableAlias != "" {
+			aliasQualifiedRe = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(lowerTableAlias) + `\.` + wordBoundary(lowerKey) + `\s*=`)
+		}
+		unqualifiedRe := regexp.MustCompile(`(?i)` + wordBoundary(lowerKey) + `\s*=`)
 
-		if !strings.Contains(lowerText, tableQualifiedPattern) &&
-			!strings.Contains(lowerText, aliasQualifiedPattern) &&
-			!strings.Contains(lowerText, unqualifiedPattern) {
+		if !(tableQualifiedRe.MatchString(lowerText) ||
+			(aliasQualifiedRe != nil && aliasQualifiedRe.MatchString(lowerText)) ||
+			unqualifiedRe.MatchString(lowerText)) {
 			return false
 		}
 	}
@@ -357,10 +360,12 @@ func getMainTableName(fromClause *parser.FromClause) string {
 
 	// Get the first table name (main table)
 	firstTable := fromClause.Tables[0]
+	if firstTable.TableName != "" {
+		return firstTable.TableName
+	}
 	if firstTable.Name != "" {
 		return firstTable.Name
 	}
-
 	return ""
 }
 
@@ -379,20 +384,21 @@ func getPrimaryKeyColumns(table *snapsql.TableInfo) []string {
 
 // areAllPrimaryKeysInWhere checks if all primary keys are specified in WHERE clause with equality
 func areAllPrimaryKeysInWhere(primaryKeys []string, whereText string) bool {
-	// Convert to lowercase for case-insensitive matching
 	lowerText := strings.ToLower(whereText)
-
-	// Check if all primary keys are present with equality conditions
 	for _, pk := range primaryKeys {
 		lowerPK := strings.ToLower(pk)
-
-		// Look for patterns like "pk = " or "pk="
-		if !strings.Contains(lowerText, lowerPK+" =") && !strings.Contains(lowerText, lowerPK+"=") {
+		re := regexp.MustCompile(`(?i)` + wordBoundary(lowerPK) + `\s*=`)
+		if !re.MatchString(lowerText) {
 			return false
 		}
 	}
-
 	return true
+}
+
+// wordBoundary builds a regex fragment to match identifier with word boundaries
+func wordBoundary(ident string) string {
+	// Use \b word boundary which works with RE2. This is sufficient for typical identifiers.
+	return `\b` + regexp.QuoteMeta(ident) + `\b`
 }
 
 // getWhereClauseText extracts the text content of WHERE clause
