@@ -3,7 +3,6 @@ package intermediate
 import (
 	"bufio"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -140,25 +139,4 @@ func mapSQLType(sqlType string) string {
 	default:
 		return "any"
 	}
-}
-
-// discoverSchemaFile attempts to find a schema.sql relative to queries path.
-func discoverSchemaFile(queriesInputPath string) string {
-	// Candidate 1: <queries>/../sql/schema.sql
-	dir := filepath.Dir(queriesInputPath)
-
-	candidate1 := filepath.Join(dir, "sql", "schema.sql")
-	if _, err := os.Stat(candidate1); err == nil {
-		return candidate1
-	}
-	// Candidate 2: project root sql/schema.sql (walk up until we find queries parent marker?)
-	// Simplified: ascend two levels max
-	parent := filepath.Dir(dir)
-
-	candidate2 := filepath.Join(parent, "sql", "schema.sql")
-	if _, err := os.Stat(candidate2); err == nil {
-		return candidate2
-	}
-
-	return ""
 }

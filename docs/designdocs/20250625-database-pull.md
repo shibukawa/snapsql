@@ -1,5 +1,7 @@
 # Database Pull Feature Design Document
 
+> **Status:** Legacy. The `snapsql pull` workflow has been removed; see tbls JSON runtime integration (September 2025).
+
 ## Overview
 
 The database pull feature extracts schema information from existing databases (PostgreSQL, MySQL, SQLite) and generates YAML schema files. This functionality provides accurate type information for SQL template generation and validation, supporting the development workflow.

@@ -149,18 +149,6 @@ snapsql config validate
 snapsql config test-db
 ```
 
-### pull - Pull Remote Templates
-
-Pull SQL templates from remote sources (planned feature).
-
-```bash
-snapsql pull <source> [options]
-```
-
-**Options:**
-- `--branch <name>` - Specify branch/version
-- `--output <dir>` - Output directory
-
 ### version - Show Version
 
 Display version information.

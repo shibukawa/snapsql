@@ -1,5 +1,7 @@
 # SnapSQL CLI Tool Design
 
+> **Status:** Legacy. The `pull` command described here has been removed in favour of the tbls JSON runtime helpers (September 2025).
+
 ## Overview
 
 The SnapSQL command-line tool (`snapsql`) provides a comprehensive interface for managing SQL templates, generating code, and extracting database schemas. It supports multiple programming languages and integrates with the SnapSQL template engine.

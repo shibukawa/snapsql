@@ -1,5 +1,7 @@
 # 20250628-json-type-policy.md
 
+> **Note:** References to the former `pull` pipeline remain for historical context. Current implementations rely on the tbls JSON runtime helpers introduced in September 2025.
+
 ## Handling of JSON Types in SnapSQL Type Inference Engine
 
 ### Policy & Constraints

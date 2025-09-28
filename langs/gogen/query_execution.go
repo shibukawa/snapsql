@@ -20,6 +20,46 @@ type queryExecutionData struct {
 	IteratorYieldType string
 }
 
+type parentKeyField struct {
+	varName  string
+	nullable bool
+}
+
+func appendParentKeyBuilder(code []string, indent, keyVar string, fields []parentKeyField) []string {
+	if len(fields) == 0 {
+		return code
+	}
+
+	if len(fields) == 1 {
+		f := fields[0]
+		if f.nullable {
+			code = append(code, fmt.Sprintf("%svar %s string", indent, keyVar))
+			code = append(code, fmt.Sprintf("%sif %s != nil { %s = fmt.Sprintf(\"%%v\", *%s) } else { %s = \"<nil>\" }", indent, f.varName, keyVar, f.varName, keyVar))
+		} else {
+			code = append(code, fmt.Sprintf("%s%s := fmt.Sprintf(\"%%v\", %s)", indent, keyVar, f.varName))
+		}
+
+		return code
+	}
+
+	partVars := make([]string, len(fields))
+	for i, f := range fields {
+		tmpVar := fmt.Sprintf("_pkp_%d", i)
+		partVars[i] = tmpVar
+
+		code = append(code, fmt.Sprintf("%svar %s string", indent, tmpVar))
+		if f.nullable {
+			code = append(code, fmt.Sprintf("%sif %s != nil { %s = fmt.Sprintf(\"%%v\", *%s) } else { %s = \"<nil>\" }", indent, f.varName, tmpVar, f.varName, tmpVar))
+		} else {
+			code = append(code, fmt.Sprintf("%s%s = fmt.Sprintf(\"%%v\", %s)", indent, tmpVar, f.varName))
+		}
+	}
+
+	code = append(code, fmt.Sprintf("%s%s := strings.Join([]string{%s}, \"|\")", indent, keyVar, strings.Join(partVars, ", ")))
+
+	return code
+}
+
 // generateQueryExecution generates query execution and result mapping code
 func generateQueryExecution(format *intermediate.IntermediateFormat, responseStruct *responseStructData, metas []*hierarchicalNodeMeta) (*queryExecutionData, error) {
 	var code []string
@@ -76,8 +116,6 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 			}
 
 			code = append(code, scanCode...)
-		} else {
-			// Nothing to scan; already executed above when no struct
 		}
 	case "many":
 		needsAggregation := false
@@ -213,7 +251,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 // generateIteratorBody builds the body of an iterator for non-aggregated many responses.
 func generateIteratorBody(responseStruct *responseStructData) ([]string, error) {
 	if responseStruct == nil {
-		return nil, fmt.Errorf("iterator generation requires a response struct")
+		return nil, ErrIteratorRequiresResponseStruct
 	}
 
 	var code []string
@@ -234,10 +272,12 @@ func generateIteratorBody(responseStruct *responseStructData) ([]string, error) 
 	code = append(code, "")
 	code = append(code, "for rows.Next() {")
 	code = append(code, fmt.Sprintf("\titem := new(%s)", responseStruct.Name))
+
 	code = append(code, "\tif err := rows.Scan(")
 	for _, field := range responseStruct.Fields {
 		code = append(code, fmt.Sprintf("\t\t&item.%s,", field.Name))
 	}
+
 	code = append(code, "\t); err != nil {")
 	code = append(code, "\t\t_ = yield(nil, fmt.Errorf(\"failed to scan row: %w\", err))")
 	code = append(code, "\t\treturn")
@@ -447,31 +487,13 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 
 	code = append(code, "    )")
 	code = append(code, "    if err != nil { return result, fmt.Errorf(\"failed to scan row: %w\", err) }")
-	// parent key build (dereference pointer PKs for stable keys)
-	if len(parentPK) == 1 {
-		if parentPK[0].Resp.IsNullable {
-			code = append(code, "    var parentKey string")
-			code = append(code, fmt.Sprintf("    if %s != nil { parentKey = fmt.Sprintf(\"%%v\", *%s) } else { parentKey = \"<nil>\" }", parentPK[0].VarName, parentPK[0].VarName))
-		} else {
-			code = append(code, fmt.Sprintf("    parentKey := fmt.Sprintf(\"%%v\", %s)", parentPK[0].VarName))
-		}
-	} else {
-		// multiple key parts
-		partVars := make([]string, len(parentPK))
-		for i, pk := range parentPK {
-			v := fmt.Sprintf("_pkp_%d", i)
-			partVars[i] = v
 
-			code = append(code, fmt.Sprintf("    var %s string", v))
-			if pk.Resp.IsNullable {
-				code = append(code, fmt.Sprintf("    if %s != nil { %s = fmt.Sprintf(\"%%v\", *%s) } else { %s = \"<nil>\" }", pk.VarName, v, pk.VarName, v))
-			} else {
-				code = append(code, fmt.Sprintf("    %s = fmt.Sprintf(\"%%v\", %s)", v, pk.VarName))
-			}
-		}
-
-		code = append(code, fmt.Sprintf("    parentKey := strings.Join([]string{%s}, \"|\")", strings.Join(partVars, ", ")))
+	parentKeyFields := make([]parentKeyField, len(parentPK))
+	for i, pk := range parentPK {
+		parentKeyFields[i] = parentKeyField{varName: pk.VarName, nullable: pk.Resp.IsNullable}
 	}
+
+	code = appendParentKeyBuilder(code, "    ", "parentKey", parentKeyFields)
 
 	code = append(code, fmt.Sprintf("    if _parentMap == nil { _parentMap = make(map[string]*%s) }", responseStruct.Name))
 	code = append(code, "    parentObj, _parentExists := _parentMap[parentKey]")
@@ -696,6 +718,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 		if strings.Contains(c.resp.Name, "__") && !strings.HasPrefix(goType, "*") {
 			goType = "*" + goType
 		}
+
 		if c.resp.IsNullable && !strings.HasPrefix(goType, "*") {
 			goType = "*" + goType
 		}
@@ -723,30 +746,13 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 
 	code = append(code, "    )")
 	code = append(code, "    if err != nil { return result, fmt.Errorf(\"failed to scan row: %w\", err) }")
-	// Build parent key (dereference pointer PKs for stable keys)
-	if len(parentPK) == 1 {
-		if parentPK[0].resp.IsNullable {
-			code = append(code, "    var pk_parent string")
-			code = append(code, fmt.Sprintf("    if %s != nil { pk_parent = fmt.Sprintf(\"%%v\", *%s) } else { pk_parent = \"<nil>\" }", parentPK[0].varName, parentPK[0].varName))
-		} else {
-			code = append(code, fmt.Sprintf("    pk_parent := fmt.Sprintf(\"%%v\", %s)", parentPK[0].varName))
-		}
-	} else {
-		partVars := make([]string, len(parentPK))
-		for i, pk := range parentPK {
-			v := fmt.Sprintf("_pkp_%d", i)
-			partVars[i] = v
 
-			code = append(code, fmt.Sprintf("    var %s string", v))
-			if pk.resp.IsNullable {
-				code = append(code, fmt.Sprintf("    if %s != nil { %s = fmt.Sprintf(\"%%v\", *%s) } else { %s = \"<nil>\" }", pk.varName, v, pk.varName, v))
-			} else {
-				code = append(code, fmt.Sprintf("    %s = fmt.Sprintf(\"%%v\", %s)", v, pk.varName))
-			}
-		}
-
-		code = append(code, fmt.Sprintf("    pk_parent := strings.Join([]string{%s}, \"|\")", strings.Join(partVars, ", ")))
+	pkFields := make([]parentKeyField, len(parentPK))
+	for i, pk := range parentPK {
+		pkFields[i] = parentKeyField{varName: pk.varName, nullable: pk.resp.IsNullable}
 	}
+
+	code = appendParentKeyBuilder(code, "    ", "pk_parent", pkFields)
 
 	code = append(code, fmt.Sprintf("    if _parentMap == nil { _parentMap = make(map[string]*%s) }", mainStruct))
 	code = append(code, "    parentObj, _okParent := _parentMap[pk_parent]")
@@ -775,6 +781,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 		if len(m.KeyFields) == 1 {
 			kf := m.KeyFields[0]
 			k := strings.ToLower(celNameToGoName(kf))
+
 			expr := "col_" + k
 			if strings.Contains(kf, "__") {
 				expr = "*" + expr
@@ -783,12 +790,15 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 					expr = "*" + expr
 				}
 			}
+
 			code = append(code, fmt.Sprintf("        _k_%s := fmt.Sprintf(\"%%v\", %s)", strings.Join(m.Path, "_"), expr))
 		} else {
 			fmtParts := make([]string, len(m.KeyFields))
+
 			args := make([]string, len(m.KeyFields))
 			for i, kf := range m.KeyFields {
 				fmtParts[i] = "%v"
+
 				arg := "col_" + strings.ToLower(celNameToGoName(kf))
 				if strings.Contains(kf, "__") {
 					arg = "*" + arg
@@ -797,6 +807,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 						arg = "*" + arg
 					}
 				}
+
 				args[i] = arg
 			}
 
@@ -821,6 +832,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 
 			leaf := df[strings.LastIndex(df, "__")+1:]
 			resp := respByName[df]
+
 			colVar := "col_" + strings.ToLower(celNameToGoName(df))
 			if resp.IsNullable {
 				code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.Join(m.Path, "_"), celNameToGoName(leaf), colVar))

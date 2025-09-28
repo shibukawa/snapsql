@@ -181,6 +181,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	functionReturnType := fmt.Sprintf("(%s, error)", responseType)
 	declareResult := true
 	iteratorYieldType := ""
+
 	if queryExecution.IsIterator && responseStruct != nil {
 		functionReturnType = fmt.Sprintf("iter.Seq2[*%s, error]", responseStruct.Name)
 		declareResult = false
@@ -286,6 +287,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	for imp := range data.Imports {
 		importSlice = append(importSlice, imp)
 	}
+
 	sort.Strings(importSlice)
 
 	data.ImportSlice = importSlice

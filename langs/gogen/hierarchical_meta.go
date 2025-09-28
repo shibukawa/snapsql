@@ -120,7 +120,7 @@ func buildHierarchicalNodeMetas(functionName string, responses []intermediate.Re
 		}
 		// 安全性: Key の無いノードは後段集約で重複排除できないためエラー返却（設計で skip も検討可）。
 		if len(meta.KeyFields) == 0 {
-			return nil, fmt.Errorf("hierarchical node %s has no key fields (depth=%d)", k, depth)
+			return nil, fmt.Errorf("%w: %s (depth=%d)", ErrHierarchicalNodeMissingKeys, k, depth)
 		}
 
 		metas = append(metas, meta)
@@ -128,7 +128,7 @@ func buildHierarchicalNodeMetas(functionName string, responses []intermediate.Re
 
 	// ルートノード複数サポートは今後検討。ここでは rootKeyFields が 0/1 以外の場合警告扱い (エラー返却)。
 	if len(rootKeyFields) > 1 {
-		return nil, fmt.Errorf("multiple root key fields detected (=%d); multi-root not supported", len(rootKeyFields))
+		return nil, fmt.Errorf("%w: count=%d", ErrHierarchicalMultipleRootKeys, len(rootKeyFields))
 	}
 
 	return metas, nil

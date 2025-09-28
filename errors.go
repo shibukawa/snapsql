@@ -220,16 +220,19 @@ var (
 	// ErrNoResponseFields indicates a generated query had no response fields.
 	ErrNoResponseFields = errors.New("no response fields found")
 	// ErrSchemaDirectoryNotFound indicates the ./schema directory is missing prior to generation.
-	ErrSchemaDirectoryNotFound = errors.New("schema directory not found; run 'snapsql pull' first")
+	ErrSchemaDirectoryNotFound = errors.New("schema directory not found; generate schema metadata via tbls or provide a schema directory")
 	// ErrNoSchemaYAMLFound indicates no schema YAML files were discovered.
-	ErrNoSchemaYAMLFound = errors.New("no schema YAML files found; run 'snapsql pull'")
+	ErrNoSchemaYAMLFound = errors.New("no schema metadata found; ensure tbls schema.json is available or configure a schema directory")
 
 	// ErrNotFound indicates a requested entity (affinity=one) was not found.
 	ErrNotFound = errors.New("not found")
 
-	// Hierarchical scan specific errors (code generation/runtime)
-	ErrHierarchicalNoRawResponses        = errors.New("hierarchical scan: no raw responses")
-	ErrHierarchicalNoGroups              = errors.New("hierarchical scan: no hierarchical groups detected")
-	ErrHierarchicalNoParentPrimaryKey    = errors.New("hierarchical scan: no parent primary key columns present")
+	// ErrHierarchicalNoRawResponses indicates aggregated scans have no raw columns available.
+	ErrHierarchicalNoRawResponses = errors.New("hierarchical scan: no raw responses")
+	// ErrHierarchicalNoGroups reports that no hierarchical groups were detected for aggregation.
+	ErrHierarchicalNoGroups = errors.New("hierarchical scan: no hierarchical groups detected")
+	// ErrHierarchicalNoParentPrimaryKey indicates parent rows lack primary key columns needed for aggregation.
+	ErrHierarchicalNoParentPrimaryKey = errors.New("hierarchical scan: no parent primary key columns present")
+	// ErrHierarchicalMultipleParentsForOne indicates more than one parent row was found while affinity=one was requested.
 	ErrHierarchicalMultipleParentsForOne = errors.New("hierarchical scan: multiple parent rows for affinity=one")
 )

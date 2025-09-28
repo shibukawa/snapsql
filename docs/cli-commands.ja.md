@@ -149,18 +149,6 @@ snapsql config validate
 snapsql config test-db
 ```
 
-### pull - リモートテンプレート取得
-
-リモートソースからSQLテンプレートを取得します（計画中の機能）。
-
-```bash
-snapsql pull <ソース> [オプション]
-```
-
-**オプション:**
-- `--branch <名前>` - ブランチ/バージョンを指定
-- `--output <ディレクトリ>` - 出力ディレクトリ
-
 ### version - バージョン表示
 
 バージョン情報を表示します。

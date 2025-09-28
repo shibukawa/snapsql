@@ -1,0 +1,9 @@
+{
+  "name": "acceptance",
+  "tables": [],
+  "relations": [],
+  "driver": {
+    "name": "sqlite",
+    "database_version": "test"
+  }
+}

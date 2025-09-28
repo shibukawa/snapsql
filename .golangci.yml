@@ -62,5 +62,14 @@ linters:
       - path: functionsigs
         linters:
           - dupl
+      - path: ^examples/
+        linters:
+          - dupl
+          - dogsled
+          - nilnesserr
+          - unused
+          - whitespace
+          - wsl
+          - wsl_v5
 run:
   timeout: 5m

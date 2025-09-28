@@ -159,20 +159,20 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	for _, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
-			// WHERE/RETURNING の前にスペースを強制する
+			// Force a leading space before WHERE/RETURNING keywords
 			val := inst.Value
 			val = strings.ReplaceAll(val, "WHERE", " WHERE")
 			val = strings.ReplaceAll(val, "RETURNING", " RETURNING")
 			frag := fmt.Sprintf("%q", val)
-			// ひとつ前が単語で終わり、今回が単語で始まるなら、直前にスペースを追記する
+			// Insert a space when the previous fragment ends with a word and the new fragment starts with a word
 			code = append(code, fmt.Sprintf(`{ // safe append static with spacing
 	_frag := %s
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
-		// 単語or識別子の末尾判定
+			// Determine whether the previous rune terminates a word/identifier
 		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// 先頭の空白をスキップ
+			// Skip leading whitespace characters in the fragment
 		_k := 0
 		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
 		_startsWord := false
