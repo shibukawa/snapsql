@@ -150,6 +150,10 @@ func parseExpectedResults(content []byte) ([]map[string]any, error) {
 		return nil, fmt.Errorf("failed to parse expected results: %w", err)
 	}
 
+	if result == nil {
+		result = make([]map[string]any, 0)
+	}
+
 	// Normalize values
 	for i, item := range result {
 		for k, v := range item {
@@ -157,10 +161,6 @@ func parseExpectedResults(content []byte) ([]map[string]any, error) {
 		}
 
 		result[i] = item
-	}
-
-	if len(result) == 0 {
-		return nil, snapsql.ErrEmptyExpectedResults
 	}
 
 	return result, nil

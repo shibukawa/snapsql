@@ -81,6 +81,40 @@ include_email: true
 	assert.Equal(t, "John", testCase.ExpectedResult[0]["name"])
 }
 
+func TestParseAllowsEmptyExpectedResults(t *testing.T) {
+	input := `# Empty Expected Results
+
+## Description
+
+Allow empty expected results blocks.
+
+## SQL
+
+` + "```sql" + `
+SELECT 1;
+` + "```" + `
+
+## Test Cases
+
+### No rows expected
+
+**Expected Results:**
+` + "```yaml" + `
+[]
+` + "```" + `
+`
+
+	doc, err := Parse(strings.NewReader(input))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(doc.TestCases))
+
+	testCase := doc.TestCases[0]
+	assert.Equal(t, "No rows expected", testCase.Name)
+	assert.Equal(t, 0, len(testCase.ExpectedResult))
+	assert.Equal(t, 1, len(testCase.ExpectedResults))
+	assert.Equal(t, 0, len(testCase.ExpectedResults[0].Data))
+}
+
 func TestDuplicateSections(t *testing.T) {
 	input := `---
 function_name: "test_duplicates"

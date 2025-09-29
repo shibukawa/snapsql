@@ -3,6 +3,7 @@ package intermediate
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
@@ -24,6 +25,9 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	}
 
 	instructions := GenerateInstructions(ctx.Tokens, expressions)
+
+	// Normalize INSERT ... SELECT statements so system fields appear in the SELECT list instead of before the table name
+	instructions = normalizeInsertSelectSystemValues(instructions)
 
 	// Detect SQL patterns that need dialect-specific handling
 	dialectConversions := detectDialectPatterns(ctx.Tokens)
@@ -289,11 +293,11 @@ func detectCastSyntax(tokens []tok.Token, startIndex int) *DialectConversion {
 		Variants: []DialectVariant{
 			{
 				Dialects:    []string{"mysql", "sqlite"},
-				SqlFragment: fmt.Sprintf("CAST_SPLIT|CAST(%s|AS|%s)", exprSQL, typeSQL),
+				SqlFragment: fmt.Sprintf("CAST_SPLIT|%s|AS|%s", exprSQL, typeSQL),
 			},
 			{
 				Dialects:    []string{"postgresql"},
-				SqlFragment: fmt.Sprintf("CAST_SPLIT|(%s|::|%s)", exprSQL, typeSQL),
+				SqlFragment: fmt.Sprintf("CAST_SPLIT|(%s)|::|%s", exprSQL, typeSQL),
 			},
 		},
 	}
@@ -411,7 +415,7 @@ func detectPostgreSQLCast(tokens []tok.Token, colonIndex int) *DialectConversion
 			},
 			{
 				Dialects:    []string{"mysql", "sqlite"},
-				SqlFragment: fmt.Sprintf("CAST_SPLIT|CAST(%s|AS|%s)", exprSQL, typeSQL),
+				SqlFragment: fmt.Sprintf("CAST_SPLIT|%s|AS|%s", exprSQL, typeSQL),
 			},
 		},
 	}
@@ -694,12 +698,17 @@ func expandVariant(v DialectVariant, pos string) Instruction {
 	sql := v.SqlFragment
 	if strings.HasPrefix(sql, "CAST_SPLIT|") {
 		parts := strings.Split(strings.TrimPrefix(sql, "CAST_SPLIT|"), "|")
-		if len(parts) == 4 { // CAST(expr|AS|type)
-			return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("CAST(%s AS %s)", parts[0], parts[2])}
-		}
+		if len(parts) >= 3 {
+			expr := parts[0]
+			op := parts[1]
+			typePart := strings.Join(parts[2:], "|")
 
-		if len(parts) == 3 { // expr|::|type
-			return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("%s::%s", parts[0], parts[2])}
+			switch op {
+			case "AS":
+				return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("CAST(%s AS %s)", expr, typePart)}
+			case "::":
+				return Instruction{Op: OpEmitStatic, Pos: pos, Value: fmt.Sprintf("%s::%s", expr, typePart)}
+			}
 		}
 
 		return Instruction{Op: OpEmitStatic, Pos: pos, Value: strings.ReplaceAll(strings.ReplaceAll(sql, "CAST_SPLIT|", ""), "|", "")}
@@ -716,6 +725,189 @@ func expandVariant(v DialectVariant, pos string) Instruction {
 	}
 
 	return Instruction{Op: OpEmitStatic, Pos: pos, Value: sql}
+}
+
+func normalizeInsertSelectSystemValues(instructions []Instruction) []Instruction {
+	type pendingSystemField struct {
+		instruction  Instruction
+		separator    string
+		separatorPos string
+	}
+
+	var (
+		result         []Instruction
+		pendingSystem  []pendingSystemField
+		inInsert       bool
+		isInsertSelect bool
+		sawSelect      bool
+	)
+
+	appendPending := func(pos string) {
+		if len(pendingSystem) == 0 {
+			return
+		}
+		for _, pending := range pendingSystem {
+			sep := pending.separator
+			if sep == "" {
+				sep = ", "
+			}
+
+			sepPos := pending.separatorPos
+			if sepPos == "" {
+				sepPos = pos
+			}
+
+			result = append(result, Instruction{Op: OpEmitStatic, Pos: sepPos, Value: sep})
+			result = append(result, pending.instruction)
+		}
+		pendingSystem = nil
+	}
+
+	resetState := func() {
+		inInsert = false
+		isInsertSelect = false
+		sawSelect = false
+		pendingSystem = nil
+	}
+
+	for idx := 0; idx < len(instructions); idx++ {
+		inst := instructions[idx]
+
+		if inst.Op == OpEmitStatic {
+			upperValue := strings.ToUpper(inst.Value)
+
+			if strings.Contains(upperValue, "INSERT INTO") {
+				if idx := strings.Index(upperValue, "INSERT INTO"); idx >= 0 {
+					insertEnd := idx + len("INSERT INTO")
+					j := insertEnd
+					for j < len(inst.Value) && unicode.IsSpace(rune(inst.Value[j])) {
+						j++
+					}
+
+					if j < len(inst.Value) && inst.Value[j] == ',' {
+						remainder := inst.Value[j+1:]
+						if len(remainder) > 0 && (remainder[0] == ' ' || remainder[0] == '\t') {
+							remainder = remainder[1:]
+						}
+
+						inst.Value = inst.Value[:j] + remainder
+
+						if j == insertEnd {
+							inst.Value = inst.Value[:j] + " " + inst.Value[j:]
+						}
+
+						upperValue = strings.ToUpper(inst.Value)
+					}
+				}
+
+				inInsert = true
+				sawSelect = false
+				pendingSystem = nil
+				isInsertSelect = false
+
+				for lookahead := idx; lookahead < len(instructions); lookahead++ {
+					next := instructions[lookahead]
+					if next.Op != OpEmitStatic {
+						continue
+					}
+
+					nextUpper := strings.ToUpper(next.Value)
+					if strings.Contains(nextUpper, "VALUES") {
+						break
+					}
+
+					if strings.Contains(nextUpper, "SELECT") {
+						isInsertSelect = true
+						break
+					}
+				}
+			}
+
+			if inInsert && isInsertSelect {
+				if strings.Contains(upperValue, "SELECT") {
+					sawSelect = true
+				}
+
+				if sawSelect && len(pendingSystem) > 0 {
+					if idxFrom := strings.Index(upperValue, "FROM"); idxFrom >= 0 {
+						before := inst.Value[:idxFrom]
+						after := inst.Value[idxFrom:]
+
+						if before != "" {
+							result = append(result, Instruction{Op: OpEmitStatic, Pos: inst.Pos, Value: before})
+						}
+
+						appendPending(inst.Pos)
+
+						if after != "" {
+							result = append(result, Instruction{Op: OpEmitStatic, Pos: inst.Pos, Value: after})
+						}
+
+						resetState()
+						continue
+					}
+				}
+			}
+
+			result = append(result, inst)
+
+			if inInsert {
+				if !isInsertSelect && strings.Contains(upperValue, "VALUES") {
+					resetState()
+				} else if strings.Contains(upperValue, ";") {
+					if len(pendingSystem) > 0 {
+						appendPending(inst.Pos)
+					}
+					resetState()
+				}
+			}
+
+			continue
+		}
+
+		if inInsert && isInsertSelect && !sawSelect && inst.Op == OpEmitSystemValue {
+			separator := ""
+			separatorPos := ""
+
+			if len(result) > 0 {
+				if last := result[len(result)-1]; last.Op == OpEmitStatic {
+					if strings.TrimSpace(last.Value) == "," {
+						separator = last.Value
+						separatorPos = last.Pos
+						result = result[:len(result)-1]
+					}
+				}
+			}
+
+			pendingSystem = append(pendingSystem, pendingSystemField{
+				instruction:  inst,
+				separator:    separator,
+				separatorPos: separatorPos,
+			})
+			continue
+		}
+
+		result = append(result, inst)
+	}
+
+	if len(pendingSystem) > 0 {
+		for _, pending := range pendingSystem {
+			sep := pending.separator
+			if sep == "" {
+				sep = ", "
+			}
+
+			sepPos := pending.separatorPos
+			if sepPos == "" {
+				sepPos = pending.instruction.Pos
+			}
+
+			result = append(result, Instruction{Op: OpEmitStatic, Pos: sepPos, Value: sep})
+			result = append(result, pending.instruction)
+		}
+	}
+
+	return result
 }
 
 func mergeAdjacentStaticInstructions(ins []Instruction) []Instruction {

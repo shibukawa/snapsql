@@ -312,6 +312,13 @@ export SNAPSQL_DEBUG_PARSER=true
 snapsql generate
 ```
 
+Kanban サンプルのコード生成は `examples/kanban` ディレクトリ内で実行します：
+
+```bash
+cd examples/kanban
+snapsql generate
+```
+
 ### 一般的なデバッグシナリオ
 
 1. **テンプレートパース問題**:

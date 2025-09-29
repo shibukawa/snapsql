@@ -43,8 +43,6 @@ var (
 	ErrEmptyContent = errors.New("empty content")
 	// ErrFailedToParse indicates a generic parsing failure on input data.
 	ErrFailedToParse = errors.New("failed to parse data")
-	// ErrEmptyExpectedResults indicates an Expected Results block was present but empty.
-	ErrEmptyExpectedResults = errors.New("empty expected results")
 	// ErrNoDatasetElement indicates a dataset element was not found where required.
 	ErrNoDatasetElement = errors.New("no dataset element found")
 	// ErrInvalidCSVFormat indicates the CSV file lacks required rows.

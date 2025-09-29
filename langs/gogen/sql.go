@@ -43,6 +43,51 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 	return generateDynamicSQLFromOptimized(optimizedInstructions, format)
 }
 
+func ensureSpaceBeforePlaceholders(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(s) + len(s)/4)
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if (ch == '?' || ch == '$') && i > 0 {
+			prev := s[i-1]
+			if !isWhitespaceByte(prev) && isWordCharBeforePlaceholder(prev) {
+				builder.WriteByte(' ')
+			}
+		}
+
+		builder.WriteByte(ch)
+	}
+
+	return builder.String()
+}
+
+func isWhitespaceByte(b byte) bool {
+	switch b {
+	case ' ', '\n', '\t', '\r':
+		return true
+	default:
+		return false
+	}
+}
+
+func isWordCharBeforePlaceholder(b byte) bool {
+	if (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') {
+		return true
+	}
+
+	switch b {
+	case '_', ')', ']', '"':
+		return true
+	default:
+		return false
+	}
+}
+
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions
 func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var (
@@ -88,6 +133,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 			// WHERE/RETURNING の前に必ずスペースを入れる（既にスペースがある場合はそのまま）
 			value = strings.ReplaceAll(value, "WHERE", " WHERE")
 			value = strings.ReplaceAll(value, "RETURNING", " RETURNING")
+			value = ensureSpaceBeforePlaceholders(value)
 			// 直前のパーツと単語が連結してしまう場合のスペース付与
 			if len(sqlParts) > 0 && needsSpaceBetween(sqlParts[len(sqlParts)-1], value) {
 				sqlParts[len(sqlParts)-1] = sqlParts[len(sqlParts)-1] + " "
@@ -163,6 +209,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			val := inst.Value
 			val = strings.ReplaceAll(val, "WHERE", " WHERE")
 			val = strings.ReplaceAll(val, "RETURNING", " RETURNING")
+			val = ensureSpaceBeforePlaceholders(val)
 			frag := fmt.Sprintf("%q", val)
 			// ひとつ前が単語で終わり、今回が単語で始まるなら、直前にスペースを追記する
 			code = append(code, fmt.Sprintf(`{ // safe append static with spacing

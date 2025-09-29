@@ -234,7 +234,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	}
 	if condResult.Value().(bool) {
 	{ // safe append static with spacing
-	_frag := "created_at BETWEEN?"
+	_frag := "created_at BETWEEN ?"
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
@@ -285,7 +285,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	args = append(args, result.Value())
 	}
 	{ // safe append static with spacing
-	_frag := "ORDER BY?"
+	_frag := "ORDER BY ?"
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]

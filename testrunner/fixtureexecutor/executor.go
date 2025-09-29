@@ -270,6 +270,17 @@ func resolveFixtureValue(value any) (any, error) {
 		if len(v) == 0 {
 			return value, nil
 		}
+		if len(v) == 1 {
+			if v[0] == nil {
+				return nil, nil
+			}
+			if str, ok := v[0].(string); ok {
+				signature := strings.ToLower(strings.TrimSpace(str))
+				if signature == "null" || signature == "nil" {
+					return nil, nil
+				}
+			}
+		}
 		if first, ok := v[0].(string); ok {
 			matcher := strings.ToLower(strings.TrimSpace(first))
 			switch matcher {

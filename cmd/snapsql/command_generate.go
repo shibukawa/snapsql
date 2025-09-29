@@ -56,6 +56,15 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
+	// Detect the repository stub configuration that simply points to the Kanban sample
+	if isLikelyStubConfig(ctx.Config, config) {
+		sampleConfig := filepath.Join("examples", "kanban", "snapsql.yaml")
+		if _, err := os.Stat(sampleConfig); err == nil {
+			color.Yellow("Kanban sample code generation must be executed inside examples/kanban.\nRun:\n  cd examples/kanban\n  snapsql generate")
+			return nil
+		}
+	}
+
 	// Rebase config.InputDir relative to config file directory (only when user did not override via --input)
 	if ctx.Config != "" && g.Input == "" && config.InputDir != "" && !filepath.IsAbs(config.InputDir) {
 		var baseDir string
@@ -96,6 +105,43 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 
 	// Generate all configured languages
 	return g.generateAllLanguages(ctx, config, inputPath, constantFiles)
+}
+
+func isLikelyStubConfig(configPath string, config *Config) bool {
+	if config == nil {
+		return false
+	}
+
+	if filepath.Base(strings.TrimSpace(configPath)) != "snapsql.yaml" && configPath != "" {
+		return false
+	}
+
+	if config.InputDir != "./queries" {
+		return false
+	}
+
+	if config.Dialect != "postgres" {
+		return false
+	}
+
+	if len(config.Generation.Generators) != 1 {
+		return false
+	}
+
+	jsonGen, ok := config.Generation.Generators["json"]
+	if !ok {
+		return false
+	}
+
+	if jsonGen.Enabled {
+		return false
+	}
+
+	if jsonGen.Output != "./generated" {
+		return false
+	}
+
+	return true
 }
 
 // generateAllLanguages generates files for all configured languages

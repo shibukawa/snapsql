@@ -379,6 +379,79 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 	assert.Equal(t, "New User", users[0]["name"])
 }
 
+func TestExecutor_ClearInsertStrategy_NullPlaceholder(t *testing.T) {
+	// Create in-memory SQLite database for testing
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	// Create test table with nullable datetime column
+	_, err = db.Exec(`
+		CREATE TABLE boards (
+			id INTEGER PRIMARY KEY,
+			name TEXT NOT NULL,
+			status TEXT NOT NULL,
+			archived_at DATETIME NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// minimal table info including column order for deterministic inserts
+	executor := NewExecutor(db, "sqlite", map[string]*snapsql.TableInfo{
+		"boards": {
+			Name:        "boards",
+			ColumnOrder: []string{"id", "name", "status", "archived_at"},
+			Columns: map[string]*snapsql.ColumnInfo{
+				"id":          {Name: "id", IsPrimaryKey: true},
+				"name":        {Name: "name"},
+				"status":      {Name: "status"},
+				"archived_at": {Name: "archived_at", Nullable: true},
+			},
+		},
+	})
+
+	testCase := &markdownparser.TestCase{
+		Name: "Null placeholder is converted to database NULL",
+		Fixtures: []markdownparser.TableFixture{
+			{
+				TableName: "boards",
+				Strategy:  markdownparser.ClearInsert,
+				Data: []map[string]any{
+					{"id": 1, "name": "Sprint Board", "status": "active", "archived_at": []any{nil}},
+				},
+			},
+		},
+	}
+
+	options := &ExecutionOptions{
+		Mode:     FixtureOnly,
+		Commit:   true,
+		Parallel: 1,
+		Timeout:  time.Minute,
+	}
+
+	result, trace, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Empty(t, trace)
+
+	var (
+		id       int
+		name     string
+		status   string
+		archived sql.NullTime
+	)
+
+	err = db.QueryRow("SELECT id, name, status, archived_at FROM boards WHERE id = 1").Scan(&id, &name, &status, &archived)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, id)
+	assert.Equal(t, "Sprint Board", name)
+	assert.Equal(t, "active", status)
+	assert.False(t, archived.Valid, "archived_at should be NULL")
+}
+
 func TestTestRunner_RunTests(t *testing.T) {
 	// Create in-memory SQLite database for testing
 	db, err := sql.Open("sqlite3", ":memory:")

@@ -250,6 +250,12 @@ func AddSystemFieldsToInsert(stmt parser.StatementNode, implicitParams []Implici
 		if err != nil {
 			return fmt.Errorf("failed to add system values to VALUES clause: %w", err)
 		}
+	} else if insertStmt.Select != nil {
+		// Handle INSERT ... SELECT pattern by appending system values to SELECT clause
+		err := addSystemValuesToSelectClause(insertStmt.Select, columnsToAdd)
+		if err != nil {
+			return fmt.Errorf("failed to add system values to SELECT clause: %w", err)
+		}
 	}
 
 	return nil
@@ -298,6 +304,44 @@ func addSystemValuesToValuesClause(valuesClause *parser.ValuesClause, columnsToA
 
 	// Insert new tokens before the closing parenthesis
 	for range newTokens {
+	}
+
+	return nil
+}
+
+// addSystemValuesToSelectClause appends system value directives to SELECT clause for INSERT ... SELECT statements
+func addSystemValuesToSelectClause(selectClause *parser.SelectClause, columnsToAdd []string) error {
+	if len(columnsToAdd) == 0 || selectClause == nil {
+		return nil
+	}
+
+	insertIndex := len(selectClause.RawTokens()) - 1
+	if insertIndex < 0 {
+		return fmt.Errorf("%w: SELECT clause", snapsql.ErrClosingParenthesisNotFound)
+	}
+
+	for _, column := range columnsToAdd {
+		newTokens := []tok.Token{
+			{Type: tok.COMMA, Value: ","},
+			{Type: tok.WHITESPACE, Value: " "},
+			{
+				Type:  tok.BLOCK_COMMENT,
+				Value: fmt.Sprintf("/*# EMIT_SYSTEM_VALUE: %s */", column),
+				Directive: &tok.Directive{
+					Type:        "system_value",
+					SystemField: column,
+				},
+			},
+		}
+
+		selectClause.InsertTokensAfterIndex(insertIndex, newTokens)
+		insertIndex += len(newTokens)
+
+		selectClause.Fields = append(selectClause.Fields, parser.SelectField{
+			FieldKind:    parser.LiteralField,
+			FieldName:    column,
+			ExplicitName: true,
+		})
 	}
 
 	return nil

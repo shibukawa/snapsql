@@ -6,6 +6,7 @@ import (
 
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -89,6 +90,19 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 	}
 
 	// Build the final intermediate format
+	responses := applyHierarchyKeyLevels(determineResponseType(ctx.Statement, ctx.TableInfo), ctx.TableInfo)
+
+	if len(responses) == 0 {
+		fallbackResponses, err := buildDMLReturningResponses(ctx.Statement, ctx.TableInfo)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build RETURNING responses: %w", err)
+		}
+
+		if len(fallbackResponses) > 0 {
+			responses = applyHierarchyKeyLevels(fallbackResponses, ctx.TableInfo)
+		}
+	}
+
 	result := &IntermediateFormat{
 		FormatVersion:      "1",
 		Description:        ctx.Description,
@@ -101,7 +115,7 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		ImplicitParameters: ctx.ImplicitParams,
 		SystemFields:       ctx.SystemFields,
 		ResponseAffinity:   ctx.ResponseAffinity,
-		Responses:          applyHierarchyKeyLevels(determineResponseType(ctx.Statement, ctx.TableInfo), ctx.TableInfo), // Add type inference result + hierarchy levels
+		Responses:          responses,
 	}
 
 	return result, nil
@@ -133,6 +147,204 @@ func convertEnvironmentsToEnvs(environments []string) [][]EnvVar {
 	}
 
 	return envs
+}
+
+// buildDMLReturningResponses synthesizes response metadata for DML statements with RETURNING
+// clauses when type inference fails to populate responses. It leverages schema information and
+// the parser AST to map returned columns back to their originating tables and columns.
+func buildDMLReturningResponses(stmt parser.StatementNode, tableInfo map[string]*snapsql.TableInfo) ([]Response, error) {
+	if stmt == nil || len(tableInfo) == 0 {
+		return nil, nil
+	}
+
+	switch s := stmt.(type) {
+	case *parser.InsertIntoStatement:
+		if s.Returning == nil || s.Into == nil {
+			return nil, nil
+		}
+
+		baseTable, aliasMap := resolveTableReference(s.Into.Table, tableInfo)
+		if baseTable == "" {
+			return nil, nil
+		}
+
+		return buildResponsesFromReturningClause(s.Returning, baseTable, aliasMap, tableInfo), nil
+	case *parser.UpdateStatement:
+		if s.Returning == nil || s.Update == nil {
+			return nil, nil
+		}
+
+		baseTable, aliasMap := resolveTableReference(s.Update.Table, tableInfo)
+		if baseTable == "" {
+			return nil, nil
+		}
+
+		return buildResponsesFromReturningClause(s.Returning, baseTable, aliasMap, tableInfo), nil
+	case *parser.DeleteFromStatement:
+		if s.Returning == nil || s.From == nil {
+			return nil, nil
+		}
+
+		baseTable, aliasMap := resolveTableReference(s.From.Table, tableInfo)
+		if baseTable == "" {
+			return nil, nil
+		}
+
+		return buildResponsesFromReturningClause(s.Returning, baseTable, aliasMap, tableInfo), nil
+	default:
+		return nil, nil
+	}
+}
+
+func resolveTableReference(ref cmn.TableReference, tableInfo map[string]*snapsql.TableInfo) (string, map[string]string) {
+	aliasMap := map[string]string{}
+
+	canonical := canonicalTableName(ref, tableInfo)
+	if canonical == "" {
+		return "", aliasMap
+	}
+
+	if ref.Name != "" {
+		aliasMap[strings.ToLower(ref.Name)] = canonical
+	}
+
+	if ref.TableName != "" {
+		aliasMap[strings.ToLower(ref.TableName)] = canonical
+	}
+
+	aliasMap[strings.ToLower(canonical)] = canonical
+
+	return canonical, aliasMap
+}
+
+func canonicalTableName(ref cmn.TableReference, tableInfo map[string]*snapsql.TableInfo) string {
+	candidates := []string{ref.TableName, ref.Name}
+
+	for _, cand := range candidates {
+		cand = strings.TrimSpace(cand)
+		if cand == "" {
+			continue
+		}
+
+		if tbl := lookupTableInfo(tableInfo, cand); tbl != nil {
+			return tbl.Name
+		}
+	}
+
+	return ""
+}
+
+func buildResponsesFromReturningClause(returning *parser.ReturningClause, baseTable string, aliasMap map[string]string, tableInfo map[string]*snapsql.TableInfo) []Response {
+	if returning == nil {
+		return nil
+	}
+
+	responses := make([]Response, 0, len(returning.Fields))
+
+	for _, field := range returning.Fields {
+		columnName := normalizeColumnName(field.FieldName)
+		if columnName == "" {
+			columnName = normalizeColumnName(field.OriginalField)
+		}
+
+		if columnName == "" {
+			continue
+		}
+
+		tableName := baseTable
+		if field.TableName != "" {
+			if mapped := aliasMap[strings.ToLower(field.TableName)]; mapped != "" {
+				tableName = mapped
+			} else if tbl := lookupTableInfo(tableInfo, field.TableName); tbl != nil {
+				tableName = tbl.Name
+			}
+		}
+
+		tblInfo := lookupTableInfo(tableInfo, tableName)
+		if tblInfo == nil {
+			continue
+		}
+
+		colInfo := lookupColumnInfo(tblInfo, columnName)
+		if colInfo == nil {
+			continue
+		}
+
+		responses = append(responses, Response{
+			Name:         columnName,
+			Type:         colInfo.DataType,
+			BaseType:     colInfo.DataType,
+			IsNullable:   colInfo.Nullable,
+			MaxLength:    colInfo.MaxLength,
+			Precision:    colInfo.Precision,
+			Scale:        colInfo.Scale,
+			SourceTable:  tblInfo.Name,
+			SourceColumn: columnName,
+		})
+	}
+
+	return responses
+}
+
+func normalizeColumnName(name string) string {
+	if name == "" {
+		return ""
+	}
+
+	trimmed := strings.TrimSpace(name)
+	trimmed = strings.Trim(trimmed, "`\"[]")
+
+	if idx := strings.Index(trimmed, "::"); idx >= 0 {
+		trimmed = trimmed[:idx]
+	}
+
+	if dot := strings.LastIndex(trimmed, "."); dot >= 0 {
+		trimmed = trimmed[dot+1:]
+	}
+
+	return strings.TrimSpace(trimmed)
+}
+
+func lookupTableInfo(tableInfo map[string]*snapsql.TableInfo, name string) *snapsql.TableInfo {
+	if len(tableInfo) == 0 || name == "" {
+		return nil
+	}
+
+	if tbl, ok := tableInfo[name]; ok {
+		return tbl
+	}
+
+	lower := strings.ToLower(name)
+	for key, tbl := range tableInfo {
+		if strings.EqualFold(key, name) || strings.ToLower(tbl.Name) == lower {
+			return tbl
+		}
+	}
+
+	return nil
+}
+
+func lookupColumnInfo(table *snapsql.TableInfo, column string) *snapsql.ColumnInfo {
+	if table == nil || column == "" {
+		return nil
+	}
+
+	if col, ok := table.Columns[column]; ok {
+		return col
+	}
+
+	lower := strings.ToLower(column)
+	for key, col := range table.Columns {
+		if strings.EqualFold(key, column) {
+			return col
+		}
+
+		if strings.ToLower(key) == lower {
+			return col
+		}
+	}
+
+	return nil
 }
 
 // CreateDefaultPipeline creates a pipeline with default processors
