@@ -98,6 +98,7 @@ func TestRunAllFixtureTestsReportsParseErrors(t *testing.T) {
 	require.Equal(t, filepath.ToSlash("broken.snap.md"), result.SourceFile)
 
 	color.NoColor = true
+
 	t.Cleanup(func() { color.NoColor = false })
 
 	output := captureStdout(t, func() {

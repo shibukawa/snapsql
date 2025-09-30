@@ -225,9 +225,12 @@ var (
 	// ErrNotFound indicates a requested entity (affinity=one) was not found.
 	ErrNotFound = errors.New("not found")
 
-	// Hierarchical scan specific errors (code generation/runtime)
-	ErrHierarchicalNoRawResponses        = errors.New("hierarchical scan: no raw responses")
-	ErrHierarchicalNoGroups              = errors.New("hierarchical scan: no hierarchical groups detected")
-	ErrHierarchicalNoParentPrimaryKey    = errors.New("hierarchical scan: no parent primary key columns present")
+	// ErrHierarchicalNoRawResponses indicates hierarchical scan found no raw responses.
+	ErrHierarchicalNoRawResponses = errors.New("hierarchical scan: no raw responses")
+	// ErrHierarchicalNoGroups indicates hierarchical scan found no groups.
+	ErrHierarchicalNoGroups = errors.New("hierarchical scan: no hierarchical groups detected")
+	// ErrHierarchicalNoParentPrimaryKey indicates hierarchical scan found no parent primary key.
+	ErrHierarchicalNoParentPrimaryKey = errors.New("hierarchical scan: no parent primary key columns present")
+	// ErrHierarchicalMultipleParentsForOne indicates hierarchical scan found multiple parent rows for affinity=one.
 	ErrHierarchicalMultipleParentsForOne = errors.New("hierarchical scan: multiple parent rows for affinity=one")
 )

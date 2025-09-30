@@ -589,6 +589,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 	// Process each file
 	processedCount := 0
 	generatedFiles := make([]string, 0, len(files))
+
 	var encounteredErr error
 
 	for _, file := range files {
@@ -597,6 +598,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 		if err != nil {
 			color.Red("Failed to process %s: %v", file, err)
 			encounteredErr = errors.Join(encounteredErr, err)
+
 			continue
 		}
 

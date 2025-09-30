@@ -746,6 +746,7 @@ func normalizeInsertSelectSystemValues(instructions []Instruction) []Instruction
 		if len(pendingSystem) == 0 {
 			return
 		}
+
 		for _, pending := range pendingSystem {
 			sep := pending.separator
 			if sep == "" {
@@ -760,6 +761,7 @@ func normalizeInsertSelectSystemValues(instructions []Instruction) []Instruction
 			result = append(result, Instruction{Op: OpEmitStatic, Pos: sepPos, Value: sep})
 			result = append(result, pending.instruction)
 		}
+
 		pendingSystem = nil
 	}
 
@@ -779,6 +781,7 @@ func normalizeInsertSelectSystemValues(instructions []Instruction) []Instruction
 			if strings.Contains(upperValue, "INSERT INTO") {
 				if idx := strings.Index(upperValue, "INSERT INTO"); idx >= 0 {
 					insertEnd := idx + len("INSERT INTO")
+
 					j := insertEnd
 					for j < len(inst.Value) && unicode.IsSpace(rune(inst.Value[j])) {
 						j++
@@ -844,6 +847,7 @@ func normalizeInsertSelectSystemValues(instructions []Instruction) []Instruction
 						}
 
 						resetState()
+
 						continue
 					}
 				}
@@ -858,6 +862,7 @@ func normalizeInsertSelectSystemValues(instructions []Instruction) []Instruction
 					if len(pendingSystem) > 0 {
 						appendPending(inst.Pos)
 					}
+
 					resetState()
 				}
 			}
@@ -884,6 +889,7 @@ func normalizeInsertSelectSystemValues(instructions []Instruction) []Instruction
 				separator:    separator,
 				separatorPos: separatorPos,
 			})
+
 			continue
 		}
 

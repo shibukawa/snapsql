@@ -22,6 +22,7 @@ func buildTableInfo(table string, pkCols []string, extraCols ...string) map[stri
 			cols[c] = &snapsql.ColumnInfo{Name: c, DataType: "int"}
 		}
 	}
+
 	return map[string]*snapsql.TableInfo{
 		table: {
 			Name:    table,
@@ -37,10 +38,12 @@ function_name: listsByBoard
 description: lists by board (non PK where)
 */
 SELECT id, title FROM lists WHERE board_id = 1 AND is_archived = 0`
+
 	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, ".", ".", parser.DefaultOptions)
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
+
 	ti := buildTableInfo("lists", []string{"id"}, "board_id", "is_archived", "title")
 	aff := determineResponseAffinity(stmt, ti)
 	assert.Equal(t, ResponseAffinityMany, aff)
@@ -53,10 +56,12 @@ function_name: listByID
 description: list by id (PK equality)
 */
 SELECT id, title FROM lists WHERE id = 1`
+
 	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, ".", ".", parser.DefaultOptions)
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
+
 	ti := buildTableInfo("lists", []string{"id"}, "title")
 	aff := determineResponseAffinity(stmt, ti)
 	assert.Equal(t, ResponseAffinityOne, aff)

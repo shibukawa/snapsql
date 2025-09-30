@@ -192,9 +192,9 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
-		// 単語or識別子の末尾判定
+		// determine if last char is word char
 		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// 先頭の空白をスキップ
+		// skip leading spaces in _frag
 		_k := 0
 		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
 		_startsWord := false
@@ -215,9 +215,9 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
-		// 単語or識別子の末尾判定
+		// determine if last char is word char
 		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// 先頭の空白をスキップ
+		// skip leading spaces in _frag
 		_k := 0
 		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
 		_startsWord := false
@@ -238,9 +238,9 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
-		// 単語or識別子の末尾判定
+		// determine if last char is word char
 		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// 先頭の空白をスキップ
+		// skip leading spaces in _frag
 		_k := 0
 		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
 		_startsWord := false
@@ -265,9 +265,9 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
-		// 単語or識別子の末尾判定
+		// determine if last char is word char
 		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// 先頭の空白をスキップ
+		// skip leading spaces in _frag
 		_k := 0
 		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
 		_startsWord := false
@@ -289,9 +289,9 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
-		// 単語or識別子の末尾判定
+		// determine if last char is word char
 		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// 先頭の空白をスキップ
+		// skip leading spaces in _frag
 		_k := 0
 		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
 		_startsWord := false
@@ -309,13 +309,13 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	args = append(args, result.Value())
 	boundaryNeeded = false
 	{ // safe append static with spacing
-	_frag := "LIMIT OFFSET "
+	_frag := " LIMIT  OFFSET "
 	if builder.Len() > 0 {
 		_b := builder.String()
 		_last := _b[len(_b)-1]
-		// 単語or識別子の末尾判定
+		// determine if last char is word char
 		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// 先頭の空白をスキップ
+		// skip leading spaces in _frag
 		_k := 0
 		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
 		_startsWord := false

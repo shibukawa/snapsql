@@ -132,7 +132,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	for _, file := range testFiles {
 		fileInfo, err := ftr.parseTestFile(file)
 		if err != nil {
-			displayPath := file
+			var displayPath string
 			if rel, relErr := filepath.Rel(ftr.projectRoot, file); relErr == nil && !strings.HasPrefix(rel, "..") {
 				displayPath = filepath.ToSlash(rel)
 			} else {
@@ -141,7 +141,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 
 			issue := preparationIssue{
 				filePath: displayPath,
-				name:     fmt.Sprintf("Parse %s", filepath.Base(displayPath)),
+				name:     "Parse " + filepath.Base(displayPath),
 				err:      fmt.Errorf("failed to parse markdown: %w", err),
 			}
 

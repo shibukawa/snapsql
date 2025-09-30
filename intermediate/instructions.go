@@ -65,7 +65,6 @@ func shouldAutoInsertLimit(stmt cmn.StatementNode, tokens []tokenizer.Token) boo
 }
 
 func detectLimitOffsetClause(tokens []tokenizer.Token) *LimitOffsetClauseInfo {
-
 	info := &LimitOffsetClauseInfo{}
 
 	for i, token := range tokens {

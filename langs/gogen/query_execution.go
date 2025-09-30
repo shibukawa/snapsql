@@ -1,12 +1,17 @@
 package gogen
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
+)
+
+var (
+	ErrIteratorRequiresStruct = errors.New("iterator generation requires a response struct")
 )
 
 // queryExecutionData represents query execution code generation data
@@ -76,8 +81,6 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 			}
 
 			code = append(code, scanCode...)
-		} else {
-			// Nothing to scan; already executed above when no struct
 		}
 	case "many":
 		needsAggregation := false
@@ -213,7 +216,7 @@ func generateSimpleScanCode(responseStruct *responseStructData, isMany bool) ([]
 // generateIteratorBody builds the body of an iterator for non-aggregated many responses.
 func generateIteratorBody(responseStruct *responseStructData) ([]string, error) {
 	if responseStruct == nil {
-		return nil, fmt.Errorf("iterator generation requires a response struct")
+		return nil, ErrIteratorRequiresStruct
 	}
 
 	var code []string
@@ -234,10 +237,12 @@ func generateIteratorBody(responseStruct *responseStructData) ([]string, error) 
 	code = append(code, "")
 	code = append(code, "for rows.Next() {")
 	code = append(code, fmt.Sprintf("\titem := new(%s)", responseStruct.Name))
+
 	code = append(code, "\tif err := rows.Scan(")
 	for _, field := range responseStruct.Fields {
 		code = append(code, fmt.Sprintf("\t\t&item.%s,", field.Name))
 	}
+
 	code = append(code, "\t); err != nil {")
 	code = append(code, "\t\t_ = yield(nil, fmt.Errorf(\"failed to scan row: %w\", err))")
 	code = append(code, "\t\treturn")
@@ -448,6 +453,7 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 	code = append(code, "    )")
 	code = append(code, "    if err != nil { return result, fmt.Errorf(\"failed to scan row: %w\", err) }")
 	// parent key build (dereference pointer PKs for stable keys)
+	//nolint:dupl // Different variable naming conventions for different contexts
 	if len(parentPK) == 1 {
 		if parentPK[0].Resp.IsNullable {
 			code = append(code, "    var parentKey string")
@@ -696,6 +702,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 		if strings.Contains(c.resp.Name, "__") && !strings.HasPrefix(goType, "*") {
 			goType = "*" + goType
 		}
+
 		if c.resp.IsNullable && !strings.HasPrefix(goType, "*") {
 			goType = "*" + goType
 		}
@@ -724,6 +731,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 	code = append(code, "    )")
 	code = append(code, "    if err != nil { return result, fmt.Errorf(\"failed to scan row: %w\", err) }")
 	// Build parent key (dereference pointer PKs for stable keys)
+	//nolint:dupl // Different variable naming conventions for different contexts
 	if len(parentPK) == 1 {
 		if parentPK[0].resp.IsNullable {
 			code = append(code, "    var pk_parent string")
@@ -775,6 +783,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 		if len(m.KeyFields) == 1 {
 			kf := m.KeyFields[0]
 			k := strings.ToLower(celNameToGoName(kf))
+
 			expr := "col_" + k
 			if strings.Contains(kf, "__") {
 				expr = "*" + expr
@@ -783,12 +792,15 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 					expr = "*" + expr
 				}
 			}
+
 			code = append(code, fmt.Sprintf("        _k_%s := fmt.Sprintf(\"%%v\", %s)", strings.Join(m.Path, "_"), expr))
 		} else {
 			fmtParts := make([]string, len(m.KeyFields))
+
 			args := make([]string, len(m.KeyFields))
 			for i, kf := range m.KeyFields {
 				fmtParts[i] = "%v"
+
 				arg := "col_" + strings.ToLower(celNameToGoName(kf))
 				if strings.Contains(kf, "__") {
 					arg = "*" + arg
@@ -797,6 +809,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 						arg = "*" + arg
 					}
 				}
+
 				args[i] = arg
 			}
 
@@ -821,6 +834,7 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 
 			leaf := df[strings.LastIndex(df, "__")+1:]
 			resp := respByName[df]
+
 			colVar := "col_" + strings.ToLower(celNameToGoName(df))
 			if resp.IsNullable {
 				code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.Join(m.Path, "_"), celNameToGoName(leaf), colVar))

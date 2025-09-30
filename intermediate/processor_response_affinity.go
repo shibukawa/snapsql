@@ -308,15 +308,17 @@ func areAllPrimaryKeysInWhereForTableWithAlias(primaryKeys []string, whereText s
 
 		// Regex patterns to avoid substring false positives
 		tableQualifiedRe := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(lowerTableName) + `\.` + wordBoundary(lowerKey) + `\s*=`)
+
 		var aliasQualifiedRe *regexp.Regexp
 		if lowerTableAlias != "" {
 			aliasQualifiedRe = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(lowerTableAlias) + `\.` + wordBoundary(lowerKey) + `\s*=`)
 		}
+
 		unqualifiedRe := regexp.MustCompile(`(?i)` + wordBoundary(lowerKey) + `\s*=`)
 
-		if !(tableQualifiedRe.MatchString(lowerText) ||
-			(aliasQualifiedRe != nil && aliasQualifiedRe.MatchString(lowerText)) ||
-			unqualifiedRe.MatchString(lowerText)) {
+		if !tableQualifiedRe.MatchString(lowerText) &&
+			(aliasQualifiedRe == nil || !aliasQualifiedRe.MatchString(lowerText)) &&
+			!unqualifiedRe.MatchString(lowerText) {
 			return false
 		}
 	}
@@ -363,9 +365,11 @@ func getMainTableName(fromClause *parser.FromClause) string {
 	if firstTable.TableName != "" {
 		return firstTable.TableName
 	}
+
 	if firstTable.Name != "" {
 		return firstTable.Name
 	}
+
 	return ""
 }
 
@@ -387,11 +391,13 @@ func areAllPrimaryKeysInWhere(primaryKeys []string, whereText string) bool {
 	lowerText := strings.ToLower(whereText)
 	for _, pk := range primaryKeys {
 		lowerPK := strings.ToLower(pk)
+
 		re := regexp.MustCompile(`(?i)` + wordBoundary(lowerPK) + `\s*=`)
 		if !re.MatchString(lowerText) {
 			return false
 		}
 	}
+
 	return true
 }
 

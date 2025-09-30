@@ -40,6 +40,7 @@ func TestPipelineUpdateReturningGeneratesResponses(t *testing.T) {
 	// Ensure primary fields are present
 	foundID := false
 	foundTitle := false
+
 	for _, resp := range format.Responses {
 		switch resp.Name {
 		case "id":

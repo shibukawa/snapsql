@@ -55,7 +55,11 @@ func loadConfig(testDir string) (*Config, error) {
 func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
 	yamlPath := filepath.Join(testDir, "schema.yaml")
 	if _, err := os.Stat(yamlPath); err != nil {
-		return map[string]*TableInfo{}, nil
+		if os.IsNotExist(err) {
+			return map[string]*TableInfo{}, nil
+		}
+
+		return nil, err
 	}
 
 	yamlContent, err := os.ReadFile(yamlPath)

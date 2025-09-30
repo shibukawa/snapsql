@@ -734,6 +734,7 @@ func TestCTERawTokensIncludesBody(t *testing.T) {
 	assert.Equal(t, 1, len(got))
 
 	stmt := got[0].Val.NewValue.(cmn.StatementNode)
+
 	cte := stmt.CTE()
 	if cte == nil {
 		t.Fatalf("expected statement to include CTE")

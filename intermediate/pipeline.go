@@ -252,6 +252,7 @@ func buildResponsesFromReturningClause(returning *parser.ReturningClause, baseTa
 		}
 
 		tableName := baseTable
+
 		if field.TableName != "" {
 			if mapped := aliasMap[strings.ToLower(field.TableName)]; mapped != "" {
 				tableName = mapped

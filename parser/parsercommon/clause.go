@@ -140,6 +140,7 @@ func NewWithClause(heading, body []tokenizer.Token) *WithClause {
 	bodyCopy := append([]tokenizer.Token(nil), body...)
 
 	combined := append(append([]tokenizer.Token(nil), headingCopy...), bodyCopy...)
+
 	var srcBuilder strings.Builder
 	for _, tk := range combined {
 		srcBuilder.WriteString(tk.Value)
