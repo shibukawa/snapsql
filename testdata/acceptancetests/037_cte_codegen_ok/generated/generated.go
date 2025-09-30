@@ -26,12 +26,12 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// GetComprehensiveDialectTest specific CEL programs and mock path
+// PostponeCards specific CEL programs and mock path
 var (
-	getcomprehensivedialecttestPrograms []cel.Program
+	postponecardsPrograms []cel.Program
 )
 
-const getcomprehensivedialecttestMockPath = ""
+const postponecardsMockPath = ""
 
 func init() {
 
@@ -44,41 +44,28 @@ func init() {
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("user_id", cel.IntType),
 		}
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create GetComprehensiveDialectTest CEL environment 0: %v", err))
+			panic(fmt.Sprintf("failed to create PostponeCards CEL environment 0: %v", err))
 		}
 		celEnvironments[0] = env0
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getcomprehensivedialecttestPrograms = make([]cel.Program, 1)
-	// expr_001: "user_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("user_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_id': %v", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
-		}
-		getcomprehensivedialecttestPrograms[0] = program
-	}
+	postponecardsPrograms = make([]cel.Program, 0)
 }
-// GetComprehensiveDialectTest - sql.Result Affinity
-func GetComprehensiveDialectTest(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+// PostponeCards - sql.Result Affinity
+func PostponeCards(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomprehensivedialecttest", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "postponecards", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getcomprehensivedialecttestMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(postponecardsMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("failed to get mock data: %w", err)
 		}
@@ -92,10 +79,8 @@ func GetComprehensiveDialectTest(ctx context.Context, executor snapsqlgo.DBExecu
 	}
 
 	// Build SQL
-	query := "SELECT id, name, (age)::INTEGER as age_cast_standard, price::DECIMAL(10,2) as price_cast_postgresql, (salary + bonus)::NUMERIC(12,2) as total_cast_complex, first_name || ' ' || last_name as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, CURRENT_TIMESTAMP as time_mysql, CURRENT_TIMESTAMP as time_standard, TRUE as bool_true, FALSE as bool_false, RANDOM() as random_mysql, RANDOM() as random_postgresql, (CURRENT_TIMESTAMP)::TEXT as nested_cast_time, 'ID: ' || CAST(id AS TEXT) as nested_concat_cast FROM users  WHERE id =$1 AND active = TRUE AND created_at > CURRENT_TIMESTAMP"
-	args := []any{
-		userID,
-	}
+	query := "WITH pending AS (SELECT id FROM cards  WHERE status = 'pending') SELECT id FROM pending"
+	args := []any{}
 		// Execute query
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {

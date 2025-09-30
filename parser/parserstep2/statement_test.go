@@ -713,3 +713,44 @@ LIMIT /*= page_size */10
 		t.Logf("Found clause of type %s with condition: %q", check.clauseType, foundClause.IfCondition())
 	}
 }
+
+func TestCTERawTokensIncludesBody(t *testing.T) {
+	sql := `WITH pending AS (SELECT id FROM cards WHERE status = 'pending') SELECT id FROM pending`
+
+	tokens, err := tok.Tokenize(sql)
+	assert.NoError(t, err)
+
+	pcTokens := tokenToEntity(tokens)
+	pctx := &pc.ParseContext[Entity]{}
+	pctx.MaxDepth = 30
+	pctx.TraceEnable = true
+	pctx.OrMode = pc.OrModeTryFast
+	pctx.CheckTransformSafety = true
+
+	perr := &cmn.ParseError{}
+	consumed, got, err := ParseStatement(perr)(pctx, pcTokens)
+	assert.NoError(t, err)
+	assert.Equal(t, len(pcTokens), consumed)
+	assert.Equal(t, 1, len(got))
+
+	stmt := got[0].Val.NewValue.(cmn.StatementNode)
+	cte := stmt.CTE()
+	if cte == nil {
+		t.Fatalf("expected statement to include CTE")
+	}
+
+	rawTokens := cte.RawTokens()
+
+	filtered := make([]string, 0, len(rawTokens))
+	for _, tk := range rawTokens {
+		switch tk.Type {
+		case tok.WHITESPACE, tok.LINE_COMMENT, tok.BLOCK_COMMENT:
+			continue
+		}
+
+		filtered = append(filtered, tk.Value)
+	}
+
+	expected := []string{"WITH", "pending", "AS", "(", "SELECT", "id", "FROM", "cards", "WHERE", "status", "=", "'pending'", ")"}
+	assert.Equal(t, expected, filtered)
+}

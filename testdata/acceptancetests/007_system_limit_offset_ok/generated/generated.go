@@ -19,8 +19,8 @@ package generated
 
 import (
 	"context"
-	"fmt"
 	"database/sql"
+	"fmt"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -81,6 +81,7 @@ func init() {
 		getuserswithlimitoffsetPrograms[1] = program
 	}
 }
+
 // GetUsersWithLimitOffset - sql.Result Affinity
 func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
@@ -110,21 +111,21 @@ func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor,
 		minAge,
 		maxAge,
 	}
-		// Execute query
-		stmt, err := executor.PrepareContext(ctx, query)
-		if err != nil {
-			return result, fmt.Errorf("failed to prepare statement: %w", err)
-		}
-		defer stmt.Close()
-		// Execute query and scan multiple rows (many affinity)
-		rows, err := stmt.QueryContext(ctx, args...)
-		if err != nil {
-		    return result, fmt.Errorf("failed to execute query: %w", err)
-		}
-		defer rows.Close()
-		
-		// Generic scan for interface{} result - not implemented
-		// This would require runtime reflection or predefined column mapping
+	// Execute query
+	stmt, err := executor.PrepareContext(ctx, query)
+	if err != nil {
+		return result, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+	// Execute query and scan multiple rows (many affinity)
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+		return result, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
 
-		return result, nil
+	// Generic scan for interface{} result - not implemented
+	// This would require runtime reflection or predefined column mapping
+
+	return result, nil
 }

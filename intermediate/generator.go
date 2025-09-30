@@ -296,11 +296,26 @@ func extractTokensFromStatement(stmt parsercommon.StatementNode) []tokenizer.Tok
 	// WITH clause must appear before the main statement.
 	// Ensure CTE tokens come first if present.
 	if cte := stmt.CTE(); cte != nil {
-		tokens = append(tokens, cte.RawTokens()...)
+		cteTokens := cte.RawTokens()
+		tokens = append(tokens, cteTokens...)
+
+		if len(cteTokens) > 0 {
+			last := cteTokens[len(cteTokens)-1]
+			switch last.Type {
+			case tokenizer.WHITESPACE, tokenizer.LINE_COMMENT, tokenizer.BLOCK_COMMENT:
+				// trailing whitespace already present; no-op
+			default:
+				tokens = append(tokens, tokenizer.Token{Type: tokenizer.WHITESPACE, Value: " "})
+			}
+		}
 	}
 
 	// Then process tokens from each clause
 	for _, clause := range stmt.Clauses() {
+		if clause.Type() == parsercommon.WITH_CLAUSE {
+			continue
+		}
+
 		tokens = append(tokens, clause.RawTokens()...)
 	}
 

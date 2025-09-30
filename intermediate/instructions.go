@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode"
 
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -50,8 +51,21 @@ func isSelectStatement(tokens []tokenizer.Token) bool {
 	return false
 }
 
-// detectLimitOffsetClause analyzes tokens to detect LIMIT and OFFSET clause patterns
+func shouldAutoInsertLimit(stmt cmn.StatementNode, tokens []tokenizer.Token) bool {
+	if stmt != nil {
+		switch stmt.Type() {
+		case cmn.SELECT_STATEMENT:
+			return true
+		case cmn.INSERT_INTO_STATEMENT, cmn.UPDATE_STATEMENT, cmn.DELETE_FROM_STATEMENT:
+			return false
+		}
+	}
+
+	return isSelectStatement(tokens)
+}
+
 func detectLimitOffsetClause(tokens []tokenizer.Token) *LimitOffsetClauseInfo {
+
 	info := &LimitOffsetClauseInfo{}
 
 	for i, token := range tokens {
@@ -121,7 +135,7 @@ func checkForCondition(tokens []tokenizer.Token, keywordIndex, valueIndex int, c
 }
 
 // GenerateInstructions generates instructions from tokens with expression index references
-func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Instruction {
+func GenerateInstructions(stmt cmn.StatementNode, tokens []tokenizer.Token, expressions []string) []Instruction {
 	instructions := []Instruction{}
 
 	// Detect LIMIT and OFFSET clause patterns
@@ -592,7 +606,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 	}
 
 	// Handle case 2: No LIMIT clause exists (only for SELECT statements)
-	if !limitOffsetInfo.HasLimit && isSelectStatement(tokens) {
+	if !limitOffsetInfo.HasLimit && shouldAutoInsertLimit(stmt, tokens) {
 		// IF_SYSTEM_LIMIT, EMIT_STATIC(LIMIT ), EMIT_SYSTEM_LIMIT, END
 		instructions = append(instructions, Instruction{
 			Op:  OpIfSystemLimit,
@@ -617,7 +631,7 @@ func GenerateInstructions(tokens []tokenizer.Token, expressions []string) []Inst
 	}
 
 	// Handle case 2: No OFFSET clause exists (only for SELECT statements)
-	if !limitOffsetInfo.HasOffset && isSelectStatement(tokens) {
+	if !limitOffsetInfo.HasOffset && shouldAutoInsertLimit(stmt, tokens) {
 		// IF_SYSTEM_OFFSET, EMIT_STATIC(OFFSET ), EMIT_SYSTEM_OFFSET, END
 		instructions = append(instructions, Instruction{
 			Op:  OpIfSystemOffset,
@@ -755,12 +769,12 @@ func handleLimitOffsetClause(token tokenizer.Token, limitOffsetInfo *LimitOffset
 		hasCondition = limitOffsetInfo.HasLimitCondition
 		opIfSystem = OpIfSystemLimit
 		opEmitSystem = OpEmitSystemLimit
-		staticValue = "LIMIT "
+		staticValue = " LIMIT "
 	} else {
 		hasCondition = limitOffsetInfo.HasOffsetCondition
 		opIfSystem = OpIfSystemOffset
 		opEmitSystem = OpEmitSystemOffset
-		staticValue = "OFFSET "
+		staticValue = " OFFSET "
 	}
 
 	if hasCondition {

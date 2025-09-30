@@ -19,6 +19,8 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/markdownparser"
+	"github.com/shibukawa/snapsql/parser"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/query"
 )
 
@@ -38,6 +40,9 @@ var (
 	errValueMismatch         = errors.New("value mismatch")
 	errUpsertMissingPK       = errors.New("upsert row missing primary key column")
 	errMissingRequiredColumn = errors.New("missing required non-null column in fixture row")
+	keywordUpdateRegexp      = regexp.MustCompile(`\bUPDATE\b`)
+	keywordDeleteRegexp      = regexp.MustCompile(`\bDELETE\b`)
+	keywordInsertRegexp      = regexp.MustCompile(`\bINSERT\b`)
 	errUnknownFixtureColumn  = errors.New("fixture row contains unknown column")
 )
 
@@ -722,21 +727,77 @@ func firstUnnamedExternalSpec(specs []markdownparser.ExpectedResultSpec) (markdo
 
 // detectQueryType detects the type of SQL query
 func detectQueryType(sql string) QueryType {
-	// Remove leading whitespace and convert to uppercase
-	trimmed := strings.TrimSpace(strings.ToUpper(sql))
-
-	if strings.HasPrefix(trimmed, "SELECT") || strings.HasPrefix(trimmed, "WITH") {
+	trimmed := strings.TrimSpace(sql)
+	if trimmed == "" {
 		return SelectQuery
-	} else if strings.HasPrefix(trimmed, "INSERT") {
+	}
+
+	if qt, ok := detectQueryTypeFromParser(trimmed); ok {
+		return qt
+	}
+
+	upper := strings.ToUpper(trimmed)
+	if strings.HasPrefix(upper, "SELECT") {
+		return SelectQuery
+	}
+	if strings.HasPrefix(upper, "INSERT") {
 		return InsertQuery
-	} else if strings.HasPrefix(trimmed, "UPDATE") {
+	}
+	if strings.HasPrefix(upper, "UPDATE") {
 		return UpdateQuery
-	} else if strings.HasPrefix(trimmed, "DELETE") {
+	}
+	if strings.HasPrefix(upper, "DELETE") {
 		return DeleteQuery
+	}
+
+	if strings.HasPrefix(upper, "WITH") {
+		if containsKeyword(upper, "UPDATE") {
+			return UpdateQuery
+		}
+		if containsKeyword(upper, "DELETE") {
+			return DeleteQuery
+		}
+		if containsKeyword(upper, "INSERT") {
+			return InsertQuery
+		}
+		return SelectQuery
 	}
 
 	// Default to SELECT for unknown queries
 	return SelectQuery
+}
+
+func detectQueryTypeFromParser(sql string) (QueryType, bool) {
+	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "detect_query.sql", "", parser.DefaultOptions)
+	if err != nil || stmt == nil {
+		return 0, false
+	}
+
+	switch stmt.Type() {
+	case cmn.SELECT_STATEMENT:
+		return SelectQuery, true
+	case cmn.INSERT_INTO_STATEMENT:
+		return InsertQuery, true
+	case cmn.UPDATE_STATEMENT:
+		return UpdateQuery, true
+	case cmn.DELETE_FROM_STATEMENT:
+		return DeleteQuery, true
+	default:
+		return 0, false
+	}
+}
+
+func containsKeyword(sqlUpper, keyword string) bool {
+	switch keyword {
+	case "UPDATE":
+		return keywordUpdateRegexp.MatchString(sqlUpper)
+	case "DELETE":
+		return keywordDeleteRegexp.MatchString(sqlUpper)
+	case "INSERT":
+		return keywordInsertRegexp.MatchString(sqlUpper)
+	default:
+		return false
+	}
 }
 
 // hasReturningClause checks if the SQL query has a RETURNING clause

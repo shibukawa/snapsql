@@ -24,7 +24,7 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 		expressions[j] = celExpr.Expression
 	}
 
-	instructions := GenerateInstructions(ctx.Tokens, expressions)
+	instructions := GenerateInstructions(ctx.Statement, ctx.Tokens, expressions)
 
 	// Normalize INSERT ... SELECT statements so system fields appear in the SELECT list instead of before the table name
 	instructions = normalizeInsertSelectSystemValues(instructions)

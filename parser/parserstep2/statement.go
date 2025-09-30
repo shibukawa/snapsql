@@ -126,12 +126,13 @@ func parseCTE() pc.Parser[Entity] {
 			return 0, nil, err
 		}
 
-		var result = &cmn.WithClause{
-			Recursive:     heading[len(heading)-1].Val.Original.Type == tok.RECURSIVE,
-			HeadingTokens: entityToToken(heading),
-		}
+		headingTokens := entityToToken(heading)
+		isRecursive := len(heading) > 0 && heading[len(heading)-1].Val.Original.Type == tok.RECURSIVE
 
 		offset := consume
+		bodyStart := consume
+
+		cteDefs := make([]cmn.CTEDefinition, 0, 1)
 
 		// first CTE
 		consume, match, err := firstCte(pctx, tokens[offset:])
@@ -147,7 +148,7 @@ func parseCTE() pc.Parser[Entity] {
 
 		offset += consume
 
-		result.CTEs = append(result.CTEs, cmn.CTEDefinition{
+		cteDefs = append(cteDefs, cmn.CTEDefinition{
 			Name:   match[0].Val.Original.Value,
 			Select: match[2].Val.NewValue,
 		})
@@ -169,24 +170,32 @@ func parseCTE() pc.Parser[Entity] {
 
 			offset += consume
 
-			result.CTEs = append(result.CTEs, cmn.CTEDefinition{
+			cteDefs = append(cteDefs, cmn.CTEDefinition{
 				Name:   match[1].Val.Original.Value,
 				Select: match[3].Val.NewValue,
 			})
 		}
 
+		var trailingTokens []tok.Token
+
 		// Extra comma
 		consume, match, err = comma(pctx, tokens[offset:])
 		if err == nil {
 			offset += consume
-			result.TrailingTokens = entityToToken(match)
+			trailingTokens = entityToToken(match)
 		}
+
+		bodyTokens := entityToToken(tokens[bodyStart:offset])
+		withClauseNode := cmn.NewWithClause(headingTokens, bodyTokens)
+		withClauseNode.Recursive = isRecursive
+		withClauseNode.CTEs = cteDefs
+		withClauseNode.TrailingTokens = trailingTokens
 
 		return offset, []pc.Token[Entity]{
 			{
 				Type: "with-clause",
 				Val: Entity{
-					NewValue:  result,
+					NewValue:  withClauseNode,
 					rawTokens: entityToToken(tokens[:offset]),
 				},
 			},
