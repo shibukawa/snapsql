@@ -10,16 +10,19 @@ import (
 
 // sqlBuilderData represents SQL building code generation data
 type sqlBuilderData struct {
-	IsStatic       bool     // true if SQL can be built as a static string
-	StaticSQL      string   // static SQL string if IsStatic is true
-	BuilderCode    []string // code lines for dynamic SQL building
-	HasArguments   bool     // true if the query has parameters
-	Arguments      []int    // expression indices for arguments (in order)
-	ParameterNames []string // parameter names for static SQL (in order)
+	IsStatic              bool     // true if SQL can be built as a static string
+	StaticSQL             string   // static SQL string if IsStatic is true
+	BuilderCode           []string // code lines for dynamic SQL building
+	HasArguments          bool     // true if the query has parameters
+	Arguments             []int    // expression indices for arguments (in order, -1 for system params)
+	ParameterNames        []string // parameter names for static SQL (legacy use)
+	ArgumentSystemFields  []string // system field names aligned with Arguments slice (empty string for non-system)
+	HasSystemArguments    bool     // true if Arguments includes system parameters
+	HasNonSystemArguments bool     // true if Arguments includes regular expressions
 }
 
 // processSQLBuilderWithDialect processes instructions and generates SQL building code for a specific dialect
-func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, dialect string) (*sqlBuilderData, error) {
+func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, dialect, functionName string) (*sqlBuilderData, error) {
 	// Require dialect to be specified
 	if dialect == "" {
 		return nil, snapsql.ErrDialectMustBeSpecified
@@ -40,7 +43,7 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 	}
 
 	// Generate dynamic SQL building code
-	return generateDynamicSQLFromOptimized(optimizedInstructions, format)
+	return generateDynamicSQLFromOptimized(optimizedInstructions, format, functionName)
 }
 
 func ensureSpaceBeforePlaceholders(s string) string {
@@ -91,10 +94,12 @@ func isWordCharBeforePlaceholder(b byte) bool {
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions
 func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var (
-		sqlParts       []string
-		arguments      []int
-		systemFields   []string
-		parameterIndex = 1
+		sqlParts              []string
+		arguments             []int
+		argumentSystemFields  []string
+		hasSystemArguments    bool
+		hasNonSystemArguments bool
+		parameterIndex        = 1
 	)
 
 	// helper: 直前のパーツの末尾と次のパーツの先頭が共に単語/識別子の場合は間に空白を入れる
@@ -143,11 +148,13 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
 				arguments = append(arguments, *inst.ExprIndex)
+				argumentSystemFields = append(argumentSystemFields, "")
+				hasNonSystemArguments = true
 			}
 		case "ADD_SYSTEM_PARAM":
-			// Track system field name for parameter ordering
-			systemFields = append(systemFields, inst.SystemField)
 			arguments = append(arguments, -1) // Use -1 to indicate system parameter
+			argumentSystemFields = append(argumentSystemFields, inst.SystemField)
+			hasSystemArguments = true
 		}
 	}
 
@@ -156,14 +163,10 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 	// Convert expression indices and system fields to parameter names for static SQL
 	var parameterNames []string
 
-	systemFieldIndex := 0
-
-	for _, exprIndex := range arguments {
+	for idx, exprIndex := range arguments {
 		if exprIndex == -1 {
-			// This is a system parameter
-			if systemFieldIndex < len(systemFields) {
-				parameterNames = append(parameterNames, systemFields[systemFieldIndex])
-				systemFieldIndex++
+			if idx < len(argumentSystemFields) {
+				parameterNames = append(parameterNames, argumentSystemFields[idx])
 			}
 		} else if exprIndex < len(format.CELExpressions) {
 			expr := format.CELExpressions[exprIndex]
@@ -174,19 +177,23 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 	}
 
 	return &sqlBuilderData{
-		IsStatic:       true,
-		StaticSQL:      staticSQL,
-		HasArguments:   len(arguments) > 0,
-		Arguments:      arguments,
-		ParameterNames: parameterNames,
+		IsStatic:              true,
+		StaticSQL:             staticSQL,
+		HasArguments:          len(arguments) > 0,
+		Arguments:             arguments,
+		ParameterNames:        parameterNames,
+		ArgumentSystemFields:  argumentSystemFields,
+		HasSystemArguments:    hasSystemArguments,
+		HasNonSystemArguments: hasNonSystemArguments,
 	}, nil
 }
 
 // generateDynamicSQLFromOptimized generates dynamic SQL building code from optimized instructions
-func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
+func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, functionName string) (*sqlBuilderData, error) {
 	var code []string
 
 	hasArguments := false
+	evalCounter := 0
 
 	// Track control flow stack
 	controlStack := []string{}
@@ -195,7 +202,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	code = append(code, "var boundaryNeeded bool")
 
 	// Add parameter map for loop variables
-	code = append(code, "paramMap := map[string]interface{}{")
+	code = append(code, "paramMap := map[string]any{")
 	for _, param := range format.Parameters {
 		code = append(code, fmt.Sprintf("    %q: %s,", param.Name, snakeToCamelLower(param.Name)))
 	}
@@ -232,13 +239,16 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
+				resVar := fmt.Sprintf("evalRes%d", evalCounter)
+				evalCounter++
+
 				code = append(code, fmt.Sprintf("// Evaluate expression %d", *inst.ExprIndex))
-				code = append(code, fmt.Sprintf("result, err := %sPrograms[%d].Eval(paramMap)",
-					strings.ToLower(format.FunctionName), *inst.ExprIndex))
+				code = append(code, fmt.Sprintf("%s, _, err := %sPrograms[%d].Eval(paramMap)",
+					resVar, strings.ToLower(format.FunctionName), *inst.ExprIndex))
 				code = append(code, "if err != nil {")
-				code = append(code, "    return result, fmt.Errorf(\"failed to evaluate expression: %w\", err)")
+				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate expression: %%w\", err)", functionName))
 				code = append(code, "}")
-				code = append(code, "args = append(args, result.Value())")
+				code = append(code, fmt.Sprintf("args = append(args, %s.Value())", resVar))
 				hasArguments = true
 			}
 
@@ -259,10 +269,10 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 		case "IF":
 			if inst.ExprIndex != nil {
 				code = append(code, fmt.Sprintf("// IF condition: expression %d", *inst.ExprIndex))
-				code = append(code, fmt.Sprintf("condResult, err := %sPrograms[%d].Eval(paramMap)",
+				code = append(code, fmt.Sprintf("condResult, _, err := %sPrograms[%d].Eval(paramMap)",
 					strings.ToLower(format.FunctionName), *inst.ExprIndex))
 				code = append(code, "if err != nil {")
-				code = append(code, "    return result, fmt.Errorf(\"failed to evaluate condition: %w\", err)")
+				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate condition: %%w\", err)", functionName))
 				code = append(code, "}")
 				code = append(code, "if condResult.Value().(bool) {")
 				controlStack = append(controlStack, "if")
@@ -281,12 +291,12 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 		case "LOOP_START":
 			if inst.CollectionExprIndex != nil {
 				code = append(code, fmt.Sprintf("// FOR loop: evaluate collection expression %d", *inst.CollectionExprIndex))
-				code = append(code, fmt.Sprintf("collectionResult%d, err := %sPrograms[%d].Eval(paramMap)",
+				code = append(code, fmt.Sprintf("collectionResult%d, _, err := %sPrograms[%d].Eval(paramMap)",
 					*inst.CollectionExprIndex, strings.ToLower(format.FunctionName), *inst.CollectionExprIndex))
 				code = append(code, "if err != nil {")
-				code = append(code, "    return result, fmt.Errorf(\"failed to evaluate collection: %w\", err)")
+				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate collection: %%w\", err)", functionName))
 				code = append(code, "}")
-				code = append(code, fmt.Sprintf("collection%d := collectionResult%d.Value().([]interface{})",
+				code = append(code, fmt.Sprintf("collection%d := collectionResult%d.Value().([]any)",
 					*inst.CollectionExprIndex, *inst.CollectionExprIndex))
 				code = append(code, fmt.Sprintf("for _, %sLoopVar := range collection%d {",
 					inst.Variable, *inst.CollectionExprIndex))

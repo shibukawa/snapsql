@@ -273,7 +273,7 @@ func TestGenerateQueryExecutionManyIterator(t *testing.T) {
 		t.Fatalf("processResponseStruct returned error: %v", err)
 	}
 
-	data, err := generateQueryExecution(format, respStruct, nil)
+	data, err := generateQueryExecution(format, respStruct, nil, respStruct.Name, "ListByBoard", "result")
 	if err != nil {
 		t.Fatalf("generateQueryExecution returned error: %v", err)
 	}

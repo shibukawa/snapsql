@@ -19,9 +19,9 @@ package generated
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
-	"database/sql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -62,11 +62,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("include_email")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'include_email': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "include_email", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'include_email': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "include_email", err))
 		}
 		getuserswithconditionsPrograms[0] = program
 	}
@@ -74,11 +74,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("min_age")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'min_age': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "min_age", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'min_age': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age", err))
 		}
 		getuserswithconditionsPrograms[1] = program
 	}
@@ -86,15 +86,16 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("max_age")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'max_age': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "max_age", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'max_age': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "max_age", err))
 		}
 		getuserswithconditionsPrograms[2] = program
 	}
 }
+
 // GetUsersWithConditions - sql.Result Affinity
 func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, includeEmail bool, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
@@ -107,174 +108,223 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(getuserswithconditionsMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("GetUsersWithConditions: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("GetUsersWithConditions: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	var builder strings.Builder
-	args := make([]any, 0)
-	var boundaryNeeded bool
-	paramMap := map[string]interface{}{
-	    "min_age": minAge,
-	    "max_age": maxAge,
-	    "include_email": includeEmail,
-	}
-	{ // safe append static with spacing
-	_frag := "SELECT id, name,"
-	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
-	}
-	builder.WriteString(_frag)
-}
-	boundaryNeeded = true
-	// IF condition: expression 0
-	condResult, err := get_users_with_conditionsPrograms[0].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate condition: %w", err)
-	}
-	if condResult.Value().(bool) {
-	{ // safe append static with spacing
-	_frag := "email"
-	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
-	}
-	builder.WriteString(_frag)
-}
-	boundaryNeeded = true
-	if boundaryNeeded {
-	    builder.WriteString(",")
-	}
-	boundaryNeeded = true
-	} else {
-	{ // safe append static with spacing
-	_frag := "'N/A' as email"
-	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
-	}
-	builder.WriteString(_frag)
-}
-	boundaryNeeded = true
-	if boundaryNeeded {
-	    builder.WriteString(",")
-	}
-	boundaryNeeded = true
-	}
-	{ // safe append static with spacing
-	_frag := "age"
-	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
-	}
-	builder.WriteString(_frag)
-}
-	boundaryNeeded = true
-	boundaryNeeded = false
-	{ // safe append static with spacing
-	_frag := "FROM users  WHERE age >=?"
-	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
-	}
-	builder.WriteString(_frag)
-}
-	boundaryNeeded = true
-	// Evaluate expression 1
-	result, err := get_users_with_conditionsPrograms[1].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	{ // safe append static with spacing
-	_frag := "AND age <=?"
-	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
-	}
-	builder.WriteString(_frag)
-}
-	boundaryNeeded = true
-	// Evaluate expression 2
-	result, err := get_users_with_conditionsPrograms[2].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	
-	query := builder.String()
-		// Execute query
-		stmt, err := executor.PrepareContext(ctx, query)
-		if err != nil {
-			return result, fmt.Errorf("failed to prepare statement: %w", err)
+	buildQueryAndArgs := func() (string, []any, error) {
+		var builder strings.Builder
+		args := make([]any, 0)
+		var boundaryNeeded bool
+		paramMap := map[string]any{
+			"min_age":       minAge,
+			"max_age":       maxAge,
+			"include_email": includeEmail,
 		}
-		defer stmt.Close()
-		// Execute query and scan multiple rows (many affinity)
-		rows, err := stmt.QueryContext(ctx, args...)
-		if err != nil {
-		    return result, fmt.Errorf("failed to execute query: %w", err)
+		{ // safe append static with spacing
+			_frag := "SELECT id, name,"
+			if builder.Len() > 0 {
+				_b := builder.String()
+				_last := _b[len(_b)-1]
+				// determine if last char is word char
+				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+				// skip leading spaces in _frag
+				_k := 0
+				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+					_k++
+				}
+				_startsWord := false
+				if _k < len(_frag) {
+					_c := _frag[_k]
+					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+				}
+				if _endsWord && _startsWord {
+					builder.WriteByte(' ')
+				}
+			}
+			builder.WriteString(_frag)
 		}
-		defer rows.Close()
-		
-		// Generic scan for interface{} result - not implemented
-		// This would require runtime reflection or predefined column mapping
+		boundaryNeeded = true
+		// IF condition: expression 0
+		condResult, _, err := get_users_with_conditionsPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate condition: %w", err)
+		}
+		if condResult.Value().(bool) {
+			{ // safe append static with spacing
+				_frag := "email"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			if boundaryNeeded {
+				builder.WriteString(",")
+			}
+			boundaryNeeded = true
+		} else {
+			{ // safe append static with spacing
+				_frag := "'N/A' as email"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			if boundaryNeeded {
+				builder.WriteString(",")
+			}
+			boundaryNeeded = true
+		}
+		{ // safe append static with spacing
+			_frag := "age"
+			if builder.Len() > 0 {
+				_b := builder.String()
+				_last := _b[len(_b)-1]
+				// determine if last char is word char
+				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+				// skip leading spaces in _frag
+				_k := 0
+				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+					_k++
+				}
+				_startsWord := false
+				if _k < len(_frag) {
+					_c := _frag[_k]
+					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+				}
+				if _endsWord && _startsWord {
+					builder.WriteByte(' ')
+				}
+			}
+			builder.WriteString(_frag)
+		}
+		boundaryNeeded = true
+		boundaryNeeded = false
+		{ // safe append static with spacing
+			_frag := "FROM users  WHERE age >=?"
+			if builder.Len() > 0 {
+				_b := builder.String()
+				_last := _b[len(_b)-1]
+				// determine if last char is word char
+				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+				// skip leading spaces in _frag
+				_k := 0
+				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+					_k++
+				}
+				_startsWord := false
+				if _k < len(_frag) {
+					_c := _frag[_k]
+					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+				}
+				if _endsWord && _startsWord {
+					builder.WriteByte(' ')
+				}
+			}
+			builder.WriteString(_frag)
+		}
+		boundaryNeeded = true
+		// Evaluate expression 1
+		evalRes0, _, err := get_users_with_conditionsPrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+		{ // safe append static with spacing
+			_frag := "AND age <=?"
+			if builder.Len() > 0 {
+				_b := builder.String()
+				_last := _b[len(_b)-1]
+				// determine if last char is word char
+				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+				// skip leading spaces in _frag
+				_k := 0
+				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+					_k++
+				}
+				_startsWord := false
+				if _k < len(_frag) {
+					_c := _frag[_k]
+					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+				}
+				if _endsWord && _startsWord {
+					builder.WriteByte(' ')
+				}
+			}
+			builder.WriteString(_frag)
+		}
+		boundaryNeeded = true
+		// Evaluate expression 2
+		evalRes1, _, err := get_users_with_conditionsPrograms[2].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes1.Value())
 
-		return result, nil
+		query := builder.String()
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
+	// Execute query
+	stmt, err := executor.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("GetUsersWithConditions: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+	// Execute query and scan multiple rows (many affinity)
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("GetUsersWithConditions: failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	// Generic scan for any result - not implemented
+	// This would require runtime reflection or predefined column mapping
+
+	return result, nil
 }

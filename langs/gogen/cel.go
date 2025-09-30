@@ -41,7 +41,7 @@ var goTypeMap = map[string]string{
 	"date":      "time.Time",
 	"time":      "time.Time",
 	"bytes":     "[]byte",
-	"any":       "interface{}",
+	"any":       "any",
 }
 
 // celEnvironmentData represents a CEL environment for code generation

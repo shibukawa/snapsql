@@ -19,8 +19,8 @@ package generated
 
 import (
 	"context"
-	"fmt"
 	"database/sql"
+	"fmt"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -59,15 +59,16 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("users")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'users': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "users", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'users': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "users", err))
 		}
 		insertusersPrograms[0] = program
 	}
 }
+
 // InsertUsers - sql.Result Affinity
 func InsertUsers(ctx context.Context, executor snapsqlgo.DBExecutor, users []User, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
@@ -80,33 +81,48 @@ func InsertUsers(ctx context.Context, executor snapsqlgo.DBExecutor, users []Use
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(insertusersMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("InsertUsers: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("InsertUsers: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "INSERT INTO users (id, name, email) VALUES ($1)"
-	args := []any{
-		users,
-	}
-		// Execute query
-		stmt, err := executor.PrepareContext(ctx, query)
-		if err != nil {
-			return result, fmt.Errorf("failed to prepare statement: %w", err)
-		}
-		defer stmt.Close()
-		// Execute query (no result expected)
-		_, err = stmt.ExecContext(ctx, args...)
-		if err != nil {
-		    return result, fmt.Errorf("failed to execute statement: %w", err)
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "INSERT INTO users (id, name, email) VALUES ($1)"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"users": users,
 		}
 
-		return result, nil
+		evalRes0, _, err := insertusersPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUsers: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
+	// Execute query
+	stmt, err := executor.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("InsertUsers: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+	// Execute query (no result expected)
+	execResult, err := stmt.ExecContext(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("InsertUsers: failed to execute statement: %w", err)
+	}
+	result = execResult
+
+	return result, nil
 }

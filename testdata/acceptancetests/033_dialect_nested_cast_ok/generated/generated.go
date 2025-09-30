@@ -19,8 +19,8 @@ package generated
 
 import (
 	"context"
-	"fmt"
 	"database/sql"
+	"fmt"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -59,15 +59,16 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_id", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
 		getnesteddialectcastPrograms[0] = program
 	}
 }
+
 // GetNestedDialectCast - sql.Result Affinity
 func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
@@ -80,37 +81,51 @@ func GetNestedDialectCast(ctx context.Context, executor snapsqlgo.DBExecutor, us
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(getnesteddialectcastMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("GetNestedDialectCast: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("GetNestedDialectCast: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name, (CURRENT_TIMESTAMP)::TEXT as current_time_text, (TRUE)::INTEGER as bool_as_int FROM users  WHERE id =$1"
-	args := []any{
-		userID,
-	}
-		// Execute query
-		stmt, err := executor.PrepareContext(ctx, query)
-		if err != nil {
-			return result, fmt.Errorf("failed to prepare statement: %w", err)
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "SELECT id, name, (CURRENT_TIMESTAMP)::TEXT as current_time_text, (TRUE)::INTEGER as bool_as_int FROM users  WHERE id =$1"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"user_id": userID,
 		}
-		defer stmt.Close()
-		// Execute query and scan multiple rows (many affinity)
-		rows, err := stmt.QueryContext(ctx, args...)
-		if err != nil {
-		    return result, fmt.Errorf("failed to execute query: %w", err)
-		}
-		defer rows.Close()
-		
-		// Generic scan for interface{} result - not implemented
-		// This would require runtime reflection or predefined column mapping
 
-		return result, nil
+		evalRes0, _, err := getnesteddialectcastPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetNestedDialectCast: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
+	// Execute query
+	stmt, err := executor.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("GetNestedDialectCast: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+	// Execute query and scan multiple rows (many affinity)
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("GetNestedDialectCast: failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	// Generic scan for any result - not implemented
+	// This would require runtime reflection or predefined column mapping
+
+	return result, nil
 }

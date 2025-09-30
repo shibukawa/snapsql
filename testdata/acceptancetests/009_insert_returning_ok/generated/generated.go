@@ -19,8 +19,8 @@ package generated
 
 import (
 	"context"
-	"fmt"
 	"database/sql"
+	"fmt"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -60,11 +60,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user_name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_name", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_name", err))
 		}
 		insertuserwithreturningPrograms[0] = program
 	}
@@ -72,15 +72,16 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user_email")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_email': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_email", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_email': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_email", err))
 		}
 		insertuserwithreturningPrograms[1] = program
 	}
 }
+
 // InsertUserWithReturning - sql.Result Affinity
 func InsertUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor, userName string, userEmail string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
@@ -93,34 +94,55 @@ func InsertUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserwithreturningMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("InsertUserWithReturning: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("InsertUserWithReturning: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "INSERT INTO users (name, email, created_at) VALUES ($1,$2, CURRENT_TIMESTAMP)  RETURNING id, name, email, created_at"
-	args := []any{
-		userName,
-		userEmail,
-	}
-		// Execute query
-		stmt, err := executor.PrepareContext(ctx, query)
-		if err != nil {
-			return result, fmt.Errorf("failed to prepare statement: %w", err)
-		}
-		defer stmt.Close()
-		// Execute statement (no response struct available)
-		_, err = stmt.ExecContext(ctx, args...)
-		if err != nil {
-		    return result, fmt.Errorf("failed to execute statement: %w", err)
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "INSERT INTO users (name, email, created_at) VALUES ($1,$2, CURRENT_TIMESTAMP)  RETURNING id, name, email, created_at"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"user_name":  userName,
+			"user_email": userEmail,
 		}
 
-		return result, nil
+		evalRes0, _, err := insertuserwithreturningPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUserWithReturning: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+
+		evalRes1, _, err := insertuserwithreturningPrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUserWithReturning: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes1.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
+	// Execute query
+	stmt, err := executor.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("InsertUserWithReturning: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+	// Execute statement (no response struct available)
+	execResult, err := stmt.ExecContext(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("InsertUserWithReturning: failed to execute statement: %w", err)
+	}
+	result = execResult
+
+	return result, nil
 }

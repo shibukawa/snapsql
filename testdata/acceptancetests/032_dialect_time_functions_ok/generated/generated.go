@@ -19,8 +19,8 @@ package generated
 
 import (
 	"context"
-	"fmt"
 	"database/sql"
+	"fmt"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -55,6 +55,7 @@ func init() {
 	// Create programs for each expression using the corresponding environment
 	getcurrenttimePrograms = make([]cel.Program, 0)
 }
+
 // GetCurrentTime - sql.Result Affinity
 func GetCurrentTime(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
@@ -67,35 +68,42 @@ func GetCurrentTime(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(getcurrenttimeMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("GetCurrentTime: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("GetCurrentTime: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name, CURRENT_TIMESTAMP as current_time_now, CURRENT_TIMESTAMP as current_time_standard FROM users"
-	args := []any{}
-		// Execute query
-		stmt, err := executor.PrepareContext(ctx, query)
-		if err != nil {
-			return result, fmt.Errorf("failed to prepare statement: %w", err)
-		}
-		defer stmt.Close()
-		// Execute query and scan multiple rows (many affinity)
-		rows, err := stmt.QueryContext(ctx, args...)
-		if err != nil {
-		    return result, fmt.Errorf("failed to execute query: %w", err)
-		}
-		defer rows.Close()
-		
-		// Generic scan for interface{} result - not implemented
-		// This would require runtime reflection or predefined column mapping
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "SELECT id, name, CURRENT_TIMESTAMP as current_time_now, CURRENT_TIMESTAMP as current_time_standard FROM users"
+		args := make([]any, 0)
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
+	// Execute query
+	stmt, err := executor.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("GetCurrentTime: failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+	// Execute query and scan multiple rows (many affinity)
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("GetCurrentTime: failed to execute query: %w", err)
+	}
+	defer rows.Close()
 
-		return result, nil
+	// Generic scan for any result - not implemented
+	// This would require runtime reflection or predefined column mapping
+
+	return result, nil
 }

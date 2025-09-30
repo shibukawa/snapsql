@@ -3,7 +3,9 @@ package gogen
 import (
 	"errors"
 	"fmt"
+	"go/format"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -157,14 +159,20 @@ func (g *Generator) Generate(w io.Writer) error {
 	// Generate type registrations for custom types
 	typeRegistrations, typeDefinitions := generateTypeRegistrations(g.Format, structDefinitions)
 
+	// Convert function name to CamelCase
+	funcName := snakeToCamel(g.Format.FunctionName)
+
+	// Determine zero value used when returning on error
+	errorZeroValue := determineErrorZeroValue(responseType)
+
 	// Process SQL builder
-	sqlBuilder, err := processSQLBuilderWithDialect(g.Format, g.Dialect)
+	sqlBuilder, err := processSQLBuilderWithDialect(g.Format, g.Dialect, funcName)
 	if err != nil {
 		return fmt.Errorf("failed to process SQL builder: %w", err)
 	}
 
 	// Process query execution
-	queryExecution, err := generateQueryExecution(g.Format, responseStruct, g.hierarchicalMetas)
+	queryExecution, err := generateQueryExecution(g.Format, responseStruct, g.hierarchicalMetas, responseType, funcName, errorZeroValue)
 	if err != nil {
 		return fmt.Errorf("failed to generate query execution: %w", err)
 	}
@@ -175,9 +183,6 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to process implicit parameters: %w", err)
 	}
 
-	// Convert function name to CamelCase
-	funcName := snakeToCamel(g.Format.FunctionName)
-
 	functionReturnType := fmt.Sprintf("(%s, error)", responseType)
 	declareResult := true
 	iteratorYieldType := ""
@@ -186,6 +191,10 @@ func (g *Generator) Generate(w io.Writer) error {
 		functionReturnType = fmt.Sprintf("iter.Seq2[*%s, error]", responseStruct.Name)
 		declareResult = false
 		iteratorYieldType = queryExecution.IteratorYieldType
+	}
+
+	if !declareResult {
+		errorZeroValue = "nil"
 	}
 
 	data := struct {
@@ -215,6 +224,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		HierarchicalMetas  []*hierarchicalNodeMeta
 		IteratorYieldType  string
 		DeclareResult      bool
+		ErrorZeroValue     string
 	}{
 		Timestamp:          time.Now(),
 		PackageName:        g.PackageName,
@@ -240,6 +250,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		FunctionReturnType: functionReturnType,
 		IteratorYieldType:  iteratorYieldType,
 		DeclareResult:      declareResult,
+		ErrorZeroValue:     errorZeroValue,
 	}
 
 	if queryExecution.IsIterator && responseStruct != nil {
@@ -406,7 +417,16 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to execute template: %w", err)
 	}
 
-	_, err = fmt.Fprint(w, buf.String())
+	formatted, err := format.Source([]byte(buf.String()))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to format generated Go code for %s: %v\n", g.Format.FunctionName, err)
+		fmt.Fprintln(os.Stderr, "----- generated code (unformatted) -----")
+		fmt.Fprintln(os.Stderr, buf.String())
+		fmt.Fprintln(os.Stderr, "----- end generated code -----")
+		panic(err)
+	}
+
+	_, err = w.Write(formatted)
 
 	return err
 }
@@ -490,6 +510,41 @@ func snakeToCamelLower(s string) string {
 	return result.String()
 }
 
+func determineErrorZeroValue(responseType string) string {
+	trimmed := strings.TrimSpace(responseType)
+
+	base := trimmed
+	if idx := strings.Index(trimmed, ","); idx >= 0 {
+		base = strings.TrimSpace(trimmed[:idx])
+	}
+
+	base = strings.TrimSpace(base)
+	if strings.HasSuffix(base, " error)") {
+		if idx := strings.LastIndex(base, " "); idx >= 0 {
+			base = strings.TrimSpace(base[:idx])
+		}
+	}
+
+	switch base {
+	case "sql.Result", "interface{}", "any":
+		return "nil"
+	}
+
+	if strings.HasPrefix(base, "*") {
+		return "nil"
+	}
+
+	if strings.HasPrefix(base, "iter.") {
+		return "nil"
+	}
+
+	if strings.Contains(base, "iter.") {
+		return "nil"
+	}
+
+	return "result"
+}
+
 // processParameters converts intermediate parameters to Go parameter data
 func processParameters(params []intermediate.Parameter, funcName string) ([]parameterData, []string, error) {
 	result := make([]parameterData, len(params))
@@ -514,9 +569,10 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 			structDefinitions = append(structDefinitions, structDefs...)
 
 			result[i] = parameterData{
-				Name:     snakeToCamelLower(param.Name),
-				Type:     "[]InsertAllSubDepartmentsDepartment",
-				Required: !param.Optional,
+				Name:         snakeToCamelLower(param.Name),
+				OriginalName: param.Name,
+				Type:         "[]InsertAllSubDepartmentsDepartment",
+				Required:     !param.Optional,
 			}
 
 			continue
@@ -529,9 +585,10 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 		}
 
 		result[i] = parameterData{
-			Name:     snakeToCamelLower(param.Name),
-			Type:     goType,
-			Required: !param.Optional,
+			Name:         snakeToCamelLower(param.Name),
+			OriginalName: param.Name,
+			Type:         goType,
+			Required:     !param.Optional,
 		}
 	}
 
@@ -597,7 +654,7 @@ func convertToGoType(snapType string) (string, error) {
 	case "bytes":
 		return "[]byte", nil
 	case "any":
-		return "interface{}", nil
+		return "any", nil
 	default:
 		// Handle custom types (valid Go type names)
 		if isValidGoTypeName(snapType) {
@@ -639,7 +696,7 @@ func processResponseType(format *intermediate.IntermediateFormat) (string, error
 	case "many":
 		return "[]" + structName, nil
 	case "none":
-		return "interface{}", nil
+		return "any", nil
 	default:
 		return structName, nil
 	}
@@ -757,9 +814,10 @@ type instruction struct {
 }
 
 type parameterData struct {
-	Name     string
-	Type     string
-	Required bool
+	Name         string
+	OriginalName string
+	Type         string
+	Required     bool
 }
 
 type parameter struct {
@@ -891,7 +949,7 @@ func convertTypeToGo(typeName string) (string, error) {
 	case "date":
 		return "time.Time", nil
 	case "any":
-		return "interface{}", nil
+		return "any", nil
 	default:
 		if strings.HasSuffix(typeName, "[]") {
 			elementType := strings.TrimSuffix(typeName, "[]")
@@ -1062,7 +1120,7 @@ func init() {
 	// Static accessor functions for each type
 	{{- range $typeName, $fields := .TypeDefinitions }}
 	{{- range $fieldName, $fieldType := $fields }}
-	{{ $typeName | toLower }}{{ $fieldName | celNameToGoName }}Accessor := func(value interface{}) ref.Val {
+{{ $typeName | toLower }}{{ $fieldName | celNameToGoName }}Accessor := func(value any) ref.Val {
 		v := value.(*{{ $typeName }})
 		return snapsqlgo.ConvertGoValueToCEL(v.{{ $fieldName | celNameToGoName }})
 	}
@@ -1126,13 +1184,13 @@ func init() {
 	{{- range .CELPrograms }}
 	// {{ .ID }}: "{{ .Expression }}" using environment {{ .EnvironmentIdx }}
 	{
-		ast, issues := celEnvironments[{{ .EnvironmentIdx }}].Compile("{{ .Expression }}")
+		ast, issues := celEnvironments[{{ .EnvironmentIdx }}].Compile({{ printf "%q" .Expression }})
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression '{{ .Expression }}': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", {{ printf "%q" .Expression }}, issues.Err()))
 		}
 		program, err := celEnvironments[{{ .EnvironmentIdx }}].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for '{{ .Expression }}': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", {{ printf "%q" .Expression }}, err))
 		}
 		{{ $.LowerFuncName }}Programs[{{ .Index }}] = program
 	}
@@ -1159,19 +1217,19 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[{{ .ResponseType }}](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to {{ .ResponseType }} struct: %w", err)
+			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock data to {{ .ResponseType }} struct: %w", err)
 		}
 
 		return result, nil
 	}
 	{{- end }}
 
-	{{- if and .ImplicitParams (hasAnySystemParam .SQLBuilder.ParameterNames) }}
+	{{- if and .ImplicitParams .SQLBuilder.HasSystemArguments }}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{{- range .ImplicitParams }}
@@ -1183,44 +1241,62 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	{{- end }}
 
 	// Build SQL
-	{{- if .SQLBuilder.IsStatic }}
-	query := {{ printf "%q" .SQLBuilder.StaticSQL }}
-	{{- if or .SQLBuilder.HasArguments .ImplicitParams }}
-	args := []any{
-		{{- range .SQLBuilder.ParameterNames }}
-		{{- if isSystemColumn . }}
-		systemValues["{{ . }}"],
+	buildQueryAndArgs := func() (string, []any, error) {
+		{{- if .SQLBuilder.IsStatic }}
+		query := {{ printf "%q" .SQLBuilder.StaticSQL }}
+		args := make([]any, 0)
+		{{- if .SQLBuilder.HasArguments }}
+			{{- if .SQLBuilder.HasNonSystemArguments }}
+		paramMap := map[string]any{
+			{{- range .Parameters }}
+			"{{ .OriginalName }}": {{ .Name }},
+			{{- end }}
+		}
+			{{ end }}
+			{{ range $idx, $arg := .SQLBuilder.Arguments }}
+				{{- if eq $arg -1 }}
+		args = append(args, systemValues["{{ index $.SQLBuilder.ArgumentSystemFields $idx }}"])
+				{{ else }}
+		{{ $resVar := printf "evalRes%d" $idx }}
+		{{ $resVar }}, _, err := {{ $.LowerFuncName }}Programs[{{ $arg }}].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("{{ $.FunctionName }}: failed to evaluate expression: %w", err)
+		}
+		args = append(args, {{ $resVar }}.Value())
+				{{- end }}
+			{{- end }}
+		{{- end }}
+		return query, args, nil
 		{{- else }}
-		{{ . }},
-		{{- end }}
-		{{- end }}
-	}
-	{{- else }}
-	args := []any{}
-	{{- end }}
-	{{- else }}
 	var builder strings.Builder
 	args := make([]any, 0)
-	
+
 	{{- range .SQLBuilder.BuilderCode }}
 	{{ . }}
 	{{- end }}
-	
+
 	query := builder.String()
-	{{- end }}
+	return query, args, nil
+		{{- end }}
+	}
 
 {{- if .QueryExecution.IsIterator }}
 	return func(yield func({{ .IteratorYieldType }}, error) bool) {
+		query, args, err := buildQueryAndArgs()
+		if err != nil {
+			_ = yield(nil, err)
+			return
+		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 			mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
 			if err != nil {
-				_ = yield(nil, fmt.Errorf("failed to get mock data: %w", err))
+				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to get mock data: %w", err))
 				return
 			}
 
 			rows, err := snapsqlgo.MapMockDataToStruct[{{ .ResponseType }}](mockData)
 			if err != nil {
-				_ = yield(nil, fmt.Errorf("failed to map mock data to {{ .ResponseType }} struct: %w", err))
+				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to map mock data to {{ .ResponseType }} struct: %w", err))
 				return
 			}
 
@@ -1239,10 +1315,14 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 		{{- end }}
 	}
 		{{- else }}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return {{ .ErrorZeroValue }}, err
+	}
 		// Execute query
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			return result, fmt.Errorf("failed to prepare statement: %w", err)
+			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w", err)
 		}
 		defer stmt.Close()
 

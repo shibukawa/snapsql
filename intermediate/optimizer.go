@@ -20,19 +20,32 @@ type OptimizedInstruction struct {
 func OptimizeInstructions(instructions []Instruction, dialect string) ([]OptimizedInstruction, error) {
 	var result []OptimizedInstruction
 
-	skipUntilEnd := 0
+	type systemClauseState struct {
+		skipping bool
+	}
+
+	var systemStack []systemClauseState
+
+	// helper to know if we are skipping current instruction because we are before ELSE in a system clause
+	isSkippingSystem := func() bool {
+		return len(systemStack) > 0 && systemStack[len(systemStack)-1].skipping
+	}
 
 	for i, inst := range instructions {
-		// Skip instructions if we're inside a system directive block
-		if skipUntilEnd > 0 {
+		if isSkippingSystem() {
 			switch inst.Op {
-			case OpEnd:
-				skipUntilEnd--
 			case OpIfSystemLimit, OpIfSystemOffset:
-				skipUntilEnd++
+				systemStack = append(systemStack, systemClauseState{skipping: true})
+				continue
+			case OpElse:
+				systemStack[len(systemStack)-1].skipping = false
+				continue
+			case OpEnd:
+				systemStack = systemStack[:len(systemStack)-1]
+				continue
+			default:
+				continue
 			}
-
-			continue
 		}
 
 		switch inst.Op {
@@ -108,11 +121,27 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 			})
 
 		case OpElse:
+			if len(systemStack) > 0 {
+				if systemStack[len(systemStack)-1].skipping {
+					// handled in skipping branch above
+					continue
+				}
+
+				// Inside ELSE part of system clause: ignore control token
+				continue
+			}
+
 			result = append(result, OptimizedInstruction{
 				Op: "ELSE",
 			})
 
 		case OpEnd:
+			if len(systemStack) > 0 {
+				// Closing a system clause, drop control token
+				systemStack = systemStack[:len(systemStack)-1]
+				continue
+			}
+
 			result = append(result, OptimizedInstruction{
 				Op: "END",
 			})
@@ -132,8 +161,9 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 			})
 
 		case OpIfSystemLimit, OpIfSystemOffset:
-			// Skip system directives (treat as false)
-			skipUntilEnd = 1
+			// Start a system clause and skip the first branch
+			systemStack = append(systemStack, systemClauseState{skipping: true})
+			continue
 
 		case OpEmitSystemLimit, OpEmitSystemOffset:
 			// Skip system limit/offset emissions (not supported in static SQL)
