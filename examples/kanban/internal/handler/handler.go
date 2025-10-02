@@ -475,7 +475,6 @@ func (a *API) handleCardCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, card)
 }
 
-//nolint:dupl // Card operations have similar patterns but different logic
 func (a *API) handleCardUpdate(w http.ResponseWriter, r *http.Request) {
 	cardID, err := parsePathInt(r, "id")
 	if err != nil {
@@ -518,7 +517,6 @@ func (a *API) handleCardUpdate(w http.ResponseWriter, r *http.Request) {
 	writeNoContent(w)
 }
 
-//nolint:dupl // Card operations have similar patterns but different logic
 func (a *API) handleCardMove(w http.ResponseWriter, r *http.Request) {
 	cardID, err := parsePathInt(r, "id")
 	if err != nil {
