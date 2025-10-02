@@ -250,7 +250,7 @@ func TestAPI_CardUpdate(t *testing.T) {
 	mux, _, seed := setupAPI(t, true)
 
 	// Update an existing card
-	cardID := int(seed.CardIDs["Task 1"])
+	cardID := int(seed.CardIDs[stageBacklog])
 	rr := jsonRequest(t, mux, http.MethodPatch, fmt.Sprintf("%s/cards/%d", apiBase, cardID), map[string]any{
 		"title":       "Updated Task",
 		"description": "Updated description",
@@ -267,7 +267,7 @@ func TestAPI_CardMove(t *testing.T) {
 	mux, _, seed := setupAPI(t, true)
 
 	// Move a card from one list to another
-	cardID := int(seed.CardIDs["Task 1"])
+	cardID := int(seed.CardIDs[stageBacklog])
 	targetListID := int(seed.ListIDs[stageReview])
 
 	rr := jsonRequest(t, mux, http.MethodPost, fmt.Sprintf("%s/cards/%d/move", apiBase, cardID), map[string]any{
@@ -316,9 +316,10 @@ func TestAPI_ErrorHandling(t *testing.T) {
 func TestAPI_CardCreate(t *testing.T) {
 	mux, _, seed := setupAPI(t, true)
 
-	listID := int(seed.ListIDs[stageInProgress])
+	// Card creation automatically adds to the first list (Backlog)
+	expectedListID := int(seed.ListIDs[stageBacklog])
 
-	rr := jsonRequest(t, mux, http.MethodPost, fmt.Sprintf("%s/lists/%d/cards", apiBase, listID), map[string]any{
+	rr := jsonRequest(t, mux, http.MethodPost, fmt.Sprintf("%s/cards", apiBase), map[string]any{
 		"title":       "New Task",
 		"description": "Task description",
 		"position":    1.5,
@@ -330,8 +331,8 @@ func TestAPI_CardCreate(t *testing.T) {
 	var card query.CardCreateResult
 	decodeJSON(t, rr, &card)
 
-	if card.ListID != listID {
-		t.Fatalf("card expected list %d got %d", listID, card.ListID)
+	if card.ListID != expectedListID {
+		t.Fatalf("card expected list %d got %d", expectedListID, card.ListID)
 	}
 
 	if card.Title != "New Task" {
