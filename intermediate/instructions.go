@@ -67,7 +67,26 @@ func shouldAutoInsertLimit(stmt cmn.StatementNode, tokens []tokenizer.Token) boo
 func detectLimitOffsetClause(tokens []tokenizer.Token) *LimitOffsetClauseInfo {
 	info := &LimitOffsetClauseInfo{}
 
+	// Track parenthesis nesting level to detect subqueries
+	nestLevel := 0
+
 	for i, token := range tokens {
+		// Track parenthesis nesting
+		if token.Type == tokenizer.OPENED_PARENS {
+			nestLevel++
+			continue
+		}
+
+		if token.Type == tokenizer.CLOSED_PARENS {
+			nestLevel--
+			continue
+		}
+
+		// Only process LIMIT/OFFSET at top level (not inside subqueries)
+		if nestLevel > 0 {
+			continue
+		}
+
 		// Look for LIMIT keyword
 		if token.Type == tokenizer.LIMIT {
 			info.HasLimit = true

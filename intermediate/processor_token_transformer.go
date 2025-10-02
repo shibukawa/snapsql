@@ -41,6 +41,7 @@ func (t *TokenTransformer) addSystemFieldsToInsertTokens(tokens []tokenizer.Toke
 	insertIntoEnd := -1
 	valuesStart := -1
 	valuesEnd := -1
+	valuesNestLevel := 0
 
 	for i, token := range tokens {
 		if token.Type == tokenizer.CLOSED_PARENS && insertIntoEnd == -1 {
@@ -52,9 +53,18 @@ func (t *TokenTransformer) addSystemFieldsToInsertTokens(tokens []tokenizer.Toke
 			valuesStart = i
 		}
 
-		if token.Type == tokenizer.CLOSED_PARENS && valuesStart != -1 && valuesEnd == -1 {
-			// Closing parenthesis after VALUES
-			valuesEnd = i
+		// Track parenthesis nesting after VALUES keyword
+		if valuesStart != -1 && valuesEnd == -1 {
+			switch token.Type {
+			case tokenizer.OPENED_PARENS:
+				valuesNestLevel++
+			case tokenizer.CLOSED_PARENS:
+				valuesNestLevel--
+				// When nest level returns to 0, we found the matching closing parenthesis
+				if valuesNestLevel == 0 {
+					valuesEnd = i
+				}
+			}
 		}
 	}
 

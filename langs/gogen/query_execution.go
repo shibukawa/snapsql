@@ -786,6 +786,17 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 	for _, c := range rootCols {
 		code = append(code, fmt.Sprintf("        parentObj.%s = %s", celNameToGoName(c.resp.Name), c.varName))
 	}
+	// Initialize child slices to empty arrays (depth 1)
+	for _, m := range metas {
+		if m.Depth == 1 {
+			childStructName := mainStruct
+			for _, seg := range m.Path {
+				childStructName += celNameToGoName(seg)
+			}
+
+			code = append(code, fmt.Sprintf("        parentObj.%s = make([]*%s, 0)", celNameToGoName(m.Path[0]), childStructName))
+		}
+	}
 
 	code = append(code, "        _parentMap[pk_parent] = parentObj")
 	code = append(code, "    }")
@@ -843,6 +854,12 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 		code = append(code, fmt.Sprintf("        node_%s, _exists_%s := _nodeMap_%s[_chain_%s]", strings.Join(m.Path, "_"), strings.Join(m.Path, "_"), strings.Join(m.Path, "_"), strings.Join(m.Path, "_")))
 		code = append(code, fmt.Sprintf("        if ! _exists_%s {", strings.Join(m.Path, "_")))
 		code = append(code, fmt.Sprintf("            node_%s = &%s{}", strings.Join(m.Path, "_"), mainStruct+joinCamel(m.Path)))
+		// Assign key fields first (hierarchy keys like ID)
+		for _, kf := range m.KeyFields {
+			leaf := kf[strings.LastIndex(kf, "__")+1:]
+			colVar := "col_" + strings.ToLower(celNameToGoName(kf))
+			code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.Join(m.Path, "_"), celNameToGoName(leaf), colVar))
+		}
 		// Assign data fields (exclude keys already assigned)
 		keySet := map[string]struct{}{}
 		for _, kf := range m.KeyFields {
@@ -866,6 +883,30 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 				code = append(code, "            }")
 			} else {
 				code = append(code, fmt.Sprintf("            node_%s.%s = %s", strings.Join(m.Path, "_"), celNameToGoName(leaf), colVar))
+			}
+		}
+		// Initialize child slices for this node
+		for _, child := range metas {
+			// Check if child is a direct child of current node (parent path matches current path)
+			if len(child.ParentPath) == len(m.Path) {
+				isChild := true
+
+				for i, seg := range m.Path {
+					if child.ParentPath[i] != seg {
+						isChild = false
+						break
+					}
+				}
+
+				if isChild {
+					childStructName := mainStruct
+					for _, seg := range child.Path {
+						childStructName += celNameToGoName(seg)
+					}
+
+					childFieldName := celNameToGoName(child.Path[len(child.Path)-1])
+					code = append(code, fmt.Sprintf("            node_%s.%s = make([]*%s, 0)", strings.Join(m.Path, "_"), childFieldName, childStructName))
+				}
 			}
 		}
 		// Append to parent slice
