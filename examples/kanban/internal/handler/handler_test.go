@@ -319,7 +319,7 @@ func TestAPI_CardCreate(t *testing.T) {
 	// Card creation automatically adds to the first list (Backlog)
 	expectedListID := int(seed.ListIDs[stageBacklog])
 
-	rr := jsonRequest(t, mux, http.MethodPost, fmt.Sprintf("%s/cards", apiBase), map[string]any{
+	rr := jsonRequest(t, mux, http.MethodPost, apiBase+"/cards", map[string]any{
 		"title":       "New Task",
 		"description": "Task description",
 		"position":    1.5,
