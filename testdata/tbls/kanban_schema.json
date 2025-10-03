@@ -1,0 +1,404 @@
+{
+  "name": "kanban.db",
+  "tables": [
+    {
+      "name": "boards",
+      "type": "table",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "'active'"
+        },
+        {
+          "name": "archived_at",
+          "type": "DATETIME",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ux_boards_active",
+          "def": "CREATE UNIQUE INDEX ux_boards_active ON boards(status) WHERE status = 'active'",
+          "table": "boards",
+          "columns": [
+            "status"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "id",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "boards",
+          "columns": [
+            "id"
+          ]
+        }
+      ],
+      "def": "CREATE TABLE boards (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name TEXT NOT NULL,\n    status TEXT NOT NULL DEFAULT 'active',\n    archived_at DATETIME,\n    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\n)"
+    },
+    {
+      "name": "lists",
+      "type": "table",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "board_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "stage_order",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "position",
+          "type": "REAL",
+          "nullable": false
+        },
+        {
+          "name": "is_archived",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_lists_board_position",
+          "def": "CREATE INDEX idx_lists_board_position ON lists (board_id, position)",
+          "table": "lists",
+          "columns": [
+            "board_id",
+            "position"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "id",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "lists",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "- (Foreign key ID: 0)",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (board_id) REFERENCES boards (id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE",
+          "table": "lists",
+          "referenced_table": "boards",
+          "columns": [
+            "board_id"
+          ],
+          "referenced_columns": [
+            "id"
+          ]
+        }
+      ],
+      "def": "CREATE TABLE lists (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    board_id INTEGER NOT NULL,\n    name TEXT NOT NULL,\n    stage_order INTEGER NOT NULL DEFAULT 0,\n    position REAL NOT NULL,\n    is_archived INTEGER NOT NULL DEFAULT 0,\n    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    FOREIGN KEY (board_id) REFERENCES boards (id) ON DELETE CASCADE\n)"
+    },
+    {
+      "name": "list_templates",
+      "type": "table",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "stage_order",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "is_active",
+          "type": "INTEGER",
+          "nullable": false,
+          "default": "1"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "sqlite_autoindex_list_templates_1",
+          "def": "UNIQUE (stage_order)",
+          "table": "list_templates",
+          "columns": [
+            "stage_order"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "id",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "list_templates",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "sqlite_autoindex_list_templates_1",
+          "type": "UNIQUE",
+          "def": "UNIQUE (stage_order)",
+          "table": "list_templates",
+          "columns": [
+            "stage_order"
+          ]
+        }
+      ],
+      "def": "CREATE TABLE list_templates (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name TEXT NOT NULL,\n    stage_order INTEGER NOT NULL UNIQUE,\n    is_active INTEGER NOT NULL DEFAULT 1\n)"
+    },
+    {
+      "name": "cards",
+      "type": "table",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "list_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "nullable": false,
+          "default": "''"
+        },
+        {
+          "name": "position",
+          "type": "REAL",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_cards_list_position",
+          "def": "CREATE INDEX idx_cards_list_position ON cards (list_id, position)",
+          "table": "cards",
+          "columns": [
+            "list_id",
+            "position"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "id",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "cards",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "- (Foreign key ID: 0)",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (list_id) REFERENCES lists (id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE",
+          "table": "cards",
+          "referenced_table": "lists",
+          "columns": [
+            "list_id"
+          ],
+          "referenced_columns": [
+            "id"
+          ]
+        }
+      ],
+      "def": "CREATE TABLE cards (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    list_id INTEGER NOT NULL,\n    title TEXT NOT NULL,\n    description TEXT NOT NULL DEFAULT '',\n    position REAL NOT NULL,\n    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    FOREIGN KEY (list_id) REFERENCES lists (id) ON DELETE CASCADE\n)"
+    },
+    {
+      "name": "card_comments",
+      "type": "table",
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "nullable": true
+        },
+        {
+          "name": "card_id",
+          "type": "INTEGER",
+          "nullable": false
+        },
+        {
+          "name": "body",
+          "type": "TEXT",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_card_comments_card_created_at",
+          "def": "CREATE INDEX idx_card_comments_card_created_at ON card_comments (card_id, created_at)",
+          "table": "card_comments",
+          "columns": [
+            "card_id",
+            "created_at"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "id",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "card_comments",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "- (Foreign key ID: 0)",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (card_id) REFERENCES cards (id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE",
+          "table": "card_comments",
+          "referenced_table": "cards",
+          "columns": [
+            "card_id"
+          ],
+          "referenced_columns": [
+            "id"
+          ]
+        }
+      ],
+      "def": "CREATE TABLE card_comments (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    card_id INTEGER NOT NULL,\n    body TEXT NOT NULL,\n    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    FOREIGN KEY (card_id) REFERENCES cards (id) ON DELETE CASCADE\n)"
+    }
+  ],
+  "relations": [
+    {
+      "table": "lists",
+      "columns": [
+        "board_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "boards",
+      "parent_columns": [
+        "id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (board_id) REFERENCES boards (id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE"
+    },
+    {
+      "table": "cards",
+      "columns": [
+        "list_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "lists",
+      "parent_columns": [
+        "id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (list_id) REFERENCES lists (id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE"
+    },
+    {
+      "table": "card_comments",
+      "columns": [
+        "card_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "cards",
+      "parent_columns": [
+        "id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (card_id) REFERENCES cards (id) ON UPDATE NO ACTION ON DELETE CASCADE MATCH NONE"
+    }
+  ],
+  "driver": {
+    "name": "sqlite",
+    "database_version": "3.50.4"
+  }
+}

@@ -21,7 +21,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/inspect"
-	"github.com/shibukawa/snapsql/pull"
 	"github.com/shibukawa/snapsql/testrunner"
 	"github.com/shibukawa/snapsql/testrunner/fixtureexecutor"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
@@ -150,6 +149,11 @@ func (cmd *TestCmd) Run(ctx *Context) error {
 		return err
 	}
 
+	runtimeTables := loadRuntimeTables(ctx)
+	if len(runtimeTables) == 0 {
+		return snapsql.ErrNoSchemaYAMLFound
+	}
+
 	if verbose {
 		fmt.Printf("Starting test execution in: %s\n", projectRoot)
 		fmt.Printf("Execution mode: %s\n", mode)
@@ -179,10 +183,10 @@ func (cmd *TestCmd) Run(ctx *Context) error {
 	}
 
 	if cmd.UseExisting {
-		return cmd.runWithExistingDatabase(projectRoot, config, includePaths, options, verbose)
+		return cmd.runWithExistingDatabase(projectRoot, config, includePaths, options, verbose, runtimeTables)
 	}
 
-	return cmd.runWithEphemeralDatabase(projectRoot, config, includePaths, options, verbose)
+	return cmd.runWithEphemeralDatabase(projectRoot, config, includePaths, options, verbose, runtimeTables)
 }
 
 func (cmd *TestCmd) resolveTargetPaths(projectRoot string) ([]string, error) {
@@ -235,7 +239,7 @@ func (cmd *TestCmd) resolveTargetPaths(projectRoot string) ([]string, error) {
 	return resolved, nil
 }
 
-func (cmd *TestCmd) runWithExistingDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool) error {
+func (cmd *TestCmd) runWithExistingDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo) error {
 	if config.Databases == nil {
 		if verbose {
 			fmt.Printf("No database configuration present in snapsql.yaml, falling back to Go tests\n")
@@ -253,10 +257,10 @@ func (cmd *TestCmd) runWithExistingDatabase(projectRoot string, config *snapsql.
 		return cmd.runGoTests(projectRoot, includePaths, options, verbose)
 	}
 
-	return cmd.runFixtureTests(projectRoot, config, dbConfig, includePaths, options, verbose)
+	return cmd.runFixtureTests(projectRoot, config, dbConfig, includePaths, options, verbose, tableCatalog)
 }
 
-func (cmd *TestCmd) runWithEphemeralDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool) error {
+func (cmd *TestCmd) runWithEphemeralDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo) error {
 	if strings.TrimSpace(config.Dialect) == "" {
 		return ErrDialectNotConfigured
 	}
@@ -273,20 +277,11 @@ func (cmd *TestCmd) runWithEphemeralDatabase(projectRoot string, config *snapsql
 		return err
 	}
 
-	if err := cmd.executeSchemaPull(ctx, config, provisioned, verbose); err != nil {
-		return err
-	}
-
-	tableInfo, err := cmd.loadTableInfo(cmd.SchemaOutput, verbose)
-	if err != nil {
-		return err
-	}
-
-	return cmd.executeFixtureTests(projectRoot, config, provisioned.DB, tableInfo, includePaths, options, verbose)
+	return cmd.executeFixtureTests(projectRoot, config, provisioned.DB, tableCatalog, includePaths, options, verbose)
 }
 
 // runFixtureTests runs fixture-based tests
-func (cmd *TestCmd) runFixtureTests(projectRoot string, config *snapsql.Config, dbConfig snapsql.Database, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool) error {
+func (cmd *TestCmd) runFixtureTests(projectRoot string, config *snapsql.Config, dbConfig snapsql.Database, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo) error {
 	// Open database connection
 	db, err := sql.Open(dbConfig.Driver, dbConfig.Connection)
 	if err != nil {
@@ -306,7 +301,7 @@ func (cmd *TestCmd) runFixtureTests(projectRoot string, config *snapsql.Config, 
 		fmt.Println()
 	}
 
-	return cmd.executeFixtureTests(projectRoot, config, db, nil, includePaths, options, verbose)
+	return cmd.executeFixtureTests(projectRoot, config, db, tableCatalog, includePaths, options, verbose)
 }
 
 func (cmd *TestCmd) executeFixtureTests(projectRoot string, config *snapsql.Config, db *sql.DB, tableInfo map[string]*snapsql.TableInfo, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool) error {
@@ -569,102 +564,6 @@ func (cmd *TestCmd) applySchema(ctx context.Context, db *sql.DB, schemaPaths []s
 	return nil
 }
 
-func (cmd *TestCmd) executeSchemaPull(ctx context.Context, config *snapsql.Config, provisioned *provisionedDatabase, verbose bool) error {
-	outputDir := cmd.SchemaOutput
-	if outputDir == "" {
-		outputDir = "./schema"
-	}
-
-	if err := os.RemoveAll(outputDir); err != nil {
-		return fmt.Errorf("failed to clean schema output directory %s: %w", outputDir, err)
-	}
-
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create schema output directory %s: %w", outputDir, err)
-	}
-
-	pullConfig := pull.PullConfig{
-		DatabaseURL:    provisioned.DatabaseURL,
-		DatabaseType:   normalizeDialect(config.Dialect),
-		OutputPath:     outputDir,
-		SchemaAware:    true,
-		IncludeViews:   config.Schema.IncludeViews,
-		IncludeIndexes: config.Schema.IncludeIndexes,
-		IncludeTables:  config.Schema.TablePatterns.Include,
-		ExcludeTables:  config.Schema.TablePatterns.Exclude,
-	}
-
-	result, err := pull.ExecutePull(ctx, pullConfig)
-	if err != nil {
-		return fmt.Errorf("schema pull failed: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("Schema pull complete: %d schema(s) processed\n", len(result.Schemas))
-	}
-
-	return nil
-}
-
-func (cmd *TestCmd) loadTableInfo(root string, verbose bool) (map[string]*snapsql.TableInfo, error) {
-	info, err := os.Stat(root)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if verbose {
-				fmt.Printf("Schema directory %s does not exist; continuing without table metadata\n", root)
-			}
-
-			return map[string]*snapsql.TableInfo{}, nil
-		}
-
-		return nil, fmt.Errorf("failed to inspect schema directory %s: %w", root, err)
-	}
-
-	if !info.IsDir() {
-		return nil, fmt.Errorf("%w: %s", ErrSchemaOutputNotDirectory, root)
-	}
-
-	tableInfo := make(map[string]*snapsql.TableInfo)
-
-	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		if filepath.Ext(path) != ".yaml" {
-			return nil
-		}
-
-		table, err := pull.LoadTableFromYAMLFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to load schema YAML %s: %w", path, err)
-		}
-
-		tableInfo[table.Name] = table
-		if table.Schema != "" {
-			qualified := table.Schema + "." + table.Name
-			if _, exists := tableInfo[qualified]; !exists {
-				tableInfo[qualified] = table
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if verbose {
-		fmt.Printf("Loaded %d table definition(s) from %s\n", len(tableInfo), root)
-	}
-
-	return tableInfo, nil
-}
-
 func collectSQLFiles(root string) ([]string, error) {
 	var files []string
 
@@ -801,7 +700,6 @@ var CLI struct {
 	Generate  GenerateCmd  `cmd:"" help:"Generate intermediate files from SQL templates"`
 	Validate  ValidateCmd  `cmd:"" help:"Validate SQL templates"`
 	Init      InitCmd      `cmd:"" help:"Initialize a new SnapSQL project"`
-	Pull      PullCmd      `cmd:"" help:"Pull schema information from database"`
 	Query     QueryCmd     `cmd:"" help:"Execute SQL queries"`
 	Test      TestCmd      `cmd:"" help:"Run tests"`
 	Format    FormatCmd    `cmd:"" help:"Format SnapSQL template files"`

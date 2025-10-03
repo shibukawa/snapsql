@@ -20,8 +20,9 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
 	"time"
+
+	"github.com/shibukawa/snapsql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
