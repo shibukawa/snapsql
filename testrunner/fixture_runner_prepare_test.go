@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/fatih/color"
 	"github.com/shibukawa/snapsql/testrunner/fixtureexecutor"
 	"github.com/stretchr/testify/require"
 )
@@ -96,10 +95,6 @@ func TestRunAllFixtureTestsReportsParseErrors(t *testing.T) {
 	require.Contains(t, result.Error.Error(), "missing required section")
 	require.Equal(t, "Parse broken.snap.md", result.TestName)
 	require.Equal(t, filepath.ToSlash("broken.snap.md"), result.SourceFile)
-
-	color.NoColor = true
-
-	t.Cleanup(func() { color.NoColor = false })
 
 	output := captureStdout(t, func() {
 		runner.PrintSummary(summary)
