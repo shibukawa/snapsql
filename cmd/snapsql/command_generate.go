@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,9 +15,11 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/langs/gogen"
 	"github.com/shibukawa/snapsql/markdownparser"
+	"github.com/shibukawa/snapsql/pull"
 )
 
 // GenerateCmd represents the generate command
@@ -29,10 +33,53 @@ type GenerateCmd struct {
 }
 
 func (g *GenerateCmd) Run(ctx *Context) error {
+	// Auto-detect local snapsql.yaml when --config not provided so that
+	// running `snapsql generate` inside examples/kanban updates examples/kanban/generated/*
+	if ctx.Config == "" {
+		// Prefer snapsql.yaml, fallback to snapsql.yml
+		if _, err := os.Stat("snapsql.yaml"); err == nil {
+			ctx.Config = "snapsql.yaml"
+			if ctx.Verbose {
+				color.Cyan("Detected local configuration file: %s", ctx.Config)
+			}
+		} else if _, err2 := os.Stat("snapsql.yml"); err2 == nil {
+			ctx.Config = "snapsql.yml"
+			if ctx.Verbose {
+				color.Cyan("Detected local configuration file: %s", ctx.Config)
+			}
+		}
+	}
+
 	// Load configuration
 	config, err := LoadConfig(ctx.Config)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Detect the repository stub configuration that simply points to the Kanban sample
+	if isLikelyStubConfig(ctx.Config, config) {
+		sampleConfig := filepath.Join("examples", "kanban", "snapsql.yaml")
+		if _, err := os.Stat(sampleConfig); err == nil {
+			color.Yellow("Kanban sample code generation must be executed inside examples/kanban.\nRun:\n  cd examples/kanban\n  snapsql generate")
+			return nil
+		}
+	}
+
+	// Rebase config.InputDir relative to config file directory (only when user did not override via --input)
+	if ctx.Config != "" && g.Input == "" && config.InputDir != "" && !filepath.IsAbs(config.InputDir) {
+		var baseDir string
+
+		if !filepath.IsAbs(ctx.Config) {
+			cwd, _ := os.Getwd()
+			baseDir = filepath.Dir(filepath.Join(cwd, ctx.Config))
+		} else {
+			baseDir = filepath.Dir(ctx.Config)
+		}
+
+		config.InputDir = filepath.Clean(filepath.Join(baseDir, config.InputDir))
+		if ctx.Verbose {
+			color.Cyan("Resolved input_dir to %s", config.InputDir)
+		}
 	}
 
 	// Determine input path
@@ -60,10 +107,110 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 	return g.generateAllLanguages(ctx, config, inputPath, constantFiles)
 }
 
+func isLikelyStubConfig(configPath string, config *Config) bool {
+	if config == nil {
+		return false
+	}
+
+	if filepath.Base(strings.TrimSpace(configPath)) != "snapsql.yaml" && configPath != "" {
+		return false
+	}
+
+	if config.InputDir != "./queries" {
+		return false
+	}
+
+	if config.Dialect != "postgres" {
+		return false
+	}
+
+	if len(config.Generation.Generators) != 1 {
+		return false
+	}
+
+	jsonGen, ok := config.Generation.Generators["json"]
+	if !ok {
+		return false
+	}
+
+	if jsonGen.Enabled {
+		return false
+	}
+
+	if jsonGen.Output != "./generated" {
+		return false
+	}
+
+	return true
+}
+
 // generateAllLanguages generates files for all configured languages
 func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPath string, constantFiles []string) error {
 	// Generate files for all enabled generators
 	generatedLanguages := 0
+
+	// Base directory for resolving relative paths (config directory if provided)
+	var configBaseDir string
+
+	if ctx.Config != "" {
+		// If ctx.Config is relative, join with current working directory for safety
+		if !filepath.IsAbs(ctx.Config) {
+			cwd, _ := os.Getwd()
+			configBaseDir = filepath.Dir(filepath.Join(cwd, ctx.Config))
+		} else {
+			configBaseDir = filepath.Dir(ctx.Config)
+		}
+	}
+
+	// Validate schema presence before generation (schema YAML must exist for proper type inference)
+	// Determine schema directory relative to config if present
+	schemaDir := "./schema"
+	if ctx.Config != "" && !filepath.IsAbs(schemaDir) {
+		var baseDir string
+
+		if !filepath.IsAbs(ctx.Config) {
+			cwd, _ := os.Getwd()
+			baseDir = filepath.Dir(filepath.Join(cwd, ctx.Config))
+		} else {
+			baseDir = filepath.Dir(ctx.Config)
+		}
+
+		candidate := filepath.Join(baseDir, "schema")
+		if _, err := os.Stat(candidate); err == nil {
+			schemaDir = candidate
+		}
+	}
+	// If still not found and path suggests kanban example, fallback
+	if _, err := os.Stat(schemaDir); os.IsNotExist(err) && strings.Contains(inputPath, "examples/kanban") {
+		candidate := filepath.Join("examples/kanban", "schema")
+		if _, err2 := os.Stat(candidate); err2 == nil {
+			schemaDir = candidate
+		}
+	}
+
+	if _, err := os.Stat(schemaDir); err != nil {
+		return snapsql.ErrSchemaDirectoryNotFound
+	}
+
+	// quick heuristic: require at least one .yaml under schemaDir
+	hasSchema := false
+
+	filepath.Walk(schemaDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err // propagate error instead of swallowing
+		}
+
+		if !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".yaml") {
+			hasSchema = true
+			return filepath.SkipDir // early exit after first file
+		}
+
+		return nil
+	})
+
+	if !hasSchema {
+		return snapsql.ErrNoSchemaYAMLFound
+	}
 
 	var (
 		intermediateFiles []string
@@ -71,8 +218,12 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 	)
 
 	// Generate all enabled generators
-
 	for lang, generator := range config.Generation.Generators {
+		// Rebase generator output relative to config directory (only if originally relative)
+		if configBaseDir != "" && generator.Output != "" && !filepath.IsAbs(generator.Output) {
+			generator.Output = filepath.Clean(filepath.Join(configBaseDir, generator.Output))
+		}
+
 		if !generator.Enabled {
 			continue
 		}
@@ -234,10 +385,9 @@ func generateGoFiles(generator GeneratorConfig, intermediateFiles []string, ctx 
 
 // generateWithExternalPlugin attempts to use an external generator plugin
 func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
-	_ = ctx // Context not currently used for external plugin generation
 	pluginName := "snapsql-gen-" + lang
 
-	// Check if plugin exists in PATH
+	// Verify plugin availability
 	if _, err := exec.LookPath(pluginName); err != nil {
 		return fmt.Errorf("%w: '%s'", ErrPluginNotFound, pluginName)
 	}
@@ -248,63 +398,49 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 		outputDir = "./generated/" + lang
 	}
 
-	err := ensureDir(outputDir)
-	if err != nil {
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 	}
 
-	// Process each intermediate file
+	// Base arguments (shared across files)
+	baseArgs := []string{"--output", outputDir}
+	for key, value := range generator.Settings {
+		var strValue string
+		switch v := value.(type) {
+		case string:
+			strValue = v
+		case bool:
+			strValue = strconv.FormatBool(v)
+		case int, int64, float64:
+			strValue = fmt.Sprintf("%v", v)
+		default:
+			continue // skip complex types (slices, maps, etc.)
+		}
+
+		baseArgs = append(baseArgs, "--"+key, strValue)
+	}
+
 	for _, intermediateFile := range intermediateFiles {
-		// Load intermediate file
-		fileData, err := os.ReadFile(intermediateFile)
+		data, err := os.ReadFile(intermediateFile)
 		if err != nil {
-			continue
+			return fmt.Errorf("failed to read intermediate file %s: %w", intermediateFile, err)
 		}
 
-		intermediateData, err := intermediate.FromJSON(fileData)
-		if err != nil {
-			continue
-		}
+		args := append([]string{}, baseArgs...)
+		args = append(args, "--input", intermediateFile)
 
-		// Convert to JSON for plugin input
-		jsonData, err := intermediateData.ToJSON()
-		if err != nil {
-			continue
-		}
-
-		// Prepare command arguments
-		args := []string{
-			"--output", outputDir,
-		}
-
-		// Add settings as command line arguments
-		for key, value := range generator.Settings {
-			// Convert setting value to string
-			var strValue string
-			switch v := value.(type) {
-			case string:
-				strValue = v
-			case bool:
-				strValue = strconv.FormatBool(v)
-			case int, int64, float64:
-				strValue = fmt.Sprintf("%v", v)
-			default:
-				// Skip complex types
-				continue
-			}
-
-			args = append(args, "--"+key, strValue)
-		}
-
-		// Execute plugin
-		ctx := context.Background()
-		cmd := exec.CommandContext(ctx, pluginName, args...)
-		cmd.Stdin = bytes.NewReader(jsonData)
+		execCtx := context.Background()
+		cmd := exec.CommandContext(execCtx, pluginName, args...)
+		cmd.Stdin = bytes.NewReader(data)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 
 		if err := cmd.Run(); err != nil {
-			continue
+			return fmt.Errorf("external plugin %s failed for %s: %w", pluginName, intermediateFile, err)
+		}
+
+		if ctx.Verbose {
+			color.Green("Generated (plugin %s): %s", pluginName, intermediateFile)
 		}
 	}
 
@@ -313,6 +449,34 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 
 // generateSpecificLanguage generates files for a specific language
 func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inputPath string, constantFiles []string) error {
+	// Schema presence check (same as in generateAllLanguages)
+	schemaDir := "./schema"
+	if _, err := os.Stat(schemaDir); os.IsNotExist(err) && strings.Contains(inputPath, "examples/kanban") {
+		candidate := filepath.Join("examples/kanban", "schema")
+		if _, err2 := os.Stat(candidate); err2 == nil {
+			schemaDir = candidate
+		}
+	}
+
+	if _, err := os.Stat(schemaDir); err != nil {
+		return snapsql.ErrSchemaDirectoryNotFound
+	}
+
+	hasSchema := false
+
+	filepath.Walk(schemaDir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".yaml") {
+			hasSchema = true
+			return filepath.SkipDir
+		}
+
+		return nil
+	})
+
+	if !hasSchema {
+		return snapsql.ErrNoSchemaYAMLFound
+	}
+
 	switch g.Lang {
 	case "json":
 		// Just generate intermediate files
@@ -378,6 +542,20 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 		outputDir = jsonGen.Output
 	}
 
+	// Rebase outputDir relative to config file directory if config was provided (and path is relative)
+	if ctx.Config != "" && !filepath.IsAbs(outputDir) {
+		var baseDir string
+
+		if !filepath.IsAbs(ctx.Config) {
+			cwd, _ := os.Getwd()
+			baseDir = filepath.Dir(filepath.Join(cwd, ctx.Config))
+		} else {
+			baseDir = filepath.Dir(ctx.Config)
+		}
+
+		outputDir = filepath.Clean(filepath.Join(baseDir, outputDir))
+	}
+
 	// Ensure output directory exists
 	if err := ensureDir(outputDir); err != nil {
 		return nil, fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
@@ -412,13 +590,14 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 	processedCount := 0
 	generatedFiles := make([]string, 0, len(files))
 
+	var encounteredErr error
+
 	for _, file := range files {
 		// Generate intermediate file
 		outputFile, err := g.processTemplateFile(file, outputDir, inputPath, constantFiles, config, ctx)
 		if err != nil {
-			if ctx.Verbose {
-				color.Red("Failed to process %s: %v", file, err)
-			}
+			color.Red("Failed to process %s: %v", file, err)
+			encounteredErr = errors.Join(encounteredErr, err)
 
 			continue
 		}
@@ -426,6 +605,10 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 		generatedFiles = append(generatedFiles, outputFile)
 		processedCount++
 		// Output message is handled in processTemplateFile
+	}
+
+	if encounteredErr != nil {
+		return nil, encounteredErr
 	}
 
 	return generatedFiles, nil
@@ -451,6 +634,63 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string,
 
 	var format *intermediate.IntermediateFormat
 
+	// Load schema YAMLs (per-table format with metadata + table) using official loader.
+	tableInfo := map[string]*snapsql.TableInfo{}
+	// Try root schema first; if missing and input under examples/kanban, fallback.
+	schemaRoot := "./schema"
+	if ctx.Config != "" && !filepath.IsAbs(schemaRoot) {
+		var baseDir string
+
+		if !filepath.IsAbs(ctx.Config) {
+			cwd, _ := os.Getwd()
+			baseDir = filepath.Dir(filepath.Join(cwd, ctx.Config))
+		} else {
+			baseDir = filepath.Dir(ctx.Config)
+		}
+
+		candidate := filepath.Join(baseDir, "schema")
+		if _, err := os.Stat(candidate); err == nil {
+			schemaRoot = candidate
+		}
+	}
+
+	if _, err := os.Stat(schemaRoot); os.IsNotExist(err) && strings.Contains(inputFile, "examples/kanban") {
+		alt := filepath.Join("examples/kanban", "schema")
+		if _, err2 := os.Stat(alt); err2 == nil {
+			schemaRoot = alt
+		}
+	}
+
+	walkErr := filepath.WalkDir(schemaRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil { // propagate real filesystem error
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		if !strings.HasSuffix(strings.ToLower(d.Name()), ".yaml") {
+			return nil
+		}
+
+		table, lerr := pull.LoadTableFromYAMLFile(path)
+		if lerr != nil {
+			return lerr
+		}
+
+		tableInfo[table.Name] = table
+
+		return nil
+	})
+	if walkErr != nil {
+		return "", fmt.Errorf("failed to walk schema directory: %w", walkErr)
+	}
+
+	if len(tableInfo) == 0 {
+		return "", snapsql.ErrNoSchemaYAMLFound
+	}
+
 	if ext == ".md" {
 		// Process Markdown file
 		doc, err := markdownparser.Parse(strings.NewReader(string(content)))
@@ -458,7 +698,7 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string,
 			return "", fmt.Errorf("failed to parse markdown: %w", err)
 		}
 
-		format, err = intermediate.GenerateFromMarkdown(doc, inputFile, ".", constants, nil, config)
+		format, err = intermediate.GenerateFromMarkdown(doc, inputFile, ".", constants, tableInfo, config)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate from markdown: %w", err)
 		}
@@ -466,7 +706,7 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string,
 		// Process SQL file
 		reader := strings.NewReader(string(content))
 
-		format, err = intermediate.GenerateFromSQL(reader, constants, inputFile, ".", nil, config)
+		format, err = intermediate.GenerateFromSQL(reader, constants, inputFile, ".", tableInfo, config)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate from SQL: %w", err)
 		}
@@ -479,7 +719,7 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string,
 	// Ensure output directory exists (including subdirectories if preserving hierarchy)
 	outputFileDir := filepath.Dir(outputFile)
 	if err := ensureDir(outputFileDir); err != nil {
-		return "", fmt.Errorf("failed to create output directory %s: %w", outputFileDir, err)
+		return "", err
 	}
 
 	// Write intermediate format to file

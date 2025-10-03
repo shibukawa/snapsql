@@ -62,5 +62,8 @@ linters:
       - path: functionsigs
         linters:
           - dupl
+      - path: examples/kanban/internal/handler
+        linters:
+          - dupl
 run:
   timeout: 5m

@@ -4,7 +4,30 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/shibukawa/snapsql/intermediate"
 )
+
+func TestConvertToGoTypeFloatNormalization(t *testing.T) {
+	cases := []struct {
+		in  string
+		out string
+	}{
+		{"float", "float64"},
+		{"float32", "float64"},
+		{"float64", "float64"},
+	}
+	for _, c := range cases {
+		got, err := convertToGoType(c.in)
+		if err != nil {
+			t.Fatalf("convertToGoType(%s) unexpected error: %v", c.in, err)
+		}
+
+		if got != c.out {
+			t.Errorf("convertToGoType(%s) = %s, want %s", c.in, got, c.out)
+		}
+	}
+}
 
 func TestConvertToGoType_UnknownType(t *testing.T) {
 	tests := []struct {
@@ -203,5 +226,68 @@ func TestUnsupportedTypeError(t *testing.T) {
 
 			t.Logf("Error: %s", errorStr)
 		})
+	}
+}
+
+func TestProcessResponseStructRootPkNonNull(t *testing.T) {
+	format := &intermediate.IntermediateFormat{
+		FunctionName:     "list_by_board",
+		ResponseAffinity: "many",
+		Responses: []intermediate.Response{
+			{Name: "id", Type: "int", IsNullable: true, HierarchyKeyLevel: 1},
+			{Name: "name", Type: "string"},
+		},
+	}
+
+	respStruct, err := processResponseStruct(format)
+	if err != nil {
+		t.Fatalf("processResponseStruct returned error: %v", err)
+	}
+
+	if len(respStruct.Fields) == 0 {
+		t.Fatalf("expected fields in response struct")
+	}
+
+	field := respStruct.Fields[0]
+	if field.Type != "int" {
+		t.Errorf("expected root PK field type int, got %s", field.Type)
+	}
+
+	if field.IsPointer {
+		t.Errorf("expected root PK field to be non-pointer")
+	}
+}
+
+func TestGenerateQueryExecutionManyIterator(t *testing.T) {
+	format := &intermediate.IntermediateFormat{
+		FunctionName:     "list_by_board",
+		ResponseAffinity: "many",
+		Responses: []intermediate.Response{
+			{Name: "id", Type: "int"},
+			{Name: "name", Type: "string"},
+		},
+	}
+
+	respStruct, err := processResponseStruct(format)
+	if err != nil {
+		t.Fatalf("processResponseStruct returned error: %v", err)
+	}
+
+	data, err := generateQueryExecution(format, respStruct, nil, respStruct.Name, "ListByBoard", "result")
+	if err != nil {
+		t.Fatalf("generateQueryExecution returned error: %v", err)
+	}
+
+	if !data.IsIterator {
+		t.Fatalf("expected iterator generation for many affinity")
+	}
+
+	if len(data.IteratorBody) == 0 {
+		t.Fatalf("expected iterator body to be generated")
+	}
+
+	expectedYield := "*" + respStruct.Name
+	if data.IteratorYieldType != expectedYield {
+		t.Errorf("expected iterator yield type %s, got %s", expectedYield, data.IteratorYieldType)
 	}
 }

@@ -26,13 +26,6 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
-// GetFilteredDataResult represents the response structure for GetFilteredData
-type GetFilteredDataResult struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
-	Age int `json:"age"`
-	Department string `json:"department"`
-}
 
 // GetFilteredData specific CEL programs and mock path
 var (
@@ -46,19 +39,23 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("min_age", cel.IntType),
-		cel.Variable("max_age", cel.IntType),
-		cel.Variable("departments", cel.ListType(cel.StringType)),
-		cel.Variable("active", cel.BoolType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetFilteredData CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("min_age", cel.IntType),
+			cel.Variable("max_age", cel.IntType),
+			cel.Variable("departments", cel.ListType(cel.StringType)),
+			cel.Variable("active", cel.BoolType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetFilteredData CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getfiltereddataPrograms = make([]cel.Program, 7)
@@ -66,11 +63,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("min_age > 0")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'min_age > 0': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "min_age > 0", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'min_age > 0': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age > 0", err))
 		}
 		getfiltereddataPrograms[0] = program
 	}
@@ -78,11 +75,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("min_age")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'min_age': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "min_age", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'min_age': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age", err))
 		}
 		getfiltereddataPrograms[1] = program
 	}
@@ -90,11 +87,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("max_age > 0")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'max_age > 0': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "max_age > 0", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'max_age > 0': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "max_age > 0", err))
 		}
 		getfiltereddataPrograms[2] = program
 	}
@@ -102,11 +99,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("max_age")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'max_age': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "max_age", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'max_age': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "max_age", err))
 		}
 		getfiltereddataPrograms[3] = program
 	}
@@ -114,11 +111,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("departments.size() > 0")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'departments.size() > 0': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "departments.size() > 0", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'departments.size() > 0': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "departments.size() > 0", err))
 		}
 		getfiltereddataPrograms[4] = program
 	}
@@ -126,11 +123,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("departments")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'departments': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "departments", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'departments': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "departments", err))
 		}
 		getfiltereddataPrograms[5] = program
 	}
@@ -138,153 +135,300 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("active")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'active': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "active", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'active': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "active", err))
 		}
 		getfiltereddataPrograms[6] = program
 	}
 }
-// GetFilteredData - []GetFilteredDataResult Affinity
-func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, departments []string, active bool, opts ...snapsqlgo.FuncOpt) ([]GetFilteredDataResult, error) {
-	var result []GetFilteredDataResult
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getfiltereddata", "[]getfiltereddataresult")
+// GetFilteredData - sql.Result Affinity
+func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge int, maxAge int, departments []string, active bool, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getfiltereddata", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(getfiltereddataMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("GetFilteredData: failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[[]GetFilteredDataResult](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to []GetFilteredDataResult struct: %w", err)
+			return nil, fmt.Errorf("GetFilteredData: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	var builder strings.Builder
-	args := make([]any, 0)
-	var boundaryNeeded bool
-	paramMap := map[string]interface{}{
-	    "min_age": minAge,
-	    "max_age": maxAge,
-	    "departments": departments,
-	    "active": active,
-	}
-	builder.WriteString("SELECT id, name, age, department FROM users WHERE 1=1")
-	boundaryNeeded = true
-	// IF condition: expression 0
-	condResult, err := getfiltereddataPrograms[0].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate condition: %w", err)
-	}
-	if condResult.Value().(bool) {
-	if boundaryNeeded {
-	    builder.WriteString("AND")
-	}
-	boundaryNeeded = true
-	builder.WriteString("age >=?")
-	boundaryNeeded = true
-	// Evaluate expression 1
-	result, err := getfiltereddataPrograms[1].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	}
-	// IF condition: expression 2
-	condResult, err := getfiltereddataPrograms[2].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate condition: %w", err)
-	}
-	if condResult.Value().(bool) {
-	if boundaryNeeded {
-	    builder.WriteString("AND")
-	}
-	boundaryNeeded = true
-	builder.WriteString("age <=?")
-	boundaryNeeded = true
-	// Evaluate expression 3
-	result, err := getfiltereddataPrograms[3].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	}
-	// IF condition: expression 4
-	condResult, err := getfiltereddataPrograms[4].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate condition: %w", err)
-	}
-	if condResult.Value().(bool) {
-	builder.WriteString("department IN (?")
-	boundaryNeeded = true
-	// Evaluate expression 5
-	result, err := getfiltereddataPrograms[5].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	builder.WriteString("('HR''Engineering'")
-	boundaryNeeded = true
-	boundaryNeeded = false
-	builder.WriteString("))")
-	boundaryNeeded = true
-	}
-	// IF condition: expression 6
-	condResult, err := getfiltereddataPrograms[6].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate condition: %w", err)
-	}
-	if condResult.Value().(bool) {
-	if boundaryNeeded {
-	    builder.WriteString("AND")
-	}
-	boundaryNeeded = true
-	builder.WriteString("status = 'active'")
-	boundaryNeeded = true
-	}
-	
-	query := builder.String()
+	buildQueryAndArgs := func() (string, []any, error) {
+		var builder strings.Builder
+		args := make([]any, 0)
+		var boundaryNeeded bool
+		paramMap := map[string]any{
+			"min_age":     minAge,
+			"max_age":     maxAge,
+			"departments": departments,
+			"active":      active,
+		}
+		{ // safe append static with spacing
+			_frag := "SELECT id, name, age, department FROM users  WHERE 1=1"
+			if builder.Len() > 0 {
+				_b := builder.String()
+				_last := _b[len(_b)-1]
+				// determine if last char is word char
+				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+				// skip leading spaces in _frag
+				_k := 0
+				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+					_k++
+				}
+				_startsWord := false
+				if _k < len(_frag) {
+					_c := _frag[_k]
+					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+				}
+				if _endsWord && _startsWord {
+					builder.WriteByte(' ')
+				}
+			}
+			builder.WriteString(_frag)
+		}
+		boundaryNeeded = true
+		// IF condition: expression 0
+		condResult, _, err := getfiltereddataPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
+		}
+		if condResult.Value().(bool) {
+			if boundaryNeeded {
+				builder.WriteString("AND")
+			}
+			boundaryNeeded = true
+			{ // safe append static with spacing
+				_frag := "age >=?"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			// Evaluate expression 1
+			evalRes0, _, err := getfiltereddataPrograms[1].Eval(paramMap)
+			if err != nil {
+				return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate expression: %w", err)
+			}
+			args = append(args, evalRes0.Value())
+		}
+		// IF condition: expression 2
+		condResult, _, err := getfiltereddataPrograms[2].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
+		}
+		if condResult.Value().(bool) {
+			if boundaryNeeded {
+				builder.WriteString("AND")
+			}
+			boundaryNeeded = true
+			{ // safe append static with spacing
+				_frag := "age <=?"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			// Evaluate expression 3
+			evalRes1, _, err := getfiltereddataPrograms[3].Eval(paramMap)
+			if err != nil {
+				return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate expression: %w", err)
+			}
+			args = append(args, evalRes1.Value())
+		}
+		// IF condition: expression 4
+		condResult, _, err := getfiltereddataPrograms[4].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
+		}
+		if condResult.Value().(bool) {
+			{ // safe append static with spacing
+				_frag := "department IN (?"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			// Evaluate expression 5
+			evalRes2, _, err := getfiltereddataPrograms[5].Eval(paramMap)
+			if err != nil {
+				return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate expression: %w", err)
+			}
+			args = append(args, evalRes2.Value())
+			{ // safe append static with spacing
+				_frag := "('HR''Engineering'"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			boundaryNeeded = false
+			{ // safe append static with spacing
+				_frag := "))"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+		}
+		// IF condition: expression 6
+		condResult, _, err := getfiltereddataPrograms[6].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
+		}
+		if condResult.Value().(bool) {
+			if boundaryNeeded {
+				builder.WriteString("AND")
+			}
+			boundaryNeeded = true
+			{ // safe append static with spacing
+				_frag := "status = 'active'"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+		}
 
+		query := builder.String()
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("GetFilteredData: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute query: %w", err)
+		return nil, fmt.Errorf("GetFilteredData: failed to execute query: %w", err)
 	}
 	defer rows.Close()
-	
-	for rows.Next() {
-	    var item GetFilteredDataResult
-	    err := rows.Scan(
-	        &item.Id,
-	        &item.Name,
-	        &item.Age,
-	        &item.Department
-	    )
-	    if err != nil {
-	        return result, fmt.Errorf("failed to scan row: %w", err)
-	    }
-	    result = append(result, item)
-	}
-	
-	if err = rows.Err(); err != nil {
-	    return result, fmt.Errorf("error iterating rows: %w", err)
-	}
+
+	// Generic scan for any result - not implemented
+	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }

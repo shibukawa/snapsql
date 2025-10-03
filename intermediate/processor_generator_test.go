@@ -128,6 +128,30 @@ SELECT id, TRUE as is_active FROM users`,
 	}
 }
 
+func TestGenerateInstructionsIncludesCTE(t *testing.T) {
+	sql := `/*#
+function_name: postpone_cards
+*/
+WITH pending AS (SELECT id FROM cards WHERE status = 'pending')
+SELECT id FROM pending`
+
+	reader := strings.NewReader(sql)
+	result, err := GenerateFromSQL(reader, nil, "", "", nil, nil)
+	assert.NoError(t, err)
+
+	foundCTE := false
+	needle := "WITH pending AS (SELECT id FROM cards WHERE status = 'pending')"
+
+	for _, instruction := range result.Instructions {
+		if instruction.Op == OpEmitStatic && strings.Contains(instruction.Value, needle) {
+			foundCTE = true
+			break
+		}
+	}
+
+	assert.True(t, foundCTE, "expected emitted instructions to include WITH clause tokens")
+}
+
 func TestDetectDialectPatterns(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -250,7 +274,7 @@ func TestDetectLimitOffsetClause(t *testing.T) {
 	}{
 		{
 			name: "no limit or offset clause",
-			sql:  "SELECT * FROM users",
+			sql:  "SELECT id FROM users",
 			expected: &LimitOffsetClauseInfo{
 				HasLimit:  false,
 				HasOffset: false,
@@ -258,7 +282,7 @@ func TestDetectLimitOffsetClause(t *testing.T) {
 		},
 		{
 			name: "simple limit clause",
-			sql:  "SELECT * FROM users LIMIT 10",
+			sql:  "SELECT id FROM users LIMIT 10",
 			expected: &LimitOffsetClauseInfo{
 				HasLimit:          true,
 				HasLimitCondition: false,
@@ -267,7 +291,7 @@ func TestDetectLimitOffsetClause(t *testing.T) {
 		},
 		{
 			name: "simple offset clause",
-			sql:  "SELECT * FROM users OFFSET 20",
+			sql:  "SELECT id FROM users OFFSET 20",
 			expected: &LimitOffsetClauseInfo{
 				HasLimit:           false,
 				HasOffset:          true,
@@ -276,7 +300,7 @@ func TestDetectLimitOffsetClause(t *testing.T) {
 		},
 		{
 			name: "limit and offset clause",
-			sql:  "SELECT * FROM users LIMIT 10 OFFSET 20",
+			sql:  "SELECT id FROM users LIMIT 10 OFFSET 20",
 			expected: &LimitOffsetClauseInfo{
 				HasLimit:           true,
 				HasLimitCondition:  false,
@@ -286,7 +310,7 @@ func TestDetectLimitOffsetClause(t *testing.T) {
 		},
 		{
 			name: "limit with variable",
-			sql:  "SELECT * FROM users LIMIT /*= page_size */10",
+			sql:  "SELECT id FROM users LIMIT /*= page_size */10",
 			expected: &LimitOffsetClauseInfo{
 				HasLimit:          true,
 				HasLimitCondition: false,
@@ -325,9 +349,9 @@ func TestGenerateInstructionsWithLimitOffset(t *testing.T) {
 	}{
 		{
 			name: "no limit or offset clause",
-			sql:  "SELECT * FROM users",
+			sql:  "SELECT id FROM users",
 			expected: []string{
-				"EMIT_STATIC",     // SELECT * FROM users
+				"EMIT_STATIC",     // SELECT id FROM users
 				"IF_SYSTEM_LIMIT", // Add system limit if available
 				"EMIT_STATIC",     // LIMIT
 				"EMIT_SYSTEM_LIMIT",
@@ -340,9 +364,9 @@ func TestGenerateInstructionsWithLimitOffset(t *testing.T) {
 		},
 		{
 			name: "simple limit clause",
-			sql:  "SELECT * FROM users LIMIT 10",
+			sql:  "SELECT id FROM users LIMIT 10",
 			expected: []string{
-				"EMIT_STATIC", // SELECT * FROM users
+				"EMIT_STATIC", // SELECT id FROM users
 				"EMIT_STATIC", // LIMIT
 				"IF_SYSTEM_LIMIT",
 				"EMIT_SYSTEM_LIMIT",
@@ -357,9 +381,9 @@ func TestGenerateInstructionsWithLimitOffset(t *testing.T) {
 		},
 		{
 			name: "limit and offset clause",
-			sql:  "SELECT * FROM users LIMIT 10 OFFSET 20",
+			sql:  "SELECT id FROM users LIMIT 10 OFFSET 20",
 			expected: []string{
-				"EMIT_STATIC", // SELECT * FROM users
+				"EMIT_STATIC", // SELECT id FROM users
 				"EMIT_STATIC", // LIMIT
 				"IF_SYSTEM_LIMIT",
 				"EMIT_SYSTEM_LIMIT",
@@ -381,7 +405,10 @@ func TestGenerateInstructionsWithLimitOffset(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
 
-			instructions := GenerateInstructions(tokens, []string{})
+			stmt, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+			assert.NoError(t, err)
+
+			instructions := GenerateInstructions(stmt, tokens, []string{})
 
 			// Extract operation names for comparison
 			ops := make([]string, len(instructions))

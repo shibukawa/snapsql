@@ -39,27 +39,35 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 2)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("users", cel.ListType(types.NewObjectType("User"))),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("users", cel.ListType(types.NewObjectType("User"))),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 	// Environment 1: Base environment
-	env1, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 1: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user", cel.AnyType),
+		}
+		env1, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 1: %v", err))
+		}
+		celEnvironments[1] = env1
 	}
-	celEnvironments[1] = env1
 
 	// Create programs for each expression using the corresponding environment
 	insertusertagsPrograms = make([]cel.Program, 3)
@@ -67,11 +75,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("users")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'users': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "users", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'users': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "users", err))
 		}
 		insertusertagsPrograms[0] = program
 	}
@@ -79,11 +87,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[1].Compile("user.id")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user.id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user.id", issues.Err()))
 		}
 		program, err := celEnvironments[1].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user.id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user.id", err))
 		}
 		insertusertagsPrograms[1] = program
 	}
@@ -91,87 +99,184 @@ func init() {
 	{
 		ast, issues := celEnvironments[1].Compile("user.tags")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user.tags': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user.tags", issues.Err()))
 		}
 		program, err := celEnvironments[1].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user.tags': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user.tags", err))
 		}
 		insertusertagsPrograms[2] = program
 	}
 }
+
 // InsertUserTags - sql.Result Affinity
-func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []User, user interface{}, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []User, user any, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertusertags", "sql.result")
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertusertags", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(insertusertagsMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("InsertUserTags: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("InsertUserTags: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	var builder strings.Builder
-	args := make([]any, 0)
-	var boundaryNeeded bool
-	paramMap := map[string]interface{}{
-	    "users": users,
-	}
-	builder.WriteString("INSERT INTO user_tags (user_id, tag) VALUES")
-	boundaryNeeded = true
-	// FOR loop: evaluate collection expression 0
-	collectionResult0, err := insertusertagsPrograms[0].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate collection: %w", err)
-	}
-	collection0 := collectionResult0.Value().([]interface{})
-	for _, userLoopVar := range collection0 {
-	    paramMap["user"] = userLoopVar
-	builder.WriteString("(?")
-	boundaryNeeded = true
-	// Evaluate expression 1
-	result, err := insertusertagsPrograms[1].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	builder.WriteString(",?")
-	boundaryNeeded = true
-	// Evaluate expression 2
-	result, err := insertusertagsPrograms[2].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	builder.WriteString(")")
-	boundaryNeeded = true
-	}
-	
-	query := builder.String()
+	buildQueryAndArgs := func() (string, []any, error) {
+		var builder strings.Builder
+		args := make([]any, 0)
+		var boundaryNeeded bool
+		paramMap := map[string]any{
+			"users": users,
+		}
+		{ // safe append static with spacing
+			_frag := "INSERT INTO user_tags (user_id, tag) VALUES"
+			if builder.Len() > 0 {
+				_b := builder.String()
+				_last := _b[len(_b)-1]
+				// determine if last char is word char
+				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+				// skip leading spaces in _frag
+				_k := 0
+				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+					_k++
+				}
+				_startsWord := false
+				if _k < len(_frag) {
+					_c := _frag[_k]
+					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+				}
+				if _endsWord && _startsWord {
+					builder.WriteByte(' ')
+				}
+			}
+			builder.WriteString(_frag)
+		}
+		boundaryNeeded = true
+		// FOR loop: evaluate collection expression 0
+		collectionResult0, _, err := insertusertagsPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate collection: %w", err)
+		}
+		collection0 := collectionResult0.Value().([]any)
+		for _, userLoopVar := range collection0 {
+			paramMap["user"] = userLoopVar
+			{ // safe append static with spacing
+				_frag := "(?"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			// Evaluate expression 1
+			evalRes0, _, err := insertusertagsPrograms[1].Eval(paramMap)
+			if err != nil {
+				return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate expression: %w", err)
+			}
+			args = append(args, evalRes0.Value())
+			{ // safe append static with spacing
+				_frag := ",?"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+			// Evaluate expression 2
+			evalRes1, _, err := insertusertagsPrograms[2].Eval(paramMap)
+			if err != nil {
+				return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate expression: %w", err)
+			}
+			args = append(args, evalRes1.Value())
+			{ // safe append static with spacing
+				_frag := ")"
+				if builder.Len() > 0 {
+					_b := builder.String()
+					_last := _b[len(_b)-1]
+					// determine if last char is word char
+					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+					// skip leading spaces in _frag
+					_k := 0
+					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+						_k++
+					}
+					_startsWord := false
+					if _k < len(_frag) {
+						_c := _frag[_k]
+						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+					}
+					if _endsWord && _startsWord {
+						builder.WriteByte(' ')
+					}
+				}
+				builder.WriteString(_frag)
+			}
+			boundaryNeeded = true
+		}
 
+		query := builder.String()
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("InsertUserTags: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute statement: %w", err)
+		return nil, fmt.Errorf("InsertUserTags: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

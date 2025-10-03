@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,17 +38,21 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_id", cel.IntType),
-		cel.Variable("new_name", cel.StringType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create UpdateUserWithReturningSqlite CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_id", cel.IntType),
+			cel.Variable("new_name", cel.StringType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create UpdateUserWithReturningSqlite CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	updateuserwithreturningsqlitePrograms = make([]cel.Program, 2)
@@ -57,11 +60,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("new_name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'new_name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "new_name", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'new_name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "new_name", err))
 		}
 		updateuserwithreturningsqlitePrograms[0] = program
 	}
@@ -69,58 +72,79 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_id", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
 		updateuserwithreturningsqlitePrograms[1] = program
 	}
 }
+
 // UpdateUserWithReturningSqlite - sql.Result Affinity
 func UpdateUserWithReturningSqlite(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, newName string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturningsqlite", "sql.result")
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturningsqlite", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(updateuserwithreturningsqliteMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "UPDATE users SET name =$1, updated_at = CURRENT_TIMESTAMP WHERE id =$2RETURNING id, name, email, updated_at"
-	args := []any{
-		newName,
-		userID,
-	}
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "UPDATE users SET name =$1, updated_at = CURRENT_TIMESTAMP  WHERE id =$2  RETURNING id, name, email, updated_at"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"user_id":  userID,
+			"new_name": newName,
+		}
 
+		evalRes0, _, err := updateuserwithreturningsqlitePrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+
+		evalRes1, _, err := updateuserwithreturningsqlitePrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes1.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute query: %w", err)
+		return nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to execute query: %w", err)
 	}
 	defer rows.Close()
-	
-	// Generic scan for interface{} result - not implemented
+
+	// Generic scan for any result - not implemented
 	// This would require runtime reflection or predefined column mapping
 
 	return result, nil

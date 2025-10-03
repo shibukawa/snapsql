@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,18 +38,22 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("name", cel.StringType),
-		cel.Variable("email", cel.StringType),
-		cel.Variable("lock_no", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create UpdateUser CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("name", cel.StringType),
+			cel.Variable("email", cel.StringType),
+			cel.Variable("lock_no", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create UpdateUser CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	updateuserPrograms = make([]cel.Program, 3)
@@ -58,11 +61,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "name", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "name", err))
 		}
 		updateuserPrograms[0] = program
 	}
@@ -70,11 +73,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("email")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'email': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "email", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'email': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "email", err))
 		}
 		updateuserPrograms[1] = program
 	}
@@ -82,32 +85,34 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("lock_no")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'lock_no': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "lock_no", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'lock_no': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "lock_no", err))
 		}
 		updateuserPrograms[2] = program
 	}
 }
+
 // UpdateUser - sql.Result Affinity
 func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string, email string, lockNo int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuser", "sql.result")
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuser", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(updateuserMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("UpdateUser: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("UpdateUser: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
@@ -118,26 +123,57 @@ func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string,
 		{Name: "updated_by", Type: "string", Required: true},
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
+	_ = systemValues // avoid unused if not referenced in args
 
 	// Build SQL
-	query := "UPDATE users SET name =$1, email =$2, lock_no =$3, updated_at = /*= updated_at */CURRENT_TIMESTAMP, updated_by = /*= updated_by */CURRENT_TIMESTAMPWHERE id = 1"
-	args := []any{
-		name,
-		email,
-		lockNo,
-	}
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "UPDATE users SET name =$1, email =$2, lock_no =$3, updated_at = $4, updated_by = $5  WHERE id = 1"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"name":    name,
+			"email":   email,
+			"lock_no": lockNo,
+		}
 
+		evalRes0, _, err := updateuserPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("UpdateUser: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+
+		evalRes1, _, err := updateuserPrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("UpdateUser: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes1.Value())
+
+		evalRes2, _, err := updateuserPrograms[2].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("UpdateUser: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes2.Value())
+		args = append(args, systemValues["updated_at"])
+
+		args = append(args, systemValues["updated_by"])
+
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("UpdateUser: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute statement: %w", err)
+		return nil, fmt.Errorf("UpdateUser: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

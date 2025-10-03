@@ -41,12 +41,8 @@ var (
 	ErrNoParameterFound = errors.New("no parameter code block or list found")
 	// ErrEmptyContent indicates the Markdown or SQL content was empty.
 	ErrEmptyContent = errors.New("empty content")
-	// ErrEmptyParameters indicates the parameters block exists but is empty.
-	ErrEmptyParameters = errors.New("empty parameters object")
 	// ErrFailedToParse indicates a generic parsing failure on input data.
 	ErrFailedToParse = errors.New("failed to parse data")
-	// ErrEmptyExpectedResults indicates an Expected Results block was present but empty.
-	ErrEmptyExpectedResults = errors.New("empty expected results")
 	// ErrNoDatasetElement indicates a dataset element was not found where required.
 	ErrNoDatasetElement = errors.New("no dataset element found")
 	// ErrInvalidCSVFormat indicates the CSV file lacks required rows.
@@ -221,4 +217,20 @@ var (
 	ErrConfigFileNotFound = errors.New("configuration file not found")
 	// ErrNoResponseFields indicates a generated query had no response fields.
 	ErrNoResponseFields = errors.New("no response fields found")
+	// ErrSchemaDirectoryNotFound indicates the ./schema directory is missing prior to generation.
+	ErrSchemaDirectoryNotFound = errors.New("schema directory not found; run 'snapsql pull' first")
+	// ErrNoSchemaYAMLFound indicates no schema YAML files were discovered.
+	ErrNoSchemaYAMLFound = errors.New("no schema YAML files found; run 'snapsql pull'")
+
+	// ErrNotFound indicates a requested entity (affinity=one) was not found.
+	ErrNotFound = errors.New("not found")
+
+	// ErrHierarchicalNoRawResponses indicates hierarchical scan found no raw responses.
+	ErrHierarchicalNoRawResponses = errors.New("hierarchical scan: no raw responses")
+	// ErrHierarchicalNoGroups indicates hierarchical scan found no groups.
+	ErrHierarchicalNoGroups = errors.New("hierarchical scan: no hierarchical groups detected")
+	// ErrHierarchicalNoParentPrimaryKey indicates hierarchical scan found no parent primary key.
+	ErrHierarchicalNoParentPrimaryKey = errors.New("hierarchical scan: no parent primary key columns present")
+	// ErrHierarchicalMultipleParentsForOne indicates hierarchical scan found multiple parent rows for affinity=one.
+	ErrHierarchicalMultipleParentsForOne = errors.New("hierarchical scan: multiple parent rows for affinity=one")
 )

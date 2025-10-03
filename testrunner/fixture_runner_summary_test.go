@@ -65,12 +65,6 @@ func captureStdout(t *testing.T, fn func()) string {
 func TestFixtureTestRunnerPrintSummaryLabelsFailures(t *testing.T) {
 	t.Parallel()
 
-	color.NoColor = true
-
-	t.Cleanup(func() {
-		color.NoColor = false
-	})
-
 	runner := &FixtureTestRunner{}
 	runner.SetVerbose(true)
 

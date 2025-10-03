@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,16 +38,20 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("department_ids", cel.ListType(cel.IntType)),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create GetUsersByDepartments CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("department_ids", cel.ListType(cel.IntType)),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create GetUsersByDepartments CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	getusersbydepartmentsPrograms = make([]cel.Program, 1)
@@ -56,57 +59,72 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("department_ids")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'department_ids': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "department_ids", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'department_ids': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "department_ids", err))
 		}
 		getusersbydepartmentsPrograms[0] = program
 	}
 }
+
 // GetUsersByDepartments - sql.Result Affinity
 func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departmentIds []int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getusersbydepartments", "sql.result")
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getusersbydepartments", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(getusersbydepartmentsMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("GetUsersByDepartments: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("GetUsersByDepartments: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name FROM users WHERE department_id IN ($1, 2, 3)"
-	args := []any{
-		departmentIds,
-	}
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "SELECT id, name FROM users  WHERE department_id IN ($1, 2, 3)"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"department_ids": departmentIds,
+		}
 
+		evalRes0, _, err := getusersbydepartmentsPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("GetUsersByDepartments: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("GetUsersByDepartments: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows
+	// Execute query and scan multiple rows (many affinity)
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute query: %w", err)
+		return nil, fmt.Errorf("GetUsersByDepartments: failed to execute query: %w", err)
 	}
 	defer rows.Close()
-	
-	// Generic scan for interface{} result - not implemented
+
+	// Generic scan for any result - not implemented
 	// This would require runtime reflection or predefined column mapping
 
 	return result, nil

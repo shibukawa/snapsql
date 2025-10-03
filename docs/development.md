@@ -290,6 +290,13 @@ export SNAPSQL_DEBUG_PARSER=true
 snapsql generate
 ```
 
+Run generation for the Kanban sample from inside `examples/kanban`:
+
+```bash
+cd examples/kanban
+snapsql generate
+```
+
 ### Common Debug Scenarios
 
 1. **Template parsing issues**:

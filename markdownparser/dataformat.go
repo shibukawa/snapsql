@@ -21,20 +21,20 @@ func parseParameters(content []byte) (map[string]any, error) {
 	}
 
 	// Try YAML/JSON first
-	var params map[string]any
+	params := make(map[string]any)
 
 	err := yaml.Unmarshal(content, &params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse YAML parameters: %w", err)
 	}
 
-	if len(params) == 0 {
-		return nil, snapsql.ErrEmptyParameters
-	}
-
 	// Convert numeric types to ensure consistency
 	for k, v := range params {
 		params[k] = normalizeValue(v)
+	}
+
+	if params == nil {
+		params = make(map[string]any)
 	}
 
 	return params, nil
@@ -150,6 +150,10 @@ func parseExpectedResults(content []byte) ([]map[string]any, error) {
 		return nil, fmt.Errorf("failed to parse expected results: %w", err)
 	}
 
+	if result == nil {
+		result = make([]map[string]any, 0)
+	}
+
 	// Normalize values
 	for i, item := range result {
 		for k, v := range item {
@@ -157,10 +161,6 @@ func parseExpectedResults(content []byte) ([]map[string]any, error) {
 		}
 
 		result[i] = item
-	}
-
-	if len(result) == 0 {
-		return nil, snapsql.ErrEmptyExpectedResults
 	}
 
 	return result, nil

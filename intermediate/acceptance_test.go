@@ -31,15 +31,11 @@ type YAMLColumnInfo struct {
 
 // loadConfig loads configuration from snapsql.yaml file
 func loadConfig(testDir string) (*Config, error) {
-	// Priority: config.yaml > snapsql.yaml > default
 	candidates := []string{"config.yaml", "snapsql.yaml"}
-
-	var loaded *Config
-
 	for _, name := range candidates {
-		path := filepath.Join(testDir, name)
-		if _, err := os.Stat(path); err == nil {
-			data, err := os.ReadFile(path)
+		p := filepath.Join(testDir, name)
+		if _, err := os.Stat(p); err == nil {
+			data, err := os.ReadFile(p)
 			if err != nil {
 				return nil, err
 			}
@@ -49,63 +45,41 @@ func loadConfig(testDir string) (*Config, error) {
 				return nil, err
 			}
 
-			loaded = &cfg
-
-			break
+			return &cfg, nil
 		}
 	}
 
-	if loaded == nil {
-		loaded = &Config{Dialect: "postgres"}
-	}
-	// Ensure default dialect fallback
-	if loaded.Dialect == "" {
-		loaded.Dialect = "postgres"
-	}
-
-	return loaded, nil
+	return &Config{}, nil
 }
-func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
-	tablesPath := filepath.Join(testDir, "tables.yaml")
 
-	// Check if tables.yaml exists
-	if _, err := os.Stat(tablesPath); os.IsNotExist(err) {
-		// Return empty table info if file doesn't exist
-		return make(map[string]*TableInfo), nil
+func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
+	yamlPath := filepath.Join(testDir, "schema.yaml")
+	if _, err := os.Stat(yamlPath); err != nil {
+		if os.IsNotExist(err) {
+			return map[string]*TableInfo{}, nil
+		}
+
+		return nil, err
 	}
 
-	// Read YAML file
-	yamlContent, err := os.ReadFile(tablesPath)
+	yamlContent, err := os.ReadFile(yamlPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse YAML
 	var yamlTableInfo YAMLTableInfo
 	if err := yaml.Unmarshal(yamlContent, &yamlTableInfo); err != nil {
 		return nil, err
 	}
 
-	// Convert to the format expected by DetermineResponseType
 	result := make(map[string]*TableInfo)
-
 	for tableName, tableSchema := range yamlTableInfo.Tables {
-		tableInfo := &TableInfo{
-			Name:    tableName,
-			Columns: make(map[string]*ColumnInfo),
+		tinfo := &TableInfo{Name: tableName, Columns: map[string]*ColumnInfo{}}
+		for colName, col := range tableSchema.Columns {
+			tinfo.Columns[colName] = &ColumnInfo{Name: colName, DataType: col.Type, Nullable: col.Nullable, IsPrimaryKey: col.PrimaryKey, MaxLength: col.MaxLength}
 		}
 
-		for columnName, columnInfo := range tableSchema.Columns {
-			tableInfo.Columns[columnName] = &ColumnInfo{
-				Name:         columnName,
-				DataType:     columnInfo.Type,
-				Nullable:     columnInfo.Nullable,
-				IsPrimaryKey: columnInfo.PrimaryKey,
-				MaxLength:    columnInfo.MaxLength,
-			}
-		}
-
-		result[tableName] = tableInfo
+		result[tableName] = tinfo
 	}
 
 	return result, nil
@@ -241,7 +215,6 @@ func TestAcceptance(t *testing.T) {
 				t.Fatalf("Failed to parse expected JSON: %v", err)
 			}
 
-			// Compare the results
 			assert.Equal(t, expected, actual)
 		})
 	}

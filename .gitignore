@@ -1,4 +1,6 @@
 testdata/**/actual.*
 cmd/snapsql/snapsql
 cmd/snapsql/snapsql.exe
+examples/kanban/cmd/kanban/dist/*
+!examples/kanban/cmd/kanban/dist/.keep
 

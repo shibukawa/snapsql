@@ -84,6 +84,8 @@ func (c *DatabaseConnector) ParseDatabaseURL(databaseURL string) (string, error)
 		return "mysql", nil
 	case "sqlite", "sqlite3":
 		return "sqlite", nil
+	case "file": // treat file: paths as sqlite database files
+		return "sqlite", nil
 	default:
 		return "", ErrUnsupportedDatabase
 	}
@@ -105,7 +107,7 @@ func (c *DatabaseConnector) ValidateConnectionString(databaseURL string) error {
 		return c.validatePostgreSQLURL(u)
 	case "mysql":
 		return c.validateMySQLURL(u)
-	case "sqlite", "sqlite3":
+	case "sqlite", "sqlite3", "file":
 		return c.validateSQLiteURL(u)
 	default:
 		return ErrUnsupportedDatabase
@@ -215,6 +217,14 @@ func (c *DatabaseConnector) ParseConnectionInfo(databaseURL string) (ConnectionI
 		} else {
 			// sqlite://./db.db format
 			info.Database = u.Host + u.Path
+		}
+	case "file":
+		// file:./relative/path.db または file:/absolute/path.db を sqlite として扱う
+		info.Type = "sqlite"
+		if u.Path != "" {
+			info.Database = strings.TrimPrefix(u.Path, "/")
+		} else if u.Opaque != "" { // file:./foo.db の形は Opaque に格納される
+			info.Database = strings.TrimPrefix(u.Opaque, "./")
 		}
 	}
 
@@ -378,7 +388,8 @@ func (c *DatabaseConnector) validateMySQLURL(u *url.URL) error {
 }
 
 func (c *DatabaseConnector) validateSQLiteURL(u *url.URL) error {
-	if u.Path == "" && u.Host == "" {
+	// sqlite:// or file: スキーマでパスが存在するか (file: の場合は Opaque を見る)
+	if u.Path == "" && u.Host == "" && u.Opaque == "" {
 		return ErrInvalidDatabaseURL
 	}
 

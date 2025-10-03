@@ -1,19 +1,21 @@
 package fixtureexecutor
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/fatih/color"
 )
 
-func TestFormatDiffUnifiedYAML(t *testing.T) {
+func TestMain(m *testing.M) {
 	color.NoColor = true
 
-	t.Cleanup(func() {
-		color.NoColor = false
-	})
+	os.Exit(m.Run())
+}
 
+func TestFormatDiffUnifiedYAML(t *testing.T) {
+	// 色付け無効化はTestMainで一括設定
 	diff := &DiffError{
 		Table:       "lists",
 		PrimaryKeys: []string{"id"},

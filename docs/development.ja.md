@@ -198,6 +198,28 @@ func TestWithPostgreSQL(t *testing.T) {
 
 ## アーキテクチャ
 
+### 階層レスポンスと HierarchyKeyLevel
+
+多段 `a__b__c__col` 形式の列に対し `hierarchy_key_level` を付与し、主キー階層と集約ロジックを一元化しています。
+
+| hierarchy_key_level | 意味 |
+|---------------------|------|
+| 0 | 非キー列 |
+| 1 | ルート(親)主キー列 |
+| 2 | 第一階層子ノード主キー列 |
+| 3 | 第二階層子ノード主キー列 |
+| … | 深さに対応 |
+
+旧 `is_primary_key` は 2025-09 に削除され、`hierarchy_key_level > 0` がキー判定の唯一の指標です。
+
+集約生成アルゴリズム概要:
+1. ルート PK (level=1 複合可) で `_parentMap` を索引
+2. 各階層ノードは `depth == hierarchy_key_level` の列セットを PK と見なしローカルキー生成
+3. chain key = 親の chain key + `|<path>:<localKey>` を用い `_nodeMap*` で重複排除
+4. 行ストリーミング中に木構造を再構築
+
+スキーマが無い場合でも最初のルート列を level=1 にフォールバックし破綻を防ぎます。
+
 ### パーサーコンビネーターシステム
 
 SnapSQLはSQLパース用のカスタムパーサーコンビネーターライブラリを使用：
@@ -287,6 +309,13 @@ snapsql --verbose query template.snap.sql
 
 # パーサーをデバッグ
 export SNAPSQL_DEBUG_PARSER=true
+snapsql generate
+```
+
+Kanban サンプルのコード生成は `examples/kanban` ディレクトリ内で実行します：
+
+```bash
+cd examples/kanban
 snapsql generate
 ```
 

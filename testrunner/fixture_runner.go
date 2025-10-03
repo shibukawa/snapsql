@@ -40,6 +40,9 @@ type FixtureTestRunner struct {
 
 type preparationIssue struct {
 	testCase *markdownparser.TestCase
+	filePath string
+	line     int
+	name     string
 	err      error
 }
 
@@ -124,12 +127,28 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	var allTestCases []*markdownparser.TestCase
 
 	fileSummaries := make([]fileTestSummary, 0, len(testFiles))
+	parseIssues := make([]preparationIssue, 0)
 
 	for _, file := range testFiles {
 		fileInfo, err := ftr.parseTestFile(file)
 		if err != nil {
+			var displayPath string
+			if rel, relErr := filepath.Rel(ftr.projectRoot, file); relErr == nil && !strings.HasPrefix(rel, "..") {
+				displayPath = filepath.ToSlash(rel)
+			} else {
+				displayPath = filepath.ToSlash(file)
+			}
+
+			issue := preparationIssue{
+				filePath: displayPath,
+				name:     "Parse " + filepath.Base(displayPath),
+				err:      fmt.Errorf("failed to parse markdown: %w", err),
+			}
+
+			parseIssues = append(parseIssues, issue)
+
 			if ftr.verbose {
-				fmt.Printf("Warning: failed to parse %s: %v\n", file, err)
+				fmt.Printf("Warning: failed to parse %s: %v\n", displayPath, err)
 			}
 
 			continue
@@ -191,6 +210,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	}
 
 	runnableCases, prepIssues := ftr.prepareTestCases(fileSummaries)
+	additionalIssues := append(parseIssues, prepIssues...)
 
 	if ftr.verbose {
 		fmt.Printf("Executing %d test cases\n", len(runnableCases))
@@ -220,11 +240,11 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 
 	// Convert to FixtureTestSummary
 	fixtureSummary := &FixtureTestSummary{
-		TotalTests:    summary.TotalTests + len(prepIssues),
+		TotalTests:    summary.TotalTests + len(additionalIssues),
 		PassedTests:   summary.PassedTests,
-		FailedTests:   summary.FailedTests + len(prepIssues),
+		FailedTests:   summary.FailedTests + len(additionalIssues),
 		TotalDuration: summary.TotalDuration,
-		Results:       make([]FixtureTestResult, 0, len(summary.Results)+len(prepIssues)),
+		Results:       make([]FixtureTestResult, 0, len(summary.Results)+len(additionalIssues)),
 	}
 
 	for _, result := range summary.Results {
@@ -237,8 +257,13 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 			sourceLine = result.TestCase.Line
 		}
 
+		testName := "<unknown test>"
+		if result.TestCase != nil && strings.TrimSpace(result.TestCase.Name) != "" {
+			testName = result.TestCase.Name
+		}
+
 		fixtureSummary.Results = append(fixtureSummary.Results, FixtureTestResult{
-			TestName:    result.TestCase.Name,
+			TestName:    testName,
 			Success:     result.Success,
 			Duration:    result.Duration,
 			Error:       result.Error,
@@ -260,7 +285,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 		}
 	}
 
-	for _, issue := range prepIssues {
+	for _, issue := range additionalIssues {
 		fixtureSummary.Results = append(fixtureSummary.Results, issue.toFixtureResult())
 		fixtureSummary.DefinitionFailures++
 	}
@@ -438,17 +463,26 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 }
 
 func (pi preparationIssue) toFixtureResult() FixtureTestResult {
-	name := "<unknown test>"
-	file := ""
-	line := 0
+	name := strings.TrimSpace(pi.name)
+	if name == "" {
+		name = "<unknown test>"
+	}
+
+	file := pi.filePath
+	line := pi.line
 
 	if pi.testCase != nil {
-		if pi.testCase.Name != "" {
-			name = pi.testCase.Name
+		if trimmed := strings.TrimSpace(pi.testCase.Name); trimmed != "" {
+			name = trimmed
 		}
 
-		file = pi.testCase.SourceFile
-		line = pi.testCase.Line
+		if tcFile := strings.TrimSpace(pi.testCase.SourceFile); tcFile != "" {
+			file = tcFile
+		}
+
+		if pi.testCase.Line > 0 {
+			line = pi.testCase.Line
+		}
 	}
 
 	return FixtureTestResult{

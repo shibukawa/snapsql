@@ -2,6 +2,7 @@ package parsercommon
 
 import (
 	"github.com/shibukawa/snapsql/tokenizer"
+	"strings"
 )
 
 // Clause structures
@@ -132,6 +133,27 @@ type WithClause struct {
 	HeadingTokens  []tokenizer.Token // Leading tokens before the WITH clause
 	CTEs           []CTEDefinition
 	TrailingTokens []tokenizer.Token // Additional tokens that may follow the CTE definitions
+}
+
+func NewWithClause(heading, body []tokenizer.Token) *WithClause {
+	headingCopy := append([]tokenizer.Token(nil), heading...)
+	bodyCopy := append([]tokenizer.Token(nil), body...)
+
+	combined := append(append([]tokenizer.Token(nil), headingCopy...), bodyCopy...)
+
+	var srcBuilder strings.Builder
+	for _, tk := range combined {
+		srcBuilder.WriteString(tk.Value)
+	}
+
+	return &WithClause{
+		clauseBaseNode: clauseBaseNode{
+			clauseSourceText: srcBuilder.String(),
+			headingTokens:    headingCopy,
+			bodyTokens:       bodyCopy,
+		},
+		HeadingTokens: headingCopy,
+	}
 }
 
 func (n *WithClause) Type() NodeType {

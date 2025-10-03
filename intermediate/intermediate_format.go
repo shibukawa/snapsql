@@ -84,6 +84,13 @@ type Response struct {
 	MaxLength  *int   `json:"max_length,omitempty"`
 	Precision  *int   `json:"precision,omitempty"`
 	Scale      *int   `json:"scale,omitempty"`
+	// HierarchyKeyLevel: 0=非PK, 1=ルートPK, 2=第一階層子PK, 3=第二階層子PK ...
+	// a__b__c のような多段 prefix に対応する将来拡張を想定
+	// 設定タイミング: SELECT 解析 Processor (未実装) が prefix 分解とスキーマ主キー照合で決定する予定
+	HierarchyKeyLevel int `json:"hierarchy_key_level,omitempty"`
+	// Internal only: precise source origin (not exported to final intermediate JSON)
+	SourceTable  string `json:"-"`
+	SourceColumn string `json:"-"`
 }
 
 // ImplicitParameter represents a parameter that should be obtained from context/TLS

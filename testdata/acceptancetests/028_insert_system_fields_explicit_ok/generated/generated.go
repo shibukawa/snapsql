@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/cel-go/cel"
@@ -40,18 +39,22 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user", cel.types.NewObjectType("User")),
-		cel.Variable("created_at", cel.TimestampType),
-		cel.Variable("updated_at", cel.TimestampType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUser CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user", cel.types.NewObjectType("User")),
+			cel.Variable("created_at", cel.TimestampType),
+			cel.Variable("updated_at", cel.TimestampType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertUser CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	insertuserPrograms = make([]cel.Program, 4)
@@ -59,11 +62,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user.id")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user.id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user.id", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user.id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user.id", err))
 		}
 		insertuserPrograms[0] = program
 	}
@@ -71,11 +74,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user.name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user.name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user.name", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user.name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user.name", err))
 		}
 		insertuserPrograms[1] = program
 	}
@@ -83,11 +86,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("created_at")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'created_at': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "created_at", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'created_at': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "created_at", err))
 		}
 		insertuserPrograms[2] = program
 	}
@@ -95,57 +98,90 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("updated_at")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'updated_at': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "updated_at", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'updated_at': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "updated_at", err))
 		}
 		insertuserPrograms[3] = program
 	}
 }
+
 // InsertUser - sql.Result Affinity
 func InsertUser(ctx context.Context, executor snapsqlgo.DBExecutor, user User, createdAt time.Time, updatedAt time.Time, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuser", "sql.result")
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuser", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("InsertUser: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("InsertUser: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "INSERT INTO users (id, name, created_at, updated_at) VALUES ($1,$2,$3(),$4())"
-	args := []any{
-		user.id,
-		user.name,
-		createdAt,
-		updatedAt,
-	}
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "INSERT INTO users (id, name, created_at, updated_at) VALUES ($1,$2,$3 (),$4 ())"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"user":       user,
+			"created_at": createdAt,
+			"updated_at": updatedAt,
+		}
 
+		evalRes0, _, err := insertuserPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUser: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+
+		evalRes1, _, err := insertuserPrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUser: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes1.Value())
+
+		evalRes2, _, err := insertuserPrograms[2].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUser: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes2.Value())
+
+		evalRes3, _, err := insertuserPrograms[3].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUser: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes3.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("InsertUser: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute statement: %w", err)
+		return nil, fmt.Errorf("InsertUser: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

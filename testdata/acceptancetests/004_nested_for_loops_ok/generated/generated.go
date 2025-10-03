@@ -24,20 +24,19 @@ import (
 	"strings"
 
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
+
 type InsertAllSubDepartmentsSubDepartment struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 type InsertAllSubDepartmentsDepartment struct {
-	DepartmentName string                                      `json:"department_name"`
-	DepartmentCode string                                      `json:"department_code"`
-	SubDepartments []InsertAllSubDepartmentsSubDepartment     `json:"sub_departments"`
-}
-// InsertAllSubDepartmentsResult represents the response structure for InsertAllSubDepartments
-type InsertAllSubDepartmentsResult struct {
-	Affectedrows int `json:"affected_rows"`
+	DepartmentName string                                 `json:"department_name"`
+	DepartmentCode string                                 `json:"department_code"`
+	SubDepartments []InsertAllSubDepartmentsSubDepartment `json:"sub_departments"`
 }
 
 // InsertAllSubDepartments specific CEL programs and mock path
@@ -49,23 +48,23 @@ const insertallsubdepartmentsMockPath = ""
 
 func init() {
 	// Static accessor functions for each type
-	insertallsubdepartmentsdepartmentDepartmentCodeAccessor := func(value interface{}) ref.Val {
+	insertallsubdepartmentsdepartmentDepartmentCodeAccessor := func(value any) ref.Val {
 		v := value.(*InsertAllSubDepartmentsDepartment)
 		return snapsqlgo.ConvertGoValueToCEL(v.DepartmentCode)
 	}
-	insertallsubdepartmentsdepartmentDepartmentNameAccessor := func(value interface{}) ref.Val {
+	insertallsubdepartmentsdepartmentDepartmentNameAccessor := func(value any) ref.Val {
 		v := value.(*InsertAllSubDepartmentsDepartment)
 		return snapsqlgo.ConvertGoValueToCEL(v.DepartmentName)
 	}
-	insertallsubdepartmentsdepartmentSubDepartmentsAccessor := func(value interface{}) ref.Val {
+	insertallsubdepartmentsdepartmentSubDepartmentsAccessor := func(value any) ref.Val {
 		v := value.(*InsertAllSubDepartmentsDepartment)
 		return snapsqlgo.ConvertGoValueToCEL(v.SubDepartments)
 	}
-	insertallsubdepartmentssubdepartmentIDAccessor := func(value interface{}) ref.Val {
+	insertallsubdepartmentssubdepartmentIDAccessor := func(value any) ref.Val {
 		v := value.(*InsertAllSubDepartmentsSubDepartment)
 		return snapsqlgo.ConvertGoValueToCEL(v.ID)
 	}
-	insertallsubdepartmentssubdepartmentNameAccessor := func(value interface{}) ref.Val {
+	insertallsubdepartmentssubdepartmentNameAccessor := func(value any) ref.Val {
 		v := value.(*InsertAllSubDepartmentsSubDepartment)
 		return snapsqlgo.ConvertGoValueToCEL(v.Name)
 	}
@@ -74,30 +73,30 @@ func init() {
 	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
 		"InsertAllSubDepartmentsDepartment": {
 			"department_code": snapsqlgo.CreateFieldInfo(
-				"department_code", 
-				types.StringType, 
+				"department_code",
+				types.StringType,
 				insertallsubdepartmentsdepartmentDepartmentCodeAccessor,
 			),
 			"department_name": snapsqlgo.CreateFieldInfo(
-				"department_name", 
-				types.StringType, 
+				"department_name",
+				types.StringType,
 				insertallsubdepartmentsdepartmentDepartmentNameAccessor,
 			),
 			"sub_departments": snapsqlgo.CreateFieldInfo(
-				"sub_departments", 
-				types.NewListType(types.NewObjectType("InsertAllSubDepartmentsSubDepartment")), 
+				"sub_departments",
+				types.NewListType(types.NewObjectType("InsertAllSubDepartmentsSubDepartment")),
 				insertallsubdepartmentsdepartmentSubDepartmentsAccessor,
 			),
 		},
 		"InsertAllSubDepartmentsSubDepartment": {
 			"id": snapsqlgo.CreateFieldInfo(
-				"id", 
-				types.StringType, 
+				"id",
+				types.StringType,
 				insertallsubdepartmentssubdepartmentIDAccessor,
 			),
 			"name": snapsqlgo.CreateFieldInfo(
-				"name", 
-				types.StringType, 
+				"name",
+				types.StringType,
 				insertallsubdepartmentssubdepartmentNameAccessor,
 			),
 		},
@@ -106,55 +105,62 @@ func init() {
 	// Create and set up local type store
 	registry := snapsqlgo.NewLocalTypeRegistry()
 	for typeName, fields := range typeDefinitions {
-		structInfo := &snapsqlgo.StructInfo{
-			Name:    typeName,
-			CelType: types.NewObjectType(typeName),
-			Fields:  fields,
-		}
-		registry.RegisterStruct(typeName, structInfo)
+		registry.RegisterStructWithFields(typeName, fields)
 	}
-	
+
 	// Set global registry for nested type resolution
 	snapsqlgo.SetGlobalRegistry(registry)
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 3)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
-		cel.Variable("departments", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("departments", cel.AnyType),
+		}
+		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 	// Environment 1: Base environment
-	env1, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
-		cel.Variable("dept", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 1: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("dept", cel.AnyType),
+		}
+		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
+		env1, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 1: %v", err))
+		}
+		celEnvironments[1] = env1
 	}
-	celEnvironments[1] = env1
 	// Environment 2: Base environment
-	env2, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...,
-		cel.Variable("sub", cel.AnyType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 2: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("sub", cel.AnyType),
+		}
+		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
+		env2, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 2: %v", err))
+		}
+		celEnvironments[2] = env2
 	}
-	celEnvironments[2] = env2
 
 	// Create programs for each expression using the corresponding environment
 	insertallsubdepartmentsPrograms = make([]cel.Program, 6)
@@ -162,11 +168,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("departments")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'departments': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "departments", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'departments': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "departments", err))
 		}
 		insertallsubdepartmentsPrograms[0] = program
 	}
@@ -174,23 +180,23 @@ func init() {
 	{
 		ast, issues := celEnvironments[1].Compile("dept.sub_departments")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'dept.sub_departments': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "dept.sub_departments", issues.Err()))
 		}
 		program, err := celEnvironments[1].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'dept.sub_departments': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.sub_departments", err))
 		}
 		insertallsubdepartmentsPrograms[1] = program
 	}
 	// expr_003: "dept.department_code + "-" + sub.id" using environment 2
 	{
-		ast, issues := celEnvironments[2].Compile("dept.department_code + "-" + sub.id")
+		ast, issues := celEnvironments[2].Compile("dept.department_code + \"-\" + sub.id")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'dept.department_code + "-" + sub.id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "dept.department_code + \"-\" + sub.id", issues.Err()))
 		}
 		program, err := celEnvironments[2].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'dept.department_code + "-" + sub.id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.department_code + \"-\" + sub.id", err))
 		}
 		insertallsubdepartmentsPrograms[2] = program
 	}
@@ -198,11 +204,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[2].Compile("sub.name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'sub.name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "sub.name", issues.Err()))
 		}
 		program, err := celEnvironments[2].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'sub.name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "sub.name", err))
 		}
 		insertallsubdepartmentsPrograms[3] = program
 	}
@@ -210,11 +216,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[2].Compile("dept.department_code")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'dept.department_code': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "dept.department_code", issues.Err()))
 		}
 		program, err := celEnvironments[2].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'dept.department_code': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.department_code", err))
 		}
 		insertallsubdepartmentsPrograms[4] = program
 	}
@@ -222,112 +228,253 @@ func init() {
 	{
 		ast, issues := celEnvironments[2].Compile("dept.department_name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'dept.department_name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "dept.department_name", issues.Err()))
 		}
 		program, err := celEnvironments[2].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'dept.department_name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.department_name", err))
 		}
 		insertallsubdepartmentsPrograms[5] = program
 	}
 }
-// InsertAllSubDepartments - interface{} Affinity
-func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departments []InsertAllSubDepartmentsDepartment, dept interface{}, sub interface{}, opts ...snapsqlgo.FuncOpt) (interface{}, error) {
-	var result interface{}
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertallsubdepartments", "interface{}")
+// InsertAllSubDepartments - sql.Result Affinity
+func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, departments []InsertAllSubDepartmentsDepartment, dept any, sub any, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
+
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertallsubdepartments", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(insertallsubdepartmentsMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("InsertAllSubDepartments: failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[interface{}](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to interface{} struct: %w", err)
+			return nil, fmt.Errorf("InsertAllSubDepartments: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	var builder strings.Builder
-	args := make([]any, 0)
-	var boundaryNeeded bool
-	paramMap := map[string]interface{}{
-	    "departments": departments,
-	}
-	builder.WriteString("INSERT INTO sub_departments (id, name, department_code, department_name) VALUES")
-	boundaryNeeded = true
-	// FOR loop: evaluate collection expression 0
-	collectionResult0, err := insert_all_sub_departmentsPrograms[0].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate collection: %w", err)
-	}
-	collection0 := collectionResult0.Value().([]interface{})
-	for _, deptLoopVar := range collection0 {
-	    paramMap["dept"] = deptLoopVar
-	// FOR loop: evaluate collection expression 1
-	collectionResult1, err := insert_all_sub_departmentsPrograms[1].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate collection: %w", err)
-	}
-	collection1 := collectionResult1.Value().([]interface{})
-	for _, subLoopVar := range collection1 {
-	    paramMap["sub"] = subLoopVar
-	builder.WriteString("(?")
-	boundaryNeeded = true
-	// Evaluate expression 2
-	result, err := insert_all_sub_departmentsPrograms[2].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	builder.WriteString(",?")
-	boundaryNeeded = true
-	// Evaluate expression 3
-	result, err := insert_all_sub_departmentsPrograms[3].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	builder.WriteString(",?")
-	boundaryNeeded = true
-	// Evaluate expression 4
-	result, err := insert_all_sub_departmentsPrograms[4].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	builder.WriteString(",?")
-	boundaryNeeded = true
-	// Evaluate expression 5
-	result, err := insert_all_sub_departmentsPrograms[5].Eval(paramMap)
-	if err != nil {
-	    return result, fmt.Errorf("failed to evaluate expression: %w", err)
-	}
-	args = append(args, result.Value())
-	builder.WriteString(")")
-	boundaryNeeded = true
-	}
-	}
-	
-	query := builder.String()
+	buildQueryAndArgs := func() (string, []any, error) {
+		var builder strings.Builder
+		args := make([]any, 0)
+		var boundaryNeeded bool
+		paramMap := map[string]any{
+			"departments": departments,
+		}
+		{ // safe append static with spacing
+			_frag := "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"
+			if builder.Len() > 0 {
+				_b := builder.String()
+				_last := _b[len(_b)-1]
+				// determine if last char is word char
+				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+				// skip leading spaces in _frag
+				_k := 0
+				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+					_k++
+				}
+				_startsWord := false
+				if _k < len(_frag) {
+					_c := _frag[_k]
+					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+				}
+				if _endsWord && _startsWord {
+					builder.WriteByte(' ')
+				}
+			}
+			builder.WriteString(_frag)
+		}
+		boundaryNeeded = true
+		// FOR loop: evaluate collection expression 0
+		collectionResult0, _, err := insert_all_sub_departmentsPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate collection: %w", err)
+		}
+		collection0 := collectionResult0.Value().([]any)
+		for _, deptLoopVar := range collection0 {
+			paramMap["dept"] = deptLoopVar
+			// FOR loop: evaluate collection expression 1
+			collectionResult1, _, err := insert_all_sub_departmentsPrograms[1].Eval(paramMap)
+			if err != nil {
+				return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate collection: %w", err)
+			}
+			collection1 := collectionResult1.Value().([]any)
+			for _, subLoopVar := range collection1 {
+				paramMap["sub"] = subLoopVar
+				{ // safe append static with spacing
+					_frag := "(?"
+					if builder.Len() > 0 {
+						_b := builder.String()
+						_last := _b[len(_b)-1]
+						// determine if last char is word char
+						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+						// skip leading spaces in _frag
+						_k := 0
+						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+							_k++
+						}
+						_startsWord := false
+						if _k < len(_frag) {
+							_c := _frag[_k]
+							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+						}
+						if _endsWord && _startsWord {
+							builder.WriteByte(' ')
+						}
+					}
+					builder.WriteString(_frag)
+				}
+				boundaryNeeded = true
+				// Evaluate expression 2
+				evalRes0, _, err := insert_all_sub_departmentsPrograms[2].Eval(paramMap)
+				if err != nil {
+					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
+				}
+				args = append(args, evalRes0.Value())
+				{ // safe append static with spacing
+					_frag := ",?"
+					if builder.Len() > 0 {
+						_b := builder.String()
+						_last := _b[len(_b)-1]
+						// determine if last char is word char
+						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+						// skip leading spaces in _frag
+						_k := 0
+						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+							_k++
+						}
+						_startsWord := false
+						if _k < len(_frag) {
+							_c := _frag[_k]
+							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+						}
+						if _endsWord && _startsWord {
+							builder.WriteByte(' ')
+						}
+					}
+					builder.WriteString(_frag)
+				}
+				boundaryNeeded = true
+				// Evaluate expression 3
+				evalRes1, _, err := insert_all_sub_departmentsPrograms[3].Eval(paramMap)
+				if err != nil {
+					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
+				}
+				args = append(args, evalRes1.Value())
+				{ // safe append static with spacing
+					_frag := ",?"
+					if builder.Len() > 0 {
+						_b := builder.String()
+						_last := _b[len(_b)-1]
+						// determine if last char is word char
+						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+						// skip leading spaces in _frag
+						_k := 0
+						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+							_k++
+						}
+						_startsWord := false
+						if _k < len(_frag) {
+							_c := _frag[_k]
+							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+						}
+						if _endsWord && _startsWord {
+							builder.WriteByte(' ')
+						}
+					}
+					builder.WriteString(_frag)
+				}
+				boundaryNeeded = true
+				// Evaluate expression 4
+				evalRes2, _, err := insert_all_sub_departmentsPrograms[4].Eval(paramMap)
+				if err != nil {
+					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
+				}
+				args = append(args, evalRes2.Value())
+				{ // safe append static with spacing
+					_frag := ",?"
+					if builder.Len() > 0 {
+						_b := builder.String()
+						_last := _b[len(_b)-1]
+						// determine if last char is word char
+						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+						// skip leading spaces in _frag
+						_k := 0
+						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+							_k++
+						}
+						_startsWord := false
+						if _k < len(_frag) {
+							_c := _frag[_k]
+							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+						}
+						if _endsWord && _startsWord {
+							builder.WriteByte(' ')
+						}
+					}
+					builder.WriteString(_frag)
+				}
+				boundaryNeeded = true
+				// Evaluate expression 5
+				evalRes3, _, err := insert_all_sub_departmentsPrograms[5].Eval(paramMap)
+				if err != nil {
+					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
+				}
+				args = append(args, evalRes3.Value())
+				{ // safe append static with spacing
+					_frag := ")"
+					if builder.Len() > 0 {
+						_b := builder.String()
+						_last := _b[len(_b)-1]
+						// determine if last char is word char
+						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
+						// skip leading spaces in _frag
+						_k := 0
+						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
+							_k++
+						}
+						_startsWord := false
+						if _k < len(_frag) {
+							_c := _frag[_k]
+							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
+						}
+						if _endsWord && _startsWord {
+							builder.WriteByte(' ')
+						}
+					}
+					builder.WriteString(_frag)
+				}
+				boundaryNeeded = true
+			}
+		}
 
+		query := builder.String()
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("InsertAllSubDepartments: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to execute statement: %w", err)
+		return nil, fmt.Errorf("InsertAllSubDepartments: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -39,17 +38,21 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_name", cel.StringType),
-		cel.Variable("user_email", cel.StringType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create InsertUserWithReturningMariadb CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_name", cel.StringType),
+			cel.Variable("user_email", cel.StringType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create InsertUserWithReturningMariadb CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	insertuserwithreturningmariadbPrograms = make([]cel.Program, 2)
@@ -57,11 +60,11 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user_name")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_name': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_name", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_name': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_name", err))
 		}
 		insertuserwithreturningmariadbPrograms[0] = program
 	}
@@ -69,54 +72,77 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user_email")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_email': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_email", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_email': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_email", err))
 		}
 		insertuserwithreturningmariadbPrograms[1] = program
 	}
 }
+
 // InsertUserWithReturningMariadb - sql.Result Affinity
 func InsertUserWithReturningMariadb(ctx context.Context, executor snapsqlgo.DBExecutor, userName string, userEmail string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuserwithreturningmariadb", "sql.result")
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuserwithreturningmariadb", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserwithreturningmariadbMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("InsertUserWithReturningMariadb: failed to get mock data: %w", err)
 		}
 
 		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to sql.Result struct: %w", err)
+			return nil, fmt.Errorf("InsertUserWithReturningMariadb: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "INSERT INTO users (name, email, created_at) VALUES ($1,$2, NOW()) RETURNING id, name, email, created_at"
-	args := []any{
-		userName,
-		userEmail,
-	}
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "INSERT INTO users (name, email, created_at) VALUES ($1,$2, NOW())  RETURNING id, name, email, created_at"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"user_name":  userName,
+			"user_email": userEmail,
+		}
 
+		evalRes0, _, err := insertuserwithreturningmariadbPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUserWithReturningMariadb: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+
+		evalRes1, _, err := insertuserwithreturningmariadbPrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("InsertUserWithReturningMariadb: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes1.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("InsertUserWithReturningMariadb: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan single row
-	row := stmt.QueryRowContext(ctx, args...)
-	// Generic scan for interface{} result - not implemented
-	// This would require runtime reflection or predefined column mapping
+	// Execute statement (no response struct available)
+	execResult, err := stmt.ExecContext(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("InsertUserWithReturningMariadb: failed to execute statement: %w", err)
+	}
+	result = execResult
 
 	return result, nil
 }

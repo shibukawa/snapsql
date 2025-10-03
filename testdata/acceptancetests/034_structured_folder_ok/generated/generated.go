@@ -21,18 +21,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
-// FindUserByIDResult represents the response structure for FindUserByID
-type FindUserByIDResult struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Createdat time.Time `json:"created_at"`
-}
 
 // FindUserByID specific CEL programs and mock path
 var (
@@ -46,16 +38,20 @@ func init() {
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
 	// Environment 0: Base environment
-	env0, err := cel.NewEnv(
-		cel.HomogeneousAggregateLiterals(),
-		cel.EagerlyValidateDeclarations(true),
-		snapsqlgo.DecimalLibrary,
-		cel.Variable("user_id", cel.IntType),
-	)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create FindUserByID CEL environment 0: %v", err))
+	{
+		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		opts := []cel.EnvOption{
+			cel.HomogeneousAggregateLiterals(),
+			cel.EagerlyValidateDeclarations(true),
+			snapsqlgo.DecimalLibrary,
+			cel.Variable("user_id", cel.IntType),
+		}
+		env0, err := cel.NewEnv(opts...)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create FindUserByID CEL environment 0: %v", err))
+		}
+		celEnvironments[0] = env0
 	}
-	celEnvironments[0] = env0
 
 	// Create programs for each expression using the corresponding environment
 	finduserbyidPrograms = make([]cel.Program, 1)
@@ -63,60 +59,73 @@ func init() {
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression 'user_id': %v", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_id", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for 'user_id': %v", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
 		finduserbyidPrograms[0] = program
 	}
 }
+
 // FindUserByID Find a user by their ID from hierarchical structure
-func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (FindUserByIDResult, error) {
-	var result FindUserByIDResult
+func FindUserByID(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
-	// Extract function configuration
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduserbyid", "finduserbyidresult")
+	// Hierarchical metas (for nested aggregation code generation - placeholder)
+	// Count: 0
 
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduserbyid", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles(finduserbyidMockPath, funcConfig.MockDataNames)
 		if err != nil {
-			return result, fmt.Errorf("failed to get mock data: %w", err)
+			return nil, fmt.Errorf("FindUserByID: failed to get mock data: %w", err)
 		}
 
-		result, err = snapsqlgo.MapMockDataToStruct[FindUserByIDResult](mockData)
+		result, err = snapsqlgo.MapMockDataToStruct[sql.Result](mockData)
 		if err != nil {
-			return result, fmt.Errorf("failed to map mock data to FindUserByIDResult struct: %w", err)
+			return nil, fmt.Errorf("FindUserByID: failed to map mock data to sql.Result struct: %w", err)
 		}
 
 		return result, nil
 	}
 
 	// Build SQL
-	query := "SELECT id, name, email, created_at FROM users WHERE id =$1"
-	args := []any{
-		userID,
-	}
+	buildQueryAndArgs := func() (string, []any, error) {
+		query := "SELECT id, name, email, created_at FROM users  WHERE id =$1"
+		args := make([]any, 0)
+		paramMap := map[string]any{
+			"user_id": userID,
+		}
 
+		evalRes0, _, err := finduserbyidPrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("FindUserByID: failed to evaluate expression: %w", err)
+		}
+		args = append(args, evalRes0.Value())
+		return query, args, nil
+	}
+	query, args, err := buildQueryAndArgs()
+	if err != nil {
+		return nil, err
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("failed to prepare statement: %w", err)
+		return nil, fmt.Errorf("FindUserByID: failed to prepare statement: %w", err)
 	}
 	defer stmt.Close()
-	// Execute query and scan single row
-	row := stmt.QueryRowContext(ctx, args...)
-	err = row.Scan(
-	    &result.Id,
-	    &result.Name,
-	    &result.Email,
-	    &result.Createdat
-	)
+	// Execute query and scan multiple rows (many affinity)
+	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
-	    return result, fmt.Errorf("failed to scan row: %w", err)
+		return nil, fmt.Errorf("FindUserByID: failed to execute query: %w", err)
 	}
+	defer rows.Close()
+
+	// Generic scan for any result - not implemented
+	// This would require runtime reflection or predefined column mapping
 
 	return result, nil
 }
