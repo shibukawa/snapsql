@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,6 +67,12 @@ func (i *InitCmd) Run(ctx *Context) error {
 		return fmt.Errorf("failed to create sample files: %w", err)
 	}
 
+	// Create VS Code settings for YAML schema validation
+	err = createVSCodeSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create VS Code settings: %w", err)
+	}
+
 	if !ctx.Quiet {
 		color.Green("SnapSQL project initialized successfully")
 		fmt.Println("\nNext steps:")
@@ -115,19 +122,29 @@ generation:
   input_dir: "./queries"
   validate: true
   
-  # Language-specific settings (including output directories)
-  json:
-    output: "./generated"
-    pretty: true
-    include_metadata: true
-  
-  go:
-    output: "./internal/queries"
-    package: "queries"
-  
-  typescript:
-    output: "./src/generated"
-    types: true
+  # Generator configurations
+  # Generators are enabled by default unless 'disabled: true' is specified
+  generators:
+    json:
+      output: "./generated"
+      preserve_hierarchy: true
+      settings:
+        pretty: true
+        include_metadata: true
+    
+    go:
+      output: "./internal/queries"
+      disabled: true
+      preserve_hierarchy: true
+      settings:
+        package: "queries"
+    
+    typescript:
+      output: "./src/generated"
+      disabled: true
+      preserve_hierarchy: true
+      settings:
+        types: true
 
 # Validation settings
 validation:
@@ -152,14 +169,12 @@ func createKanbanConfig() error {
 	b.WriteString("  generators:\n")
 	b.WriteString("    json:\n")
 	b.WriteString("      output: \"./generated\"\n")
-	b.WriteString("      enabled: true\n")
 	b.WriteString("      preserve_hierarchy: true\n")
 	b.WriteString("      settings:\n")
 	b.WriteString("        pretty: true\n")
 	b.WriteString("        include_metadata: true\n")
 	b.WriteString("    go:\n")
 	b.WriteString("      output: \"./internal/query\"\n")
-	b.WriteString("      enabled: true\n")
 	b.WriteString("      preserve_hierarchy: true\n")
 	b.WriteString("      settings:\n")
 	b.WriteString("        package: \"query\"\n\n")
@@ -215,4 +230,70 @@ func writeFile(path, content string) error {
 	}
 
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// createVSCodeSettings creates or updates .vscode/settings.json with YAML schema configuration
+func createVSCodeSettings(ctx *Context) error {
+	vscodeDir := ".vscode"
+	settingsPath := filepath.Join(vscodeDir, "settings.json")
+
+	// Create .vscode directory if it doesn't exist
+	if err := os.MkdirAll(vscodeDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .vscode directory: %w", err)
+	}
+
+	// Define the schema URL
+	schemaURL := "https://raw.githubusercontent.com/shibukawa/snapsql/refs/heads/main/snapsql-config.schema.json"
+	schemaPatterns := []string{"snapsql.yaml", "**/snapsql*.yaml"}
+
+	// Check if settings.json already exists
+	var settings map[string]interface{}
+
+	existingData, err := os.ReadFile(settingsPath)
+	if err == nil {
+		// File exists, parse it
+		if err := json.Unmarshal(existingData, &settings); err != nil {
+			// If parsing fails, create new settings
+			if ctx.Verbose {
+				color.Yellow("Warning: existing settings.json is invalid, creating new one")
+			}
+
+			settings = make(map[string]interface{})
+		}
+	} else {
+		// File doesn't exist, create new settings
+		settings = make(map[string]interface{})
+	}
+
+	// Add or update yaml.schemas configuration
+	yamlSchemas, ok := settings["yaml.schemas"].(map[string]interface{})
+	if !ok {
+		yamlSchemas = make(map[string]interface{})
+	}
+
+	// Convert patterns to interface slice for JSON
+	patterns := make([]interface{}, len(schemaPatterns))
+	for i, p := range schemaPatterns {
+		patterns[i] = p
+	}
+
+	yamlSchemas[schemaURL] = patterns
+	settings["yaml.schemas"] = yamlSchemas
+
+	// Marshal with indentation for readability
+	data, err := json.MarshalIndent(settings, "", "    ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal settings: %w", err)
+	}
+
+	// Write settings file
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write settings.json: %w", err)
+	}
+
+	if ctx.Verbose {
+		color.Green("Created/updated .vscode/settings.json with YAML schema configuration")
+	}
+
+	return nil
 }

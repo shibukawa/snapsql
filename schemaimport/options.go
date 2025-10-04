@@ -2,10 +2,10 @@ package schemaimport
 
 // Options describes the inputs required to construct a Config instance.
 type Options struct {
-    // WorkingDir is the base directory used to resolve relative paths.
-    WorkingDir string
-    // TblsConfigPath is the path to .tbls.yml / tbls.yml resolved from CLI or defaults.
-    TblsConfigPath string
+	// WorkingDir is the base directory used to resolve relative paths.
+	WorkingDir string
+	// TblsConfigPath is the path to .tbls.yml / tbls.yml resolved from CLI or defaults.
+	TblsConfigPath string
 	// SchemaJSONPath is the path to the tbls-generated schema.json file.
 	SchemaJSONPath string
 	// OutputDir is the directory where SnapSQL YAML files will be written.
@@ -20,12 +20,12 @@ type Options struct {
 	IncludeIndexes *bool
 	// SchemaAware controls whether YAML files are emitted under schema-aware directories when non-nil.
 	SchemaAware *bool
-    // DryRun indicates the command should report resolved inputs without writing files.
-    DryRun bool
-    // Experimental gates the command behind an opt-in flag during rollout.
-    Experimental bool
-    // Verbose toggles detailed logging.
-    Verbose bool
-    // Logger, when non-nil, is used for verbose logging.
-    Logger func(format string, args ...any)
+	// DryRun indicates the command should report resolved inputs without writing files.
+	DryRun bool
+	// Experimental gates the command behind an opt-in flag during rollout.
+	Experimental bool
+	// Verbose toggles detailed logging.
+	Verbose bool
+	// Logger, when non-nil, is used for verbose logging.
+	Logger func(format string, args ...any)
 }

@@ -1,0 +1,460 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/shibukawa/snapsql/snapsql-config.schema.json",
+  "title": "SnapSQL Configuration",
+  "description": "Configuration file schema for SnapSQL projects",
+  "type": "object",
+  "properties": {
+    "dialect": {
+      "type": "string",
+      "enum": ["postgres", "mysql", "sqlite", "sqlserver"],
+      "default": "postgres",
+      "description": "SQL dialect to use for query generation and validation"
+    },
+    "input_dir": {
+      "type": "string",
+      "default": "./queries",
+      "description": "Directory containing SQL template files (.snap.sql or .snap.md)"
+    },
+    "databases": {
+      "type": "object",
+      "description": "Database connection configurations for different environments",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "enum": ["postgres", "mysql", "sqlite3", "sqlserver"],
+            "description": "Database driver name"
+          },
+          "connection": {
+            "type": "string",
+            "description": "Database connection string (supports environment variable expansion with ${VAR})"
+          },
+          "schema": {
+            "type": "string",
+            "description": "Default schema name"
+          },
+          "database": {
+            "type": "string",
+            "description": "Database name"
+          }
+        },
+        "required": ["driver", "connection"]
+      }
+    },
+    "constant_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "List of YAML files containing project constants"
+    },
+    "schema_extraction": {
+      "type": "object",
+      "description": "Settings for database schema extraction",
+      "properties": {
+        "include_views": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include database views in schema extraction"
+        },
+        "include_indexes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include database indexes in schema extraction"
+        },
+        "table_patterns": {
+          "type": "object",
+          "properties": {
+            "include": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": ["*"],
+              "description": "Table name patterns to include (glob patterns)"
+            },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": ["pg_*", "information_schema*", "sys_*"],
+              "description": "Table name patterns to exclude (glob patterns)"
+            }
+          }
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "description": "Code generation settings",
+      "properties": {
+        "validate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Validate SQL templates during generation"
+        },
+        "generate_mock_data": {
+          "type": "boolean",
+          "default": false,
+          "description": "Generate mock data for testing"
+        },
+        "generators": {
+          "type": "object",
+          "description": "Configuration for each code generator",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "output": {
+                "type": "string",
+                "description": "Output directory for generated files (required when generator is enabled)"
+              },
+              "disabled": {
+                "type": "boolean",
+                "default": false,
+                "description": "Set to true to disable this generator. Generators are enabled by default unless explicitly disabled."
+              },
+              "preserve_hierarchy": {
+                "type": "boolean",
+                "default": true,
+                "description": "Preserve directory hierarchy from input_dir in output"
+              },
+              "settings": {
+                "type": "object",
+                "description": "Generator-specific settings",
+                "additionalProperties": true
+              }
+            },
+            "if": {
+              "properties": {
+                "disabled": {
+                  "const": false
+                }
+              }
+            },
+            "then": {
+              "required": ["output"]
+            }
+          },
+          "properties": {
+            "json": {
+              "type": "object",
+              "description": "JSON intermediate format generator",
+              "properties": {
+                "output": {
+                  "type": "string"
+                },
+                "disabled": {
+                  "type": "boolean"
+                },
+                "preserve_hierarchy": {
+                  "type": "boolean"
+                },
+                "settings": {
+                  "type": "object",
+                  "properties": {
+                    "pretty": {
+                      "type": "boolean",
+                      "default": true,
+                      "description": "Pretty-print JSON output"
+                    },
+                    "include_metadata": {
+                      "type": "boolean",
+                      "default": true,
+                      "description": "Include metadata in JSON output"
+                    }
+                  }
+                }
+              }
+            },
+            "go": {
+              "type": "object",
+              "description": "Go code generator",
+              "properties": {
+                "output": {
+                  "type": "string"
+                },
+                "disabled": {
+                  "type": "boolean"
+                },
+                "preserve_hierarchy": {
+                  "type": "boolean"
+                },
+                "settings": {
+                  "type": "object",
+                  "properties": {
+                    "package": {
+                      "type": "string",
+                      "default": "queries",
+                      "description": "Go package name for generated code"
+                    }
+                  }
+                }
+              }
+            },
+            "typescript": {
+              "type": "object",
+              "description": "TypeScript code generator",
+              "properties": {
+                "output": {
+                  "type": "string"
+                },
+                "disabled": {
+                  "type": "boolean"
+                },
+                "preserve_hierarchy": {
+                  "type": "boolean"
+                },
+                "settings": {
+                  "type": "object",
+                  "properties": {
+                    "types": {
+                      "type": "boolean",
+                      "default": true,
+                      "description": "Generate TypeScript type definitions"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "description": "SQL validation settings",
+      "properties": {
+        "strict": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable strict validation mode"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "no-dynamic-table-names",
+              "require-parameter-types",
+              "no-select-star",
+              "require-where-clause"
+            ]
+          },
+          "default": ["no-dynamic-table-names", "require-parameter-types"],
+          "description": "List of validation rules to enforce"
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "description": "Query execution settings",
+      "properties": {
+        "default_format": {
+          "type": "string",
+          "enum": ["table", "json", "csv", "markdown"],
+          "default": "table",
+          "description": "Default output format for query results"
+        },
+        "default_environment": {
+          "type": "string",
+          "default": "development",
+          "description": "Default database environment to use"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 30,
+          "description": "Query timeout in seconds"
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1000,
+          "description": "Maximum number of rows to return"
+        },
+        "explain": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run EXPLAIN before executing queries"
+        },
+        "explain_analyze": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run EXPLAIN ANALYZE before executing queries"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Default LIMIT clause value (0 means no limit)"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Default OFFSET clause value"
+        },
+        "execute_dangerous_query": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow execution of dangerous queries (DELETE/UPDATE without WHERE clause)"
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "description": "System field configuration (created_at, updated_at, etc.)",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Field name (e.g., created_at, updated_at, created_by)"
+              },
+              "type": {
+                "type": "string",
+                "description": "Field data type (e.g., timestamp, int, string)"
+              },
+              "exclude_from_select": {
+                "type": "boolean",
+                "default": false,
+                "description": "Exclude this field from SELECT statements by default"
+              },
+              "on_insert": {
+                "type": "object",
+                "description": "Configuration for INSERT operations",
+                "properties": {
+                  "default": {
+                    "description": "Default value expression (e.g., NOW(), 1)",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "parameter": {
+                    "type": "string",
+                    "enum": ["explicit", "implicit", "error", ""],
+                    "description": "Parameter handling: explicit (user provides), implicit (from context), error (not allowed), or empty (no parameter)"
+                  }
+                }
+              },
+              "on_update": {
+                "type": "object",
+                "description": "Configuration for UPDATE operations",
+                "properties": {
+                  "default": {
+                    "description": "Default value expression (e.g., NOW())",
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "parameter": {
+                    "type": "string",
+                    "enum": ["explicit", "implicit", "error", ""],
+                    "description": "Parameter handling: explicit (user provides), implicit (from context), error (not allowed), or empty (no parameter)"
+                  }
+                }
+              }
+            },
+            "required": ["name"]
+          },
+          "description": "List of system field configurations"
+        }
+      }
+    }
+  },
+  "required": ["dialect"],
+  "examples": [
+    {
+      "dialect": "postgres",
+      "input_dir": "./queries",
+      "databases": {
+        "development": {
+          "driver": "postgres",
+          "connection": "postgres://user:pass@localhost:5432/mydb",
+          "schema": "public"
+        }
+      },
+      "generation": {
+        "validate": true,
+        "generators": {
+          "json": {
+            "output": "./generated",
+            "preserve_hierarchy": true,
+            "settings": {
+              "pretty": true,
+              "include_metadata": true
+            }
+          },
+          "go": {
+            "output": "./internal/queries",
+            "disabled": true,
+            "preserve_hierarchy": true,
+            "settings": {
+              "package": "queries"
+            }
+          }
+        }
+      },
+      "query": {
+        "default_format": "table",
+        "default_environment": "development",
+        "timeout": 30,
+        "max_rows": 1000
+      },
+      "system": {
+        "fields": [
+          {
+            "name": "created_at",
+            "type": "timestamp",
+            "on_insert": {
+              "default": "NOW()"
+            },
+            "on_update": {
+              "parameter": "error"
+            }
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp",
+            "on_insert": {
+              "default": "NOW()"
+            },
+            "on_update": {
+              "default": "NOW()"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

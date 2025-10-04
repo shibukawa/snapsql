@@ -29,13 +29,12 @@ generation:
   generators:
     json:
       output: "./generated"
-      enabled: true
       pretty: true
       include_metadata: true
     
     go:
       output: "./internal/queries"
-      enabled: false
+      disabled: true
       package: "queries"
       preserve_hierarchy: true
       mock_path: "./testdata/mocks"
