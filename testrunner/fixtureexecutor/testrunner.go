@@ -13,12 +13,16 @@ import (
 
 // TestResult represents the result of a single test execution
 type TestResult struct {
-	TestCase *markdownparser.TestCase
-	Success  bool
-	Duration time.Duration
-	Result   *ValidationResult
-	Trace    []SQLTrace
-	Error    error
+	TestCase          *markdownparser.TestCase
+	Success           bool
+	Duration          time.Duration
+	Result            *ValidationResult
+	Trace             []SQLTrace
+	Error             error
+	ExpectedError     *string // Expected error type from test case
+	ActualErrorType   string  // Classified error type
+	ErrorMatch        bool    // Whether error matched expected
+	ErrorMatchMessage string  // Detailed error match message
 }
 
 // TestSummary represents the overall test execution summary
@@ -157,6 +161,12 @@ func (tr *TestRunner) executeTestWithTimeout(ctx context.Context, testCase *mark
 	// Execute test
 	result, trace, err := tr.executeTestWithContext(testCtx, testCase)
 
+	// Handle error test cases
+	if testCase.ExpectedError != nil {
+		return tr.handleErrorTest(testCase, result, trace, err, time.Since(startTime))
+	}
+
+	// Handle normal test cases
 	return TestResult{
 		TestCase: testCase,
 		Success:  err == nil,
@@ -165,6 +175,38 @@ func (tr *TestRunner) executeTestWithTimeout(ctx context.Context, testCase *mark
 		Trace:    trace,
 		Error:    err,
 	}
+}
+
+// handleErrorTest handles test cases that expect an error
+func (tr *TestRunner) handleErrorTest(testCase *markdownparser.TestCase, result *ValidationResult, trace []SQLTrace, err error, duration time.Duration) TestResult {
+	testResult := TestResult{
+		TestCase:      testCase,
+		Duration:      duration,
+		Result:        result,
+		Trace:         trace,
+		Error:         err,
+		ExpectedError: testCase.ExpectedError,
+	}
+	if err == nil {
+		// Expected error but got success
+		testResult.Success = false
+		testResult.ErrorMatch = false
+		testResult.ErrorMatchMessage = "expected error but operation succeeded"
+
+		return testResult
+	}
+
+	// Classify the actual error
+	actualErrorType := markdownparser.ClassifyDatabaseError(err)
+	testResult.ActualErrorType = string(actualErrorType)
+
+	// Check if error matches expected type
+	matches, message := markdownparser.MatchesExpectedError(err, *testCase.ExpectedError)
+	testResult.ErrorMatch = matches
+	testResult.ErrorMatchMessage = message
+	testResult.Success = matches
+
+	return testResult
 }
 
 // executeTestWithContext executes a test within a context
@@ -216,9 +258,55 @@ func (tr *TestRunner) PrintSummary(summary *TestSummary) {
 			if !result.Success {
 				fmt.Printf("  %s\n", result.TestCase.Name)
 
-				if result.Error != nil {
+				// Error test specific output
+				if result.ExpectedError != nil {
+					fmt.Printf("    Expected Error: %s\n", *result.ExpectedError)
+
+					if result.Error != nil {
+						fmt.Printf("    Actual Error:   %s\n", result.ActualErrorType)
+
+						if tr.options.Verbose {
+							fmt.Printf("    Error Details:  %v\n", result.Error)
+						}
+					} else {
+						fmt.Printf("    Actual Error:   <none>\n")
+					}
+
+					if result.ErrorMatchMessage != "" {
+						fmt.Printf("    Reason: %s\n", result.ErrorMatchMessage)
+					}
+				} else if result.Error != nil {
+					// Normal test with unexpected error
 					fmt.Printf("    Error: %v\n", result.Error)
+
+					if tr.options.Verbose && len(result.Trace) > 0 {
+						fmt.Printf("    SQL Trace:\n")
+
+						for _, trace := range result.Trace {
+							fmt.Printf("      %s: %s\n", trace.Label, trace.Statement)
+						}
+					}
 				}
+			}
+		}
+	}
+
+	// Verbose mode: Show error details for all error tests
+	if tr.options.Verbose && summary.PassedTests > 0 {
+		hasErrorTests := false
+
+		for _, result := range summary.Results {
+			if result.Success && result.ExpectedError != nil {
+				if !hasErrorTests {
+					fmt.Printf("\nPassed error tests (verbose):\n")
+
+					hasErrorTests = true
+				}
+
+				fmt.Printf("  %s\n", result.TestCase.Name)
+				fmt.Printf("    Expected Error: %s\n", *result.ExpectedError)
+				fmt.Printf("    Actual Error:   %s\n", result.ActualErrorType)
+				fmt.Printf("    Error Details:  %v\n", result.Error)
 			}
 		}
 	}

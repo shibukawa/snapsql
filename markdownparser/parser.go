@@ -19,6 +19,8 @@ var (
 	ErrInvalidTestCase                          = errors.New("invalid test case")
 	ErrDuplicateParameters                      = errors.New("duplicate parameters section")
 	ErrDuplicateExpectedResults                 = errors.New("duplicate expected results section")
+	ErrDuplicateExpectedError                   = errors.New("duplicate expected error section")
+	ErrConflictingExpectations                  = errors.New("cannot specify both expected results and expected error")
 	ErrInvalidExpectedResultsExternalLinkFormat = errors.New("invalid expected results external file link format")
 	ErrInvalidFixturesExternalLinkFormat        = errors.New("invalid fixtures external file link format")
 )

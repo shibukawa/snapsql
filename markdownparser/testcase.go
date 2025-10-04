@@ -49,6 +49,7 @@ type TestCase struct {
 	VerifyQuery     string               // 検証用SELECTクエリ
 	ExpectedResult  []map[string]any     // 従来型（無名配列）
 	ExpectedResults []ExpectedResultSpec // 新型（テーブル名・戦略付き）
+	ExpectedError   *string              // 期待されるエラータイプ（normalized form）
 	SourceFile      string               // 元となるMarkdownファイルのパス
 	Line            int                  // 見出し行番号（1-origin）
 	PreparedSQL     string               // 方言・条件適用後に評価されたSQL
@@ -111,6 +112,22 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte, mapper *indexToLine
 
 					if strings.HasPrefix(text, "parameters:") || text == "params:" || strings.HasPrefix(text, "input parameters:") {
 						currentSection = TestSection{Type: "parameters"}
+					} else if strings.HasPrefix(text, "expected error:") {
+						// Extract error type from the same paragraph
+						fullText := extractTextFromNode(n, content)
+						if idx := strings.Index(strings.ToLower(fullText), "expected error:"); idx >= 0 {
+							errorText := strings.TrimSpace(fullText[idx+len("expected error:"):])
+							if errorText != "" {
+								parsedError, err := ParseExpectedError(errorText)
+								if err != nil {
+									errors = append(errors, fmt.Errorf("in test case %q: %w", currentTestCase.Name, err))
+								} else {
+									currentTestCase.ExpectedError = parsedError
+								}
+							}
+						}
+
+						currentSection = TestSection{Type: "expected_error"}
 					} else if strings.HasPrefix(text, "expected:") || strings.HasPrefix(text, "expected results:") || strings.HasPrefix(text, "expected result:") || text == "results:" {
 						currentSection = TestSection{Type: "expected"}
 						// Allow table-qualified expected results like: "Expected Results: users[pk-match]"
@@ -235,9 +252,17 @@ func extractTextFromNode(node ast.Node, content []byte) string {
 
 // validateTestCase validates a test case for required sections and format
 func validateTestCase(testCase *TestCase) error {
-	// Expected Results are required (either legacy or table-qualified)
-	if len(testCase.ExpectedResult) == 0 && len(testCase.ExpectedResults) == 0 {
-		return fmt.Errorf("%w: %q expected results", snapsql.ErrTestCaseMissingData, testCase.Name)
+	// ExpectedError and ExpectedResults are mutually exclusive
+	hasResults := len(testCase.ExpectedResult) > 0 || len(testCase.ExpectedResults) > 0
+	hasError := testCase.ExpectedError != nil
+
+	if hasResults && hasError {
+		return fmt.Errorf("%w: test case %q", ErrConflictingExpectations, testCase.Name)
+	}
+
+	// Either Expected Results or Expected Error must be specified
+	if !hasResults && !hasError {
+		return fmt.Errorf("%w: %q must specify either Expected Results or Expected Error", snapsql.ErrTestCaseMissingData, testCase.Name)
 	}
 
 	return nil
@@ -260,6 +285,11 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 		testCase.HasParameters = true
 
 	case "expected", "expected results", "results":
+		// Check for conflict with ExpectedError
+		if testCase.ExpectedError != nil {
+			return fmt.Errorf("%w: test case %q", ErrConflictingExpectations, testCase.Name)
+		}
+
 		if len(testCase.ExpectedResult) > 0 || len(testCase.ExpectedResults) > 0 {
 			return fmt.Errorf("%w in test case %q", ErrDuplicateExpectedResults, testCase.Name)
 		}
