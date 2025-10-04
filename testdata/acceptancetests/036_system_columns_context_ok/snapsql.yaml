@@ -7,7 +7,6 @@ generation:
   generators:
     go:
       output: "./generated"
-      enabled: true
       package: "testgen"
 
 system:

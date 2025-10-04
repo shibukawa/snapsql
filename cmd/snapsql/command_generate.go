@@ -136,7 +136,7 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 			generator.Output = filepath.Clean(filepath.Join(configBaseDir, generator.Output))
 		}
 
-		if !generator.Enabled {
+		if !generator.IsEnabled() {
 			continue
 		}
 
@@ -379,11 +379,11 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 
 		// Find generator config
 		generator, exists := config.Generation.Generators[g.Lang]
-		if !exists || !generator.Enabled {
+		if !exists || !generator.IsEnabled() {
 			// Use default config
-			generator = GeneratorConfig{
+			generator = snapsql.GeneratorConfig{
 				Output:   "./generated/" + g.Lang,
-				Enabled:  true,
+				Disabled: nil, // Enabled by default
 				Settings: map[string]any{},
 			}
 		}
@@ -410,9 +410,9 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 		generator, exists := config.Generation.Generators[g.Lang]
 		if !exists {
 			// Use default config
-			generator = GeneratorConfig{
+			generator = snapsql.GeneratorConfig{
 				Output:   "./generated/" + g.Lang,
-				Enabled:  true,
+				Disabled: nil, // Enabled by default
 				Settings: map[string]any{},
 			}
 		}

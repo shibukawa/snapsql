@@ -1,6 +1,7 @@
 package snapsql
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -8,6 +9,9 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/joho/godotenv"
 )
+
+// ErrConfigValidation is returned when configuration validation fails
+var ErrConfigValidation = errors.New("configuration validation failed")
 
 // Config represents the SnapSQL configuration
 type Config struct {
@@ -53,9 +57,15 @@ type GenerationConfig struct {
 // GeneratorConfig represents a single generator configuration
 type GeneratorConfig struct {
 	Output            string         `yaml:"output"`
-	Enabled           bool           `yaml:"enabled"`
+	Disabled          *bool          `yaml:"disabled"` // Pointer to distinguish between unset and true. If nil or false, generator is enabled
 	PreserveHierarchy bool           `yaml:"preserve_hierarchy"`
 	Settings          map[string]any `yaml:"settings,omitempty"`
+}
+
+// IsEnabled returns true if the generator is not explicitly disabled
+// Generators are enabled by default unless disabled: true is set
+func (g *GeneratorConfig) IsEnabled() bool {
+	return g.Disabled == nil || !*g.Disabled
 }
 
 // LanguageConfig represents language-specific generation settings (deprecated, kept for backward compatibility)
@@ -161,12 +171,17 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// Parse YAML
+	// Parse YAML with strict mode to detect unknown fields
 	var config Config
 
-	err = yaml.Unmarshal(data, &config)
+	err = yaml.UnmarshalWithOptions(data, &config, yaml.Strict())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Validate the configuration
+	if err := validateConfig(&config); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	// Apply defaults for missing values
@@ -176,6 +191,106 @@ func LoadConfig(configPath string) (*Config, error) {
 	expandConfigEnvVars(&config)
 
 	return &config, nil
+}
+
+// validateConfig validates the configuration for common errors and inconsistencies
+func validateConfig(config *Config) error {
+	// Validate dialect
+	validDialects := map[string]bool{
+		"postgres":  true,
+		"mysql":     true,
+		"sqlite":    true,
+		"sqlserver": true,
+	}
+	if config.Dialect != "" && !validDialects[config.Dialect] {
+		return fmt.Errorf("%w: invalid dialect '%s': must be one of postgres, mysql, sqlite, sqlserver", ErrConfigValidation, config.Dialect)
+	}
+
+	// Validate generator configurations
+	for name, generator := range config.Generation.Generators {
+		// Validate output path is specified if enabled
+		if generator.IsEnabled() && generator.Output == "" {
+			return fmt.Errorf("%w: generator '%s': output path is required when enabled", ErrConfigValidation, name)
+		}
+
+		// Validate known generator types
+		validGenerators := map[string]bool{
+			"json":       true,
+			"go":         true,
+			"typescript": true,
+		}
+		if !validGenerators[name] {
+			return fmt.Errorf("%w: unknown generator type '%s': must be one of json, go, typescript", ErrConfigValidation, name)
+		}
+	}
+
+	// Validate system field parameter values
+	for _, field := range config.System.Fields {
+		if field.Name == "" {
+			return fmt.Errorf("%w: system field: name is required", ErrConfigValidation)
+		}
+
+		// Validate parameter values for insert
+		if field.OnInsert.Parameter != "" {
+			validParams := map[SystemFieldParameter]bool{
+				ParameterExplicit: true,
+				ParameterImplicit: true,
+				ParameterError:    true,
+			}
+			if !validParams[field.OnInsert.Parameter] {
+				return fmt.Errorf("%w: system field '%s': invalid on_insert.parameter '%s': must be one of explicit, implicit, error", ErrConfigValidation, field.Name, field.OnInsert.Parameter)
+			}
+		}
+
+		// Validate parameter values for update
+		if field.OnUpdate.Parameter != "" {
+			validParams := map[SystemFieldParameter]bool{
+				ParameterExplicit: true,
+				ParameterImplicit: true,
+				ParameterError:    true,
+			}
+			if !validParams[field.OnUpdate.Parameter] {
+				return fmt.Errorf("%w: system field '%s': invalid on_update.parameter '%s': must be one of explicit, implicit, error", ErrConfigValidation, field.Name, field.OnUpdate.Parameter)
+			}
+		}
+	}
+
+	// Validate query configuration
+	if config.Query.Timeout < 0 {
+		return fmt.Errorf("%w: query.timeout must be non-negative, got %d", ErrConfigValidation, config.Query.Timeout)
+	}
+
+	if config.Query.MaxRows < 0 {
+		return fmt.Errorf("%w: query.max_rows must be non-negative, got %d", ErrConfigValidation, config.Query.MaxRows)
+	}
+
+	if config.Query.Limit < 0 {
+		return fmt.Errorf("%w: query.limit must be non-negative, got %d", ErrConfigValidation, config.Query.Limit)
+	}
+
+	if config.Query.Offset < 0 {
+		return fmt.Errorf("%w: query.offset must be non-negative, got %d", ErrConfigValidation, config.Query.Offset)
+	}
+
+	// Validate default format
+	if config.Query.DefaultFormat != "" {
+		validFormats := map[string]bool{
+			"table":    true,
+			"json":     true,
+			"csv":      true,
+			"markdown": true,
+		}
+		if !validFormats[config.Query.DefaultFormat] {
+			return fmt.Errorf("%w: query.default_format '%s' is invalid: must be one of table, json, csv, markdown", ErrConfigValidation, config.Query.DefaultFormat)
+		}
+	}
+
+	return nil
+}
+
+// boolPtr returns a pointer to a bool value
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 // getDefaultConfig returns the default configuration
@@ -198,7 +313,7 @@ func getDefaultConfig() *Config {
 			Generators: map[string]GeneratorConfig{
 				"json": {
 					Output:            "./generated",
-					Enabled:           true,
+					Disabled:          nil, // Enabled by default
 					PreserveHierarchy: true,
 					Settings: map[string]any{
 						"pretty":           true,
@@ -207,7 +322,7 @@ func getDefaultConfig() *Config {
 				},
 				"go": {
 					Output:            "./internal/queries",
-					Enabled:           false,
+					Disabled:          boolPtr(true), // Disabled by default
 					PreserveHierarchy: true,
 					Settings: map[string]any{
 						"package": "queries",
@@ -215,7 +330,7 @@ func getDefaultConfig() *Config {
 				},
 				"typescript": {
 					Output:            "./src/generated",
-					Enabled:           false,
+					Disabled:          boolPtr(true), // Disabled by default
 					PreserveHierarchy: true,
 					Settings: map[string]any{
 						"types": true,
@@ -308,7 +423,7 @@ func applyDefaults(config *Config) {
 	if !exists {
 		jsonGen = GeneratorConfig{
 			Output:            "./generated",
-			Enabled:           false, // Default to disabled unless explicitly enabled
+			Disabled:          boolPtr(true), // Default to disabled unless explicitly enabled: false or omitted
 			PreserveHierarchy: true,
 			Settings: map[string]any{
 				"pretty":           true,

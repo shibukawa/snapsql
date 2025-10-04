@@ -90,11 +90,40 @@ go install github.com/shibukawa/snapsql@latest
 snapsql init my-project
 cd my-project
 
+# This creates:
+# - snapsql.yaml (configuration file)
+# - queries/ (directory for SQL templates)
+# - constants/ (directory for constant definitions)
+# - generated/ (directory for generated code)
+# - .vscode/settings.json (VS Code YAML schema integration)
+
 # Generate intermediate files
 snapsql generate
 
 # Test a query with dry-run (using testdata examples)
 snapsql query testdata/markdown/test_example.md --dry-run --params-file params.json
+```
+
+### VS Code Integration
+
+When you run `snapsql init`, it automatically creates `.vscode/settings.json` with YAML schema configuration. This provides:
+
+- **Auto-completion**: IntelliSense for all configuration options
+- **Real-time validation**: Immediate feedback on configuration errors
+- **Inline documentation**: Hover over any field to see its description
+
+The schema is automatically fetched from:
+```
+https://raw.githubusercontent.com/shibukawa/snapsql/refs/heads/main/snapsql-config.schema.json
+```
+
+If you're using a different editor, you can reference the schema manually in your `snapsql.yaml`:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/shibukawa/snapsql/refs/heads/main/snapsql-config.schema.json
+
+dialect: "postgres"
+# ... rest of configuration
 ```
 
 ### Example Template
