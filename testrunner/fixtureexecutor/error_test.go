@@ -126,8 +126,8 @@ func TestErrorTestExecution(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			result, err := runner.RunSingleTest(ctx, testCase)
 
+			result, err := runner.RunSingleTest(ctx, testCase)
 			if err != nil {
 				t.Fatalf("RunSingleTest failed: %v", err)
 			}
@@ -136,20 +136,19 @@ func TestErrorTestExecution(t *testing.T) {
 				t.Errorf("Expected success=%v, got %v\n  ErrorMatchMessage: %s",
 					tt.wantSuccess, result.Success, result.ErrorMatchMessage)
 			}
+
 			if result.ActualErrorType != tt.wantErrorType {
 				t.Errorf("Expected ActualErrorType=%q, got %q",
 					tt.wantErrorType, result.ActualErrorType)
 			}
+
 			if tt.wantSuccess && !result.ErrorMatch {
 				t.Errorf("Expected ErrorMatch=true for matching error, got false")
 			}
+
 			if !tt.wantSuccess && result.ErrorMatch {
 				t.Errorf("Expected ErrorMatch=false for non-matching error, got true")
 			}
 		})
 	}
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

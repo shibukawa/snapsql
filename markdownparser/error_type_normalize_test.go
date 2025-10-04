@@ -301,6 +301,7 @@ func TestParseExpectedError(t *testing.T) {
 				if err == nil {
 					t.Errorf("ParseExpectedError(%q) expected error, got nil", tt.input)
 				}
+
 				return
 			}
 

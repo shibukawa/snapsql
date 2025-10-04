@@ -1,9 +1,13 @@
 package markdownparser
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrInvalidErrorType is returned when an invalid error type is specified
+var ErrInvalidErrorType = errors.New("invalid error type")
 
 // ErrorType represents a database error type that can occur at runtime
 type ErrorType string
@@ -62,7 +66,7 @@ func ParseExpectedError(content string) (*string, error) {
 
 	// Validate against known error types
 	if !validErrorTypes[errorType] {
-		return nil, fmt.Errorf("invalid error type: %s (original: %s)", errorType, content)
+		return nil, fmt.Errorf("%w: %s (original: %s)", ErrInvalidErrorType, errorType, content)
 	}
 
 	return &errorType, nil

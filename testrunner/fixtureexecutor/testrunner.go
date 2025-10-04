@@ -187,12 +187,12 @@ func (tr *TestRunner) handleErrorTest(testCase *markdownparser.TestCase, result 
 		Error:         err,
 		ExpectedError: testCase.ExpectedError,
 	}
-
 	if err == nil {
 		// Expected error but got success
 		testResult.Success = false
 		testResult.ErrorMatch = false
 		testResult.ErrorMatchMessage = "expected error but operation succeeded"
+
 		return testResult
 	}
 
@@ -261,22 +261,27 @@ func (tr *TestRunner) PrintSummary(summary *TestSummary) {
 				// Error test specific output
 				if result.ExpectedError != nil {
 					fmt.Printf("    Expected Error: %s\n", *result.ExpectedError)
+
 					if result.Error != nil {
 						fmt.Printf("    Actual Error:   %s\n", result.ActualErrorType)
+
 						if tr.options.Verbose {
 							fmt.Printf("    Error Details:  %v\n", result.Error)
 						}
 					} else {
 						fmt.Printf("    Actual Error:   <none>\n")
 					}
+
 					if result.ErrorMatchMessage != "" {
 						fmt.Printf("    Reason: %s\n", result.ErrorMatchMessage)
 					}
 				} else if result.Error != nil {
 					// Normal test with unexpected error
 					fmt.Printf("    Error: %v\n", result.Error)
+
 					if tr.options.Verbose && len(result.Trace) > 0 {
 						fmt.Printf("    SQL Trace:\n")
+
 						for _, trace := range result.Trace {
 							fmt.Printf("      %s: %s\n", trace.Label, trace.Statement)
 						}
@@ -289,12 +294,15 @@ func (tr *TestRunner) PrintSummary(summary *TestSummary) {
 	// Verbose mode: Show error details for all error tests
 	if tr.options.Verbose && summary.PassedTests > 0 {
 		hasErrorTests := false
+
 		for _, result := range summary.Results {
 			if result.Success && result.ExpectedError != nil {
 				if !hasErrorTests {
 					fmt.Printf("\nPassed error tests (verbose):\n")
+
 					hasErrorTests = true
 				}
+
 				fmt.Printf("  %s\n", result.TestCase.Name)
 				fmt.Printf("    Expected Error: %s\n", *result.ExpectedError)
 				fmt.Printf("    Actual Error:   %s\n", result.ActualErrorType)

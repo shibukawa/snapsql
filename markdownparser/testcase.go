@@ -126,6 +126,7 @@ func parseTestCasesFromAST(nodes []ast.Node, content []byte, mapper *indexToLine
 								}
 							}
 						}
+
 						currentSection = TestSection{Type: "expected_error"}
 					} else if strings.HasPrefix(text, "expected:") || strings.HasPrefix(text, "expected results:") || strings.HasPrefix(text, "expected result:") || text == "results:" {
 						currentSection = TestSection{Type: "expected"}
@@ -256,7 +257,7 @@ func validateTestCase(testCase *TestCase) error {
 	hasError := testCase.ExpectedError != nil
 
 	if hasResults && hasError {
-		return fmt.Errorf("test case %q: cannot specify both Expected Results and Expected Error", testCase.Name)
+		return fmt.Errorf("%w: test case %q", ErrConflictingExpectations, testCase.Name)
 	}
 
 	// Either Expected Results or Expected Error must be specified
@@ -286,7 +287,7 @@ func processTestSection(testCase *TestCase, section TestSection, format string, 
 	case "expected", "expected results", "results":
 		// Check for conflict with ExpectedError
 		if testCase.ExpectedError != nil {
-			return fmt.Errorf("test case %q: cannot specify both Expected Results and Expected Error", testCase.Name)
+			return fmt.Errorf("%w: test case %q", ErrConflictingExpectations, testCase.Name)
 		}
 
 		if len(testCase.ExpectedResult) > 0 || len(testCase.ExpectedResults) > 0 {

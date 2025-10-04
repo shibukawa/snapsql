@@ -38,12 +38,14 @@ func setupPostgres(t *testing.T) (*sql.DB, func()) {
 	connStr, err := cont.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		_ = cont.Terminate(ctx)
+
 		t.Fatalf("postgres conn string: %v", err)
 	}
 
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		_ = cont.Terminate(ctx)
+
 		t.Fatalf("open postgres: %v", err)
 	}
 
@@ -56,6 +58,7 @@ func setupPostgres(t *testing.T) (*sql.DB, func()) {
 		if err := db.Ping(); err == nil {
 			break
 		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
 
@@ -91,12 +94,14 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 	connStr, err := cont.ConnectionString(ctx)
 	if err != nil {
 		_ = cont.Terminate(ctx)
+
 		t.Fatalf("mysql conn string: %v", err)
 	}
 
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {
 		_ = cont.Terminate(ctx)
+
 		t.Fatalf("open mysql: %v", err)
 	}
 
@@ -109,6 +114,7 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 		if err := db.Ping(); err == nil {
 			break
 		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
 
@@ -147,6 +153,7 @@ func setupTestTable(t *testing.T, db *sql.DB, dialect string) {
 
 	// Create users table with various constraints
 	var createUserSQL string
+
 	switch dialect {
 	case "postgres":
 		createUserSQL = `
@@ -180,6 +187,7 @@ func setupTestTable(t *testing.T, db *sql.DB, dialect string) {
 
 	// Create orders table for foreign key tests
 	var createOrderSQL string
+
 	switch dialect {
 	case "postgres":
 		createOrderSQL = `
@@ -201,6 +209,7 @@ func setupTestTable(t *testing.T, db *sql.DB, dialect string) {
 		if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 			t.Fatalf("enable foreign keys: %v", err)
 		}
+
 		createOrderSQL = `
 			CREATE TABLE test_orders (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -223,8 +232,8 @@ func TestClassifyDatabaseError_SQLite(t *testing.T) {
 	t.Run("unique violation", func(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM test_users")
 		_, _ = db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Alice', 25)")
-		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Bob', 30)")
 
+		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Bob', 30)")
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -237,7 +246,6 @@ func TestClassifyDatabaseError_SQLite(t *testing.T) {
 
 	t.Run("foreign key violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_orders (user_id, amount) VALUES (999, 100.00)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -250,7 +258,6 @@ func TestClassifyDatabaseError_SQLite(t *testing.T) {
 
 	t.Run("not null violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_users (email, age) VALUES ('test2@example.com', 25)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -263,7 +270,6 @@ func TestClassifyDatabaseError_SQLite(t *testing.T) {
 
 	t.Run("check violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test3@example.com', 'Charlie', -5)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -285,8 +291,8 @@ func TestClassifyDatabaseError_PostgreSQL(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM test_orders")
 		_, _ = db.Exec("DELETE FROM test_users WHERE email = 'test@example.com'")
 		_, _ = db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Alice', 25)")
-		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Bob', 30)")
 
+		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Bob', 30)")
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -299,7 +305,6 @@ func TestClassifyDatabaseError_PostgreSQL(t *testing.T) {
 
 	t.Run("foreign key violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_orders (user_id, amount) VALUES (999, 100.00)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -312,7 +317,6 @@ func TestClassifyDatabaseError_PostgreSQL(t *testing.T) {
 
 	t.Run("not null violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_users (email, age) VALUES ('test2@example.com', 25)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -325,7 +329,6 @@ func TestClassifyDatabaseError_PostgreSQL(t *testing.T) {
 
 	t.Run("check violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test3@example.com', 'Charlie', -5)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -347,8 +350,8 @@ func TestClassifyDatabaseError_MySQL(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM test_orders")
 		_, _ = db.Exec("DELETE FROM test_users WHERE email = 'test@example.com'")
 		_, _ = db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Alice', 25)")
-		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Bob', 30)")
 
+		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test@example.com', 'Bob', 30)")
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -361,7 +364,6 @@ func TestClassifyDatabaseError_MySQL(t *testing.T) {
 
 	t.Run("foreign key violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_orders (user_id, amount) VALUES (999, 100.00)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -374,7 +376,6 @@ func TestClassifyDatabaseError_MySQL(t *testing.T) {
 
 	t.Run("not null violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_users (email, age) VALUES ('test2@example.com', 25)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -387,7 +388,6 @@ func TestClassifyDatabaseError_MySQL(t *testing.T) {
 
 	t.Run("check violation", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO test_users (email, name, age) VALUES ('test3@example.com', 'Charlie', -5)")
-
 		if err == nil {
 			t.Fatal("expected error but got none")
 		}
@@ -434,6 +434,7 @@ func TestMatchesExpectedError(t *testing.T) {
 		if matches {
 			t.Errorf("expected match=false, got match=true")
 		}
+
 		if msg == "" || !containsIgnoreCase(msg, "error type mismatch") {
 			t.Errorf("expected error message to contain 'error type mismatch', got %q", msg)
 		}
@@ -444,6 +445,7 @@ func TestMatchesExpectedError(t *testing.T) {
 		if matches {
 			t.Errorf("expected match=false, got match=true")
 		}
+
 		if msg == "" || !containsIgnoreCase(msg, "expected error but got no error") {
 			t.Errorf("expected error message to contain 'expected error but got no error', got %q", msg)
 		}
@@ -454,11 +456,13 @@ func containsIgnoreCase(s, substr string) bool {
 	if len(s) < len(substr) {
 		return false
 	}
+
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if matchesAtIgnoreCase(s[i:], substr) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -466,11 +470,13 @@ func matchesAtIgnoreCase(s, substr string) bool {
 	if len(s) < len(substr) {
 		return false
 	}
-	for i := 0; i < len(substr); i++ {
+
+	for i := range len(substr) {
 		if toLower(s[i]) != toLower(substr[i]) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -478,5 +484,6 @@ func toLower(b byte) byte {
 	if b >= 'A' && b <= 'Z' {
 		return b + 32
 	}
+
 	return b
 }

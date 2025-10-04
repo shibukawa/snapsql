@@ -35,6 +35,7 @@ func TestPostgreSQLErrorClassification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start container: %v", err)
 	}
+
 	defer func() {
 		if err := pgContainer.Terminate(ctx); err != nil {
 			t.Fatalf("failed to terminate container: %v", err)
@@ -149,8 +150,8 @@ func TestPostgreSQLErrorClassification(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			result, err := runner.RunSingleTest(ctx, testCase)
 
+			result, err := runner.RunSingleTest(ctx, testCase)
 			if err != nil {
 				t.Fatalf("RunSingleTest failed: %v", err)
 			}
@@ -159,6 +160,7 @@ func TestPostgreSQLErrorClassification(t *testing.T) {
 				t.Errorf("Expected success=%v, got %v\n  ErrorMatchMessage: %s\n  ActualError: %v",
 					tt.wantSuccess, result.Success, result.ErrorMatchMessage, result.Error)
 			}
+
 			if result.ActualErrorType != tt.wantErrorType {
 				t.Errorf("Expected ActualErrorType=%q, got %q\n  ActualError: %v",
 					tt.wantErrorType, result.ActualErrorType, result.Error)

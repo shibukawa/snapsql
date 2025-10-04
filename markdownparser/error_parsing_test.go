@@ -193,6 +193,7 @@ INSERT INTO users (email) VALUES (/*= email */'test')
 				if err == nil {
 					t.Errorf("expected error but got none")
 				}
+
 				return
 			}
 

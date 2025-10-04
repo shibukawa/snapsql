@@ -53,6 +53,7 @@ linters:
           - noctx
           - prealloc
           - err113
+          - dupl
       - path: main.go
         linters:
           - forbidigo
