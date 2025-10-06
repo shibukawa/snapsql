@@ -237,7 +237,7 @@ func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *mark
 	return tr.executor.ExecuteTest(testCase, sql, parameters, tr.options)
 }
 
-// normalizeParameters walks parameter map and resolves fixture-style special tokens.
+// NormalizeParameters walks parameter map and resolves fixture-style special tokens.
 // Supports array-style tokens such as ["currentdate", "-10d"] or YAML-parsed []any where
 // the first element is "currentdate" (case-insensitive). It reuses resolveFixtureValue semantics
 // from executor.go by temporarily marshalling values into the same shapes.

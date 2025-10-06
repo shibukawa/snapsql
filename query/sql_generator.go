@@ -152,16 +152,6 @@ func (s *generationState) appendSQL(text string) {
 	s.hasLast = true
 }
 
-func (s *generationState) appendSpaceIfNeeded() {
-	if s.hasLast && isWhitespace(s.lastChar) {
-		return
-	}
-
-	s.builder.WriteByte(' ')
-	s.lastChar = ' '
-	s.hasLast = true
-}
-
 func (s *generationState) trimTrailingComma() {
 	if s.builder.Len() == 0 {
 		s.hasLast = false
