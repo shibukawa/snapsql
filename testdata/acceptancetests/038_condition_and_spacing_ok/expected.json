@@ -1,0 +1,76 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": []
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "user_id",
+      "environment_index": 0,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_002",
+      "expression": "unread_only",
+      "environment_index": 0,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_003",
+      "expression": "since",
+      "environment_index": 0,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    },
+    {
+      "id": "expr_004",
+      "expression": "since",
+      "environment_index": 0,
+      "position": {
+        "line": 0,
+        "column": 0
+      }
+    }
+  ],
+  "format_version": "1",
+  "function_name": "listUserNotifications",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "9:1", "value": "SELECT n.id, n.title FROM inbox i WHERE i.user_id ="},
+    {"op": "EMIT_EVAL", "pos": "11:19", "expr_index": 0},
+    {"op": "IF", "pos": "12:1", "expr_index": 1},
+    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "13:1", "value": "AND"},
+    {"op": "EMIT_STATIC", "pos": "13:1", "value": "i.read_at IS NULL"},
+    {"op": "END", "pos": "14:1"},
+    {"op": "IF", "pos": "15:1", "expr_index": 2},
+    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "16:1", "value": "AND"},
+    {"op": "EMIT_STATIC", "pos": "16:1", "value": "i.created_at \u003e"},
+    {"op": "EMIT_EVAL", "pos": "16:20", "expr_index": 2},
+    {"op": "END", "pos": "17:1"},
+    {"op": "EMIT_STATIC", "pos": "18:1", "value": "AND i.deleted_at IS NULL"},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
+  ],
+  "parameters": [
+    {"name": "user_id", "type": "string"},
+    {"name": "unread_only", "type": "bool"},
+    {"name": "since", "type": "string"}
+  ],
+  "response_affinity": "many"
+}

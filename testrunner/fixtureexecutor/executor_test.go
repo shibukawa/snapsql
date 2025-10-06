@@ -555,12 +555,47 @@ func TestCompareRowsWithMatchersCurrentDate(t *testing.T) {
 	require.NoError(t, compareRowsWithMatchers(rowExpected, rowActual))
 
 	rowExpected = map[string]any{
-		"created_at": []any{"currentdate", "1s"},
+		"created_at": []any{"currentdate", "+1s"},
 	}
 	rowActual = map[string]any{
 		"created_at": now.Add(-2 * time.Minute),
 	}
 
 	err := compareRowsWithMatchers(rowExpected, rowActual)
+	assert.Error(t, err)
+}
+
+func TestParseFlexibleDurationRequiresSign(t *testing.T) {
+	_, err := parseFlexibleDuration("1m")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "duration must start")
+
+	dur, err := parseFlexibleDuration("+1h30m")
+	assert.NoError(t, err)
+	assert.Equal(t, time.Hour+30*time.Minute, dur)
+
+	dur, err = parseFlexibleDuration("-2h")
+	assert.NoError(t, err)
+	assert.Equal(t, -2*time.Hour, dur)
+}
+
+func TestEvaluateRelativeTimeMatcherDisplay(t *testing.T) {
+	anchor := time.Date(2025, 10, 6, 12, 0, 0, 0, time.UTC)
+	setCurrentDateAnchor(anchor)
+	defer clearCurrentDateAnchor()
+
+	expected, tol, display, err := evaluateRelativeTimeMatcher([]any{"currentdate", "+10m"})
+	require.NoError(t, err)
+	assert.Equal(t, anchor.Add(10*time.Minute), expected)
+	assert.Equal(t, time.Minute, tol)
+	assert.Equal(t, "[currentdate,+10m]", display)
+
+	expected, tol, display, err = evaluateRelativeTimeMatcher([]any{"currentdate", "+1h", "+30s"})
+	require.NoError(t, err)
+	assert.Equal(t, anchor.Add(time.Hour), expected)
+	assert.Equal(t, 30*time.Second, tol)
+	assert.Equal(t, "[currentdate,+1h,+30s]", display)
+
+	_, _, _, err = evaluateRelativeTimeMatcher([]any{"currentdate", "1h"})
 	assert.Error(t, err)
 }

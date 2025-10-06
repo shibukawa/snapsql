@@ -241,7 +241,7 @@ func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *mark
 // Supports array-style tokens such as ["currentdate", "-10d"] or YAML-parsed []any where
 // the first element is "currentdate" (case-insensitive). It reuses resolveFixtureValue semantics
 // from executor.go by temporarily marshalling values into the same shapes.
-func normalizeParameters(params map[string]any) error {
+func NormalizeParameters(params map[string]any) error {
 	for k, v := range params {
 		// Only handle string, []any, map[string]any types; other types remain unchanged
 		switch vv := v.(type) {
@@ -257,7 +257,7 @@ func normalizeParameters(params map[string]any) error {
 			params[k] = nv
 		case map[string]any:
 			// recursively normalize nested maps
-			if err := normalizeParameters(vv); err != nil {
+			if err := NormalizeParameters(vv); err != nil {
 				return err
 			}
 		}

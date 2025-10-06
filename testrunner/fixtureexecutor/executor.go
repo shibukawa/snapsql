@@ -416,7 +416,7 @@ func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, pa
 		TimeAnchor:  anchor,
 	}
 
-	if err := normalizeParameters(execution.Parameters); err != nil {
+	if err := NormalizeParameters(execution.Parameters); err != nil {
 		return nil, nil, wrapDefinitionFailure(err, "failed to normalize parameters")
 	}
 
@@ -1427,14 +1427,14 @@ func evaluateMatcherDiff(column string, expected any, actual any) *ColumnDiff {
 				matcher := strings.ToLower(first)
 				switch matcher {
 				case "currentdate", "current_date":
-					expectedTime, tolerance, err := evaluateRelativeTimeMatcher(val)
+					expectedTime, tolerance, display, err := evaluateRelativeTimeMatcher(val)
 					if err != nil {
 						return &ColumnDiff{Column: column, Expected: formatValueForDiff(val), Actual: formatValueForDiff(actual), Reason: err.Error()}
 					}
 
 					actualTime, ok := parseTimeValue(actual)
 					if !ok {
-						return &ColumnDiff{Column: column, Expected: "[currentdate]", Actual: formatValueForDiff(actual), Reason: "invalid time value"}
+						return &ColumnDiff{Column: column, Expected: display, Actual: formatValueForDiff(actual), Reason: "invalid time value"}
 					}
 
 					delta := actualTime.Sub(expectedTime)
@@ -1443,7 +1443,7 @@ func evaluateMatcherDiff(column string, expected any, actual any) *ColumnDiff {
 					}
 
 					if delta > tolerance {
-						return &ColumnDiff{Column: column, Expected: fmt.Sprintf("[currentdate,%s]", tolerance.String()), Actual: actualTime.UTC().Format(time.RFC3339), Reason: "timestamp outside tolerance"}
+						return &ColumnDiff{Column: column, Expected: display, Actual: actualTime.UTC().Format(time.RFC3339), Reason: "timestamp outside tolerance"}
 					}
 					return nil
 				case "null":
@@ -1485,35 +1485,50 @@ func evaluateMatcherDiff(column string, expected any, actual any) *ColumnDiff {
 	return nil
 }
 
-func evaluateRelativeTimeMatcher(arr []any) (time.Time, time.Duration, error) {
+func evaluateRelativeTimeMatcher(arr []any) (time.Time, time.Duration, string, error) {
 	base := currentDateAnchorNow()
 	offset := time.Duration(0)
 	tolerance := time.Minute
+	offsetToken := ""
+	toleranceToken := ""
 
 	if len(arr) >= 2 {
-		if offsetToken, ok := arr[1].(string); ok && strings.TrimSpace(offsetToken) != "" {
-			dur, err := parseFlexibleDuration(offsetToken)
+		if token, ok := arr[1].(string); ok && strings.TrimSpace(token) != "" {
+			trimmed := strings.TrimSpace(token)
+			dur, err := parseFlexibleDuration(trimmed)
 			if err != nil {
-				return time.Time{}, 0, err
+				return time.Time{}, 0, "", err
 			}
 			offset = dur
+			offsetToken = trimmed
 		}
 	}
 
 	if len(arr) >= 3 {
-		if tolToken, ok := arr[2].(string); ok && strings.TrimSpace(tolToken) != "" {
-			dur, err := parseFlexibleDuration(tolToken)
+		if token, ok := arr[2].(string); ok && strings.TrimSpace(token) != "" {
+			trimmed := strings.TrimSpace(token)
+			dur, err := parseFlexibleDuration(trimmed)
 			if err != nil {
-				return time.Time{}, 0, err
+				return time.Time{}, 0, "", err
 			}
 			if dur < 0 {
 				dur = -dur
 			}
 			tolerance = dur
+			toleranceToken = trimmed
 		}
 	}
 
-	return base.Add(offset), tolerance, nil
+	display := "[currentdate]"
+	if offsetToken != "" && toleranceToken != "" {
+		display = fmt.Sprintf("[currentdate,%s,%s]", offsetToken, toleranceToken)
+	} else if offsetToken != "" {
+		display = fmt.Sprintf("[currentdate,%s]", offsetToken)
+	} else if toleranceToken != "" {
+		display = fmt.Sprintf("[currentdate,%s]", toleranceToken)
+	}
+
+	return base.Add(offset), tolerance, display, nil
 }
 
 func buildRowKey(pkCols []string, expected, actual map[string]any, index int) map[string]any {
@@ -1772,14 +1787,21 @@ func durationAbs(d time.Duration) time.Duration {
 func parseFlexibleDuration(raw string) (time.Duration, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
-		return 0, nil
+		return 0, fmt.Errorf("duration must start with + or -: %s", raw)
 	}
 	sign := 1
-	if s[0] == '+' {
+	switch s[0] {
+	case '+':
 		s = s[1:]
-	} else if s[0] == '-' {
+	case '-':
 		sign = -1
 		s = s[1:]
+	default:
+		return 0, fmt.Errorf("duration must start with + or -: %s", raw)
+	}
+
+	if len(strings.TrimSpace(s)) == 0 {
+		return 0, fmt.Errorf("invalid duration: %s", raw)
 	}
 
 	if strings.HasSuffix(s, "d") {

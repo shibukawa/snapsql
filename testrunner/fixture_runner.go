@@ -442,6 +442,14 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 				continue
 			}
 
+			if err := fixtureexecutor.NormalizeParameters(tc.Parameters); err != nil {
+				issues = append(issues, preparationIssue{
+					testCase: tc,
+					err:      fmt.Errorf("failed to normalize parameters for %s: %w", tc.Name, err),
+				})
+				continue
+			}
+
 			finalSQL, args, err := generator.Generate(tc.Parameters)
 			if err != nil {
 				issues = append(issues, preparationIssue{
