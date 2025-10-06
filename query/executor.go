@@ -215,14 +215,31 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 		switch inst.Op {
 		case "EMIT_STATIC":
 			// When we see the first content after deferred boundary tokens, flush them first.
-			if len(deferredTokens) > 0 && !isOnlyWhitespace(inst.Value) {
+			processed := ensureSpaceBeforePlaceholders(inst.Value)
+			if len(deferredTokens) > 0 && !isOnlyWhitespace(processed) {
 				flushDeferred()
 			}
 
-			if inst.Value != "" {
-				builder.WriteString(inst.Value)
+			if processed != "" {
+				if builder.Len() > 0 {
+					trimmed := strings.TrimLeft(processed, " \n\t\r")
+					if trimmed != "" {
+						first := trimmed[0]
+						if first == '?' || first == '$' {
+							existing := builder.String()
+							if len(existing) > 0 {
+								last := existing[len(existing)-1]
+								if !isWhitespaceByte(last) && isWordCharBeforePlaceholder(last) {
+									builder.WriteByte(' ')
+								}
+							}
+						}
+					}
+				}
 
-				if !isOnlyWhitespace(inst.Value) {
+				builder.WriteString(processed)
+
+				if !isOnlyWhitespace(processed) {
 					hasContentSinceBd = true
 				}
 			}
@@ -259,7 +276,7 @@ func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 		case "EMIT_UNLESS_BOUNDARY":
 			// Defer emission until we know content appears before the next boundary
 			if inst.Value != "" {
-				deferredTokens = append(deferredTokens, inst.Value)
+				deferredTokens = append(deferredTokens, padBoundaryToken(inst.Value))
 			}
 
 		case "BOUNDARY":
@@ -295,6 +312,65 @@ func isOnlyWhitespace(s string) bool {
 	}
 
 	return len(s) > 0
+}
+
+func padBoundaryToken(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return value
+	}
+
+	switch strings.ToUpper(trimmed) {
+	case "AND", "OR":
+		return " " + trimmed + " "
+	default:
+		return value
+	}
+}
+
+func ensureSpaceBeforePlaceholders(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+
+	var b strings.Builder
+	b.Grow(len(s) + len(s)/4)
+
+	for i := range len(s) {
+		ch := s[i]
+		if (ch == '?' || ch == '$') && i > 0 {
+			prev := s[i-1]
+			if !isWhitespaceByte(prev) && isWordCharBeforePlaceholder(prev) {
+				b.WriteByte(' ')
+			}
+		}
+
+		b.WriteByte(ch)
+	}
+
+	return b.String()
+}
+
+func isWhitespaceByte(b byte) bool {
+	switch b {
+	case ' ', '\n', '\t', '\r':
+		return true
+	default:
+		return false
+	}
+}
+
+func isWordCharBeforePlaceholder(b byte) bool {
+	if (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') {
+		return true
+	}
+
+	switch b {
+	case '_', ')', ']', '"':
+		return true
+	default:
+		return false
+	}
 }
 
 // getDialectFromDriver converts database driver name to dialect

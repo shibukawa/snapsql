@@ -28,10 +28,10 @@ import (
 
 // GetComprehensiveDialectTestMysql specific CEL programs and mock path
 var (
-	getcomprehensivedialecttestmysqlPrograms []cel.Program
+	getComprehensiveDialectTestMysqlPrograms []cel.Program
 )
 
-const getcomprehensivedialecttestmysqlMockPath = ""
+const getComprehensiveDialectTestMysqlMockPath = ""
 
 func init() {
 
@@ -54,7 +54,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getcomprehensivedialecttestmysqlPrograms = make([]cel.Program, 1)
+	getComprehensiveDialectTestMysqlPrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -65,7 +65,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		getcomprehensivedialecttestmysqlPrograms[0] = program
+		getComprehensiveDialectTestMysqlPrograms[0] = program
 	}
 }
 
@@ -76,10 +76,10 @@ func GetComprehensiveDialectTestMysql(ctx context.Context, executor snapsqlgo.DB
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomprehensivedialecttestmysql", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getComprehensiveDialectTestMysql", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getcomprehensivedialecttestmysqlMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getComprehensiveDialectTestMysqlMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetComprehensiveDialectTestMysql: failed to get mock data: %w", err)
 		}
@@ -100,7 +100,7 @@ func GetComprehensiveDialectTestMysql(ctx context.Context, executor snapsqlgo.DB
 			"user_id": userID,
 		}
 
-		evalRes0, _, err := getcomprehensivedialecttestmysqlPrograms[0].Eval(paramMap)
+		evalRes0, _, err := getComprehensiveDialectTestMysqlPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComprehensiveDialectTestMysql: failed to evaluate expression: %w", err)
 		}

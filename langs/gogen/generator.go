@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -183,6 +184,8 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to process implicit parameters: %w", err)
 	}
 
+	implicitParams = ensureImplicitParams(g.Format, sqlBuilder, implicitParams)
+
 	functionReturnType := fmt.Sprintf("(%s, error)", responseType)
 	declareResult := true
 	iteratorYieldType := ""
@@ -229,7 +232,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		Timestamp:          time.Now(),
 		PackageName:        g.PackageName,
 		FunctionName:       funcName,
-		LowerFuncName:      strings.ToLower(funcName),
+		LowerFuncName:      toLowerCamel(g.Format.FunctionName),
 		Description:        g.Format.Description,
 		MockPath:           g.MockPath,
 		CELEnvironments:    celEnvs,
@@ -508,6 +511,21 @@ func snakeToCamelLower(s string) string {
 	}
 
 	return result.String()
+}
+
+func toLowerCamel(name string) string {
+	if strings.Contains(name, "_") {
+		return snakeToCamelLower(name)
+	}
+
+	runes := []rune(name)
+	if len(runes) == 0 {
+		return ""
+	}
+
+	runes[0] = unicode.ToLower(runes[0])
+
+	return string(runes)
 }
 
 func determineErrorZeroValue(responseType string) string {
@@ -1018,6 +1036,79 @@ func processImplicitParameters(format *intermediate.IntermediateFormat) ([]impli
 	return implicitParams, nil
 }
 
+func ensureImplicitParams(format *intermediate.IntermediateFormat, sqlBuilder *sqlBuilderData, params []implicitParam) []implicitParam {
+	if sqlBuilder == nil || len(sqlBuilder.ArgumentSystemFields) == 0 {
+		return params
+	}
+
+	existing := make(map[string]struct{}, len(params))
+	for _, p := range params {
+		existing[p.Name] = struct{}{}
+	}
+
+	defaults := make(map[string]any)
+
+	for _, field := range format.SystemFields {
+		if field.OnInsert != nil && field.OnInsert.Default != nil {
+			defaults[field.Name] = field.OnInsert.Default
+		}
+
+		if field.OnUpdate != nil && field.OnUpdate.Default != nil {
+			if _, ok := defaults[field.Name]; !ok {
+				defaults[field.Name] = field.OnUpdate.Default
+			}
+		}
+	}
+
+	for _, name := range sqlBuilder.ArgumentSystemFields {
+		if name == "" {
+			continue
+		}
+
+		if _, ok := existing[name]; ok {
+			continue
+		}
+
+		goType := guessImplicitParamGoType(name)
+		defaultVal := defaults[name]
+		defaultLiteral := ""
+
+		if defaultVal != nil {
+			if lit, err := generateDefaultValueLiteral(defaultVal, goType); err == nil {
+				defaultLiteral = lit
+			} else if str, ok := defaultVal.(string); ok {
+				defaultLiteral = fmt.Sprintf("%q", str)
+			}
+		}
+
+		params = append(params, implicitParam{
+			Name:                name,
+			Type:                goType,
+			Required:            false,
+			Default:             defaultVal,
+			DefaultValueLiteral: defaultLiteral,
+		})
+		existing[name] = struct{}{}
+	}
+
+	return params
+}
+
+func guessImplicitParamGoType(name string) string {
+	switch name {
+	case "created_at", "updated_at", "deleted_at", "read_at":
+		if t, err := convertTypeToGo("timestamp"); err == nil {
+			return t
+		}
+	case "created_by", "updated_by", "created_user", "updated_user", "user_id":
+		if t, err := convertTypeToGo("string"); err == nil {
+			return t
+		}
+	}
+
+	return "any"
+}
+
 // generateDefaultValueLiteral generates Go code literal for default values
 func generateDefaultValueLiteral(defaultValue any, goType string) (string, error) {
 	switch v := defaultValue.(type) {
@@ -1275,7 +1366,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	{{ . }}
 	{{- end }}
 
-	query := builder.String()
+	query := strings.TrimSpace(builder.String())
 	return query, args, nil
 		{{- end }}
 	}

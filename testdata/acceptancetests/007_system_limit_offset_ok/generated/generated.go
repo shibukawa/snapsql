@@ -28,10 +28,10 @@ import (
 
 // GetUsersWithLimitOffset specific CEL programs and mock path
 var (
-	getuserswithlimitoffsetPrograms []cel.Program
+	getUsersWithLimitOffsetPrograms []cel.Program
 )
 
-const getuserswithlimitoffsetMockPath = ""
+const getUsersWithLimitOffsetMockPath = ""
 
 func init() {
 
@@ -55,7 +55,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getuserswithlimitoffsetPrograms = make([]cel.Program, 2)
+	getUsersWithLimitOffsetPrograms = make([]cel.Program, 2)
 	// expr_001: "min_age" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("min_age")
@@ -66,7 +66,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age", err))
 		}
-		getuserswithlimitoffsetPrograms[0] = program
+		getUsersWithLimitOffsetPrograms[0] = program
 	}
 	// expr_002: "max_age" using environment 0
 	{
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "max_age", err))
 		}
-		getuserswithlimitoffsetPrograms[1] = program
+		getUsersWithLimitOffsetPrograms[1] = program
 	}
 }
 
@@ -89,10 +89,10 @@ func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor,
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithlimitoffset", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getUsersWithLimitOffset", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getuserswithlimitoffsetMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getUsersWithLimitOffsetMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetUsersWithLimitOffset: failed to get mock data: %w", err)
 		}
@@ -114,13 +114,13 @@ func GetUsersWithLimitOffset(ctx context.Context, executor snapsqlgo.DBExecutor,
 			"max_age": maxAge,
 		}
 
-		evalRes0, _, err := getuserswithlimitoffsetPrograms[0].Eval(paramMap)
+		evalRes0, _, err := getUsersWithLimitOffsetPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithLimitOffset: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := getuserswithlimitoffsetPrograms[1].Eval(paramMap)
+		evalRes1, _, err := getUsersWithLimitOffsetPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithLimitOffset: failed to evaluate expression: %w", err)
 		}

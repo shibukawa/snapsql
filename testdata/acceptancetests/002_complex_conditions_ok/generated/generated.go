@@ -29,10 +29,10 @@ import (
 
 // GetFilteredData specific CEL programs and mock path
 var (
-	getfiltereddataPrograms []cel.Program
+	getFilteredDataPrograms []cel.Program
 )
 
-const getfiltereddataMockPath = ""
+const getFilteredDataMockPath = ""
 
 func init() {
 
@@ -58,7 +58,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getfiltereddataPrograms = make([]cel.Program, 7)
+	getFilteredDataPrograms = make([]cel.Program, 7)
 	// expr_001: "min_age > 0" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("min_age > 0")
@@ -69,7 +69,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age > 0", err))
 		}
-		getfiltereddataPrograms[0] = program
+		getFilteredDataPrograms[0] = program
 	}
 	// expr_002: "min_age" using environment 0
 	{
@@ -81,7 +81,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age", err))
 		}
-		getfiltereddataPrograms[1] = program
+		getFilteredDataPrograms[1] = program
 	}
 	// expr_003: "max_age > 0" using environment 0
 	{
@@ -93,7 +93,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "max_age > 0", err))
 		}
-		getfiltereddataPrograms[2] = program
+		getFilteredDataPrograms[2] = program
 	}
 	// expr_004: "max_age" using environment 0
 	{
@@ -105,7 +105,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "max_age", err))
 		}
-		getfiltereddataPrograms[3] = program
+		getFilteredDataPrograms[3] = program
 	}
 	// expr_005: "departments.size() > 0" using environment 0
 	{
@@ -117,7 +117,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "departments.size() > 0", err))
 		}
-		getfiltereddataPrograms[4] = program
+		getFilteredDataPrograms[4] = program
 	}
 	// expr_006: "departments" using environment 0
 	{
@@ -129,7 +129,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "departments", err))
 		}
-		getfiltereddataPrograms[5] = program
+		getFilteredDataPrograms[5] = program
 	}
 	// expr_007: "active" using environment 0
 	{
@@ -141,7 +141,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "active", err))
 		}
-		getfiltereddataPrograms[6] = program
+		getFilteredDataPrograms[6] = program
 	}
 }
 
@@ -152,10 +152,10 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getfiltereddata", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getFilteredData", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getfiltereddataMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getFilteredDataMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetFilteredData: failed to get mock data: %w", err)
 		}
@@ -204,13 +204,13 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 		}
 		boundaryNeeded = true
 		// IF condition: expression 0
-		condResult, _, err := getfiltereddataPrograms[0].Eval(paramMap)
+		condResult, _, err := getFilteredDataPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
 		if condResult.Value().(bool) {
 			if boundaryNeeded {
-				builder.WriteString("AND")
+				builder.WriteString(" AND ")
 			}
 			boundaryNeeded = true
 			{ // safe append static with spacing
@@ -238,20 +238,20 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 			}
 			boundaryNeeded = true
 			// Evaluate expression 1
-			evalRes0, _, err := getfiltereddataPrograms[1].Eval(paramMap)
+			evalRes0, _, err := getFilteredDataPrograms[1].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes0.Value())
 		}
 		// IF condition: expression 2
-		condResult, _, err := getfiltereddataPrograms[2].Eval(paramMap)
+		condResult, _, err = getFilteredDataPrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
 		if condResult.Value().(bool) {
 			if boundaryNeeded {
-				builder.WriteString("AND")
+				builder.WriteString(" AND ")
 			}
 			boundaryNeeded = true
 			{ // safe append static with spacing
@@ -279,14 +279,14 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 			}
 			boundaryNeeded = true
 			// Evaluate expression 3
-			evalRes1, _, err := getfiltereddataPrograms[3].Eval(paramMap)
+			evalRes1, _, err := getFilteredDataPrograms[3].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes1.Value())
 		}
 		// IF condition: expression 4
-		condResult, _, err := getfiltereddataPrograms[4].Eval(paramMap)
+		condResult, _, err = getFilteredDataPrograms[4].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
@@ -316,7 +316,7 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 			}
 			boundaryNeeded = true
 			// Evaluate expression 5
-			evalRes2, _, err := getfiltereddataPrograms[5].Eval(paramMap)
+			evalRes2, _, err := getFilteredDataPrograms[5].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate expression: %w", err)
 			}
@@ -372,13 +372,13 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 			boundaryNeeded = true
 		}
 		// IF condition: expression 6
-		condResult, _, err := getfiltereddataPrograms[6].Eval(paramMap)
+		condResult, _, err = getFilteredDataPrograms[6].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
 		if condResult.Value().(bool) {
 			if boundaryNeeded {
-				builder.WriteString("AND")
+				builder.WriteString(" AND ")
 			}
 			boundaryNeeded = true
 			{ // safe append static with spacing
@@ -407,7 +407,7 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 			boundaryNeeded = true
 		}
 
-		query := builder.String()
+		query := strings.TrimSpace(builder.String())
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

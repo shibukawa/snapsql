@@ -28,10 +28,10 @@ import (
 
 // DeleteUserWithReturningMariadb specific CEL programs and mock path
 var (
-	deleteuserwithreturningmariadbPrograms []cel.Program
+	deleteUserWithReturningMariadbPrograms []cel.Program
 )
 
-const deleteuserwithreturningmariadbMockPath = ""
+const deleteUserWithReturningMariadbMockPath = ""
 
 func init() {
 
@@ -54,7 +54,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	deleteuserwithreturningmariadbPrograms = make([]cel.Program, 1)
+	deleteUserWithReturningMariadbPrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -65,7 +65,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		deleteuserwithreturningmariadbPrograms[0] = program
+		deleteUserWithReturningMariadbPrograms[0] = program
 	}
 }
 
@@ -76,10 +76,10 @@ func DeleteUserWithReturningMariadb(ctx context.Context, executor snapsqlgo.DBEx
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteuserwithreturningmariadb", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteUserWithReturningMariadb", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(deleteuserwithreturningmariadbMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(deleteUserWithReturningMariadbMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("DeleteUserWithReturningMariadb: failed to get mock data: %w", err)
 		}
@@ -100,7 +100,7 @@ func DeleteUserWithReturningMariadb(ctx context.Context, executor snapsqlgo.DBEx
 			"user_id": userID,
 		}
 
-		evalRes0, _, err := deleteuserwithreturningmariadbPrograms[0].Eval(paramMap)
+		evalRes0, _, err := deleteUserWithReturningMariadbPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("DeleteUserWithReturningMariadb: failed to evaluate expression: %w", err)
 		}

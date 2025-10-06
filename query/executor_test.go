@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/shibukawa/snapsql/intermediate"
 )
 
 // TestIsDangerousQuery tests the dangerous query detection
@@ -84,4 +85,35 @@ func TestOpenDatabase(t *testing.T) {
 	// Test with invalid driver
 	_, err := OpenDatabase("invalid_driver", "invalid_connection", 30)
 	assert.Error(t, err)
+}
+
+func TestBuildSQLAddsSpacingAfterBoundaryTokens(t *testing.T) {
+	idx0, idx1 := 0, 1
+	instructions := []intermediate.OptimizedInstruction{
+		{Op: "EMIT_STATIC", Value: "SELECT id FROM t WHERE a ="},
+		{Op: "EMIT_STATIC", Value: "?"},
+		{Op: "ADD_PARAM", ExprIndex: &idx0},
+		{Op: "EMIT_UNLESS_BOUNDARY", Value: "AND"},
+		{Op: "EMIT_STATIC", Value: "b >"},
+		{Op: "EMIT_STATIC", Value: "?"},
+		{Op: "ADD_PARAM", ExprIndex: &idx1},
+	}
+
+	format := &intermediate.IntermediateFormat{
+		CELExpressions: []intermediate.CELExpression{
+			{Expression: "param1"},
+			{Expression: "param2"},
+		},
+	}
+
+	params := map[string]interface{}{
+		"param1": 123,
+		"param2": 456,
+	}
+
+	exec := &Executor{}
+	sql, args, err := exec.buildSQLFromOptimized(instructions, format, params)
+	assert.NoError(t, err)
+	assert.Equal(t, "SELECT id FROM t WHERE a =? AND b >?", sql)
+	assert.Equal(t, 2, len(args))
 }

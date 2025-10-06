@@ -29,10 +29,10 @@ import (
 
 // GetComplexData specific CEL programs and mock path
 var (
-	getcomplexdataPrograms []cel.Program
+	getComplexDataPrograms []cel.Program
 )
 
-const getcomplexdataMockPath = ""
+const getComplexDataMockPath = ""
 
 func init() {
 
@@ -63,7 +63,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getcomplexdataPrograms = make([]cel.Program, 7)
+	getComplexDataPrograms = make([]cel.Program, 7)
 	// expr_001: "display_name ? username : "Anonymous"" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("display_name ? username : \"Anonymous\"")
@@ -74,7 +74,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "display_name ? username : \"Anonymous\"", err))
 		}
-		getcomplexdataPrograms[0] = program
+		getComplexDataPrograms[0] = program
 	}
 	// expr_002: "start_date != "" && end_date != """ using environment 0
 	{
@@ -86,7 +86,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "start_date != \"\" && end_date != \"\"", err))
 		}
-		getcomplexdataPrograms[1] = program
+		getComplexDataPrograms[1] = program
 	}
 	// expr_003: "start_date" using environment 0
 	{
@@ -98,7 +98,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "start_date", err))
 		}
-		getcomplexdataPrograms[2] = program
+		getComplexDataPrograms[2] = program
 	}
 	// expr_004: "end_date" using environment 0
 	{
@@ -110,7 +110,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "end_date", err))
 		}
-		getcomplexdataPrograms[3] = program
+		getComplexDataPrograms[3] = program
 	}
 	// expr_005: "sort_field + " " + (sort_direction != "" ? sort_direction : "ASC")" using environment 0
 	{
@@ -122,7 +122,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")", err))
 		}
-		getcomplexdataPrograms[4] = program
+		getComplexDataPrograms[4] = program
 	}
 	// expr_006: "page_size != 0 ? page_size : 10" using environment 0
 	{
@@ -134,7 +134,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "page_size != 0 ? page_size : 10", err))
 		}
-		getcomplexdataPrograms[5] = program
+		getComplexDataPrograms[5] = program
 	}
 	// expr_007: "page > 0 ? (page - 1) * page_size : 0" using environment 0
 	{
@@ -146,7 +146,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "page > 0 ? (page - 1) * page_size : 0", err))
 		}
-		getcomplexdataPrograms[6] = program
+		getComplexDataPrograms[6] = program
 	}
 }
 
@@ -157,10 +157,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomplexdata", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getComplexData", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getcomplexdataMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getComplexDataMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetComplexData: failed to get mock data: %w", err)
 		}
@@ -214,7 +214,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		}
 		boundaryNeeded = true
 		// Evaluate expression 0
-		evalRes0, _, err := getcomplexdataPrograms[0].Eval(paramMap)
+		evalRes0, _, err := getComplexDataPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
@@ -244,7 +244,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		}
 		boundaryNeeded = true
 		// IF condition: expression 1
-		condResult, _, err := getcomplexdataPrograms[1].Eval(paramMap)
+		condResult, _, err := getComplexDataPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate condition: %w", err)
 		}
@@ -274,13 +274,13 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			}
 			boundaryNeeded = true
 			// Evaluate expression 2
-			evalRes1, _, err := getcomplexdataPrograms[2].Eval(paramMap)
+			evalRes1, _, err := getComplexDataPrograms[2].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes1.Value())
 			if boundaryNeeded {
-				builder.WriteString("AND")
+				builder.WriteString(" AND ")
 			}
 			boundaryNeeded = true
 			{ // safe append static with spacing
@@ -308,14 +308,14 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			}
 			boundaryNeeded = true
 			// Evaluate expression 3
-			evalRes2, _, err := getcomplexdataPrograms[3].Eval(paramMap)
+			evalRes2, _, err := getComplexDataPrograms[3].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes2.Value())
 		}
 		{ // safe append static with spacing
-			_frag := "ORDER BY ?"
+			_frag := "OR DER BY ?"
 			if builder.Len() > 0 {
 				_b := builder.String()
 				_last := _b[len(_b)-1]
@@ -339,7 +339,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		}
 		boundaryNeeded = true
 		// Evaluate expression 4
-		evalRes3, _, err := getcomplexdataPrograms[4].Eval(paramMap)
+		evalRes3, _, err := getComplexDataPrograms[4].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
@@ -370,7 +370,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		}
 		boundaryNeeded = true
 		// Evaluate expression 5
-		evalRes4, _, err := getcomplexdataPrograms[5].Eval(paramMap)
+		evalRes4, _, err := getComplexDataPrograms[5].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
@@ -400,13 +400,13 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		}
 		boundaryNeeded = true
 		// Evaluate expression 6
-		evalRes5, _, err := getcomplexdataPrograms[6].Eval(paramMap)
+		evalRes5, _, err := getComplexDataPrograms[6].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes5.Value())
 
-		query := builder.String()
+		query := strings.TrimSpace(builder.String())
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

@@ -28,10 +28,10 @@ import (
 
 // InsertUserWithReturningMysql specific CEL programs and mock path
 var (
-	insertuserwithreturningmysqlPrograms []cel.Program
+	insertUserWithReturningMysqlPrograms []cel.Program
 )
 
-const insertuserwithreturningmysqlMockPath = ""
+const insertUserWithReturningMysqlMockPath = ""
 
 func init() {
 
@@ -55,7 +55,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	insertuserwithreturningmysqlPrograms = make([]cel.Program, 2)
+	insertUserWithReturningMysqlPrograms = make([]cel.Program, 2)
 	// expr_001: "user_name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_name")
@@ -66,7 +66,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_name", err))
 		}
-		insertuserwithreturningmysqlPrograms[0] = program
+		insertUserWithReturningMysqlPrograms[0] = program
 	}
 	// expr_002: "user_email" using environment 0
 	{
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_email", err))
 		}
-		insertuserwithreturningmysqlPrograms[1] = program
+		insertUserWithReturningMysqlPrograms[1] = program
 	}
 }
 
@@ -89,10 +89,10 @@ func InsertUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuserwithreturningmysql", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertUserWithReturningMysql", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserwithreturningmysqlMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(insertUserWithReturningMysqlMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("InsertUserWithReturningMysql: failed to get mock data: %w", err)
 		}
@@ -114,13 +114,13 @@ func InsertUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 			"user_email": userEmail,
 		}
 
-		evalRes0, _, err := insertuserwithreturningmysqlPrograms[0].Eval(paramMap)
+		evalRes0, _, err := insertUserWithReturningMysqlPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUserWithReturningMysql: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := insertuserwithreturningmysqlPrograms[1].Eval(paramMap)
+		evalRes1, _, err := insertUserWithReturningMysqlPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUserWithReturningMysql: failed to evaluate expression: %w", err)
 		}

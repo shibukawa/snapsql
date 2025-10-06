@@ -28,10 +28,10 @@ import (
 
 // GetCurrentTime specific CEL programs and mock path
 var (
-	getcurrenttimePrograms []cel.Program
+	getCurrentTimePrograms []cel.Program
 )
 
-const getcurrenttimeMockPath = ""
+const getCurrentTimeMockPath = ""
 
 func init() {
 
@@ -53,7 +53,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getcurrenttimePrograms = make([]cel.Program, 0)
+	getCurrentTimePrograms = make([]cel.Program, 0)
 }
 
 // GetCurrentTime - sql.Result Affinity
@@ -63,10 +63,10 @@ func GetCurrentTime(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcurrenttime", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getCurrentTime", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getcurrenttimeMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getCurrentTimeMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetCurrentTime: failed to get mock data: %w", err)
 		}

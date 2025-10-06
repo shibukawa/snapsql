@@ -29,10 +29,10 @@ import (
 
 // GetUsersWithConditions specific CEL programs and mock path
 var (
-	getuserswithconditionsPrograms []cel.Program
+	getUsersWithConditionsPrograms []cel.Program
 )
 
-const getuserswithconditionsMockPath = ""
+const getUsersWithConditionsMockPath = ""
 
 func init() {
 
@@ -57,7 +57,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getuserswithconditionsPrograms = make([]cel.Program, 3)
+	getUsersWithConditionsPrograms = make([]cel.Program, 3)
 	// expr_001: "include_email" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("include_email")
@@ -68,7 +68,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "include_email", err))
 		}
-		getuserswithconditionsPrograms[0] = program
+		getUsersWithConditionsPrograms[0] = program
 	}
 	// expr_002: "min_age" using environment 0
 	{
@@ -80,7 +80,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age", err))
 		}
-		getuserswithconditionsPrograms[1] = program
+		getUsersWithConditionsPrograms[1] = program
 	}
 	// expr_003: "max_age" using environment 0
 	{
@@ -92,7 +92,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "max_age", err))
 		}
-		getuserswithconditionsPrograms[2] = program
+		getUsersWithConditionsPrograms[2] = program
 	}
 }
 
@@ -103,10 +103,10 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithconditions", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getUsersWithConditions", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getuserswithconditionsMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getUsersWithConditionsMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetUsersWithConditions: failed to get mock data: %w", err)
 		}
@@ -154,7 +154,7 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 		}
 		boundaryNeeded = true
 		// IF condition: expression 0
-		condResult, _, err := get_users_with_conditionsPrograms[0].Eval(paramMap)
+		condResult, _, err := getUsersWithConditionsPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate condition: %w", err)
 		}
@@ -267,7 +267,7 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 		}
 		boundaryNeeded = true
 		// Evaluate expression 1
-		evalRes0, _, err := get_users_with_conditionsPrograms[1].Eval(paramMap)
+		evalRes0, _, err := getUsersWithConditionsPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate expression: %w", err)
 		}
@@ -297,13 +297,13 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 		}
 		boundaryNeeded = true
 		// Evaluate expression 2
-		evalRes1, _, err := get_users_with_conditionsPrograms[2].Eval(paramMap)
+		evalRes1, _, err := getUsersWithConditionsPrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes1.Value())
 
-		query := builder.String()
+		query := strings.TrimSpace(builder.String())
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

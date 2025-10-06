@@ -28,10 +28,10 @@ import (
 
 // UpdateUserWithReturningSqlite specific CEL programs and mock path
 var (
-	updateuserwithreturningsqlitePrograms []cel.Program
+	updateUserWithReturningSqlitePrograms []cel.Program
 )
 
-const updateuserwithreturningsqliteMockPath = ""
+const updateUserWithReturningSqliteMockPath = ""
 
 func init() {
 
@@ -55,7 +55,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	updateuserwithreturningsqlitePrograms = make([]cel.Program, 2)
+	updateUserWithReturningSqlitePrograms = make([]cel.Program, 2)
 	// expr_001: "new_name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("new_name")
@@ -66,7 +66,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "new_name", err))
 		}
-		updateuserwithreturningsqlitePrograms[0] = program
+		updateUserWithReturningSqlitePrograms[0] = program
 	}
 	// expr_002: "user_id" using environment 0
 	{
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		updateuserwithreturningsqlitePrograms[1] = program
+		updateUserWithReturningSqlitePrograms[1] = program
 	}
 }
 
@@ -89,10 +89,10 @@ func UpdateUserWithReturningSqlite(ctx context.Context, executor snapsqlgo.DBExe
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturningsqlite", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateUserWithReturningSqlite", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(updateuserwithreturningsqliteMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(updateUserWithReturningSqliteMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to get mock data: %w", err)
 		}
@@ -114,13 +114,13 @@ func UpdateUserWithReturningSqlite(ctx context.Context, executor snapsqlgo.DBExe
 			"new_name": newName,
 		}
 
-		evalRes0, _, err := updateuserwithreturningsqlitePrograms[0].Eval(paramMap)
+		evalRes0, _, err := updateUserWithReturningSqlitePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := updateuserwithreturningsqlitePrograms[1].Eval(paramMap)
+		evalRes1, _, err := updateUserWithReturningSqlitePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUserWithReturningSqlite: failed to evaluate expression: %w", err)
 		}

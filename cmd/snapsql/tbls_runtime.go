@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/schemaimport"
 )
+
+var ErrTblsDatabaseUnavailable = errors.New("tbls database configuration unavailable")
 
 func resolveConfigBaseDir(configPath string) string {
 	if configPath == "" {
@@ -32,20 +37,61 @@ func resolveConfigBaseDir(configPath string) string {
 	return filepath.Dir(configPath)
 }
 
-func loadRuntimeTables(ctx *Context) map[string]*snapsql.TableInfo {
+func isTblsConfigPath(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+
+	name := strings.ToLower(filepath.Base(path))
+
+	return strings.HasSuffix(name, ".tbls.yml") || strings.HasSuffix(name, ".tbls.yaml") || name == "tbls.yml" || name == "tbls.yaml"
+}
+
+func buildTblsOptions(ctx *Context) schemaimport.Options {
 	baseDir := resolveConfigBaseDir(ctx.Config)
 
-	opts := schemaimport.Options{WorkingDir: baseDir}
-	if ctx.Config != "" {
+	opts := schemaimport.Options{WorkingDir: baseDir, Verbose: ctx.Verbose}
+
+	if isTblsConfigPath(ctx.Config) {
 		opts.TblsConfigPath = ctx.Config
 	}
 
-	opts.Verbose = ctx.Verbose
 	if ctx.Verbose {
 		opts.Logger = func(format string, args ...any) {
 			color.Cyan("tbls runtime: "+format, args...)
 		}
 	}
+
+	return opts
+}
+
+func resolveDatabaseFromTbls(ctx *Context) (*snapsql.Database, error) {
+	opts := buildTblsOptions(ctx)
+
+	cfg, err := schemaimport.ResolveConfig(context.Background(), opts)
+	if err != nil {
+		if errors.Is(err, schemaimport.ErrTblsConfigNotFound) {
+			return nil, ErrTblsDatabaseUnavailable
+		}
+
+		return nil, fmt.Errorf("resolve tbls config: %w", err)
+	}
+
+	dsn := strings.TrimSpace(cfg.DSN())
+	if dsn == "" {
+		return nil, ErrTblsDatabaseUnavailable
+	}
+
+	db := &snapsql.Database{
+		Driver:     normalizeSQLDriverName(determineDriver(dsn)),
+		Connection: dsn,
+	}
+
+	return db, nil
+}
+
+func loadRuntimeTables(ctx *Context) map[string]*snapsql.TableInfo {
+	opts := buildTblsOptions(ctx)
 
 	runtime, err := schemaimport.LoadRuntime(context.Background(), opts)
 	if err != nil {

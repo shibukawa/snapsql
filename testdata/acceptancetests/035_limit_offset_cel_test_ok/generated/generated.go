@@ -28,10 +28,10 @@ import (
 
 // GetUsersWithCelLimitOffset specific CEL programs and mock path
 var (
-	getuserswithcellimitoffsetPrograms []cel.Program
+	getUsersWithCelLimitOffsetPrograms []cel.Program
 )
 
-const getuserswithcellimitoffsetMockPath = ""
+const getUsersWithCelLimitOffsetMockPath = ""
 
 func init() {
 
@@ -56,7 +56,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getuserswithcellimitoffsetPrograms = make([]cel.Program, 3)
+	getUsersWithCelLimitOffsetPrograms = make([]cel.Program, 3)
 	// expr_001: "min_age" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("min_age")
@@ -67,7 +67,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "min_age", err))
 		}
-		getuserswithcellimitoffsetPrograms[0] = program
+		getUsersWithCelLimitOffsetPrograms[0] = program
 	}
 	// expr_002: "page_size != 0 ? page_size : 10" using environment 0
 	{
@@ -79,7 +79,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "page_size != 0 ? page_size : 10", err))
 		}
-		getuserswithcellimitoffsetPrograms[1] = program
+		getUsersWithCelLimitOffsetPrograms[1] = program
 	}
 	// expr_003: "page > 0 ? (page - 1) * page_size : 0" using environment 0
 	{
@@ -91,7 +91,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "page > 0 ? (page - 1) * page_size : 0", err))
 		}
-		getuserswithcellimitoffsetPrograms[2] = program
+		getUsersWithCelLimitOffsetPrograms[2] = program
 	}
 }
 
@@ -102,10 +102,10 @@ func GetUsersWithCelLimitOffset(ctx context.Context, executor snapsqlgo.DBExecut
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getuserswithcellimitoffset", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getUsersWithCelLimitOffset", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getuserswithcellimitoffsetMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getUsersWithCelLimitOffsetMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetUsersWithCelLimitOffset: failed to get mock data: %w", err)
 		}
@@ -128,19 +128,19 @@ func GetUsersWithCelLimitOffset(ctx context.Context, executor snapsqlgo.DBExecut
 			"page":      page,
 		}
 
-		evalRes0, _, err := getuserswithcellimitoffsetPrograms[0].Eval(paramMap)
+		evalRes0, _, err := getUsersWithCelLimitOffsetPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithCelLimitOffset: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := getuserswithcellimitoffsetPrograms[1].Eval(paramMap)
+		evalRes1, _, err := getUsersWithCelLimitOffsetPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithCelLimitOffset: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes1.Value())
 
-		evalRes2, _, err := getuserswithcellimitoffsetPrograms[2].Eval(paramMap)
+		evalRes2, _, err := getUsersWithCelLimitOffsetPrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithCelLimitOffset: failed to evaluate expression: %w", err)
 		}

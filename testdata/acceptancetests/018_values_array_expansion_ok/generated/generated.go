@@ -28,10 +28,10 @@ import (
 
 // InsertUsers specific CEL programs and mock path
 var (
-	insertusersPrograms []cel.Program
+	insertUsersPrograms []cel.Program
 )
 
-const insertusersMockPath = ""
+const insertUsersMockPath = ""
 
 func init() {
 
@@ -54,7 +54,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	insertusersPrograms = make([]cel.Program, 1)
+	insertUsersPrograms = make([]cel.Program, 1)
 	// expr_001: "values" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("values")
@@ -65,7 +65,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "values", err))
 		}
-		insertusersPrograms[0] = program
+		insertUsersPrograms[0] = program
 	}
 }
 
@@ -76,10 +76,10 @@ func InsertUsers(ctx context.Context, executor snapsqlgo.DBExecutor, values []in
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertusers", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertUsers", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(insertusersMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(insertUsersMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("InsertUsers: failed to get mock data: %w", err)
 		}
@@ -100,7 +100,7 @@ func InsertUsers(ctx context.Context, executor snapsqlgo.DBExecutor, values []in
 			"values": values,
 		}
 
-		evalRes0, _, err := insertusersPrograms[0].Eval(paramMap)
+		evalRes0, _, err := insertUsersPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUsers: failed to evaluate expression: %w", err)
 		}

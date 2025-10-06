@@ -28,10 +28,10 @@ import (
 
 // PostponeCards specific CEL programs and mock path
 var (
-	postponecardsPrograms []cel.Program
+	postponeCardsPrograms []cel.Program
 )
 
-const postponecardsMockPath = ""
+const postponeCardsMockPath = ""
 
 func init() {
 
@@ -53,7 +53,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	postponecardsPrograms = make([]cel.Program, 0)
+	postponeCardsPrograms = make([]cel.Program, 0)
 }
 
 // PostponeCards - sql.Result Affinity
@@ -63,10 +63,10 @@ func PostponeCards(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...s
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "postponecards", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "postponeCards", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(postponecardsMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(postponeCardsMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("PostponeCards: failed to get mock data: %w", err)
 		}

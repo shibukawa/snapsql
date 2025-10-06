@@ -28,10 +28,10 @@ import (
 
 // GetComprehensiveDialectTestSqlite specific CEL programs and mock path
 var (
-	getcomprehensivedialecttestsqlitePrograms []cel.Program
+	getComprehensiveDialectTestSqlitePrograms []cel.Program
 )
 
-const getcomprehensivedialecttestsqliteMockPath = ""
+const getComprehensiveDialectTestSqliteMockPath = ""
 
 func init() {
 
@@ -54,7 +54,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getcomprehensivedialecttestsqlitePrograms = make([]cel.Program, 1)
+	getComprehensiveDialectTestSqlitePrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -65,7 +65,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		getcomprehensivedialecttestsqlitePrograms[0] = program
+		getComprehensiveDialectTestSqlitePrograms[0] = program
 	}
 }
 
@@ -76,10 +76,10 @@ func GetComprehensiveDialectTestSqlite(ctx context.Context, executor snapsqlgo.D
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomprehensivedialecttestsqlite", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getComprehensiveDialectTestSqlite", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getcomprehensivedialecttestsqliteMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getComprehensiveDialectTestSqliteMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetComprehensiveDialectTestSqlite: failed to get mock data: %w", err)
 		}
@@ -100,7 +100,7 @@ func GetComprehensiveDialectTestSqlite(ctx context.Context, executor snapsqlgo.D
 			"user_id": userID,
 		}
 
-		evalRes0, _, err := getcomprehensivedialecttestsqlitePrograms[0].Eval(paramMap)
+		evalRes0, _, err := getComprehensiveDialectTestSqlitePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComprehensiveDialectTestSqlite: failed to evaluate expression: %w", err)
 		}

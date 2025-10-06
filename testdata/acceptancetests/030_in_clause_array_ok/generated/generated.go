@@ -28,10 +28,10 @@ import (
 
 // GetUsersByDepartments specific CEL programs and mock path
 var (
-	getusersbydepartmentsPrograms []cel.Program
+	getUsersByDepartmentsPrograms []cel.Program
 )
 
-const getusersbydepartmentsMockPath = ""
+const getUsersByDepartmentsMockPath = ""
 
 func init() {
 
@@ -54,7 +54,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getusersbydepartmentsPrograms = make([]cel.Program, 1)
+	getUsersByDepartmentsPrograms = make([]cel.Program, 1)
 	// expr_001: "department_ids" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("department_ids")
@@ -65,7 +65,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "department_ids", err))
 		}
-		getusersbydepartmentsPrograms[0] = program
+		getUsersByDepartmentsPrograms[0] = program
 	}
 }
 
@@ -76,10 +76,10 @@ func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, d
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getusersbydepartments", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getUsersByDepartments", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getusersbydepartmentsMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getUsersByDepartmentsMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetUsersByDepartments: failed to get mock data: %w", err)
 		}
@@ -100,7 +100,7 @@ func GetUsersByDepartments(ctx context.Context, executor snapsqlgo.DBExecutor, d
 			"department_ids": departmentIds,
 		}
 
-		evalRes0, _, err := getusersbydepartmentsPrograms[0].Eval(paramMap)
+		evalRes0, _, err := getUsersByDepartmentsPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersByDepartments: failed to evaluate expression: %w", err)
 		}

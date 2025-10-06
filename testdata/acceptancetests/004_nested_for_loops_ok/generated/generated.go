@@ -41,10 +41,10 @@ type InsertAllSubDepartmentsDepartment struct {
 
 // InsertAllSubDepartments specific CEL programs and mock path
 var (
-	insertallsubdepartmentsPrograms []cel.Program
+	insertAllSubDepartmentsPrograms []cel.Program
 )
 
-const insertallsubdepartmentsMockPath = ""
+const insertAllSubDepartmentsMockPath = ""
 
 func init() {
 	// Static accessor functions for each type
@@ -163,7 +163,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	insertallsubdepartmentsPrograms = make([]cel.Program, 6)
+	insertAllSubDepartmentsPrograms = make([]cel.Program, 6)
 	// expr_001: "departments" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("departments")
@@ -174,7 +174,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "departments", err))
 		}
-		insertallsubdepartmentsPrograms[0] = program
+		insertAllSubDepartmentsPrograms[0] = program
 	}
 	// expr_002: "dept.sub_departments" using environment 1
 	{
@@ -186,7 +186,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.sub_departments", err))
 		}
-		insertallsubdepartmentsPrograms[1] = program
+		insertAllSubDepartmentsPrograms[1] = program
 	}
 	// expr_003: "dept.department_code + "-" + sub.id" using environment 2
 	{
@@ -198,7 +198,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.department_code + \"-\" + sub.id", err))
 		}
-		insertallsubdepartmentsPrograms[2] = program
+		insertAllSubDepartmentsPrograms[2] = program
 	}
 	// expr_004: "sub.name" using environment 2
 	{
@@ -210,7 +210,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "sub.name", err))
 		}
-		insertallsubdepartmentsPrograms[3] = program
+		insertAllSubDepartmentsPrograms[3] = program
 	}
 	// expr_005: "dept.department_code" using environment 2
 	{
@@ -222,7 +222,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.department_code", err))
 		}
-		insertallsubdepartmentsPrograms[4] = program
+		insertAllSubDepartmentsPrograms[4] = program
 	}
 	// expr_006: "dept.department_name" using environment 2
 	{
@@ -234,7 +234,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dept.department_name", err))
 		}
-		insertallsubdepartmentsPrograms[5] = program
+		insertAllSubDepartmentsPrograms[5] = program
 	}
 }
 
@@ -245,10 +245,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertallsubdepartments", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertAllSubDepartments", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(insertallsubdepartmentsMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(insertAllSubDepartmentsMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("InsertAllSubDepartments: failed to get mock data: %w", err)
 		}
@@ -265,7 +265,6 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 	buildQueryAndArgs := func() (string, []any, error) {
 		var builder strings.Builder
 		args := make([]any, 0)
-		var boundaryNeeded bool
 		paramMap := map[string]any{
 			"departments": departments,
 		}
@@ -292,9 +291,8 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 			}
 			builder.WriteString(_frag)
 		}
-		boundaryNeeded = true
 		// FOR loop: evaluate collection expression 0
-		collectionResult0, _, err := insert_all_sub_departmentsPrograms[0].Eval(paramMap)
+		collectionResult0, _, err := insertAllSubDepartmentsPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate collection: %w", err)
 		}
@@ -302,7 +300,7 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 		for _, deptLoopVar := range collection0 {
 			paramMap["dept"] = deptLoopVar
 			// FOR loop: evaluate collection expression 1
-			collectionResult1, _, err := insert_all_sub_departmentsPrograms[1].Eval(paramMap)
+			collectionResult1, _, err := insertAllSubDepartmentsPrograms[1].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate collection: %w", err)
 			}
@@ -332,9 +330,8 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					}
 					builder.WriteString(_frag)
 				}
-				boundaryNeeded = true
 				// Evaluate expression 2
-				evalRes0, _, err := insert_all_sub_departmentsPrograms[2].Eval(paramMap)
+				evalRes0, _, err := insertAllSubDepartmentsPrograms[2].Eval(paramMap)
 				if err != nil {
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
@@ -362,9 +359,8 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					}
 					builder.WriteString(_frag)
 				}
-				boundaryNeeded = true
 				// Evaluate expression 3
-				evalRes1, _, err := insert_all_sub_departmentsPrograms[3].Eval(paramMap)
+				evalRes1, _, err := insertAllSubDepartmentsPrograms[3].Eval(paramMap)
 				if err != nil {
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
@@ -392,9 +388,8 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					}
 					builder.WriteString(_frag)
 				}
-				boundaryNeeded = true
 				// Evaluate expression 4
-				evalRes2, _, err := insert_all_sub_departmentsPrograms[4].Eval(paramMap)
+				evalRes2, _, err := insertAllSubDepartmentsPrograms[4].Eval(paramMap)
 				if err != nil {
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
@@ -422,9 +417,8 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					}
 					builder.WriteString(_frag)
 				}
-				boundaryNeeded = true
 				// Evaluate expression 5
-				evalRes3, _, err := insert_all_sub_departmentsPrograms[5].Eval(paramMap)
+				evalRes3, _, err := insertAllSubDepartmentsPrograms[5].Eval(paramMap)
 				if err != nil {
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
@@ -452,11 +446,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					}
 					builder.WriteString(_frag)
 				}
-				boundaryNeeded = true
 			}
 		}
 
-		query := builder.String()
+		query := strings.TrimSpace(builder.String())
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

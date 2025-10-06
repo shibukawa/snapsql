@@ -93,7 +93,39 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 		params = make(map[string]interface{})
 	}
 
-	var result strings.Builder
+	var (
+		result   strings.Builder
+		lastChar byte
+	)
+
+	hasLastChar := false
+	isWhitespace := func(b byte) bool {
+		switch b {
+		case ' ', '\n', '\t', '\r':
+			return true
+		default:
+			return false
+		}
+	}
+	appendSQL := func(s string) {
+		if len(s) == 0 {
+			return
+		}
+
+		result.WriteString(s)
+		lastChar = s[len(s)-1]
+		hasLastChar = true
+	}
+	appendSpaceIfNeeded := func() {
+		if hasLastChar && isWhitespace(lastChar) {
+			return
+		}
+
+		result.WriteByte(' ')
+
+		lastChar = ' '
+		hasLastChar = true
+	}
 
 	sqlParams := make([]interface{}, 0) // Initialize as empty slice instead of nil
 
@@ -111,7 +143,20 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 
 		switch instr.Op {
 		case intermediate.OpEmitStatic:
-			result.WriteString(instr.Value)
+			value := instr.Value
+			if len(value) > 0 && !isWhitespace(value[0]) {
+				leading := strings.TrimLeft(value, " \t\r\n")
+				if len(leading) > 0 {
+					upper := strings.ToUpper(leading)
+					if strings.HasPrefix(upper, "AND") || strings.HasPrefix(upper, "OR") || strings.HasPrefix(upper, "WHERE") || strings.HasPrefix(upper, "JOIN") || strings.HasPrefix(upper, "ON") {
+						if hasLastChar && !isWhitespace(lastChar) {
+							appendSQL(" ")
+						}
+					}
+				}
+			}
+
+			appendSQL(value)
 
 		case intermediate.OpEmitEval:
 			if instr.ExprIndex == nil {
@@ -129,7 +174,7 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 				return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 			}
 
-			result.WriteString("?")
+			appendSQL("?")
 
 			sqlParams = append(sqlParams, value)
 
@@ -196,8 +241,17 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			conditionStack = conditionStack[:len(conditionStack)-1]
 
 		case intermediate.OpEmitUnlessBoundary:
-			// For now, just emit the value (boundary handling is complex)
-			result.WriteString(instr.Value)
+			trimmed := strings.TrimSpace(instr.Value)
+
+			upper := strings.ToUpper(trimmed)
+			switch upper {
+			case "AND", "OR":
+				appendSpaceIfNeeded()
+				appendSQL(trimmed)
+				appendSQL(" ")
+			default:
+				appendSQL(instr.Value)
+			}
 
 		case intermediate.OpBoundary:
 			// Skip boundary markers for now
@@ -212,17 +266,17 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 			conditionStack = append(conditionStack, g.shouldEmitSystemClause(params, "offset"))
 		case intermediate.OpEmitSystemLimit:
 			limitLiteral := g.resolveSystemNumeric(instr.DefaultValue, "limit")
-			result.WriteString(limitLiteral)
+			appendSQL(limitLiteral)
 		case intermediate.OpEmitSystemOffset:
 			offsetLiteral := g.resolveSystemNumeric(instr.DefaultValue, "offset")
-			result.WriteString(offsetLiteral)
+			appendSQL(offsetLiteral)
 		case intermediate.OpEmitSystemValue:
 			value, err := g.resolveSystemValue(instr.SystemField, params)
 			if err != nil {
 				return "", nil, err
 			}
 
-			result.WriteString("?")
+			appendSQL("?")
 
 			sqlParams = append(sqlParams, value)
 

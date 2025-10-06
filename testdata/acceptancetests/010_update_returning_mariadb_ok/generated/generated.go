@@ -28,10 +28,10 @@ import (
 
 // UpdateUserWithReturningMariadb specific CEL programs and mock path
 var (
-	updateuserwithreturningmariadbPrograms []cel.Program
+	updateUserWithReturningMariadbPrograms []cel.Program
 )
 
-const updateuserwithreturningmariadbMockPath = ""
+const updateUserWithReturningMariadbMockPath = ""
 
 func init() {
 
@@ -55,7 +55,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	updateuserwithreturningmariadbPrograms = make([]cel.Program, 2)
+	updateUserWithReturningMariadbPrograms = make([]cel.Program, 2)
 	// expr_001: "new_name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("new_name")
@@ -66,7 +66,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "new_name", err))
 		}
-		updateuserwithreturningmariadbPrograms[0] = program
+		updateUserWithReturningMariadbPrograms[0] = program
 	}
 	// expr_002: "user_id" using environment 0
 	{
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		updateuserwithreturningmariadbPrograms[1] = program
+		updateUserWithReturningMariadbPrograms[1] = program
 	}
 }
 
@@ -89,10 +89,10 @@ func UpdateUserWithReturningMariadb(ctx context.Context, executor snapsqlgo.DBEx
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturningmariadb", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateUserWithReturningMariadb", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(updateuserwithreturningmariadbMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(updateUserWithReturningMariadbMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("UpdateUserWithReturningMariadb: failed to get mock data: %w", err)
 		}
@@ -114,13 +114,13 @@ func UpdateUserWithReturningMariadb(ctx context.Context, executor snapsqlgo.DBEx
 			"new_name": newName,
 		}
 
-		evalRes0, _, err := updateuserwithreturningmariadbPrograms[0].Eval(paramMap)
+		evalRes0, _, err := updateUserWithReturningMariadbPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUserWithReturningMariadb: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := updateuserwithreturningmariadbPrograms[1].Eval(paramMap)
+		evalRes1, _, err := updateUserWithReturningMariadbPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUserWithReturningMariadb: failed to evaluate expression: %w", err)
 		}

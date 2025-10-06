@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,19 +22,15 @@ import (
 	"github.com/shibukawa/snapsql/inspect"
 	"github.com/shibukawa/snapsql/testrunner"
 	"github.com/shibukawa/snapsql/testrunner/fixtureexecutor"
-	"github.com/testcontainers/testcontainers-go/modules/mysql"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
 var (
 	ErrFixtureOnlyRequiresRunPattern            = errors.New("--fixture-only mode requires --run pattern to specify which test case to execute")
 	ErrFixtureOnlyAndQueryOnlyMutuallyExclusive = errors.New("--fixture-only and --query-only are mutually exclusive")
 	// ErrPathOutsideProjectRoot indicates a provided path escapes the project root.
-	ErrPathOutsideProjectRoot      = errors.New("path is outside the project root")
-	ErrUnsupportedPathType         = errors.New("unsupported path type")
-	ErrDialectNotConfigured        = errors.New("dialect not configured in snapsql.yaml; please run 'snapsql init' or set the dialect explicitly")
-	ErrUnsupportedEphemeralDialect = errors.New("unsupported dialect for ephemeral database mode")
-	ErrSchemaOutputNotDirectory    = errors.New("schema output path is not a directory")
+	ErrPathOutsideProjectRoot   = errors.New("path is outside the project root")
+	ErrUnsupportedPathType      = errors.New("unsupported path type")
+	ErrSchemaOutputNotDirectory = errors.New("schema output path is not a directory")
 )
 
 // Context represents the global context for commands
@@ -55,38 +50,8 @@ type TestCmd struct {
 	Commit       bool     `help:"Commit transactions instead of rollback"`
 	Environment  string   `help:"Database environment to use from config" default:"development"`
 	Schema       []string `help:"SQL files or directories to initialize an ephemeral database (repeatable)" short:"s"`
-	UseExisting  bool     `help:"Use configured database environment instead of provisioning an ephemeral database"`
 	SchemaOutput string   `help:"Directory to emit schema YAML snapshots before running tests" default:"./schema"`
 	Paths        []string `arg:"" optional:"" name:"path" help:"Optional file or directory paths to limit executed tests"`
-}
-
-type provisionedDatabase struct {
-	DB          *sql.DB
-	DriverName  string
-	DatabaseURL string
-	cleanup     func(context.Context) error
-}
-
-func (p *provisionedDatabase) Close(ctx context.Context) error {
-	var firstErr error
-
-	if p == nil {
-		return nil
-	}
-
-	if p.DB != nil {
-		if err := p.DB.Close(); err != nil {
-			firstErr = err
-		}
-	}
-
-	if p.cleanup != nil {
-		if err := p.cleanup(ctx); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-
-	return firstErr
 }
 
 // Run executes the test command
@@ -182,11 +147,11 @@ func (cmd *TestCmd) Run(ctx *Context) error {
 		fmt.Println()
 	}
 
-	if cmd.UseExisting {
-		return cmd.runWithExistingDatabase(projectRoot, config, includePaths, options, verbose, runtimeTables)
+	if len(cmd.Schema) > 0 {
+		return cmd.runWithSchemaDatabase(projectRoot, config, includePaths, options, verbose, runtimeTables)
 	}
 
-	return cmd.runWithEphemeralDatabase(projectRoot, config, includePaths, options, verbose, runtimeTables)
+	return cmd.runWithTblsDatabase(projectRoot, config, includePaths, options, verbose, runtimeTables, ctx)
 }
 
 func (cmd *TestCmd) resolveTargetPaths(projectRoot string) ([]string, error) {
@@ -239,73 +204,84 @@ func (cmd *TestCmd) resolveTargetPaths(projectRoot string) ([]string, error) {
 	return resolved, nil
 }
 
-func (cmd *TestCmd) runWithExistingDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo) error {
-	if config.Databases == nil {
-		if verbose {
-			fmt.Printf("No database configuration present in snapsql.yaml, falling back to Go tests\n")
-		}
-
-		return cmd.runGoTests(projectRoot, includePaths, options, verbose)
-	}
-
-	dbConfig, exists := config.Databases[cmd.Environment]
-	if !exists {
-		if verbose {
-			fmt.Printf("No database configuration found for environment '%s', falling back to Go tests\n", cmd.Environment)
-		}
-
-		return cmd.runGoTests(projectRoot, includePaths, options, verbose)
-	}
-
-	return cmd.runFixtureTests(projectRoot, config, dbConfig, includePaths, options, verbose, tableCatalog)
-}
-
-func (cmd *TestCmd) runWithEphemeralDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo) error {
-	if strings.TrimSpace(config.Dialect) == "" {
-		return ErrDialectNotConfigured
-	}
-
+func (cmd *TestCmd) runWithSchemaDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo) error {
 	ctx := context.Background()
 
-	provisioned, err := cmd.provisionEphemeralDatabase(ctx, config, verbose)
+	db, cleanup, err := openInMemorySQLite(ctx, verbose)
 	if err != nil {
 		return err
 	}
-	defer provisioned.Close(ctx)
+	defer cleanup()
 
-	if err := cmd.applySchema(ctx, provisioned.DB, cmd.Schema, verbose); err != nil {
+	config.Dialect = "sqlite"
+
+	if err := cmd.applySchema(ctx, db, cmd.Schema, verbose); err != nil {
 		return err
 	}
 
-	return cmd.executeFixtureTests(projectRoot, config, provisioned.DB, tableCatalog, includePaths, options, verbose)
+	return cmd.executeFixtureTests(projectRoot, config, db, tableCatalog, includePaths, options, verbose)
 }
 
-// runFixtureTests runs fixture-based tests
-func (cmd *TestCmd) runFixtureTests(projectRoot string, config *snapsql.Config, dbConfig snapsql.Database, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo) error {
-	// Open database connection
-	db, err := sql.Open(dbConfig.Driver, dbConfig.Connection)
+func openInMemorySQLite(ctx context.Context, verbose bool) (*sql.DB, func(), error) {
+	dsn := "file:snapsql-test?mode=memory&cache=shared&_foreign_keys=1"
+
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
+		return nil, nil, fmt.Errorf("failed to open in-memory sqlite database: %w", err)
+	}
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, nil, fmt.Errorf("failed to initialize in-memory sqlite database: %w", err)
+	}
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	if verbose {
+		fmt.Println("Provisioned in-memory SQLite database")
+	}
+
+	cleanup := func() {
+		_ = db.Close()
+	}
+
+	return db, cleanup, nil
+}
+
+func (cmd *TestCmd) runWithTblsDatabase(projectRoot string, config *snapsql.Config, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool, tableCatalog map[string]*snapsql.TableInfo, appCtx *Context) error {
+	fallback, err := resolveDatabaseFromTbls(appCtx)
+	if err != nil {
+		return fmt.Errorf("%w: failed to resolve tbls database configuration: %s", ErrDatabaseConnection, err.Error())
+	}
+
+	driverName := normalizeSQLDriverName(fallback.Driver)
+	if driverName == "" {
+		return fmt.Errorf("%w: unsupported database driver: %s", ErrDatabaseConnection, fallback.Driver)
+	}
+
+	dialect := canonicalDialectFromDriver(fallback.Driver)
+	config.Dialect = dialect
+
+	if verbose {
+		fmt.Printf("Using database configuration from tbls config (%s)\n", dialect)
+	}
+
+	db, err := sql.Open(driverName, fallback.Connection)
+	if err != nil {
+		return fmt.Errorf("%w: failed to connect to database: %w", ErrDatabaseConnection, err)
 	}
 	defer db.Close()
 
-	// Test connection
 	ctx := context.Background()
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("Connected to database: %s\n", dbConfig.Driver)
-		fmt.Printf("Schema: %s\n", dbConfig.Schema)
-		fmt.Println()
+		return fmt.Errorf("%w: failed to ping database: %s", ErrDatabaseConnection, err.Error())
 	}
 
 	return cmd.executeFixtureTests(projectRoot, config, db, tableCatalog, includePaths, options, verbose)
 }
 
 func (cmd *TestCmd) executeFixtureTests(projectRoot string, config *snapsql.Config, db *sql.DB, tableInfo map[string]*snapsql.TableInfo, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool) error {
-	// Create fixture test runner
 	runner := testrunner.NewFixtureTestRunner(projectRoot, db, config.Dialect)
 	runner.SetVerbose(verbose)
 	runner.SetExecutionOptions(options)
@@ -326,193 +302,21 @@ func (cmd *TestCmd) executeFixtureTests(projectRoot string, config *snapsql.Conf
 		}
 	}
 
-	// Create context with timeout
 	testCtx, cancel := context.WithTimeout(context.Background(), options.Timeout)
 	defer cancel()
 
-	// Run fixture tests
 	summary, err := runner.RunAllFixtureTests(testCtx)
 	if err != nil {
 		return fmt.Errorf("fixture test execution failed: %w", err)
 	}
 
-	// Print summary
 	runner.PrintSummary(summary)
 
-	// Exit with non-zero code if any tests failed
 	if summary.FailedTests > 0 {
 		os.Exit(1)
 	}
 
 	return nil
-}
-
-func (cmd *TestCmd) provisionEphemeralDatabase(ctx context.Context, config *snapsql.Config, verbose bool) (*provisionedDatabase, error) {
-	dialect := normalizeDialect(config.Dialect)
-
-	switch dialect {
-	case "sqlite":
-		return cmd.provisionSQLiteDatabase(ctx, verbose)
-	case "postgresql":
-		return cmd.provisionPostgresDatabase(ctx, verbose)
-	case "mysql":
-		return cmd.provisionMySQLDatabase(ctx, verbose)
-	default:
-		return nil, fmt.Errorf("%w: %s; specify --use-existing-db to use a configured connection", ErrUnsupportedEphemeralDialect, config.Dialect)
-	}
-}
-
-func (cmd *TestCmd) provisionSQLiteDatabase(ctx context.Context, verbose bool) (*provisionedDatabase, error) {
-	tempDir, err := os.MkdirTemp("", "snapsql-sqlite-")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temporary directory for sqlite database: %w", err)
-	}
-
-	dbPath := filepath.Join(tempDir, "snapsql-test.db")
-
-	absPath, err := filepath.Abs(dbPath)
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return nil, fmt.Errorf("failed to resolve sqlite database path: %w", err)
-	}
-
-	dsnURL := &url.URL{
-		Scheme:   "file",
-		Path:     absPath,
-		RawQuery: "_busy_timeout=5000&_foreign_keys=1",
-	}
-
-	db, err := sql.Open("sqlite3", dsnURL.String())
-	if err != nil {
-		os.RemoveAll(tempDir)
-		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
-	}
-
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		os.RemoveAll(tempDir)
-
-		return nil, fmt.Errorf("failed to initialize sqlite database: %w", err)
-	}
-
-	// Limit connections to avoid locking issues when multiple connections are opened.
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-
-	sqliteURL := (&url.URL{Scheme: "sqlite", Path: absPath}).String()
-
-	if verbose {
-		fmt.Printf("Provisioned SQLite database at %s\n", absPath)
-	}
-
-	cleanup := func(context.Context) error {
-		return os.RemoveAll(tempDir)
-	}
-
-	return &provisionedDatabase{
-		DB:          db,
-		DriverName:  "sqlite3",
-		DatabaseURL: sqliteURL,
-		cleanup:     cleanup,
-	}, nil
-}
-
-func (cmd *TestCmd) provisionPostgresDatabase(ctx context.Context, verbose bool) (*provisionedDatabase, error) {
-	container, err := postgres.Run(ctx,
-		"postgres:17-alpine",
-		postgres.WithDatabase("snapsql"),
-		postgres.WithUsername("snapsql"),
-		postgres.WithPassword("snapsql"),
-		postgres.BasicWaitStrategies(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start postgres container: %w", err)
-	}
-
-	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		container.Terminate(ctx)
-		return nil, fmt.Errorf("failed to obtain postgres connection string: %w", err)
-	}
-
-	db, err := sql.Open("pgx", connStr)
-	if err != nil {
-		container.Terminate(ctx)
-		return nil, fmt.Errorf("failed to open postgres connection: %w", err)
-	}
-
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		container.Terminate(ctx)
-
-		return nil, fmt.Errorf("failed to ping postgres container: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("Provisioned PostgreSQL container with DSN %s\n", connStr)
-	}
-
-	cleanup := func(c context.Context) error {
-		return container.Terminate(c)
-	}
-
-	return &provisionedDatabase{
-		DB:          db,
-		DriverName:  "pgx",
-		DatabaseURL: connStr,
-		cleanup:     cleanup,
-	}, nil
-}
-
-func (cmd *TestCmd) provisionMySQLDatabase(ctx context.Context, verbose bool) (*provisionedDatabase, error) {
-	container, err := mysql.Run(ctx,
-		"mysql:8.4",
-		mysql.WithDatabase("snapsql"),
-		mysql.WithUsername("snapsql"),
-		mysql.WithPassword("snapsql"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start mysql container: %w", err)
-	}
-
-	rawConnStr, err := container.ConnectionString(ctx)
-	if err != nil {
-		container.Terminate(ctx)
-		return nil, fmt.Errorf("failed to obtain mysql connection string: %w", err)
-	}
-
-	dsn := ensureMySQLMultiStatements(rawConnStr)
-
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		container.Terminate(ctx)
-		return nil, fmt.Errorf("failed to open mysql connection: %w", err)
-	}
-
-	// Give the server a brief moment to finish booting before pinging.
-	time.Sleep(2 * time.Second)
-
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		container.Terminate(ctx)
-
-		return nil, fmt.Errorf("failed to ping mysql container: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("Provisioned MySQL container with DSN %s\n", rawConnStr)
-	}
-
-	cleanup := func(c context.Context) error {
-		return container.Terminate(c)
-	}
-
-	return &provisionedDatabase{
-		DB:          db,
-		DriverName:  "mysql",
-		DatabaseURL: convertMySQLConnStrToURL(rawConnStr),
-		cleanup:     cleanup,
-	}, nil
 }
 
 func (cmd *TestCmd) applySchema(ctx context.Context, db *sql.DB, schemaPaths []string, verbose bool) error {
@@ -604,89 +408,6 @@ func executeSQLFile(ctx context.Context, db *sql.DB, path string) error {
 
 	if _, err := db.ExecContext(ctx, query); err != nil {
 		return fmt.Errorf("failed to execute schema file %s: %w", path, err)
-	}
-
-	return nil
-}
-
-func ensureMySQLMultiStatements(dsn string) string {
-	if strings.Contains(dsn, "multiStatements=") {
-		return dsn
-	}
-
-	if strings.Contains(dsn, "?") {
-		return dsn + "&multiStatements=true"
-	}
-
-	return dsn + "?multiStatements=true"
-}
-
-func convertMySQLConnStrToURL(connStr string) string {
-	if strings.Contains(connStr, "@tcp(") {
-		parts := strings.Split(connStr, "@tcp(")
-		if len(parts) == 2 {
-			userPass := parts[0]
-			hostPortDb := parts[1]
-			hostPortDb = strings.Replace(hostPortDb, ")", "", 1)
-
-			return fmt.Sprintf("mysql://%s@%s", userPass, hostPortDb)
-		}
-	}
-
-	return "mysql://" + connStr
-}
-
-func normalizeDialect(dialect string) string {
-	switch strings.ToLower(strings.TrimSpace(dialect)) {
-	case "postgres", "postgresql", "pgx":
-		return "postgresql"
-	case "mysql", "mariadb":
-		return "mysql"
-	case "sqlite", "sqlite3":
-		return "sqlite"
-	default:
-		return strings.ToLower(strings.TrimSpace(dialect))
-	}
-}
-
-// runGoTests runs regular Go tests (fallback)
-func (cmd *TestCmd) runGoTests(projectRoot string, includePaths []string, options *fixtureexecutor.ExecutionOptions, verbose bool) error {
-	// Create regular test runner
-	runner := testrunner.NewTestRunner(projectRoot)
-	runner.SetVerbose(verbose)
-
-	if len(includePaths) > 0 {
-		runner.SetIncludePaths(includePaths)
-	}
-
-	// Set run pattern if specified
-	if cmd.RunPattern != "" {
-		err := runner.SetRunPattern(cmd.RunPattern)
-		if err != nil {
-			return fmt.Errorf("invalid run pattern: %w", err)
-		}
-
-		if verbose {
-			fmt.Printf("Running tests matching pattern: %s\n", cmd.RunPattern)
-		}
-	}
-
-	// Create context with timeout
-	testCtx, cancel := context.WithTimeout(context.Background(), options.Timeout)
-	defer cancel()
-
-	// Run all tests
-	summary, err := runner.RunAllTests(testCtx)
-	if err != nil {
-		return fmt.Errorf("test execution failed: %w", err)
-	}
-
-	// Print summary
-	runner.PrintSummary(summary)
-
-	// Exit with non-zero code if any tests failed
-	if summary.FailedPackages > 0 {
-		os.Exit(1)
 	}
 
 	return nil

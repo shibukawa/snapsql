@@ -703,6 +703,16 @@ func (ftr *FixtureTestRunner) PrintSummary(summary *FixtureTestSummary) {
 					if op := ctx["operation"]; op != "" {
 						fmt.Fprintf(color.Output, "    Operation: %s\n", op)
 					}
+
+					if ftr.verbose {
+						if sql := ctx["sql"]; sql != "" {
+							fmt.Fprintf(color.Output, "    SQL: %s\n", sql)
+						}
+
+						if args := ctx["args"]; args != "" {
+							fmt.Fprintf(color.Output, "    Args: %s\n", args)
+						}
+					}
 				}
 
 				if diff, ok := fixtureexecutor.AsDiffError(result.Error); ok {

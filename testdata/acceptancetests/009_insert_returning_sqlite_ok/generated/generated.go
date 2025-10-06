@@ -28,10 +28,10 @@ import (
 
 // InsertUserWithReturningSqlite specific CEL programs and mock path
 var (
-	insertuserwithreturningsqlitePrograms []cel.Program
+	insertUserWithReturningSqlitePrograms []cel.Program
 )
 
-const insertuserwithreturningsqliteMockPath = ""
+const insertUserWithReturningSqliteMockPath = ""
 
 func init() {
 
@@ -55,7 +55,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	insertuserwithreturningsqlitePrograms = make([]cel.Program, 2)
+	insertUserWithReturningSqlitePrograms = make([]cel.Program, 2)
 	// expr_001: "user_name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_name")
@@ -66,7 +66,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_name", err))
 		}
-		insertuserwithreturningsqlitePrograms[0] = program
+		insertUserWithReturningSqlitePrograms[0] = program
 	}
 	// expr_002: "user_email" using environment 0
 	{
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_email", err))
 		}
-		insertuserwithreturningsqlitePrograms[1] = program
+		insertUserWithReturningSqlitePrograms[1] = program
 	}
 }
 
@@ -89,10 +89,10 @@ func InsertUserWithReturningSqlite(ctx context.Context, executor snapsqlgo.DBExe
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuserwithreturningsqlite", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertUserWithReturningSqlite", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserwithreturningsqliteMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(insertUserWithReturningSqliteMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("InsertUserWithReturningSqlite: failed to get mock data: %w", err)
 		}
@@ -114,13 +114,13 @@ func InsertUserWithReturningSqlite(ctx context.Context, executor snapsqlgo.DBExe
 			"user_email": userEmail,
 		}
 
-		evalRes0, _, err := insertuserwithreturningsqlitePrograms[0].Eval(paramMap)
+		evalRes0, _, err := insertUserWithReturningSqlitePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUserWithReturningSqlite: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := insertuserwithreturningsqlitePrograms[1].Eval(paramMap)
+		evalRes1, _, err := insertUserWithReturningSqlitePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUserWithReturningSqlite: failed to evaluate expression: %w", err)
 		}

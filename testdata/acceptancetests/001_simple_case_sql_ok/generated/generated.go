@@ -28,10 +28,10 @@ import (
 
 // FindUser specific CEL programs and mock path
 var (
-	finduserPrograms []cel.Program
+	findUserPrograms []cel.Program
 )
 
-const finduserMockPath = ""
+const findUserMockPath = ""
 
 func init() {
 
@@ -54,7 +54,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	finduserPrograms = make([]cel.Program, 1)
+	findUserPrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -65,7 +65,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		finduserPrograms[0] = program
+		findUserPrograms[0] = program
 	}
 }
 
@@ -76,10 +76,10 @@ func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, op
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "finduser", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "findUser", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(finduserMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(findUserMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("FindUser: failed to get mock data: %w", err)
 		}
@@ -100,7 +100,7 @@ func FindUser(ctx context.Context, executor snapsqlgo.DBExecutor, userID int, op
 			"user_id": userID,
 		}
 
-		evalRes0, _, err := finduserPrograms[0].Eval(paramMap)
+		evalRes0, _, err := findUserPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("FindUser: failed to evaluate expression: %w", err)
 		}

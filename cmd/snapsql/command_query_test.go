@@ -43,6 +43,24 @@ func TestQuery_DryRun_SQLTemplate(t *testing.T) {
 	assert.Equal(t, 0, len(args))
 }
 
+func TestQuery_GetDatabaseConnection_FallbackToTbls(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ctx := &Context{Config: filepath.Join(dir, "snapsql.yaml")}
+
+	tblsContent := "dsn: postgres://demo:demo@localhost:5432/demo?sslmode=disable\n"
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, ".tbls.yml"), []byte(tblsContent), 0o644))
+
+	cmd := &QueryCmd{}
+	config := &Config{Query: QueryConfig{}}
+
+	driver, conn, err := cmd.getDatabaseConnection(config, ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "pgx", driver)
+	assert.Equal(t, "postgres://demo:demo@localhost:5432/demo?sslmode=disable", conn)
+}
+
 func TestQuery_DryRun_SQLTemplate_WithParam(t *testing.T) {
 	t.Parallel()
 

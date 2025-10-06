@@ -28,10 +28,10 @@ import (
 
 // UpdateUser specific CEL programs and mock path
 var (
-	updateuserPrograms []cel.Program
+	updateUserPrograms []cel.Program
 )
 
-const updateuserMockPath = ""
+const updateUserMockPath = ""
 
 func init() {
 
@@ -56,7 +56,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	updateuserPrograms = make([]cel.Program, 3)
+	updateUserPrograms = make([]cel.Program, 3)
 	// expr_001: "name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("name")
@@ -67,7 +67,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "name", err))
 		}
-		updateuserPrograms[0] = program
+		updateUserPrograms[0] = program
 	}
 	// expr_002: "email" using environment 0
 	{
@@ -79,7 +79,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "email", err))
 		}
-		updateuserPrograms[1] = program
+		updateUserPrograms[1] = program
 	}
 	// expr_003: "lock_no" using environment 0
 	{
@@ -91,7 +91,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "lock_no", err))
 		}
-		updateuserPrograms[2] = program
+		updateUserPrograms[2] = program
 	}
 }
 
@@ -102,10 +102,10 @@ func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string,
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuser", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateUser", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(updateuserMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(updateUserMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("UpdateUser: failed to get mock data: %w", err)
 		}
@@ -135,19 +135,19 @@ func UpdateUser(ctx context.Context, executor snapsqlgo.DBExecutor, name string,
 			"lock_no": lockNo,
 		}
 
-		evalRes0, _, err := updateuserPrograms[0].Eval(paramMap)
+		evalRes0, _, err := updateUserPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUser: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := updateuserPrograms[1].Eval(paramMap)
+		evalRes1, _, err := updateUserPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUser: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes1.Value())
 
-		evalRes2, _, err := updateuserPrograms[2].Eval(paramMap)
+		evalRes2, _, err := updateUserPrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUser: failed to evaluate expression: %w", err)
 		}

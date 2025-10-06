@@ -21,7 +21,8 @@ func isDummyLiteral(token tokenizer.Token) bool {
 	if token.Type == tokenizer.NUMBER ||
 		token.Type == tokenizer.STRING ||
 		token.Type == tokenizer.IDENTIFIER ||
-		token.Type == tokenizer.BOOLEAN {
+		token.Type == tokenizer.BOOLEAN ||
+		token.Type == tokenizer.NULL {
 		return true
 	}
 
@@ -115,6 +116,14 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 			insertion := insertions[i]
 			// Use ClauseNode's InsertTokensAfterIndex method to insert tokens
 			clause.InsertTokensAfterIndex(insertion.index, insertion.tokens)
+		}
+
+		// Clean up: remove literal NULL tokens that follow dummy wrappers
+		toks := clause.RawTokens()
+		for i := range len(toks) - 1 {
+			if toks[i].Type == tokenizer.DUMMY_END && toks[i+1].Type == tokenizer.NULL {
+				clause.ReplaceTokens(i+1, i+2, tokenizer.Token{Type: tokenizer.WHITESPACE, Value: ""})
+			}
 		}
 	}
 }

@@ -28,10 +28,10 @@ import (
 
 // DeleteUserWithReturning specific CEL programs and mock path
 var (
-	deleteuserwithreturningPrograms []cel.Program
+	deleteUserWithReturningPrograms []cel.Program
 )
 
-const deleteuserwithreturningMockPath = ""
+const deleteUserWithReturningMockPath = ""
 
 func init() {
 
@@ -54,7 +54,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	deleteuserwithreturningPrograms = make([]cel.Program, 1)
+	deleteUserWithReturningPrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -65,7 +65,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		deleteuserwithreturningPrograms[0] = program
+		deleteUserWithReturningPrograms[0] = program
 	}
 }
 
@@ -76,10 +76,10 @@ func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteuserwithreturning", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteUserWithReturning", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(deleteuserwithreturningMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(deleteUserWithReturningMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("DeleteUserWithReturning: failed to get mock data: %w", err)
 		}
@@ -100,7 +100,7 @@ func DeleteUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 			"user_id": userID,
 		}
 
-		evalRes0, _, err := deleteuserwithreturningPrograms[0].Eval(paramMap)
+		evalRes0, _, err := deleteUserWithReturningPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("DeleteUserWithReturning: failed to evaluate expression: %w", err)
 		}

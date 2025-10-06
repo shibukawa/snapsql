@@ -28,10 +28,10 @@ import (
 
 // InsertUserWithReturning specific CEL programs and mock path
 var (
-	insertuserwithreturningPrograms []cel.Program
+	insertUserWithReturningPrograms []cel.Program
 )
 
-const insertuserwithreturningMockPath = ""
+const insertUserWithReturningMockPath = ""
 
 func init() {
 
@@ -55,7 +55,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	insertuserwithreturningPrograms = make([]cel.Program, 2)
+	insertUserWithReturningPrograms = make([]cel.Program, 2)
 	// expr_001: "user_name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_name")
@@ -66,7 +66,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_name", err))
 		}
-		insertuserwithreturningPrograms[0] = program
+		insertUserWithReturningPrograms[0] = program
 	}
 	// expr_002: "user_email" using environment 0
 	{
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_email", err))
 		}
-		insertuserwithreturningPrograms[1] = program
+		insertUserWithReturningPrograms[1] = program
 	}
 }
 
@@ -89,10 +89,10 @@ func InsertUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertuserwithreturning", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertUserWithReturning", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(insertuserwithreturningMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(insertUserWithReturningMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("InsertUserWithReturning: failed to get mock data: %w", err)
 		}
@@ -114,13 +114,13 @@ func InsertUserWithReturning(ctx context.Context, executor snapsqlgo.DBExecutor,
 			"user_email": userEmail,
 		}
 
-		evalRes0, _, err := insertuserwithreturningPrograms[0].Eval(paramMap)
+		evalRes0, _, err := insertUserWithReturningPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUserWithReturning: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := insertuserwithreturningPrograms[1].Eval(paramMap)
+		evalRes1, _, err := insertUserWithReturningPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUserWithReturning: failed to evaluate expression: %w", err)
 		}

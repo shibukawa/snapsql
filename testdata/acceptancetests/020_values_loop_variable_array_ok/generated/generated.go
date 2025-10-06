@@ -29,10 +29,10 @@ import (
 
 // InsertUserTags specific CEL programs and mock path
 var (
-	insertusertagsPrograms []cel.Program
+	insertUserTagsPrograms []cel.Program
 )
 
-const insertusertagsMockPath = ""
+const insertUserTagsMockPath = ""
 
 func init() {
 
@@ -70,7 +70,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	insertusertagsPrograms = make([]cel.Program, 3)
+	insertUserTagsPrograms = make([]cel.Program, 3)
 	// expr_001: "users" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("users")
@@ -81,7 +81,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "users", err))
 		}
-		insertusertagsPrograms[0] = program
+		insertUserTagsPrograms[0] = program
 	}
 	// expr_002: "user.id" using environment 1
 	{
@@ -93,7 +93,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user.id", err))
 		}
-		insertusertagsPrograms[1] = program
+		insertUserTagsPrograms[1] = program
 	}
 	// expr_003: "user.tags" using environment 1
 	{
@@ -105,7 +105,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user.tags", err))
 		}
-		insertusertagsPrograms[2] = program
+		insertUserTagsPrograms[2] = program
 	}
 }
 
@@ -116,10 +116,10 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertusertags", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "insertUserTags", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(insertusertagsMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(insertUserTagsMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("InsertUserTags: failed to get mock data: %w", err)
 		}
@@ -136,7 +136,6 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 	buildQueryAndArgs := func() (string, []any, error) {
 		var builder strings.Builder
 		args := make([]any, 0)
-		var boundaryNeeded bool
 		paramMap := map[string]any{
 			"users": users,
 		}
@@ -163,9 +162,8 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 			}
 			builder.WriteString(_frag)
 		}
-		boundaryNeeded = true
 		// FOR loop: evaluate collection expression 0
-		collectionResult0, _, err := insertusertagsPrograms[0].Eval(paramMap)
+		collectionResult0, _, err := insertUserTagsPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate collection: %w", err)
 		}
@@ -195,9 +193,8 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 				}
 				builder.WriteString(_frag)
 			}
-			boundaryNeeded = true
 			// Evaluate expression 1
-			evalRes0, _, err := insertusertagsPrograms[1].Eval(paramMap)
+			evalRes0, _, err := insertUserTagsPrograms[1].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate expression: %w", err)
 			}
@@ -225,9 +222,8 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 				}
 				builder.WriteString(_frag)
 			}
-			boundaryNeeded = true
 			// Evaluate expression 2
-			evalRes1, _, err := insertusertagsPrograms[2].Eval(paramMap)
+			evalRes1, _, err := insertUserTagsPrograms[2].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate expression: %w", err)
 			}
@@ -255,10 +251,9 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 				}
 				builder.WriteString(_frag)
 			}
-			boundaryNeeded = true
 		}
 
-		query := builder.String()
+		query := strings.TrimSpace(builder.String())
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

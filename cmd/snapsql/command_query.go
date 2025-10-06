@@ -289,18 +289,34 @@ func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, 
 		connectionString = q.DBConnection
 		// Try to determine driver from connection string
 		driver = determineDriver(connectionString)
-	} else {
+	} else if config.Query.DefaultEnvironment != "" {
 		// Try default environment from config
-		if config.Query.DefaultEnvironment != "" {
-			dbConfig, exists := config.Databases[config.Query.DefaultEnvironment]
-			if !exists {
-				return "", "", fmt.Errorf("%w: %s", ErrDefaultEnvironmentNotFound, config.Query.DefaultEnvironment)
+		dbConfig, exists := config.Databases[config.Query.DefaultEnvironment]
+		if !exists {
+			return "", "", fmt.Errorf("%w: %s", ErrDefaultEnvironmentNotFound, config.Query.DefaultEnvironment)
+		}
+
+		connectionString = dbConfig.Connection
+		driver = dbConfig.Driver
+	}
+
+	if strings.TrimSpace(connectionString) == "" {
+		fallback, err := resolveDatabaseFromTbls(ctx)
+		if err != nil {
+			if errors.Is(err, ErrTblsDatabaseUnavailable) {
+				return "", "", ErrNoDatabaseConnection
 			}
 
-			connectionString = dbConfig.Connection
-			driver = dbConfig.Driver
-		} else {
-			return "", "", ErrNoDatabaseConnection
+			return "", "", err
+		}
+
+		connectionString = fallback.Connection
+		if driver == "" {
+			driver = fallback.Driver
+		}
+
+		if ctx.Verbose {
+			color.Blue("Using database connection from tbls config")
 		}
 	}
 
@@ -314,18 +330,18 @@ func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, 
 // determineDriver determines the database driver from connection string
 func determineDriver(connectionString string) string {
 	if strings.HasPrefix(connectionString, "postgres://") {
-		return "postgres"
+		return normalizeSQLDriverName("postgres")
 	}
 
 	if strings.HasPrefix(connectionString, "mysql://") {
-		return "mysql"
+		return normalizeSQLDriverName("mysql")
 	}
 
 	if strings.HasPrefix(connectionString, "sqlite://") || strings.HasSuffix(connectionString, ".db") {
-		return "sqlite3"
+		return normalizeSQLDriverName("sqlite3")
 	}
 	// Default to postgres
-	return "postgres"
+	return normalizeSQLDriverName("postgres")
 }
 
 // executeDryRun generates SQL without executing it
