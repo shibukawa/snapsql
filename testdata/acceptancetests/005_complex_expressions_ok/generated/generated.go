@@ -189,26 +189,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			"page_size":      pageSize,
 			"page":           page,
 		}
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "SELECT id, name,?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -219,26 +203,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "FROM users  WHERE"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -249,26 +217,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate condition: %w", err)
 		}
 		if condResult.Value().(bool) {
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := "created_at BETWEEN ?"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
@@ -283,26 +235,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 				builder.WriteString(" AND ")
 			}
 			boundaryNeeded = true
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := "?"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
@@ -314,26 +250,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			}
 			args = append(args, evalRes2.Value())
 		}
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "OR DER BY ?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -345,26 +265,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		}
 		args = append(args, evalRes3.Value())
 		boundaryNeeded = false
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := " LIMIT ?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -375,26 +279,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes4.Value())
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := " OFFSET ?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}

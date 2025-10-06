@@ -356,9 +356,31 @@ func resolveFixtureValue(value any) (any, error) {
 			out[key] = val
 		}
 		return out, nil
+	case string:
+		if arr, ok := parseBracketLiteral(v); ok {
+			return resolveFixtureValue(arr)
+		}
+		return v, nil
 	default:
 		return value, nil
 	}
+}
+
+func parseBracketLiteral(raw string) ([]any, bool) {
+	s := strings.TrimSpace(raw)
+	if len(s) < 2 || s[0] != '[' || s[len(s)-1] != ']' {
+		return nil, false
+	}
+	inner := strings.TrimSpace(s[1 : len(s)-1])
+	if inner == "" {
+		return []any{}, true
+	}
+	parts := strings.Split(inner, ",")
+	result := make([]any, len(parts))
+	for i, p := range parts {
+		result[i] = strings.TrimSpace(p)
+	}
+	return result, true
 }
 
 // Executor handles fixture data insertion and query execution

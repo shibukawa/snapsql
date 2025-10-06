@@ -129,26 +129,10 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 			"max_age":       maxAge,
 			"include_email": includeEmail,
 		}
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "SELECT id, name,"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -159,26 +143,10 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate condition: %w", err)
 		}
 		if condResult.Value().(bool) {
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := "email"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
@@ -188,26 +156,10 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 			}
 			boundaryNeeded = true
 		} else {
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := "'N/A' as email"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
@@ -217,51 +169,19 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 			}
 			boundaryNeeded = true
 		}
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "age"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
 		boundaryNeeded = true
 		boundaryNeeded = false
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "FROM users  WHERE age >=?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -272,26 +192,10 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "AND age <=?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}

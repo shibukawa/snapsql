@@ -582,6 +582,7 @@ func TestParseFlexibleDurationRequiresSign(t *testing.T) {
 func TestEvaluateRelativeTimeMatcherDisplay(t *testing.T) {
 	anchor := time.Date(2025, 10, 6, 12, 0, 0, 0, time.UTC)
 	setCurrentDateAnchor(anchor)
+
 	defer clearCurrentDateAnchor()
 
 	expected, tol, display, err := evaluateRelativeTimeMatcher([]any{"currentdate", "+10m"})

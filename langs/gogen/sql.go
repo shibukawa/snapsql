@@ -284,20 +284,11 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			val = ensureSpaceBeforePlaceholders(val)
 			val = ensureKeywordSpacing(val)
 			frag := fmt.Sprintf("%q", val)
-			// ひとつ前が単語で終わり、今回が単語で始まるなら、直前にスペースを追記する
-			code = append(code, fmt.Sprintf(`{ // safe append static with spacing
+			// 直前に出力がある場合のみワンスペースを追加する
+			code = append(code, fmt.Sprintf(`{ // append static fragment
 	_frag := %s
 	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
+		builder.WriteByte(' ')
 	}
 	builder.WriteString(_frag)
 }`, frag))

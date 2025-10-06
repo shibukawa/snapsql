@@ -139,26 +139,10 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 		paramMap := map[string]any{
 			"users": users,
 		}
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "INSERT INTO user_tags (user_id, tag) VALUES"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -170,26 +154,10 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 		collection0 := collectionResult0.Value().([]any)
 		for _, userLoopVar := range collection0 {
 			paramMap["user"] = userLoopVar
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := "(?"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
@@ -199,26 +167,10 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 				return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes0.Value())
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := ",?"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
@@ -228,26 +180,10 @@ func InsertUserTags(ctx context.Context, executor snapsqlgo.DBExecutor, users []
 				return "", nil, fmt.Errorf("InsertUserTags: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes1.Value())
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := ")"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}

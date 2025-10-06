@@ -268,26 +268,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 		paramMap := map[string]any{
 			"departments": departments,
 		}
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
@@ -307,26 +291,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 			collection1 := collectionResult1.Value().([]any)
 			for _, subLoopVar := range collection1 {
 				paramMap["sub"] = subLoopVar
-				{ // safe append static with spacing
+				{ // append static fragment
 					_frag := "(?"
 					if builder.Len() > 0 {
-						_b := builder.String()
-						_last := _b[len(_b)-1]
-						// determine if last char is word char
-						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-						// skip leading spaces in _frag
-						_k := 0
-						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-							_k++
-						}
-						_startsWord := false
-						if _k < len(_frag) {
-							_c := _frag[_k]
-							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-						}
-						if _endsWord && _startsWord {
-							builder.WriteByte(' ')
-						}
+						builder.WriteByte(' ')
 					}
 					builder.WriteString(_frag)
 				}
@@ -336,26 +304,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
 				args = append(args, evalRes0.Value())
-				{ // safe append static with spacing
+				{ // append static fragment
 					_frag := ",?"
 					if builder.Len() > 0 {
-						_b := builder.String()
-						_last := _b[len(_b)-1]
-						// determine if last char is word char
-						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-						// skip leading spaces in _frag
-						_k := 0
-						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-							_k++
-						}
-						_startsWord := false
-						if _k < len(_frag) {
-							_c := _frag[_k]
-							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-						}
-						if _endsWord && _startsWord {
-							builder.WriteByte(' ')
-						}
+						builder.WriteByte(' ')
 					}
 					builder.WriteString(_frag)
 				}
@@ -365,26 +317,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
 				args = append(args, evalRes1.Value())
-				{ // safe append static with spacing
+				{ // append static fragment
 					_frag := ",?"
 					if builder.Len() > 0 {
-						_b := builder.String()
-						_last := _b[len(_b)-1]
-						// determine if last char is word char
-						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-						// skip leading spaces in _frag
-						_k := 0
-						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-							_k++
-						}
-						_startsWord := false
-						if _k < len(_frag) {
-							_c := _frag[_k]
-							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-						}
-						if _endsWord && _startsWord {
-							builder.WriteByte(' ')
-						}
+						builder.WriteByte(' ')
 					}
 					builder.WriteString(_frag)
 				}
@@ -394,26 +330,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
 				args = append(args, evalRes2.Value())
-				{ // safe append static with spacing
+				{ // append static fragment
 					_frag := ",?"
 					if builder.Len() > 0 {
-						_b := builder.String()
-						_last := _b[len(_b)-1]
-						// determine if last char is word char
-						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-						// skip leading spaces in _frag
-						_k := 0
-						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-							_k++
-						}
-						_startsWord := false
-						if _k < len(_frag) {
-							_c := _frag[_k]
-							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-						}
-						if _endsWord && _startsWord {
-							builder.WriteByte(' ')
-						}
+						builder.WriteByte(' ')
 					}
 					builder.WriteString(_frag)
 				}
@@ -423,26 +343,10 @@ func InsertAllSubDepartments(ctx context.Context, executor snapsqlgo.DBExecutor,
 					return "", nil, fmt.Errorf("InsertAllSubDepartments: failed to evaluate expression: %w", err)
 				}
 				args = append(args, evalRes3.Value())
-				{ // safe append static with spacing
+				{ // append static fragment
 					_frag := ")"
 					if builder.Len() > 0 {
-						_b := builder.String()
-						_last := _b[len(_b)-1]
-						// determine if last char is word char
-						_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-						// skip leading spaces in _frag
-						_k := 0
-						for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-							_k++
-						}
-						_startsWord := false
-						if _k < len(_frag) {
-							_c := _frag[_k]
-							_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-						}
-						if _endsWord && _startsWord {
-							builder.WriteByte(' ')
-						}
+						builder.WriteByte(' ')
 					}
 					builder.WriteString(_frag)
 				}

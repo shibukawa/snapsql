@@ -447,6 +447,7 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 					testCase: tc,
 					err:      fmt.Errorf("failed to normalize parameters for %s: %w", tc.Name, err),
 				})
+
 				continue
 			}
 
