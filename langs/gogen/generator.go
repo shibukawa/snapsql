@@ -1362,16 +1362,14 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 			{{ end }}
 			{{ range $idx, $arg := .SQLBuilder.Arguments }}
 				{{- if eq $arg -1 }}
-		args = append(args, systemValues["{{ index $.SQLBuilder.ArgumentSystemFields $idx }}"])
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["{{ index $.SQLBuilder.ArgumentSystemFields $idx }}"]))
 				{{ else }}
 		{{ $resVar := printf "evalRes%d" $idx }}
 		{{ $resVar }}, _, err := {{ $.LowerFuncName }}Programs[{{ $arg }}].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("{{ $.FunctionName }}: failed to evaluate expression: %w", err)
 		}
-		{{ $argVar := printf "argValue%d" $idx }}
-		{{ $argVar }} := snapsqlgo.NormalizeNullableTimestamp({{ $resVar }})
-		args = append(args, {{ $argVar }})
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp({{ $resVar }}))
 				{{- end }}
 			{{- end }}
 		{{- end }}

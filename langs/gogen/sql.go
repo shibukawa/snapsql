@@ -266,21 +266,10 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 		code = append(code, "var boundaryNeeded bool")
 	}
 
-	temporalParams := make(map[string]bool, len(format.Parameters))
-	for _, param := range format.Parameters {
-		if normalizeTemporalAlias(param.Type) == "timestamp" {
-			temporalParams[param.Name] = true
-		}
-	}
-
 	// Add parameter map for loop variables
 	code = append(code, "paramMap := map[string]any{")
 	for _, param := range format.Parameters {
-		valueExpr := snakeToCamelLower(param.Name)
-		if temporalParams[param.Name] {
-			valueExpr = fmt.Sprintf("snapsqlgo.NormalizeNullableTimestamp(%s)", valueExpr)
-		}
-		code = append(code, fmt.Sprintf("    %q: %s,", param.Name, valueExpr))
+		code = append(code, fmt.Sprintf("    %q: %s,", param.Name, snakeToCamelLower(param.Name)))
 	}
 
 	code = append(code, "}")
@@ -309,8 +298,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
-				resIndex := evalCounter
-				resVar := fmt.Sprintf("evalRes%d", resIndex)
+				resVar := fmt.Sprintf("evalRes%d", evalCounter)
 				evalCounter++
 
 				code = append(code, fmt.Sprintf("// Evaluate expression %d", *inst.ExprIndex))
@@ -319,15 +307,13 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "if err != nil {")
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate expression: %%w\", err)", functionName))
 				code = append(code, "}")
-				argVar := fmt.Sprintf("argValue%d", resIndex)
-				code = append(code, fmt.Sprintf("%s := snapsqlgo.NormalizeNullableTimestamp(%s)", argVar, resVar))
-				code = append(code, fmt.Sprintf("args = append(args, %s)", argVar))
+				code = append(code, fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(%s))", resVar))
 				hasArguments = true
 			}
 
 		case "ADD_SYSTEM_PARAM":
 			code = append(code, "// Add system parameter: "+inst.SystemField)
-			code = append(code, fmt.Sprintf("args = append(args, systemValues[%q])", inst.SystemField))
+			code = append(code, fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues[%q]))", inst.SystemField))
 			hasArguments = true
 			hasSystemArguments = true
 
