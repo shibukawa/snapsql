@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/google/cel-go/common/types"
-	"github.com/google/cel-go/common/types/ref"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -28,7 +27,7 @@ func TestNormalizeNullableTimestamp_TimeValues(t *testing.T) {
 func TestNormalizeNullableTimestamp_CELValues(t *testing.T) {
 	now := time.Now().UTC()
 
-	var val ref.Val = types.DefaultTypeAdapter.NativeToValue(now)
+	var val = types.DefaultTypeAdapter.NativeToValue(now)
 	if got, ok := NormalizeNullableTimestamp(val).(time.Time); !ok || !got.Equal(now) {
 		t.Fatalf("expected time.Time from CEL timestamp, got %T %v", got, got)
 	}

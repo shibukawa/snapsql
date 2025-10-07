@@ -22,14 +22,17 @@ func NormalizeNullableTimestamp(value any) any {
 		if v.IsZero() {
 			return nil
 		}
+
 		return v
 	case *time.Time:
 		if v == nil {
 			return nil
 		}
+
 		if v.IsZero() {
 			return nil
 		}
+
 		return *v
 	case structpb.NullValue:
 		return nil
@@ -37,6 +40,7 @@ func NormalizeNullableTimestamp(value any) any {
 		if v == types.NullValue || types.IsUnknown(v) {
 			return nil
 		}
+
 		if v.Type() == types.TimestampType {
 			native, err := v.ConvertToNative(reflect.TypeOf(time.Time{}))
 			if err == nil {
@@ -44,14 +48,17 @@ func NormalizeNullableTimestamp(value any) any {
 					if ts.IsZero() {
 						return nil
 					}
+
 					return ts
 				}
 			}
 		}
+
 		native, err := v.ConvertToNative(reflect.TypeOf((*any)(nil)).Elem())
 		if err == nil {
 			return NormalizeNullableTimestamp(native)
 		}
+
 		return v.Value()
 	default:
 		return value
