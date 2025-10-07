@@ -135,6 +135,17 @@ func TestExtractImplicitParams_PartialContext(t *testing.T) {
 	assert.Equal(t, 1, result["version"])
 }
 
+func TestValidateImplicitParamTypeTemporalAliases(t *testing.T) {
+	now := time.Now()
+	aliases := []string{"timestamp", "datetime", "date", "time", "time.Time"}
+
+	for _, alias := range aliases {
+		if !validateImplicitParamType(now, alias) {
+			t.Fatalf("expected alias %s to accept time.Time value", alias)
+		}
+	}
+}
+
 func TestGetSystemValuesFromContext_EmptyContext(t *testing.T) {
 	ctx := context.Background()
 

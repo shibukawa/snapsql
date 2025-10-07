@@ -39,10 +39,10 @@ type BoardArchiveResult struct {
 
 // BoardArchive specific CEL programs and mock path
 var (
-	boardarchivePrograms []cel.Program
+	boardArchivePrograms []cel.Program
 )
 
-const boardarchiveMockPath = ""
+const boardArchiveMockPath = ""
 
 func init() {
 
@@ -64,13 +64,13 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	boardarchivePrograms = make([]cel.Program, 0)
+	boardArchivePrograms = make([]cel.Program, 0)
 }
 
 // BoardArchive Archives the currently active board by switching its status to archived and stamping the archive timestamp. Because only one board can be active at a time, no parameters are required.
 func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*BoardArchiveResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardarchive", "[]boardarchiveresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardArchive", "[]boardarchiveresult")
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
@@ -94,7 +94,7 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(boardarchiveMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(boardArchiveMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("BoardArchive: failed to get mock data: %w", err))
 				return

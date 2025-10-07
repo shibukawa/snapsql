@@ -36,10 +36,10 @@ type CardCommentCreateResult struct {
 
 // CardCommentCreate specific CEL programs and mock path
 var (
-	cardcommentcreatePrograms []cel.Program
+	cardCommentCreatePrograms []cel.Program
 )
 
-const cardcommentcreateMockPath = ""
+const cardCommentCreateMockPath = ""
 
 func init() {
 
@@ -63,7 +63,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	cardcommentcreatePrograms = make([]cel.Program, 2)
+	cardCommentCreatePrograms = make([]cel.Program, 2)
 	// expr_001: "card_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("card_id")
@@ -74,7 +74,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
 		}
-		cardcommentcreatePrograms[0] = program
+		cardCommentCreatePrograms[0] = program
 	}
 	// expr_002: "body" using environment 0
 	{
@@ -86,7 +86,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "body", err))
 		}
-		cardcommentcreatePrograms[1] = program
+		cardCommentCreatePrograms[1] = program
 	}
 }
 
@@ -97,10 +97,10 @@ func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardI
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardcommentcreate", "cardcommentcreateresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardCommentCreate", "cardcommentcreateresult")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(cardcommentcreateMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(cardCommentCreateMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("CardCommentCreate: failed to get mock data: %w", err)
 		}
@@ -129,13 +129,13 @@ func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardI
 			"body":    body,
 		}
 
-		evalRes0, _, err := cardcommentcreatePrograms[0].Eval(paramMap)
+		evalRes0, _, err := cardCommentCreatePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCommentCreate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := cardcommentcreatePrograms[1].Eval(paramMap)
+		evalRes1, _, err := cardCommentCreatePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCommentCreate: failed to evaluate expression: %w", err)
 		}

@@ -254,6 +254,124 @@ func TestSQLGenerator_SystemValueDefaults(t *testing.T) {
 	assert.Equal(t, args[1], params["created_by"])
 }
 
+func TestSQLGenerator_Generate_LoopOperations(t *testing.T) {
+	testCases := []struct {
+		name         string
+		instructions []intermediate.Instruction
+		expressions  []intermediate.CELExpression
+		params       map[string]interface{}
+		expectedSQL  string
+		expectedArgs []interface{}
+	}{
+		{
+			name: "single level loop",
+			instructions: []intermediate.Instruction{
+				{Op: intermediate.OpEmitStatic, Value: "INSERT"},
+				{Op: intermediate.OpLoopStart, Variable: "value", CollectionExprIndex: intPtr(0)},
+				{Op: intermediate.OpEmitStatic, Value: " ["},
+				{Op: intermediate.OpEmitEval, ExprIndex: intPtr(1)},
+				{Op: intermediate.OpEmitStatic, Value: " ]"},
+				{Op: intermediate.OpLoopEnd},
+				{Op: intermediate.OpEmitStatic, Value: " ;"},
+			},
+			expressions: []intermediate.CELExpression{
+				{Expression: "items"},
+				{Expression: "value"},
+			},
+			params: map[string]interface{}{
+				"items": []interface{}{"foo", "bar"},
+			},
+			expectedSQL:  "INSERT [? ] [? ] ;",
+			expectedArgs: []interface{}{"foo", "bar"},
+		},
+		{
+			name: "nested loops",
+			instructions: []intermediate.Instruction{
+				{Op: intermediate.OpEmitStatic, Value: "BEGIN"},
+				{Op: intermediate.OpLoopStart, Variable: "group", CollectionExprIndex: intPtr(0)},
+				{Op: intermediate.OpEmitStatic, Value: " ["},
+				{Op: intermediate.OpLoopStart, Variable: "member", CollectionExprIndex: intPtr(1)},
+				{Op: intermediate.OpEmitStatic, Value: " {"},
+				{Op: intermediate.OpEmitEval, ExprIndex: intPtr(2)},
+				{Op: intermediate.OpEmitStatic, Value: " }"},
+				{Op: intermediate.OpLoopEnd},
+				{Op: intermediate.OpEmitStatic, Value: " ]"},
+				{Op: intermediate.OpLoopEnd},
+				{Op: intermediate.OpEmitStatic, Value: " END"},
+			},
+			expressions: []intermediate.CELExpression{
+				{Expression: "groups"},
+				{Expression: "group"},
+				{Expression: "member"},
+			},
+			params: map[string]interface{}{
+				"groups": []interface{}{
+					[]interface{}{"a", "b"},
+					[]interface{}{"c"},
+				},
+			},
+			expectedSQL:  "BEGIN [ {? } {? } ] [ {? } ] END",
+			expectedArgs: []interface{}{"a", "b", "c"},
+		},
+		{
+			name: "empty collection",
+			instructions: []intermediate.Instruction{
+				{Op: intermediate.OpEmitStatic, Value: "DELETE FROM t"},
+				{Op: intermediate.OpLoopStart, Variable: "value", CollectionExprIndex: intPtr(0)},
+				{Op: intermediate.OpEmitStatic, Value: " SHOULD_NOT_APPEAR"},
+				{Op: intermediate.OpLoopEnd},
+				{Op: intermediate.OpEmitStatic, Value: " WHERE flag = true"},
+			},
+			expressions: []intermediate.CELExpression{
+				{Expression: "items"},
+			},
+			params: map[string]interface{}{
+				"items": []interface{}{},
+			},
+			expectedSQL:  "DELETE FROM t WHERE flag = true",
+			expectedArgs: []interface{}{},
+		},
+		{
+			name: "loop removes trailing comma",
+			instructions: []intermediate.Instruction{
+				{Op: intermediate.OpEmitStatic, Value: "INSERT INTO t VALUES"},
+				{Op: intermediate.OpLoopStart, Variable: "row", CollectionExprIndex: intPtr(0)},
+				{Op: intermediate.OpEmitStatic, Value: "("},
+				{Op: intermediate.OpEmitEval, ExprIndex: intPtr(1)},
+				{Op: intermediate.OpEmitStatic, Value: ")"},
+				{Op: intermediate.OpEmitStatic, Value: ",\n"},
+				{Op: intermediate.OpLoopEnd},
+				{Op: intermediate.OpEmitStatic, Value: "RETURNING id"},
+			},
+			expressions: []intermediate.CELExpression{
+				{Expression: "rows"},
+				{Expression: "row"},
+			},
+			params: map[string]interface{}{
+				"rows": []interface{}{1, 2},
+			},
+			expectedSQL:  "INSERT INTO t VALUES(?),\n(?)\nRETURNING id",
+			expectedArgs: []interface{}{1, 2},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			format := &intermediate.IntermediateFormat{
+				Instructions:   tc.instructions,
+				CELExpressions: tc.expressions,
+			}
+
+			generator := NewSQLGenerator(format, "postgresql")
+			sql, args, err := generator.Generate(tc.params)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedSQL, sql)
+			assert.Equal(t, tc.expectedArgs, args)
+		})
+	}
+}
+
 func TestLoadIntermediateFormat_SupportedFileTypes(t *testing.T) {
 	tmpDir := t.TempDir()
 

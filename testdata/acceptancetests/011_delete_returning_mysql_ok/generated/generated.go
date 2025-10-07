@@ -28,24 +28,27 @@ import (
 
 // DeleteUserWithReturningMysql specific CEL programs and mock path
 var (
-	deleteuserwithreturningmysqlPrograms []cel.Program
+	deleteUserWithReturningMysqlPrograms []cel.Program
 )
 
-const deleteuserwithreturningmysqlMockPath = ""
+const deleteUserWithReturningMysqlMockPath = ""
 
 func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("user_id", cel.IntType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("user_id", cel.IntType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create DeleteUserWithReturningMysql CEL environment 0: %v", err))
@@ -54,7 +57,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	deleteuserwithreturningmysqlPrograms = make([]cel.Program, 1)
+	deleteUserWithReturningMysqlPrograms = make([]cel.Program, 1)
 	// expr_001: "user_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("user_id")
@@ -65,7 +68,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		deleteuserwithreturningmysqlPrograms[0] = program
+		deleteUserWithReturningMysqlPrograms[0] = program
 	}
 }
 
@@ -76,10 +79,10 @@ func DeleteUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteuserwithreturningmysql", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "deleteUserWithReturningMysql", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(deleteuserwithreturningmysqlMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(deleteUserWithReturningMysqlMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("DeleteUserWithReturningMysql: failed to get mock data: %w", err)
 		}
@@ -100,7 +103,7 @@ func DeleteUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 			"user_id": userID,
 		}
 
-		evalRes0, _, err := deleteuserwithreturningmysqlPrograms[0].Eval(paramMap)
+		evalRes0, _, err := deleteUserWithReturningMysqlPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("DeleteUserWithReturningMysql: failed to evaluate expression: %w", err)
 		}

@@ -442,6 +442,15 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 				continue
 			}
 
+			if err := fixtureexecutor.NormalizeParameters(tc.Parameters); err != nil {
+				issues = append(issues, preparationIssue{
+					testCase: tc,
+					err:      fmt.Errorf("failed to normalize parameters for %s: %w", tc.Name, err),
+				})
+
+				continue
+			}
+
 			finalSQL, args, err := generator.Generate(tc.Parameters)
 			if err != nil {
 				issues = append(issues, preparationIssue{
@@ -702,6 +711,16 @@ func (ftr *FixtureTestRunner) PrintSummary(summary *FixtureTestSummary) {
 
 					if op := ctx["operation"]; op != "" {
 						fmt.Fprintf(color.Output, "    Operation: %s\n", op)
+					}
+
+					if ftr.verbose {
+						if sql := ctx["sql"]; sql != "" {
+							fmt.Fprintf(color.Output, "    SQL: %s\n", sql)
+						}
+
+						if args := ctx["args"]; args != "" {
+							fmt.Fprintf(color.Output, "    Args: %s\n", args)
+						}
 					}
 				}
 

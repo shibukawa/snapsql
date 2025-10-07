@@ -2,7 +2,9 @@ package gogen
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
@@ -67,6 +69,58 @@ func ensureSpaceBeforePlaceholders(s string) string {
 	}
 
 	return builder.String()
+}
+
+func ensureKeywordSpacing(val string) string {
+	trimmed := strings.TrimSpace(val)
+	if trimmed == "" {
+		return val
+	}
+
+	start := strings.IndexFunc(val, func(r rune) bool { return !unicode.IsSpace(r) })
+	if start == -1 {
+		return val
+	}
+
+	upperTrimmed := strings.ToUpper(trimmed)
+	for _, kw := range []string{"AND", "OR", "WHERE", "JOIN", "ON"} {
+		if !strings.HasPrefix(upperTrimmed, kw) {
+			continue
+		}
+
+		if start > 0 && !unicode.IsSpace(rune(val[start-1])) {
+			val = val[:start] + " " + val[start:]
+			start++
+		}
+
+		after := start + len(kw)
+		if after < len(val) {
+			next := rune(val[after])
+			if !unicode.IsSpace(next) {
+				val = val[:after] + " " + val[after:]
+			}
+		} else {
+			val += " "
+		}
+
+		break
+	}
+
+	return val
+}
+
+func padBoundaryToken(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return value
+	}
+
+	switch strings.ToUpper(trimmed) {
+	case "AND", "OR":
+		return " " + trimmed + " "
+	default:
+		return value
+	}
 }
 
 func isWhitespaceByte(b byte) bool {
@@ -139,12 +193,15 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 			value = strings.ReplaceAll(value, "WHERE", " WHERE")
 			value = strings.ReplaceAll(value, "RETURNING", " RETURNING")
 			value = ensureSpaceBeforePlaceholders(value)
+			value = ensureKeywordSpacing(value)
 			// 直前のパーツと単語が連結してしまう場合のスペース付与
 			if len(sqlParts) > 0 && needsSpaceBetween(sqlParts[len(sqlParts)-1], value) {
 				sqlParts[len(sqlParts)-1] = sqlParts[len(sqlParts)-1] + " "
 			}
 
 			sqlParts = append(sqlParts, value)
+		case "EMIT_UNLESS_BOUNDARY":
+			sqlParts = append(sqlParts, padBoundaryToken(inst.Value))
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
 				arguments = append(arguments, *inst.ExprIndex)
@@ -193,13 +250,21 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	var code []string
 
 	hasArguments := false
+	hasSystemArguments := false
+	condVarDeclared := false
 	evalCounter := 0
 
 	// Track control flow stack
 	controlStack := []string{}
 
+	needsBoundaryTracking := slices.ContainsFunc(instructions, func(inst intermediate.OptimizedInstruction) bool {
+		return inst.Op == "EMIT_UNLESS_BOUNDARY" || inst.Op == "BOUNDARY"
+	})
+
 	// Add boundary tracking variables
-	code = append(code, "var boundaryNeeded bool")
+	if needsBoundaryTracking {
+		code = append(code, "var boundaryNeeded bool")
+	}
 
 	// Add parameter map for loop variables
 	code = append(code, "paramMap := map[string]any{")
@@ -217,25 +282,19 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			val = strings.ReplaceAll(val, "WHERE", " WHERE")
 			val = strings.ReplaceAll(val, "RETURNING", " RETURNING")
 			val = ensureSpaceBeforePlaceholders(val)
+			val = ensureKeywordSpacing(val)
 			frag := fmt.Sprintf("%q", val)
-			// ひとつ前が単語で終わり、今回が単語で始まるなら、直前にスペースを追記する
-			code = append(code, fmt.Sprintf(`{ // safe append static with spacing
+			// 直前に出力がある場合のみワンスペースを追加する
+			code = append(code, fmt.Sprintf(`{ // append static fragment
 	_frag := %s
 	if builder.Len() > 0 {
-		_b := builder.String()
-		_last := _b[len(_b)-1]
-		// determine if last char is word char
-		_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-		// skip leading spaces in _frag
-		_k := 0
-		for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') { _k++ }
-		_startsWord := false
-		if _k < len(_frag) { _c := _frag[_k]; _startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$' }
-		if _endsWord && _startsWord { builder.WriteByte(' ') }
+		builder.WriteByte(' ')
 	}
 	builder.WriteString(_frag)
 }`, frag))
-			code = append(code, "boundaryNeeded = true")
+			if needsBoundaryTracking {
+				code = append(code, "boundaryNeeded = true")
+			}
 
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
@@ -244,7 +303,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 
 				code = append(code, fmt.Sprintf("// Evaluate expression %d", *inst.ExprIndex))
 				code = append(code, fmt.Sprintf("%s, _, err := %sPrograms[%d].Eval(paramMap)",
-					resVar, strings.ToLower(format.FunctionName), *inst.ExprIndex))
+					resVar, toLowerCamel(format.FunctionName), *inst.ExprIndex))
 				code = append(code, "if err != nil {")
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate expression: %%w\", err)", functionName))
 				code = append(code, "}")
@@ -256,31 +315,45 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			code = append(code, "// Add system parameter: "+inst.SystemField)
 			code = append(code, fmt.Sprintf("args = append(args, systemValues[%q])", inst.SystemField))
 			hasArguments = true
+			hasSystemArguments = true
 
 		case "EMIT_UNLESS_BOUNDARY":
-			code = append(code, "if boundaryNeeded {")
-			code = append(code, fmt.Sprintf("    builder.WriteString(%q)", inst.Value))
-			code = append(code, "}")
-			code = append(code, "boundaryNeeded = true")
+			if needsBoundaryTracking {
+				padded := padBoundaryToken(inst.Value)
+
+				code = append(code, "if boundaryNeeded {")
+				code = append(code, fmt.Sprintf("    builder.WriteString(%q)", padded))
+				code = append(code, "}")
+				code = append(code, "boundaryNeeded = true")
+			}
 
 		case "BOUNDARY":
-			code = append(code, "boundaryNeeded = false")
+			if needsBoundaryTracking {
+				code = append(code, "boundaryNeeded = false")
+			}
 
 		case "IF":
 			if inst.ExprIndex != nil {
+				assignOp := ":="
+				if condVarDeclared {
+					assignOp = "="
+				} else {
+					condVarDeclared = true
+				}
+
 				code = append(code, fmt.Sprintf("// IF condition: expression %d", *inst.ExprIndex))
-				code = append(code, fmt.Sprintf("condResult, _, err := %sPrograms[%d].Eval(paramMap)",
-					strings.ToLower(format.FunctionName), *inst.ExprIndex))
+				code = append(code, fmt.Sprintf("condResult, _, err %s %sPrograms[%d].Eval(paramMap)",
+					assignOp, toLowerCamel(format.FunctionName), *inst.ExprIndex))
 				code = append(code, "if err != nil {")
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate condition: %%w\", err)", functionName))
 				code = append(code, "}")
-				code = append(code, "if condResult.Value().(bool) {")
+				code = append(code, "if snapsqlgo.Truthy(condResult) {")
 				controlStack = append(controlStack, "if")
 			}
 
 		case "ELSEIF":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "if" {
-				code = append(code, "} else if condResult.Value().(bool) {")
+				code = append(code, "} else if snapsqlgo.Truthy(condResult) {")
 			}
 
 		case "ELSE":
@@ -292,7 +365,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			if inst.CollectionExprIndex != nil {
 				code = append(code, fmt.Sprintf("// FOR loop: evaluate collection expression %d", *inst.CollectionExprIndex))
 				code = append(code, fmt.Sprintf("collectionResult%d, _, err := %sPrograms[%d].Eval(paramMap)",
-					*inst.CollectionExprIndex, strings.ToLower(format.FunctionName), *inst.CollectionExprIndex))
+					*inst.CollectionExprIndex, toLowerCamel(format.FunctionName), *inst.CollectionExprIndex))
 				code = append(code, "if err != nil {")
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate collection: %%w\", err)", functionName))
 				code = append(code, "}")
@@ -338,8 +411,9 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	}
 
 	return &sqlBuilderData{
-		IsStatic:     false,
-		BuilderCode:  code,
-		HasArguments: hasArguments,
+		IsStatic:           false,
+		BuilderCode:        code,
+		HasArguments:       hasArguments,
+		HasSystemArguments: hasSystemArguments,
 	}, nil
 }

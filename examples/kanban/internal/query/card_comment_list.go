@@ -37,10 +37,10 @@ type CardCommentListResult struct {
 
 // CardCommentList specific CEL programs and mock path
 var (
-	cardcommentlistPrograms []cel.Program
+	cardCommentListPrograms []cel.Program
 )
 
-const cardcommentlistMockPath = ""
+const cardCommentListMockPath = ""
 
 func init() {
 
@@ -63,7 +63,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	cardcommentlistPrograms = make([]cel.Program, 1)
+	cardCommentListPrograms = make([]cel.Program, 1)
 	// expr_001: "card_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("card_id")
@@ -74,24 +74,24 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
 		}
-		cardcommentlistPrograms[0] = program
+		cardCommentListPrograms[0] = program
 	}
 }
 
 // CardCommentList Retrieves comments associated with a card, ordered by creation time ascending for chronological display.
 func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardCommentListResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardcommentlist", "[]cardcommentlistresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardCommentList", "[]cardcommentlistresult")
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id =$1 ORDER BY created_at ASC, id ASC"
+		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id =$1 OR DER BY created_at ASC, id ASC"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"card_id": cardID,
 		}
 
-		evalRes0, _, err := cardcommentlistPrograms[0].Eval(paramMap)
+		evalRes0, _, err := cardCommentListPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCommentList: failed to evaluate expression: %w", err)
 		}
@@ -105,7 +105,7 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardcommentlistMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(cardCommentListMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("CardCommentList: failed to get mock data: %w", err))
 				return

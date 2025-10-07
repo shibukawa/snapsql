@@ -29,32 +29,35 @@ import (
 
 // GetComplexData specific CEL programs and mock path
 var (
-	getcomplexdataPrograms []cel.Program
+	getComplexDataPrograms []cel.Program
 )
 
-const getcomplexdataMockPath = ""
+const getComplexDataMockPath = ""
 
 func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("user_id", cel.IntType))
+		opts = append(opts, cel.Variable("username", cel.StringType))
+		opts = append(opts, cel.Variable("display_name", cel.BoolType))
+		opts = append(opts, cel.Variable("start_date", cel.StringType))
+		opts = append(opts, cel.Variable("end_date", cel.StringType))
+		opts = append(opts, cel.Variable("sort_field", cel.StringType))
+		opts = append(opts, cel.Variable("sort_direction", cel.StringType))
+		opts = append(opts, cel.Variable("page_size", cel.IntType))
+		opts = append(opts, cel.Variable("page", cel.IntType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("user_id", cel.IntType),
-			cel.Variable("username", cel.StringType),
-			cel.Variable("display_name", cel.BoolType),
-			cel.Variable("start_date", cel.StringType),
-			cel.Variable("end_date", cel.StringType),
-			cel.Variable("sort_field", cel.StringType),
-			cel.Variable("sort_direction", cel.StringType),
-			cel.Variable("page_size", cel.IntType),
-			cel.Variable("page", cel.IntType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create GetComplexData CEL environment 0: %v", err))
@@ -63,7 +66,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	getcomplexdataPrograms = make([]cel.Program, 7)
+	getComplexDataPrograms = make([]cel.Program, 7)
 	// expr_001: "display_name ? username : "Anonymous"" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("display_name ? username : \"Anonymous\"")
@@ -74,7 +77,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "display_name ? username : \"Anonymous\"", err))
 		}
-		getcomplexdataPrograms[0] = program
+		getComplexDataPrograms[0] = program
 	}
 	// expr_002: "start_date != "" && end_date != """ using environment 0
 	{
@@ -86,7 +89,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "start_date != \"\" && end_date != \"\"", err))
 		}
-		getcomplexdataPrograms[1] = program
+		getComplexDataPrograms[1] = program
 	}
 	// expr_003: "start_date" using environment 0
 	{
@@ -98,7 +101,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "start_date", err))
 		}
-		getcomplexdataPrograms[2] = program
+		getComplexDataPrograms[2] = program
 	}
 	// expr_004: "end_date" using environment 0
 	{
@@ -110,7 +113,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "end_date", err))
 		}
-		getcomplexdataPrograms[3] = program
+		getComplexDataPrograms[3] = program
 	}
 	// expr_005: "sort_field + " " + (sort_direction != "" ? sort_direction : "ASC")" using environment 0
 	{
@@ -122,7 +125,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")", err))
 		}
-		getcomplexdataPrograms[4] = program
+		getComplexDataPrograms[4] = program
 	}
 	// expr_006: "page_size != 0 ? page_size : 10" using environment 0
 	{
@@ -134,7 +137,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "page_size != 0 ? page_size : 10", err))
 		}
-		getcomplexdataPrograms[5] = program
+		getComplexDataPrograms[5] = program
 	}
 	// expr_007: "page > 0 ? (page - 1) * page_size : 0" using environment 0
 	{
@@ -146,7 +149,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "page > 0 ? (page - 1) * page_size : 0", err))
 		}
-		getcomplexdataPrograms[6] = program
+		getComplexDataPrograms[6] = program
 	}
 }
 
@@ -157,10 +160,10 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getcomplexdata", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "getComplexData", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(getcomplexdataMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(getComplexDataMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("GetComplexData: failed to get mock data: %w", err)
 		}
@@ -189,224 +192,112 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 			"page_size":      pageSize,
 			"page":           page,
 		}
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "SELECT id, name,?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
 		boundaryNeeded = true
 		// Evaluate expression 0
-		evalRes0, _, err := getcomplexdataPrograms[0].Eval(paramMap)
+		evalRes0, _, err := getComplexDataPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := "FROM users  WHERE"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
 		boundaryNeeded = true
 		// IF condition: expression 1
-		condResult, _, err := getcomplexdataPrograms[1].Eval(paramMap)
+		condResult, _, err := getComplexDataPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
-			{ // safe append static with spacing
+		if snapsqlgo.Truthy(condResult) {
+			{ // append static fragment
 				_frag := "created_at BETWEEN ?"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
 			boundaryNeeded = true
 			// Evaluate expression 2
-			evalRes1, _, err := getcomplexdataPrograms[2].Eval(paramMap)
+			evalRes1, _, err := getComplexDataPrograms[2].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes1.Value())
 			if boundaryNeeded {
-				builder.WriteString("AND")
+				builder.WriteString(" AND ")
 			}
 			boundaryNeeded = true
-			{ // safe append static with spacing
+			{ // append static fragment
 				_frag := "?"
 				if builder.Len() > 0 {
-					_b := builder.String()
-					_last := _b[len(_b)-1]
-					// determine if last char is word char
-					_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-					// skip leading spaces in _frag
-					_k := 0
-					for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-						_k++
-					}
-					_startsWord := false
-					if _k < len(_frag) {
-						_c := _frag[_k]
-						_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-					}
-					if _endsWord && _startsWord {
-						builder.WriteByte(' ')
-					}
+					builder.WriteByte(' ')
 				}
 				builder.WriteString(_frag)
 			}
 			boundaryNeeded = true
 			// Evaluate expression 3
-			evalRes2, _, err := getcomplexdataPrograms[3].Eval(paramMap)
+			evalRes2, _, err := getComplexDataPrograms[3].Eval(paramMap)
 			if err != nil {
 				return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 			}
 			args = append(args, evalRes2.Value())
 		}
-		{ // safe append static with spacing
-			_frag := "ORDER BY ?"
+		{ // append static fragment
+			_frag := "OR DER BY ?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
 		boundaryNeeded = true
 		// Evaluate expression 4
-		evalRes3, _, err := getcomplexdataPrograms[4].Eval(paramMap)
+		evalRes3, _, err := getComplexDataPrograms[4].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes3.Value())
 		boundaryNeeded = false
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := " LIMIT ?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
 		boundaryNeeded = true
 		// Evaluate expression 5
-		evalRes4, _, err := getcomplexdataPrograms[5].Eval(paramMap)
+		evalRes4, _, err := getComplexDataPrograms[5].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes4.Value())
-		{ // safe append static with spacing
+		{ // append static fragment
 			_frag := " OFFSET ?"
 			if builder.Len() > 0 {
-				_b := builder.String()
-				_last := _b[len(_b)-1]
-				// determine if last char is word char
-				_endsWord := (_last >= 'A' && _last <= 'Z') || (_last >= 'a' && _last <= 'z') || (_last >= '0' && _last <= '9') || _last == '_' || _last == ')'
-				// skip leading spaces in _frag
-				_k := 0
-				for _k < len(_frag) && (_frag[_k] == ' ' || _frag[_k] == '\n' || _frag[_k] == '\t') {
-					_k++
-				}
-				_startsWord := false
-				if _k < len(_frag) {
-					_c := _frag[_k]
-					_startsWord = (_c >= 'A' && _c <= 'Z') || (_c >= 'a' && _c <= 'z') || _c == '_' || _c == '(' || _c == '$'
-				}
-				if _endsWord && _startsWord {
-					builder.WriteByte(' ')
-				}
+				builder.WriteByte(' ')
 			}
 			builder.WriteString(_frag)
 		}
 		boundaryNeeded = true
 		// Evaluate expression 6
-		evalRes5, _, err := getcomplexdataPrograms[6].Eval(paramMap)
+		evalRes5, _, err := getComplexDataPrograms[6].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes5.Value())
 
-		query := builder.String()
+		query := strings.TrimSpace(builder.String())
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

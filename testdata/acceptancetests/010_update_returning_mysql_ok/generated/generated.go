@@ -28,25 +28,28 @@ import (
 
 // UpdateUserWithReturningMysql specific CEL programs and mock path
 var (
-	updateuserwithreturningmysqlPrograms []cel.Program
+	updateUserWithReturningMysqlPrograms []cel.Program
 )
 
-const updateuserwithreturningmysqlMockPath = ""
+const updateUserWithReturningMysqlMockPath = ""
 
 func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("user_id", cel.IntType))
+		opts = append(opts, cel.Variable("new_name", cel.StringType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("user_id", cel.IntType),
-			cel.Variable("new_name", cel.StringType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create UpdateUserWithReturningMysql CEL environment 0: %v", err))
@@ -55,7 +58,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	updateuserwithreturningmysqlPrograms = make([]cel.Program, 2)
+	updateUserWithReturningMysqlPrograms = make([]cel.Program, 2)
 	// expr_001: "new_name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("new_name")
@@ -66,7 +69,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "new_name", err))
 		}
-		updateuserwithreturningmysqlPrograms[0] = program
+		updateUserWithReturningMysqlPrograms[0] = program
 	}
 	// expr_002: "user_id" using environment 0
 	{
@@ -78,7 +81,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
 		}
-		updateuserwithreturningmysqlPrograms[1] = program
+		updateUserWithReturningMysqlPrograms[1] = program
 	}
 }
 
@@ -89,10 +92,10 @@ func UpdateUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateuserwithreturningmysql", "sql.result")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "updateUserWithReturningMysql", "sql.result")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(updateuserwithreturningmysqlMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(updateUserWithReturningMysqlMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("UpdateUserWithReturningMysql: failed to get mock data: %w", err)
 		}
@@ -114,13 +117,13 @@ func UpdateUserWithReturningMysql(ctx context.Context, executor snapsqlgo.DBExec
 			"new_name": newName,
 		}
 
-		evalRes0, _, err := updateuserwithreturningmysqlPrograms[0].Eval(paramMap)
+		evalRes0, _, err := updateUserWithReturningMysqlPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUserWithReturningMysql: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := updateuserwithreturningmysqlPrograms[1].Eval(paramMap)
+		evalRes1, _, err := updateUserWithReturningMysqlPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("UpdateUserWithReturningMysql: failed to evaluate expression: %w", err)
 		}

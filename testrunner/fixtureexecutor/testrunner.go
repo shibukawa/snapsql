@@ -237,6 +237,35 @@ func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *mark
 	return tr.executor.ExecuteTest(testCase, sql, parameters, tr.options)
 }
 
+// NormalizeParameters walks parameter map and resolves fixture-style special tokens.
+// Supports array-style tokens such as ["currentdate", "-10d"] or YAML-parsed []any where
+// the first element is "currentdate" (case-insensitive). It reuses resolveFixtureValue semantics
+// from executor.go by temporarily marshalling values into the same shapes.
+func NormalizeParameters(params map[string]any) error {
+	for k, v := range params {
+		// Only handle string, []any, map[string]any types; other types remain unchanged
+		switch vv := v.(type) {
+		case []any:
+			// Delegate to fixture resolver already present in executor.go
+			// We call resolveFixtureValue by constructing a value similar to fixture element
+			// Note: resolveFixtureValue lives in executor.go; import path allows access within package
+			nv, err := resolveFixtureValue(vv)
+			if err != nil {
+				return fmt.Errorf("parameter %s: %w", k, err)
+			}
+
+			params[k] = nv
+		case map[string]any:
+			// recursively normalize nested maps
+			if err := NormalizeParameters(vv); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // RunSingleTest executes a single test case
 func (tr *TestRunner) RunSingleTest(ctx context.Context, testCase *markdownparser.TestCase) (*TestResult, error) {
 	result := tr.executeTestWithTimeout(ctx, testCase)

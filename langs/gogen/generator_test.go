@@ -29,6 +29,21 @@ func TestConvertToGoTypeFloatNormalization(t *testing.T) {
 	}
 }
 
+func TestConvertToGoTypeTemporalAliases(t *testing.T) {
+	aliases := []string{"timestamp", "datetime", "date", "time"}
+
+	for _, alias := range aliases {
+		got, err := convertToGoType(alias)
+		if err != nil {
+			t.Fatalf("convertToGoType(%s) unexpected error: %v", alias, err)
+		}
+
+		if got != "time.Time" {
+			t.Errorf("convertToGoType(%s) = %s, want time.Time", alias, got)
+		}
+	}
+}
+
 func TestConvertToGoType_UnknownType(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -226,6 +241,21 @@ func TestUnsupportedTypeError(t *testing.T) {
 
 			t.Logf("Error: %s", errorStr)
 		})
+	}
+}
+
+func TestProcessCELVariableTemporalAlias(t *testing.T) {
+	data, err := processCELVariable(intermediate.CELVariableInfo{Name: "since", Type: "datetime"})
+	if err != nil {
+		t.Fatalf("processCELVariable returned error: %v", err)
+	}
+
+	if data.CelType != "TimestampType" {
+		t.Fatalf("expected CelType TimestampType, got %s", data.CelType)
+	}
+
+	if data.GoType != "time.Time" {
+		t.Fatalf("expected GoType time.Time, got %s", data.GoType)
 	}
 }
 

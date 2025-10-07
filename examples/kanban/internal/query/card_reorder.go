@@ -40,10 +40,10 @@ type CardReorderResult struct {
 
 // CardReorder specific CEL programs and mock path
 var (
-	cardreorderPrograms []cel.Program
+	cardReorderPrograms []cel.Program
 )
 
-const cardreorderMockPath = ""
+const cardReorderMockPath = ""
 
 func init() {
 
@@ -67,7 +67,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	cardreorderPrograms = make([]cel.Program, 2)
+	cardReorderPrograms = make([]cel.Program, 2)
 	// expr_001: "position" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("position")
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "position", err))
 		}
-		cardreorderPrograms[0] = program
+		cardReorderPrograms[0] = program
 	}
 	// expr_002: "card_id" using environment 0
 	{
@@ -90,14 +90,14 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
 		}
-		cardreorderPrograms[1] = program
+		cardReorderPrograms[1] = program
 	}
 }
 
 // CardReorder Adjusts the position field of a card without changing its list, supporting intra-list reordering.
 func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, position float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardReorderResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardreorder", "[]cardreorderresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardReorder", "[]cardreorderresult")
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
@@ -114,14 +114,14 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 			"position": position,
 		}
 
-		evalRes0, _, err := cardreorderPrograms[0].Eval(paramMap)
+		evalRes0, _, err := cardReorderPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardReorder: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 		args = append(args, systemValues["updated_at"])
 
-		evalRes2, _, err := cardreorderPrograms[1].Eval(paramMap)
+		evalRes2, _, err := cardReorderPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardReorder: failed to evaluate expression: %w", err)
 		}
@@ -135,7 +135,7 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardreorderMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(cardReorderMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("CardReorder: failed to get mock data: %w", err))
 				return

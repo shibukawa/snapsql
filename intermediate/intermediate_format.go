@@ -461,6 +461,8 @@ type CELExpression struct {
 type CELEnvironment struct {
 	Index               int               `json:"index"`
 	AdditionalVariables []CELVariableInfo `json:"additional_variables"`
+	Container           string            `json:"container,omitempty"`
+	ParentIndex         *int              `json:"parent_index,omitempty"`
 }
 
 // CELVariableInfo represents information about a CEL variable

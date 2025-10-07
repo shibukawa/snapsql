@@ -45,12 +45,14 @@ func (c *CELExpressionExtractor) extractEnhancedCELInfo(stmt parser.StatementNod
 	environments := make([]CELEnvironment, 0)
 
 	expressionCounter := 0
-	currentEnvIndex := 0
+	nextEnvIndex := 0
+	envStack := []int{0}
 
 	// Create base environment (index 0) - uses parameters from interface_schema
 	baseEnv := CELEnvironment{
 		Index:               0,
 		AdditionalVariables: []CELVariableInfo{}, // Empty - uses parameters
+		Container:           "root",
 	}
 	environments = append(environments, baseEnv)
 
@@ -61,7 +63,7 @@ func (c *CELExpressionExtractor) extractEnhancedCELInfo(stmt parser.StatementNod
 		return CELExpression{
 			ID:               fmt.Sprintf("expr_%03d", expressionCounter),
 			Expression:       expr,
-			EnvironmentIndex: currentEnvIndex,
+			EnvironmentIndex: envStack[len(envStack)-1],
 			Position: Position{
 				Line:   line,
 				Column: 0,
@@ -92,23 +94,27 @@ func (c *CELExpressionExtractor) extractEnhancedCELInfo(stmt parser.StatementNod
 						expressions = append(expressions, collectionExpr)
 
 						// Create new environment for loop body
-						currentEnvIndex++
+						parentIndex := envStack[len(envStack)-1]
+						nextEnvIndex++
 						loopEnv := CELEnvironment{
-							Index: currentEnvIndex,
+							Index: nextEnvIndex,
 							AdditionalVariables: []CELVariableInfo{
 								{
 									Name: variable,
 									Type: "any", // Could be inferred from collection type
 								},
 							},
+							Container:   fmt.Sprintf("for %s : %s", variable, collection),
+							ParentIndex: &parentIndex,
 						}
 						environments = append(environments, loopEnv)
+						envStack = append(envStack, nextEnvIndex)
 					}
 
 				case "end":
 					// Return to parent environment
-					if currentEnvIndex > 0 {
-						currentEnvIndex--
+					if len(envStack) > 1 {
+						envStack = envStack[:len(envStack)-1]
 					}
 
 				case "variable":

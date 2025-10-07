@@ -220,7 +220,7 @@ var (
 	// ErrSchemaDirectoryNotFound indicates the ./schema directory is missing prior to generation.
 	ErrSchemaDirectoryNotFound = errors.New("schema directory not found; run 'snapsql pull' first")
 	// ErrNoSchemaYAMLFound indicates no schema YAML files were discovered.
-	ErrNoSchemaYAMLFound = errors.New("no schema YAML files found; run 'snapsql pull'")
+	ErrNoSchemaYAMLFound = errors.New("no schema YAML files found; run 'snapsql schema pull'")
 
 	// ErrNotFound indicates a requested entity (affinity=one) was not found.
 	ErrNotFound = errors.New("not found")

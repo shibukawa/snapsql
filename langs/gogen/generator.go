@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -183,6 +184,8 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to process implicit parameters: %w", err)
 	}
 
+	implicitParams = ensureImplicitParams(g.Format, sqlBuilder, implicitParams)
+
 	functionReturnType := fmt.Sprintf("(%s, error)", responseType)
 	declareResult := true
 	iteratorYieldType := ""
@@ -229,7 +232,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		Timestamp:          time.Now(),
 		PackageName:        g.PackageName,
 		FunctionName:       funcName,
-		LowerFuncName:      strings.ToLower(funcName),
+		LowerFuncName:      toLowerCamel(g.Format.FunctionName),
 		Description:        g.Format.Description,
 		MockPath:           g.MockPath,
 		CELEnvironments:    celEnvs,
@@ -510,6 +513,21 @@ func snakeToCamelLower(s string) string {
 	return result.String()
 }
 
+func toLowerCamel(name string) string {
+	if strings.Contains(name, "_") {
+		return snakeToCamelLower(name)
+	}
+
+	runes := []rune(name)
+	if len(runes) == 0 {
+		return ""
+	}
+
+	runes[0] = unicode.ToLower(runes[0])
+
+	return string(runes)
+}
+
 func determineErrorZeroValue(responseType string) string {
 	trimmed := strings.TrimSpace(responseType)
 
@@ -631,9 +649,11 @@ func convertToGoType(snapType string) (string, error) {
 	}
 
 	// Handle basic types
-	switch strings.ToLower(snapType) {
+	normalized := normalizeTemporalAlias(strings.ToLower(snapType))
+
+	switch normalized {
 	case "int", "int32", "int64":
-		return snapType, nil
+		return normalized, nil
 	case "string":
 		return "string", nil
 	case "bool":
@@ -645,9 +665,9 @@ func convertToGoType(snapType string) (string, error) {
 		return "decimal.Decimal", nil
 	case "*decimal.decimal":
 		return "*decimal.Decimal", nil
-	case "timestamp", "date", "time", "time.time":
+	case "timestamp":
 		return "time.Time", nil
-	case "datetime":
+	case "time.time":
 		return "time.Time", nil
 	case "*time.time":
 		return "*time.Time", nil
@@ -866,7 +886,7 @@ func newUnsupportedTypeError(typeName, context string) *UnsupportedTypeError {
 	switch {
 	case context == "parameter":
 		err.Hints = []string{
-			"Basic types: int, string, bool, float, decimal, timestamp, date, time, bytes, any",
+			"Basic types: int, string, bool, float, decimal, timestamp (aliases: date, time, datetime), bytes, any",
 			"Arrays: string[], int[], etc.",
 			"Pointers: *string, *int, etc.",
 			"Custom types: MyType, time.Time, ./CustomType",
@@ -878,7 +898,7 @@ func newUnsupportedTypeError(typeName, context string) *UnsupportedTypeError {
 		}
 	case context == "type":
 		err.Hints = []string{
-			"Supported types: int, string, bool, float, double, decimal, timestamp, datetime, date, any",
+			"Supported types: int, string, bool, float, double, decimal, timestamp (aliases: date, time, datetime), any",
 			"Arrays: type[], custom Go types",
 		}
 	default:
@@ -933,7 +953,9 @@ func isValidGoIdentifier(name string) bool {
 }
 
 func convertTypeToGo(typeName string) (string, error) {
-	switch typeName {
+	normalized := normalizeTemporalAlias(strings.ToLower(typeName))
+
+	switch normalized {
 	case "int":
 		return "int", nil
 	case "string":
@@ -944,9 +966,9 @@ func convertTypeToGo(typeName string) (string, error) {
 		return "float64", nil
 	case "decimal":
 		return "decimal.Decimal", nil
-	case "timestamp", "datetime":
+	case "timestamp":
 		return "time.Time", nil
-	case "date":
+	case "time.time":
 		return "time.Time", nil
 	case "any":
 		return "any", nil
@@ -989,7 +1011,9 @@ func processImplicitParameters(format *intermediate.IntermediateFormat) ([]impli
 			}
 		}
 
-		goType, err := convertTypeToGo(ptype)
+		normalizedType := normalizeTemporalAlias(ptype)
+
+		goType, err := convertTypeToGo(normalizedType)
 		if err != nil {
 			return nil, newUnsupportedTypeError(ptype, fmt.Sprintf("implicit parameter '%s'", param.Name))
 		}
@@ -1016,6 +1040,79 @@ func processImplicitParameters(format *intermediate.IntermediateFormat) ([]impli
 	}
 
 	return implicitParams, nil
+}
+
+func ensureImplicitParams(format *intermediate.IntermediateFormat, sqlBuilder *sqlBuilderData, params []implicitParam) []implicitParam {
+	if sqlBuilder == nil || len(sqlBuilder.ArgumentSystemFields) == 0 {
+		return params
+	}
+
+	existing := make(map[string]struct{}, len(params))
+	for _, p := range params {
+		existing[p.Name] = struct{}{}
+	}
+
+	defaults := make(map[string]any)
+
+	for _, field := range format.SystemFields {
+		if field.OnInsert != nil && field.OnInsert.Default != nil {
+			defaults[field.Name] = field.OnInsert.Default
+		}
+
+		if field.OnUpdate != nil && field.OnUpdate.Default != nil {
+			if _, ok := defaults[field.Name]; !ok {
+				defaults[field.Name] = field.OnUpdate.Default
+			}
+		}
+	}
+
+	for _, name := range sqlBuilder.ArgumentSystemFields {
+		if name == "" {
+			continue
+		}
+
+		if _, ok := existing[name]; ok {
+			continue
+		}
+
+		goType := guessImplicitParamGoType(name)
+		defaultVal := defaults[name]
+		defaultLiteral := ""
+
+		if defaultVal != nil {
+			if lit, err := generateDefaultValueLiteral(defaultVal, goType); err == nil {
+				defaultLiteral = lit
+			} else if str, ok := defaultVal.(string); ok {
+				defaultLiteral = fmt.Sprintf("%q", str)
+			}
+		}
+
+		params = append(params, implicitParam{
+			Name:                name,
+			Type:                goType,
+			Required:            false,
+			Default:             defaultVal,
+			DefaultValueLiteral: defaultLiteral,
+		})
+		existing[name] = struct{}{}
+	}
+
+	return params
+}
+
+func guessImplicitParamGoType(name string) string {
+	switch name {
+	case "created_at", "updated_at", "deleted_at", "read_at":
+		if t, err := convertTypeToGo("timestamp"); err == nil {
+			return t
+		}
+	case "created_by", "updated_by", "created_user", "updated_user", "user_id":
+		if t, err := convertTypeToGo("string"); err == nil {
+			return t
+		}
+	}
+
+	return "any"
 }
 
 // generateDefaultValueLiteral generates Go code literal for default values
@@ -1156,21 +1253,28 @@ func init() {
 	celEnvironments := make([]*cel.Env, {{ .NumCELEnvs }})
 	
 	{{- range .CELEnvironments }}
-	// Environment {{ .Index }}: Base environment
+	// Environment {{ .Index }} (container: {{ .Container }})
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("{{ .Container }}"),
+		}
+		{{- range .Variables }}
+		opts = append(opts, cel.Variable("{{ .Name }}", cel.{{ .CelType }}))
+		{{- end }}
+		{{- if .HasParent }}
+		env{{ .Index }}, err := celEnvironments[{{ .Parent }}].Extend(opts...)
+		{{- else }}
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			{{- range .Variables }}
-			cel.Variable("{{ .Name }}", cel.{{ .CelType }}),
-			{{- end }}
-		}
+		)
 		{{- if $.TypeDefinitions }}
 		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
 		{{- end }}
 		env{{ .Index }}, err := cel.NewEnv(opts...)
+		{{- end }}
 		if err != nil {
 			panic(fmt.Sprintf("failed to create {{ $.FunctionName }} CEL environment {{ .Index }}: %v", err))
 		}
@@ -1275,7 +1379,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	{{ . }}
 	{{- end }}
 
-	query := builder.String()
+	query := strings.TrimSpace(builder.String())
 	return query, args, nil
 		{{- end }}
 	}

@@ -39,10 +39,10 @@ type BoardListResult struct {
 
 // BoardList specific CEL programs and mock path
 var (
-	boardlistPrograms []cel.Program
+	boardListPrograms []cel.Program
 )
 
-const boardlistMockPath = ""
+const boardListMockPath = ""
 
 func init() {
 
@@ -64,13 +64,13 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	boardlistPrograms = make([]cel.Program, 0)
+	boardListPrograms = make([]cel.Program, 0)
 }
 
 // BoardList Fetches every board with basic metadata, ordered by most recently created first. Used for the dashboard overview.
 func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*BoardListResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardlist", "[]boardlistresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardList", "[]boardlistresult")
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
@@ -85,7 +85,7 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(boardlistMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(boardListMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("BoardList: failed to get mock data: %w", err))
 				return

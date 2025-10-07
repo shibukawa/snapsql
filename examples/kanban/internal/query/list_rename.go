@@ -41,10 +41,10 @@ type ListRenameResult struct {
 
 // ListRename specific CEL programs and mock path
 var (
-	listrenamePrograms []cel.Program
+	listRenamePrograms []cel.Program
 )
 
-const listrenameMockPath = ""
+const listRenameMockPath = ""
 
 func init() {
 
@@ -68,7 +68,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	listrenamePrograms = make([]cel.Program, 2)
+	listRenamePrograms = make([]cel.Program, 2)
 	// expr_001: "name" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("name")
@@ -79,7 +79,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "name", err))
 		}
-		listrenamePrograms[0] = program
+		listRenamePrograms[0] = program
 	}
 	// expr_002: "list_id" using environment 0
 	{
@@ -91,14 +91,14 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "list_id", err))
 		}
-		listrenamePrograms[1] = program
+		listRenamePrograms[1] = program
 	}
 }
 
 // ListRename Renames a list and updates its timestamp for optimistic concurrency.
 func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, name string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListRenameResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listrename", "[]listrenameresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listRename", "[]listrenameresult")
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
@@ -115,14 +115,14 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 			"name":    name,
 		}
 
-		evalRes0, _, err := listrenamePrograms[0].Eval(paramMap)
+		evalRes0, _, err := listRenamePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 		args = append(args, systemValues["updated_at"])
 
-		evalRes2, _, err := listrenamePrograms[1].Eval(paramMap)
+		evalRes2, _, err := listRenamePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
 		}
@@ -136,7 +136,7 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(listrenameMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(listRenameMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("ListRename: failed to get mock data: %w", err))
 				return

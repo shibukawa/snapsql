@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
+	"github.com/google/cel-go/common/types/traits"
 	"github.com/google/uuid"
 	"github.com/shibukawa/snapsql/intermediate"
 )
@@ -26,13 +29,15 @@ var randomSource = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // SQLGenerator generates SQL from intermediate format instructions
 type SQLGenerator struct {
-	instructions []intermediate.Instruction
-	expressions  []intermediate.CELExpression
-	systemFields map[string]intermediate.SystemFieldInfo
-	implicitMap  map[string]intermediate.ImplicitParameter
-	generated    map[string]any
-	dialect      string
-	celEnv       *cel.Env
+	instructions    []intermediate.Instruction
+	expressions     []intermediate.CELExpression
+	systemFields    map[string]intermediate.SystemFieldInfo
+	implicitMap     map[string]intermediate.ImplicitParameter
+	generated       map[string]any
+	dialect         string
+	celEnv          *cel.Env
+	loopBoundaries  map[int]int
+	loopBoundaryErr error
 }
 
 // NewSQLGenerator creates a new SQL generator
@@ -76,7 +81,7 @@ func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect string) *S
 		cel.Variable("params", cel.MapType(cel.StringType, cel.AnyType)),
 	)
 
-	return &SQLGenerator{
+	generator := &SQLGenerator{
 		instructions: instructions,
 		expressions:  expressions,
 		systemFields: systemFields,
@@ -85,158 +90,472 @@ func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect string) *S
 		dialect:      dialect,
 		celEnv:       env,
 	}
+
+	boundaries, err := computeLoopBoundaries(generator.instructions)
+	generator.loopBoundaries = boundaries
+	generator.loopBoundaryErr = err
+
+	return generator
 }
 
 // Generate generates SQL and parameters from the instructions
 func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interface{}, error) {
+	if g.loopBoundaryErr != nil {
+		return "", nil, g.loopBoundaryErr
+	}
+
 	if params == nil {
 		params = make(map[string]interface{})
 	}
 
+	// Reset generated cache per invocation to avoid leaking values across calls.
+	g.generated = make(map[string]any)
+
 	var result strings.Builder
 
-	sqlParams := make([]interface{}, 0) // Initialize as empty slice instead of nil
+	sqlParams := make([]interface{}, 0)
+	state := &generationState{
+		builder:   &result,
+		sqlParams: &sqlParams,
+	}
+	state.boundaryEnabled = containsBoundary(g.instructions)
 
-	var conditionStack []bool // Stack to track if/else conditions
+	conditionStack := make([]bool, 0)
 
-	for i, instr := range g.instructions {
-		// Skip instructions if we're in a false condition block
-		if len(conditionStack) > 0 && !conditionStack[len(conditionStack)-1] {
-			if instr.Op == intermediate.OpEnd || instr.Op == intermediate.OpElse || instr.Op == intermediate.OpElseIf {
-				// These operations need to be processed even in false blocks
-			} else {
+	if err := g.processInstructions(state, params, &conditionStack, 0, len(g.instructions)); err != nil {
+		return "", nil, err
+	}
+
+	if len(conditionStack) > 0 {
+		return "", nil, fmt.Errorf("%w: unmatched IF statement", ErrUnsupportedOperation)
+	}
+
+	return result.String(), sqlParams, nil
+}
+
+type generationState struct {
+	builder         *strings.Builder
+	sqlParams       *[]interface{}
+	lastChar        byte
+	hasLast         bool
+	boundaryEnabled bool
+	boundaryNeeded  bool
+}
+
+func (s *generationState) appendSQL(text string) {
+	if len(text) == 0 {
+		return
+	}
+
+	s.builder.WriteString(text)
+	s.lastChar = text[len(text)-1]
+	s.hasLast = true
+}
+
+func (s *generationState) trimTrailingComma() {
+	if s.builder.Len() == 0 {
+		s.hasLast = false
+		s.lastChar = 0
+
+		return
+	}
+
+	current := s.builder.String()
+	end := len(current)
+
+	idx := end - 1
+	for idx >= 0 && isWhitespaceByte(current[idx]) {
+		idx--
+	}
+
+	if idx < 0 || current[idx] != ',' {
+		return
+	}
+
+	prefix := current[:idx]
+	suffix := current[idx+1:]
+
+	s.builder.Reset()
+	s.builder.WriteString(prefix)
+	s.builder.WriteString(suffix)
+
+	newLen := len(prefix) + len(suffix)
+	if newLen == 0 {
+		s.hasLast = false
+		s.lastChar = 0
+
+		return
+	}
+
+	if len(suffix) > 0 {
+		s.lastChar = suffix[len(suffix)-1]
+		s.hasLast = true
+
+		return
+	}
+
+	s.lastChar = prefix[len(prefix)-1]
+	s.hasLast = true
+}
+
+func isWhitespace(b byte) bool {
+	switch b {
+	case ' ', '\n', '\t', '\r':
+		return true
+	default:
+		return false
+	}
+}
+
+func (g *SQLGenerator) processInstructions(state *generationState, params map[string]interface{}, conditionStack *[]bool, start, end int) error {
+	for i := start; i < end; i++ {
+		instr := g.instructions[i]
+
+		// Skip instructions in inactive conditional branches, but keep control-flow markers in sync.
+		if len(*conditionStack) > 0 && !(*conditionStack)[len(*conditionStack)-1] {
+			switch instr.Op {
+			case intermediate.OpEnd, intermediate.OpElse, intermediate.OpElseIf:
+				// Still need to evaluate control flow markers.
+			default:
 				continue
 			}
 		}
 
 		switch instr.Op {
 		case intermediate.OpEmitStatic:
-			result.WriteString(instr.Value)
+			value := instr.Value
+			if len(value) > 0 && !isWhitespace(value[0]) {
+				leading := strings.TrimLeft(value, " \t\r\n")
+				if len(leading) > 0 {
+					upper := strings.ToUpper(leading)
+					if strings.HasPrefix(upper, "AND") || strings.HasPrefix(upper, "OR") || strings.HasPrefix(upper, "WHERE") || strings.HasPrefix(upper, "JOIN") || strings.HasPrefix(upper, "ON") {
+						if state.hasLast && !isWhitespace(state.lastChar) {
+							state.appendSQL(" ")
+						}
+					}
+				}
+			}
+
+			state.appendSQL(value)
+
+			if state.boundaryEnabled && strings.TrimSpace(value) != "" {
+				state.boundaryNeeded = true
+			}
 
 		case intermediate.OpEmitEval:
 			if instr.ExprIndex == nil {
-				return "", nil, fmt.Errorf("%w: instruction %d has no expression index", ErrInvalidExpressionIndex, i)
+				return fmt.Errorf("%w: instruction %d has no expression index", ErrInvalidExpressionIndex, i)
 			}
 
 			if *instr.ExprIndex < 0 || *instr.ExprIndex >= len(g.expressions) {
-				return "", nil, fmt.Errorf("%w: instruction %d has invalid expression index %d", ErrInvalidExpressionIndex, i, *instr.ExprIndex)
+				return fmt.Errorf("%w: instruction %d has invalid expression index %d", ErrInvalidExpressionIndex, i, *instr.ExprIndex)
 			}
 
 			expr := g.expressions[*instr.ExprIndex]
 
 			value, err := g.evaluateExpression(expr.Expression, params)
 			if err != nil {
-				return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
+				return fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 			}
 
-			result.WriteString("?")
+			state.appendSQL("?")
 
-			sqlParams = append(sqlParams, value)
+			*state.sqlParams = append(*state.sqlParams, value)
+			if state.boundaryEnabled {
+				state.boundaryNeeded = true
+			}
 
 		case intermediate.OpIf:
 			if instr.ExprIndex == nil {
-				return "", nil, fmt.Errorf("%w: IF instruction %d has no expression index", ErrInvalidExpressionIndex, i)
+				return fmt.Errorf("%w: IF instruction %d has no expression index", ErrInvalidExpressionIndex, i)
 			}
 
 			if *instr.ExprIndex < 0 || *instr.ExprIndex >= len(g.expressions) {
-				return "", nil, fmt.Errorf("%w: IF instruction %d has invalid expression index %d", ErrInvalidExpressionIndex, i, *instr.ExprIndex)
+				return fmt.Errorf("%w: IF instruction %d has invalid expression index %d", ErrInvalidExpressionIndex, i, *instr.ExprIndex)
 			}
 
 			expr := g.expressions[*instr.ExprIndex]
 
 			condition, err := g.evaluateCondition(expr.Expression, params)
 			if err != nil {
-				return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
+				return fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
 			}
 
-			conditionStack = append(conditionStack, condition)
+			*conditionStack = append(*conditionStack, condition)
 
 		case intermediate.OpElseIf:
-			if len(conditionStack) == 0 {
-				return "", nil, fmt.Errorf("%w: ELSE_IF without matching IF", ErrUnsupportedOperation)
+			if len(*conditionStack) == 0 {
+				return fmt.Errorf("%w: ELSE_IF without matching IF", ErrUnsupportedOperation)
 			}
 
-			// If the current condition is true, set it to false (we already processed the true branch)
-			if conditionStack[len(conditionStack)-1] {
-				conditionStack[len(conditionStack)-1] = false
-			} else {
-				// Evaluate the else-if condition
-				if instr.ExprIndex == nil {
-					return "", nil, fmt.Errorf("%w: ELSE_IF instruction %d has no expression index", ErrInvalidExpressionIndex, i)
-				}
-
-				if *instr.ExprIndex < 0 || *instr.ExprIndex >= len(g.expressions) {
-					return "", nil, fmt.Errorf("%w: ELSE_IF instruction %d has invalid expression index %d", ErrInvalidExpressionIndex, i, *instr.ExprIndex)
-				}
-
-				expr := g.expressions[*instr.ExprIndex]
-
-				condition, err := g.evaluateCondition(expr.Expression, params)
-				if err != nil {
-					return "", nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
-				}
-
-				conditionStack[len(conditionStack)-1] = condition
+			if (*conditionStack)[len(*conditionStack)-1] {
+				(*conditionStack)[len(*conditionStack)-1] = false
+				continue
 			}
+
+			if instr.ExprIndex == nil {
+				return fmt.Errorf("%w: ELSE_IF instruction %d has no expression index", ErrInvalidExpressionIndex, i)
+			}
+
+			if *instr.ExprIndex < 0 || *instr.ExprIndex >= len(g.expressions) {
+				return fmt.Errorf("%w: ELSE_IF instruction %d has invalid expression index %d", ErrInvalidExpressionIndex, i, *instr.ExprIndex)
+			}
+
+			expr := g.expressions[*instr.ExprIndex]
+
+			condition, err := g.evaluateCondition(expr.Expression, params)
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
+			}
+
+			(*conditionStack)[len(*conditionStack)-1] = condition
 
 		case intermediate.OpElse:
-			if len(conditionStack) == 0 {
-				return "", nil, fmt.Errorf("%w: ELSE without matching IF", ErrUnsupportedOperation)
+			if len(*conditionStack) == 0 {
+				return fmt.Errorf("%w: ELSE without matching IF", ErrUnsupportedOperation)
 			}
 
-			// Flip the condition for the else branch
-			conditionStack[len(conditionStack)-1] = !conditionStack[len(conditionStack)-1]
+			(*conditionStack)[len(*conditionStack)-1] = !(*conditionStack)[len(*conditionStack)-1]
 
 		case intermediate.OpEnd:
-			if len(conditionStack) == 0 {
-				return "", nil, fmt.Errorf("%w: END without matching IF", ErrUnsupportedOperation)
+			if len(*conditionStack) == 0 {
+				return fmt.Errorf("%w: END without matching IF", ErrUnsupportedOperation)
 			}
 
-			// Pop the condition stack
-			conditionStack = conditionStack[:len(conditionStack)-1]
+			*conditionStack = (*conditionStack)[:len(*conditionStack)-1]
 
 		case intermediate.OpEmitUnlessBoundary:
-			// For now, just emit the value (boundary handling is complex)
-			result.WriteString(instr.Value)
+			if state.boundaryEnabled {
+				token := padBoundaryToken(instr.Value)
+				if state.boundaryNeeded {
+					state.appendSQL(token)
+				}
+
+				state.boundaryNeeded = true
+			} else {
+				state.appendSQL(instr.Value)
+			}
 
 		case intermediate.OpBoundary:
-			// Skip boundary markers for now
+			if state.boundaryEnabled {
+				state.boundaryNeeded = false
+			}
 
-		case intermediate.OpLoopStart, intermediate.OpLoopEnd:
-			// Loop operations are not implemented yet
-			return "", nil, fmt.Errorf("%w: loop operations not yet implemented", ErrUnsupportedOperation)
+		case intermediate.OpLoopStart:
+			endIndex, err := g.handleLoop(state, params, conditionStack, i, instr)
+			if err != nil {
+				return err
+			}
+
+			i = endIndex
+
+		case intermediate.OpLoopEnd:
+			// Loop end is handled when the corresponding start is processed.
 
 		case intermediate.OpIfSystemLimit:
-			conditionStack = append(conditionStack, g.shouldEmitSystemClause(params, "limit"))
+			*conditionStack = append(*conditionStack, g.shouldEmitSystemClause(params, "limit"))
 		case intermediate.OpIfSystemOffset:
-			conditionStack = append(conditionStack, g.shouldEmitSystemClause(params, "offset"))
+			*conditionStack = append(*conditionStack, g.shouldEmitSystemClause(params, "offset"))
 		case intermediate.OpEmitSystemLimit:
 			limitLiteral := g.resolveSystemNumeric(instr.DefaultValue, "limit")
-			result.WriteString(limitLiteral)
+			state.appendSQL(limitLiteral)
 		case intermediate.OpEmitSystemOffset:
 			offsetLiteral := g.resolveSystemNumeric(instr.DefaultValue, "offset")
-			result.WriteString(offsetLiteral)
+			state.appendSQL(offsetLiteral)
 		case intermediate.OpEmitSystemValue:
 			value, err := g.resolveSystemValue(instr.SystemField, params)
 			if err != nil {
-				return "", nil, err
+				return err
 			}
 
-			result.WriteString("?")
+			state.appendSQL("?")
 
-			sqlParams = append(sqlParams, value)
+			*state.sqlParams = append(*state.sqlParams, value)
+			if state.boundaryEnabled {
+				state.boundaryNeeded = true
+			}
+
+		case intermediate.OpEmitIfDialect:
+			if shouldEmitForDialect(g.dialect, instr.Dialects) {
+				state.appendSQL(instr.SqlFragment)
+			}
 
 		default:
-			return "", nil, fmt.Errorf("%w: %s", ErrUnsupportedOperation, instr.Op)
+			return fmt.Errorf("%w: %s", ErrUnsupportedOperation, instr.Op)
 		}
 	}
 
-	// Check for unmatched conditions
-	if len(conditionStack) > 0 {
-		return "", nil, fmt.Errorf("%w: unmatched IF statement", ErrUnsupportedOperation)
+	return nil
+}
+
+func (g *SQLGenerator) handleLoop(state *generationState, params map[string]interface{}, conditionStack *[]bool, startIndex int, instr intermediate.Instruction) (int, error) {
+	if instr.Variable == "" {
+		return 0, fmt.Errorf("%w: loop variable missing at instruction %d", ErrUnsupportedOperation, startIndex)
 	}
 
-	return result.String(), sqlParams, nil
+	endIndex, ok := g.loopBoundaries[startIndex]
+	if !ok {
+		return 0, fmt.Errorf("%w: LOOP_START at instruction %d has no matching LOOP_END", ErrUnsupportedOperation, startIndex)
+	}
+
+	collection, err := g.evaluateLoopCollection(instr, startIndex, params)
+	if err != nil {
+		return 0, err
+	}
+
+	prevValue, hadPrev := params[instr.Variable]
+	initialStackLen := len(*conditionStack)
+
+	for _, element := range collection {
+		params[instr.Variable] = element
+		if err := g.processInstructions(state, params, conditionStack, startIndex+1, endIndex); err != nil {
+			return 0, err
+		}
+
+		*conditionStack = (*conditionStack)[:initialStackLen]
+	}
+
+	if len(collection) > 0 {
+		state.trimTrailingComma()
+	}
+
+	if hadPrev {
+		params[instr.Variable] = prevValue
+	} else {
+		delete(params, instr.Variable)
+	}
+
+	return endIndex, nil
+}
+
+func (g *SQLGenerator) evaluateLoopCollection(instr intermediate.Instruction, index int, params map[string]interface{}) ([]interface{}, error) {
+	var raw interface{}
+
+	if instr.CollectionExprIndex != nil {
+		exprIndex := *instr.CollectionExprIndex
+		if exprIndex < 0 || exprIndex >= len(g.expressions) {
+			return nil, fmt.Errorf("%w: LOOP_START instruction %d has invalid collection expression index %d", ErrInvalidExpressionIndex, index, exprIndex)
+		}
+
+		expr := g.expressions[exprIndex]
+
+		value, err := g.evaluateExpression(expr.Expression, params)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrExpressionEvaluation, err)
+		}
+
+		raw = value
+	} else if instr.Collection != "" {
+		value, ok := params[instr.Collection]
+		if !ok {
+			return nil, fmt.Errorf("%w: collection %s not found for instruction %d", ErrParameterNotFound, instr.Collection, index)
+		}
+
+		raw = value
+	} else {
+		return nil, fmt.Errorf("%w: loop collection missing for instruction %d", ErrUnsupportedOperation, index)
+	}
+
+	return normalizeCollectionValue(raw)
+}
+
+func normalizeCollectionValue(value interface{}) ([]interface{}, error) {
+	if value == nil {
+		return []interface{}{}, nil
+	}
+
+	switch v := value.(type) {
+	case []interface{}:
+		return append([]interface{}{}, v...), nil
+	case traits.Lister:
+		iter := v.Iterator()
+
+		result := make([]interface{}, 0)
+		for hasNext(iter.HasNext()) {
+			result = append(result, iter.Next().Value())
+		}
+
+		return result, nil
+	}
+
+	rv := reflect.ValueOf(value)
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		length := rv.Len()
+
+		result := make([]interface{}, length)
+		for i := range length {
+			result[i] = rv.Index(i).Interface()
+		}
+
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("%w: loop collection must be array or list, got %T", ErrUnsupportedOperation, value)
+}
+
+func hasNext(val ref.Val) bool {
+	switch v := val.(type) {
+	case types.Bool:
+		return bool(v)
+	default:
+		if b, ok := val.Value().(bool); ok {
+			return b
+		}
+	}
+
+	return false
+}
+
+func shouldEmitForDialect(current string, targets []string) bool {
+	if len(targets) == 0 {
+		return true
+	}
+
+	current = strings.ToLower(strings.TrimSpace(current))
+	for _, dialect := range targets {
+		if current == strings.ToLower(strings.TrimSpace(dialect)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func computeLoopBoundaries(instructions []intermediate.Instruction) (map[int]int, error) {
+	boundaries := make(map[int]int)
+	stack := make([]int, 0)
+
+	for idx, instr := range instructions {
+		switch instr.Op {
+		case intermediate.OpLoopStart:
+			stack = append(stack, idx)
+		case intermediate.OpLoopEnd:
+			if len(stack) == 0 {
+				return nil, fmt.Errorf("%w: LOOP_END without matching LOOP_START at instruction %d", ErrUnsupportedOperation, idx)
+			}
+
+			start := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			boundaries[start] = idx
+		}
+	}
+
+	if len(stack) > 0 {
+		return nil, fmt.Errorf("%w: LOOP_START without matching LOOP_END", ErrUnsupportedOperation)
+	}
+
+	return boundaries, nil
+}
+
+func containsBoundary(instructions []intermediate.Instruction) bool {
+	for _, inst := range instructions {
+		switch inst.Op {
+		case intermediate.OpEmitUnlessBoundary, intermediate.OpBoundary:
+			return true
+		}
+	}
+
+	return false
 }
 
 func (g *SQLGenerator) shouldEmitSystemClause(params map[string]interface{}, key string) bool {

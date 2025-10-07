@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -121,6 +122,36 @@ type ValidationResult struct {
 	QueryType    QueryType
 }
 
+var (
+	currentDateAnchorMu  sync.RWMutex
+	currentDateAnchor    time.Time
+	currentDateAnchorSet bool
+)
+
+func setCurrentDateAnchor(t time.Time) {
+	currentDateAnchorMu.Lock()
+	currentDateAnchor = t
+	currentDateAnchorSet = true
+	currentDateAnchorMu.Unlock()
+}
+
+func clearCurrentDateAnchor() {
+	currentDateAnchorMu.Lock()
+	currentDateAnchorSet = false
+	currentDateAnchorMu.Unlock()
+}
+
+func currentDateAnchorNow() time.Time {
+	currentDateAnchorMu.RLock()
+	if currentDateAnchorSet {
+		t := currentDateAnchor
+		currentDateAnchorMu.RUnlock()
+		return t
+	}
+	currentDateAnchorMu.RUnlock()
+	return time.Now().UTC()
+}
+
 // ExpectedResultsStrategy defines comparison strategy for table state validation.
 // Recognized values (design doc): "all" (default), "pk-match", "pk-exists", "pk-not-exists".
 // Executor treats empty string as "all" for backward compatibility.
@@ -135,6 +166,7 @@ type TestExecution struct {
 	Transaction *sql.Tx
 	Executor    *Executor
 	Trace       []SQLTrace
+	TimeAnchor  time.Time
 }
 
 func (te *TestExecution) addTrace(label, statement string, params map[string]any, args []any, result *ValidationResult) {
@@ -290,7 +322,7 @@ func resolveFixtureValue(value any) (any, error) {
 			matcher := strings.ToLower(strings.TrimSpace(first))
 			switch matcher {
 			case "currentdate", "current_date":
-				base := time.Now().UTC()
+				base := currentDateAnchorNow()
 				offset := time.Duration(0)
 				if len(v) >= 2 {
 					if durStr, ok := v[1].(string); ok && strings.TrimSpace(durStr) != "" {
@@ -324,9 +356,31 @@ func resolveFixtureValue(value any) (any, error) {
 			out[key] = val
 		}
 		return out, nil
+	case string:
+		if arr, ok := parseBracketLiteral(v); ok {
+			return resolveFixtureValue(arr)
+		}
+		return v, nil
 	default:
 		return value, nil
 	}
+}
+
+func parseBracketLiteral(raw string) ([]any, bool) {
+	s := strings.TrimSpace(raw)
+	if len(s) < 2 || s[0] != '[' || s[len(s)-1] != ']' {
+		return nil, false
+	}
+	inner := strings.TrimSpace(s[1 : len(s)-1])
+	if inner == "" {
+		return []any{}, true
+	}
+	parts := strings.Split(inner, ",")
+	result := make([]any, len(parts))
+	for i, p := range parts {
+		result[i] = strings.TrimSpace(p)
+	}
+	return result, true
 }
 
 // Executor handles fixture data insertion and query execution
@@ -367,6 +421,10 @@ func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, pa
 		}
 	}()
 
+	anchor := time.Now().UTC()
+	setCurrentDateAnchor(anchor)
+	defer clearCurrentDateAnchor()
+
 	finalSQL, args := e.resolveExecutableSQL(testCase, sql)
 
 	execution := &TestExecution{
@@ -377,10 +435,28 @@ func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, pa
 		Options:     opts,
 		Transaction: tx,
 		Executor:    e,
+		TimeAnchor:  anchor,
+	}
+
+	if err := NormalizeParameters(execution.Parameters); err != nil {
+		return nil, nil, wrapDefinitionFailure(err, "failed to normalize parameters")
 	}
 
 	result, err := e.executeTestSteps(execution)
 	return result, execution.Trace, err
+}
+
+func formatArgsForContext(values []any) string {
+	if len(values) == 0 {
+		return ""
+	}
+
+	parts := make([]string, len(values))
+	for i, v := range values {
+		parts[i] = fmt.Sprintf("%v", v)
+	}
+
+	return strings.Join(parts, ",")
 }
 
 // executeTestSteps executes the test steps based on execution mode
@@ -481,7 +557,7 @@ func (e *Executor) validateTableStateBySpec(tx *sql.Tx, spec markdownparser.Expe
 	case "all":
 		// expect full match with order irrelevant? design doc implies exact table contents.
 		// We compare counts and then match rows by index after sorting by PK (already ordered if PK exists).
-		if err := compareRowsSlice(spec.Data, actual, spec.TableName, pkCols, false, false); err != nil {
+		if err := compareRowsSlice(spec.Data, actual, spec.TableName, pkCols, false, true); err != nil {
 			return err
 		}
 		return nil
@@ -1164,53 +1240,74 @@ func (e *Executor) getPrimaryKeyColumns(tableName string) ([]string, error) {
 // - ignoreUnexpected: 実際の行に期待にない余分なカラムがあっても許容（シンプル検証用）
 
 func compareRowsSlice(expected, actual []map[string]any, table string, pkCols []string, orderSensitive bool, ignoreUnexpected bool) error {
-	if orderSensitive {
+	if orderSensitive || len(pkCols) == 0 {
+		return compareRowsSliceOrdered(expected, actual, table, pkCols, ignoreUnexpected)
+	}
+
+	if !rowsContainPrimaryColumns(expected, pkCols) || !rowsContainPrimaryColumns(actual, pkCols) {
 		return compareRowsSliceOrdered(expected, actual, table, pkCols, ignoreUnexpected)
 	}
 
 	diff := &DiffError{Table: table, PrimaryKeys: pkCols}
-	used := make([]bool, len(actual))
 
-	for idx, exp := range expected {
-		matchIdx := -1
-		for j, act := range actual {
-			if used[j] {
-				continue
-			}
-			if len(collectRowDiffs(exp, act, ignoreUnexpected)) == 0 {
-				matchIdx = j
-				used[j] = true
-				break
+	expectedIndex := indexRowsByPK(expected, pkCols)
+	actualIndex := indexRowsByPK(actual, pkCols)
+
+	for key, expRows := range expectedIndex {
+		actRows := actualIndex[key]
+
+		for i, expRow := range expRows {
+			if i < len(actRows) {
+				colDiffs := collectRowDiffs(expRow, actRows[i], ignoreUnexpected)
+				if len(colDiffs) > 0 {
+					keyLabel := buildRowKey(pkCols, expRow, actRows[i], i)
+					diff.RowDiffs = append(diff.RowDiffs, RowDiff{Key: keyLabel, Diffs: colDiffs})
+				}
+			} else {
+				keyLabel := buildRowKey(pkCols, expRow, nil, i)
+				diff.RowDiffs = append(diff.RowDiffs, RowDiff{
+					Key:       keyLabel,
+					RowStatus: "missing",
+					Diffs: []ColumnDiff{{
+						Column:   "__row__",
+						Expected: formatRowForDiff(expRow),
+						Actual:   "<missing>",
+					}},
+				})
 			}
 		}
-		if matchIdx == -1 {
-			key := buildRowKey(pkCols, exp, nil, idx)
+
+		if len(actRows) > len(expRows) {
+			for i := len(expRows); i < len(actRows); i++ {
+				keyLabel := buildRowKey(pkCols, nil, actRows[i], i)
+				diff.RowDiffs = append(diff.RowDiffs, RowDiff{
+					Key:       keyLabel,
+					RowStatus: "unexpected",
+					Diffs: []ColumnDiff{{
+						Column:   "__row__",
+						Expected: "<missing>",
+						Actual:   formatRowForDiff(actRows[i]),
+					}},
+				})
+			}
+		}
+
+		delete(actualIndex, key)
+	}
+
+	for _, remaining := range actualIndex {
+		for i, row := range remaining {
+			keyLabel := buildRowKey(pkCols, nil, row, i)
 			diff.RowDiffs = append(diff.RowDiffs, RowDiff{
-				Key:       key,
-				RowStatus: "missing",
+				Key:       keyLabel,
+				RowStatus: "unexpected",
 				Diffs: []ColumnDiff{{
 					Column:   "__row__",
-					Expected: formatRowForDiff(exp),
-					Actual:   "<missing>",
+					Expected: "<missing>",
+					Actual:   formatRowForDiff(row),
 				}},
 			})
 		}
-	}
-
-	for j, act := range actual {
-		if used[j] {
-			continue
-		}
-		key := buildRowKey(pkCols, nil, act, len(expected)+j)
-		diff.RowDiffs = append(diff.RowDiffs, RowDiff{
-			Key:       key,
-			RowStatus: "unexpected",
-			Diffs: []ColumnDiff{{
-				Column:   "__row__",
-				Expected: "<missing>",
-				Actual:   formatRowForDiff(act),
-			}},
-		})
 	}
 
 	if len(expected) != len(actual) {
@@ -1307,6 +1404,37 @@ func collectRowDiffs(expected, actual map[string]any, ignoreUnexpected bool) []C
 	return diffs
 }
 
+func rowsContainPrimaryColumns(rows []map[string]any, pkCols []string) bool {
+	if len(pkCols) == 0 {
+		return false
+	}
+	for _, row := range rows {
+		for _, col := range pkCols {
+			if _, ok := row[col]; !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func indexRowsByPK(rows []map[string]any, pkCols []string) map[string][]map[string]any {
+	indexed := make(map[string][]map[string]any, len(rows))
+	for _, row := range rows {
+		key := buildPrimaryKeyString(pkCols, row)
+		indexed[key] = append(indexed[key], row)
+	}
+	return indexed
+}
+
+func buildPrimaryKeyString(pkCols []string, row map[string]any) string {
+	parts := make([]string, len(pkCols))
+	for i, col := range pkCols {
+		parts[i] = fmt.Sprintf("%s=%v", col, formatValueForDiff(row[col]))
+	}
+	return strings.Join(parts, ",")
+}
+
 func evaluateMatcherDiff(column string, expected any, actual any) *ColumnDiff {
 	switch val := expected.(type) {
 	case []any:
@@ -1321,22 +1449,23 @@ func evaluateMatcherDiff(column string, expected any, actual any) *ColumnDiff {
 				matcher := strings.ToLower(first)
 				switch matcher {
 				case "currentdate", "current_date":
-					tolerance := time.Minute
-					if len(val) >= 2 {
-						if durStr, ok := val[1].(string); ok && durStr != "" {
-							if parsed, err := time.ParseDuration(durStr); err == nil {
-								tolerance = parsed
-							}
-						}
+					expectedTime, tolerance, display, err := evaluateRelativeTimeMatcher(val)
+					if err != nil {
+						return &ColumnDiff{Column: column, Expected: formatValueForDiff(val), Actual: formatValueForDiff(actual), Reason: err.Error()}
 					}
 
 					actualTime, ok := parseTimeValue(actual)
 					if !ok {
-						return &ColumnDiff{Column: column, Expected: "[currentdate]", Actual: formatValueForDiff(actual), Reason: "invalid time value"}
+						return &ColumnDiff{Column: column, Expected: display, Actual: formatValueForDiff(actual), Reason: "invalid time value"}
 					}
 
-					if durationAbs(time.Since(actualTime)) > tolerance {
-						return &ColumnDiff{Column: column, Expected: fmt.Sprintf("[currentdate,%s]", tolerance.String()), Actual: actualTime.UTC().Format(time.RFC3339), Reason: "timestamp outside tolerance"}
+					delta := actualTime.Sub(expectedTime)
+					if delta < 0 {
+						delta = -delta
+					}
+
+					if delta > tolerance {
+						return &ColumnDiff{Column: column, Expected: display, Actual: actualTime.UTC().Format(time.RFC3339), Reason: "timestamp outside tolerance"}
 					}
 					return nil
 				case "null":
@@ -1376,6 +1505,52 @@ func evaluateMatcherDiff(column string, expected any, actual any) *ColumnDiff {
 		}
 	}
 	return nil
+}
+
+func evaluateRelativeTimeMatcher(arr []any) (time.Time, time.Duration, string, error) {
+	base := currentDateAnchorNow()
+	offset := time.Duration(0)
+	tolerance := time.Minute
+	offsetToken := ""
+	toleranceToken := ""
+
+	if len(arr) >= 2 {
+		if token, ok := arr[1].(string); ok && strings.TrimSpace(token) != "" {
+			trimmed := strings.TrimSpace(token)
+			dur, err := parseFlexibleDuration(trimmed)
+			if err != nil {
+				return time.Time{}, 0, "", err
+			}
+			offset = dur
+			offsetToken = trimmed
+		}
+	}
+
+	if len(arr) >= 3 {
+		if token, ok := arr[2].(string); ok && strings.TrimSpace(token) != "" {
+			trimmed := strings.TrimSpace(token)
+			dur, err := parseFlexibleDuration(trimmed)
+			if err != nil {
+				return time.Time{}, 0, "", err
+			}
+			if dur < 0 {
+				dur = -dur
+			}
+			tolerance = dur
+			toleranceToken = trimmed
+		}
+	}
+
+	display := "[currentdate]"
+	if offsetToken != "" && toleranceToken != "" {
+		display = fmt.Sprintf("[currentdate,%s,%s]", offsetToken, toleranceToken)
+	} else if offsetToken != "" {
+		display = fmt.Sprintf("[currentdate,%s]", offsetToken)
+	} else if toleranceToken != "" {
+		display = fmt.Sprintf("[currentdate,%s]", toleranceToken)
+	}
+
+	return base.Add(offset), tolerance, display, nil
 }
 
 func buildRowKey(pkCols []string, expected, actual map[string]any, index int) map[string]any {
@@ -1634,14 +1809,21 @@ func durationAbs(d time.Duration) time.Duration {
 func parseFlexibleDuration(raw string) (time.Duration, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
-		return 0, nil
+		return 0, fmt.Errorf("duration must start with + or -: %s", raw)
 	}
 	sign := 1
-	if s[0] == '+' {
+	switch s[0] {
+	case '+':
 		s = s[1:]
-	} else if s[0] == '-' {
+	case '-':
 		sign = -1
 		s = s[1:]
+	default:
+		return 0, fmt.Errorf("duration must start with + or -: %s", raw)
+	}
+
+	if len(strings.TrimSpace(s)) == 0 {
+		return 0, fmt.Errorf("invalid duration: %s", raw)
 	}
 
 	if strings.HasSuffix(s, "d") {
@@ -1676,32 +1858,33 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 	var columns []string
 	tbl, hasSchema := e.tableInfo[tableName]
 
+	// Collect union of columns present across all rows
+	columnSet := make(map[string]struct{})
+	for _, row := range data {
+		for col := range row {
+			columnSet[col] = struct{}{}
+		}
+	}
+
 	if hasSchema && tbl != nil && len(tbl.ColumnOrder) > 0 {
-		// validate & build list using first row's keys presence
-		first := data[0]
+		// unknown column detection against schema
+		for col := range columnSet {
+			if _, ok := tbl.Columns[col]; !ok {
+				return fmt.Errorf("%w: %s", errUnknownFixtureColumn, col)
+			}
+		}
+
 		for _, c := range tbl.ColumnOrder {
-			if _, ok := first[c]; ok { // only include present columns
+			if _, ok := columnSet[c]; ok {
 				columns = append(columns, c)
 			}
 		}
-		// verify required non-null columns exist in row
-		for colName, colInfo := range tbl.Columns {
-			if !colInfo.Nullable && !colInfo.IsPrimaryKey { // PK auto value許容
-				if _, ok := first[colName]; !ok {
-					return fmt.Errorf("%w: %s", errMissingRequiredColumn, colName)
-				}
-			}
-		}
-		// unknown column detection
-		for k := range first {
-			if _, ok := tbl.Columns[k]; !ok {
-				return fmt.Errorf("%w: %s", errUnknownFixtureColumn, k)
-			}
-		}
 	} else {
-		for col := range data[0] {
+		columns = make([]string, 0, len(columnSet))
+		for col := range columnSet {
 			columns = append(columns, col)
 		}
+		sort.Strings(columns)
 	}
 
 	// Build INSERT query
@@ -1725,7 +1908,13 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 	defer cancel()
 	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
-		return wrapDefinitionFailureWithContext(map[string]string{"table": tableName, "operation": "prepare"}, err, "failed to prepare insert statement")
+		ctxMap := map[string]string{
+			"table":     tableName,
+			"operation": "prepare",
+			"sql":       query,
+		}
+		ctxMap["columns"] = strings.Join(columns, ",")
+		return wrapDefinitionFailureWithContext(ctxMap, err, "failed to prepare insert statement")
 	}
 	defer stmt.Close()
 
@@ -1752,7 +1941,13 @@ func (e *Executor) insertData(tx *sql.Tx, tableName string, data []map[string]an
 		}
 
 		if _, err := stmt.ExecContext(ctx, values...); err != nil {
-			return wrapDefinitionFailureWithContext(map[string]string{"table": tableName, "operation": "insert"}, err, "failed to insert row")
+			ctxMap := map[string]string{
+				"table":     tableName,
+				"operation": "insert",
+				"sql":       query,
+				"args":      formatArgsForContext(values),
+			}
+			return wrapDefinitionFailureWithContext(ctxMap, err, "failed to insert row")
 		}
 	}
 
@@ -2017,7 +2212,7 @@ func reorderForSchema(order []string, cols []string, placeholders []string, valu
 // quoteIdentifier quotes database identifiers based on dialect
 func (e *Executor) quoteIdentifier(identifier string) string {
 	switch e.dialect {
-	case "postgres":
+	case "postgres", "postgresql", "pg", "pgx":
 		return fmt.Sprintf(`"%s"`, identifier)
 	case "mysql":
 		return fmt.Sprintf("`%s`", identifier)
@@ -2031,7 +2226,7 @@ func (e *Executor) quoteIdentifier(identifier string) string {
 // getPlaceholder returns the appropriate placeholder for the dialect
 func (e *Executor) getPlaceholder(position int) string {
 	switch e.dialect {
-	case "postgres":
+	case "postgres", "postgresql", "pg", "pgx":
 		return fmt.Sprintf("$%d", position)
 	case "mysql", "sqlite":
 		return "?"

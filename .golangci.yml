@@ -54,6 +54,7 @@ linters:
           - prealloc
           - err113
           - dupl
+          - dogsled
       - path: main.go
         linters:
           - forbidigo
