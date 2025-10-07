@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -599,52 +598,6 @@ func addLimitOffsetIfNeeded(sql string, options QueryOptions) string {
 	}
 
 	return s
-}
-
-// convertPlaceholdersForDriver converts '?' placeholders to driver-specific syntax
-func convertPlaceholdersForDriver(sql string, driver string) string {
-	d := strings.ToLower(driver)
-	if d != "postgres" && d != "pgx" && d != "postgresql" {
-		return sql
-	}
-
-	var b strings.Builder
-
-	n := 1
-	inSingle := false
-	inDouble := false
-
-	for i := range len(sql) {
-		ch := sql[i]
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
-
-			b.WriteByte(ch)
-
-			continue
-		}
-
-		if ch == '"' && !inSingle {
-			inDouble = !inDouble
-
-			b.WriteByte(ch)
-
-			continue
-		}
-
-		if ch == '?' && !inSingle && !inDouble {
-			b.WriteByte('$')
-			b.WriteString(strconv.Itoa(n))
-
-			n++
-
-			continue
-		}
-
-		b.WriteByte(ch)
-	}
-
-	return b.String()
 }
 
 // readOriginalSQL reads SQL content from .snap.sql or extracts SQL from .snap.md

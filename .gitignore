@@ -4,3 +4,7 @@ cmd/snapsql/snapsql.exe
 examples/kanban/cmd/kanban/dist/*
 !examples/kanban/cmd/kanban/dist/.keep
 
+
+# Ignore generated Go files produced by acceptance tests
+testdata/acceptancetests/*/generated
+

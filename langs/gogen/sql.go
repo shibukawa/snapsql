@@ -307,13 +307,13 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "if err != nil {")
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate expression: %%w\", err)", functionName))
 				code = append(code, "}")
-				code = append(code, fmt.Sprintf("args = append(args, %s.Value())", resVar))
+				code = append(code, fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(%s))", resVar))
 				hasArguments = true
 			}
 
 		case "ADD_SYSTEM_PARAM":
 			code = append(code, "// Add system parameter: "+inst.SystemField)
-			code = append(code, fmt.Sprintf("args = append(args, systemValues[%q])", inst.SystemField))
+			code = append(code, fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues[%q]))", inst.SystemField))
 			hasArguments = true
 			hasSystemArguments = true
 

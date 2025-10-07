@@ -84,7 +84,7 @@ func TestQuery_DryRun_SQLTemplate_WithParam(t *testing.T) {
 	q := &QueryCmd{}
 	outSQL, args, err := q.buildSQLFromOptimized(optimized, format, map[string]any{"user_id": 1})
 	assert.NoError(t, err)
-	assert.True(t, strings.Contains(outSQL, "?"), outSQL)
+	assert.True(t, strings.Contains(outSQL, "$"), outSQL)
 	assert.Equal(t, 1, len(args))
 	assert.Equal(t, 1, args[0])
 }
@@ -139,7 +139,7 @@ func TestQuery_DryRun_MarkdownTemplate_WithParam(t *testing.T) {
 	q := &QueryCmd{}
 	outSQL, args, err := q.buildSQLFromOptimized(optimized, format, map[string]any{"user_id": 1})
 	assert.NoError(t, err)
-	assert.True(t, strings.Contains(outSQL, "?"), outSQL)
+	assert.True(t, strings.Contains(outSQL, "$"), outSQL)
 	assert.Equal(t, 1, len(args))
 	assert.Equal(t, 1, args[0])
 }

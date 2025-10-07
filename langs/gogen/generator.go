@@ -591,6 +591,7 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 				OriginalName: param.Name,
 				Type:         "[]InsertAllSubDepartmentsDepartment",
 				Required:     !param.Optional,
+				IsTemporal:   false,
 			}
 
 			continue
@@ -607,6 +608,7 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 			OriginalName: param.Name,
 			Type:         goType,
 			Required:     !param.Optional,
+			IsTemporal:   goType == "time.Time" || goType == "*time.Time",
 		}
 	}
 
@@ -838,6 +840,7 @@ type parameterData struct {
 	OriginalName string
 	Type         string
 	Required     bool
+	IsTemporal   bool
 }
 
 type parameter struct {
@@ -1350,23 +1353,23 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 		query := {{ printf "%q" .SQLBuilder.StaticSQL }}
 		args := make([]any, 0)
 		{{- if .SQLBuilder.HasArguments }}
-			{{- if .SQLBuilder.HasNonSystemArguments }}
+		{{- if .SQLBuilder.HasNonSystemArguments }}
 		paramMap := map[string]any{
 			{{- range .Parameters }}
-			"{{ .OriginalName }}": {{ .Name }},
+			"{{ .OriginalName }}": {{ if .IsTemporal }}snapsqlgo.NormalizeNullableTimestamp({{ .Name }}){{ else }}{{ .Name }}{{ end }},
 			{{- end }}
 		}
 			{{ end }}
 			{{ range $idx, $arg := .SQLBuilder.Arguments }}
 				{{- if eq $arg -1 }}
-		args = append(args, systemValues["{{ index $.SQLBuilder.ArgumentSystemFields $idx }}"])
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["{{ index $.SQLBuilder.ArgumentSystemFields $idx }}"]))
 				{{ else }}
 		{{ $resVar := printf "evalRes%d" $idx }}
 		{{ $resVar }}, _, err := {{ $.LowerFuncName }}Programs[{{ $arg }}].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("{{ $.FunctionName }}: failed to evaluate expression: %w", err)
 		}
-		args = append(args, {{ $resVar }}.Value())
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp({{ $resVar }}))
 				{{- end }}
 			{{- end }}
 		{{- end }}

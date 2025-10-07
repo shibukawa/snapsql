@@ -1,6 +1,7 @@
 package intermediate
 
 import (
+	"strconv"
 	"strings"
 )
 
@@ -182,7 +183,12 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 	}
 
 	// Merge adjacent EMIT_STATIC instructions
-	return MergeAdjacentStatic(result), nil
+	merged := MergeAdjacentStatic(result)
+
+	// Apply dialect-specific placeholder style
+	merged = applyPlaceholderStyle(merged, dialect)
+
+	return merged, nil
 }
 
 // containsDialect checks if the target dialect is in the list of supported dialects
@@ -228,6 +234,69 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 	flushStatic()
 
 	return result
+}
+
+func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) []OptimizedInstruction {
+	d := strings.ToLower(strings.TrimSpace(dialect))
+	if d != "postgres" && d != "postgresql" && d != "pgx" && d != "pg" {
+		return instructions
+	}
+
+	nextIndex := 1
+
+	convert := func(s string) string {
+		if s == "" {
+			return s
+		}
+
+		var b strings.Builder
+		b.Grow(len(s) + 4)
+
+		inSingle := false
+		inDouble := false
+
+		for i := range len(s) {
+			ch := s[i]
+
+			switch ch {
+			case '\'':
+				if !inDouble {
+					inSingle = !inSingle
+				}
+
+				b.WriteByte(ch)
+			case '"':
+				if !inSingle {
+					inDouble = !inDouble
+				}
+
+				b.WriteByte(ch)
+			case '?':
+				if !inSingle && !inDouble {
+					b.WriteByte('$')
+					b.WriteString(strconv.Itoa(nextIndex))
+					nextIndex++
+				} else {
+					b.WriteByte(ch)
+				}
+			default:
+				b.WriteByte(ch)
+			}
+		}
+
+		return b.String()
+	}
+
+	for i := range instructions {
+		switch instructions[i].Op {
+		case "EMIT_STATIC", "EMIT_UNLESS_BOUNDARY":
+			instructions[i].Value = convert(instructions[i].Value)
+		case "EMIT_IF_DIALECT":
+			instructions[i].SqlFragment = convert(instructions[i].SqlFragment)
+		}
+	}
+
+	return instructions
 }
 
 // HasDynamicInstructions checks if instructions contain dynamic elements (IF, FOR, etc.)
