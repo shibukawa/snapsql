@@ -9,25 +9,13 @@ import (
 // ensures readability by adding a space after placeholders when needed.
 // Supported drivers for numbered placeholders: postgres, pgx, postgresql.
 func FormatSQLForDriver(sql string, driver string) string {
-	s := convertPlaceholdersForDriver(sql, driver)
-	s = ensureSpaceAfterPlaceholders(s)
-
-	return s
+	return ensureSpaceAfterPlaceholders(sql)
 }
 
-// FormatSQLForDialect converts placeholders for the given dialect (dry-run use)
+// FormatSQLForDialect converts placeholders for display (dry-run use)
 // and ensures readability by adding a space after placeholders when needed.
 // Dialect: postgresql/mysql/sqlite.
 func FormatSQLForDialect(sql string, dialect string) string {
-	s := convertPlaceholdersForDialect(sql, dialect)
-	s = ensureSpaceAfterPlaceholders(s)
-
-	return s
-}
-
-// convertPlaceholdersForDialect transforms '?' into dialect-specific placeholders for display.
-// Only PostgreSQL family converts to $1..; others remain '?'. Quotes are respected.
-func convertPlaceholdersForDialect(sql, dialect string) string {
 	d := strings.ToLower(strings.TrimSpace(dialect))
 	switch d {
 	case "postgres", "postgresql", "pg", "pgx":
@@ -67,9 +55,9 @@ func convertPlaceholdersForDialect(sql, dialect string) string {
 			b.WriteByte(ch)
 		}
 
-		return b.String()
+		return ensureSpaceAfterPlaceholders(b.String())
 	default:
-		return sql
+		return ensureSpaceAfterPlaceholders(sql)
 	}
 }
 
