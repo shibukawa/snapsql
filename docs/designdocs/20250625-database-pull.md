@@ -68,7 +68,7 @@ schemas:
         columns:
           - {name: id, type: integer, snapsql_type: int, nullable: false, is_primary_key: true}
           - {name: email, type: "character varying(255)", snapsql_type: string, nullable: false}
-          - {name: created_at, type: "timestamp with time zone", snapsql_type: datetime, nullable: false}
+          - {name: created_at, type: "timestamp with time zone", snapsql_type: timestamp, nullable: false}
 ```
 
 ### Per-Table Format
@@ -100,9 +100,7 @@ metadata:
 | Integer types | int |
 | Floating point types | float |
 | Boolean types | bool |
-| Date types | date |
-| Time types | time |
-| DateTime types | datetime |
+| Timestamp types | timestamp (aliases: datetime, date, time) |
 | JSON types | json |
 | Binary types | binary |
 

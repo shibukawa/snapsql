@@ -649,9 +649,11 @@ func convertToGoType(snapType string) (string, error) {
 	}
 
 	// Handle basic types
-	switch strings.ToLower(snapType) {
+	normalized := normalizeTemporalAlias(strings.ToLower(snapType))
+
+	switch normalized {
 	case "int", "int32", "int64":
-		return snapType, nil
+		return normalized, nil
 	case "string":
 		return "string", nil
 	case "bool":
@@ -663,9 +665,9 @@ func convertToGoType(snapType string) (string, error) {
 		return "decimal.Decimal", nil
 	case "*decimal.decimal":
 		return "*decimal.Decimal", nil
-	case "timestamp", "date", "time", "time.time":
+	case "timestamp":
 		return "time.Time", nil
-	case "datetime":
+	case "time.time":
 		return "time.Time", nil
 	case "*time.time":
 		return "*time.Time", nil
@@ -884,7 +886,7 @@ func newUnsupportedTypeError(typeName, context string) *UnsupportedTypeError {
 	switch {
 	case context == "parameter":
 		err.Hints = []string{
-			"Basic types: int, string, bool, float, decimal, timestamp, date, time, bytes, any",
+			"Basic types: int, string, bool, float, decimal, timestamp (aliases: date, time, datetime), bytes, any",
 			"Arrays: string[], int[], etc.",
 			"Pointers: *string, *int, etc.",
 			"Custom types: MyType, time.Time, ./CustomType",
@@ -896,7 +898,7 @@ func newUnsupportedTypeError(typeName, context string) *UnsupportedTypeError {
 		}
 	case context == "type":
 		err.Hints = []string{
-			"Supported types: int, string, bool, float, double, decimal, timestamp, datetime, date, any",
+			"Supported types: int, string, bool, float, double, decimal, timestamp (aliases: date, time, datetime), any",
 			"Arrays: type[], custom Go types",
 		}
 	default:
@@ -951,7 +953,9 @@ func isValidGoIdentifier(name string) bool {
 }
 
 func convertTypeToGo(typeName string) (string, error) {
-	switch typeName {
+	normalized := normalizeTemporalAlias(strings.ToLower(typeName))
+
+	switch normalized {
 	case "int":
 		return "int", nil
 	case "string":
@@ -962,9 +966,9 @@ func convertTypeToGo(typeName string) (string, error) {
 		return "float64", nil
 	case "decimal":
 		return "decimal.Decimal", nil
-	case "timestamp", "datetime":
+	case "timestamp":
 		return "time.Time", nil
-	case "date":
+	case "time.time":
 		return "time.Time", nil
 	case "any":
 		return "any", nil
@@ -1007,7 +1011,9 @@ func processImplicitParameters(format *intermediate.IntermediateFormat) ([]impli
 			}
 		}
 
-		goType, err := convertTypeToGo(ptype)
+		normalizedType := normalizeTemporalAlias(ptype)
+
+		goType, err := convertTypeToGo(normalizedType)
 		if err != nil {
 			return nil, newUnsupportedTypeError(ptype, fmt.Sprintf("implicit parameter '%s'", param.Name))
 		}
@@ -1247,21 +1253,28 @@ func init() {
 	celEnvironments := make([]*cel.Env, {{ .NumCELEnvs }})
 	
 	{{- range .CELEnvironments }}
-	// Environment {{ .Index }}: Base environment
+	// Environment {{ .Index }} (container: {{ .Container }})
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("{{ .Container }}"),
+		}
+		{{- range .Variables }}
+		opts = append(opts, cel.Variable("{{ .Name }}", cel.{{ .CelType }}))
+		{{- end }}
+		{{- if .HasParent }}
+		env{{ .Index }}, err := celEnvironments[{{ .Parent }}].Extend(opts...)
+		{{- else }}
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			{{- range .Variables }}
-			cel.Variable("{{ .Name }}", cel.{{ .CelType }}),
-			{{- end }}
-		}
+		)
 		{{- if $.TypeDefinitions }}
 		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
 		{{- end }}
 		env{{ .Index }}, err := cel.NewEnv(opts...)
+		{{- end }}
 		if err != nil {
 			panic(fmt.Sprintf("failed to create {{ $.FunctionName }} CEL environment {{ .Index }}: %v", err))
 		}

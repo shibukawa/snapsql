@@ -113,15 +113,18 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 3)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("departments", cel.AnyType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("departments", cel.AnyType),
-		}
+		)
 		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
@@ -129,33 +132,27 @@ func init() {
 		}
 		celEnvironments[0] = env0
 	}
-	// Environment 1: Base environment
+	// Environment 1 (container: for dept : departments)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-			cel.Variable("dept", cel.AnyType),
+			cel.Container("for dept : departments"),
 		}
-		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
-		env1, err := cel.NewEnv(opts...)
+		opts = append(opts, cel.Variable("dept", cel.AnyType))
+		env1, err := celEnvironments[0].Extend(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 1: %v", err))
 		}
 		celEnvironments[1] = env1
 	}
-	// Environment 2: Base environment
+	// Environment 2 (container: for sub : dept.sub_departments)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-			cel.Variable("sub", cel.AnyType),
+			cel.Container("for sub : dept.sub_departments"),
 		}
-		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
-		env2, err := cel.NewEnv(opts...)
+		opts = append(opts, cel.Variable("sub", cel.AnyType))
+		env2, err := celEnvironments[1].Extend(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create InsertAllSubDepartments CEL environment 2: %v", err))
 		}

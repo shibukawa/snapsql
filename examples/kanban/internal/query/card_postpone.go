@@ -32,10 +32,10 @@ type CardPostponeResult struct {
 
 // CardPostpone specific CEL programs and mock path
 var (
-	cardpostponePrograms []cel.Program
+	cardPostponePrograms []cel.Program
 )
 
-const cardpostponeMockPath = ""
+const cardPostponeMockPath = ""
 
 func init() {
 
@@ -59,7 +59,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	cardpostponePrograms = make([]cel.Program, 6)
+	cardPostponePrograms = make([]cel.Program, 6)
 	// expr_001: "src_board_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("src_board_id")
@@ -70,7 +70,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "src_board_id", err))
 		}
-		cardpostponePrograms[0] = program
+		cardPostponePrograms[0] = program
 	}
 	// expr_002: "dst_board_id" using environment 0
 	{
@@ -82,7 +82,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dst_board_id", err))
 		}
-		cardpostponePrograms[1] = program
+		cardPostponePrograms[1] = program
 	}
 	// expr_003: "src_board_id" using environment 0
 	{
@@ -94,7 +94,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "src_board_id", err))
 		}
-		cardpostponePrograms[2] = program
+		cardPostponePrograms[2] = program
 	}
 	// expr_004: "src_board_id" using environment 0
 	{
@@ -106,7 +106,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "src_board_id", err))
 		}
-		cardpostponePrograms[3] = program
+		cardPostponePrograms[3] = program
 	}
 	// expr_005: "dst_board_id" using environment 0
 	{
@@ -118,7 +118,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dst_board_id", err))
 		}
-		cardpostponePrograms[4] = program
+		cardPostponePrograms[4] = program
 	}
 	// expr_006: "src_board_id" using environment 0
 	{
@@ -130,7 +130,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "src_board_id", err))
 		}
-		cardpostponePrograms[5] = program
+		cardPostponePrograms[5] = program
 	}
 }
 
@@ -141,10 +141,10 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardpostpone", "any")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardPostpone", "any")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(cardpostponeMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(cardPostponeMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return nil, fmt.Errorf("CardPostpone: failed to get mock data: %w", err)
 		}
@@ -165,26 +165,26 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "WITH done_stage AS ( SELECT stage_order AS stage_limit FROM lists  WHERE board_id =$1 ORDER BY stage_order DESC, id DESC LIMIT 1 ), new_list AS ( SELECT id AS new_list_id FROM lists  WHERE board_id =$2 ORDER BY stage_order ASC, id ASC LIMIT 1 ), undone_lists AS ( SELECT old.id AS old_list_id FROM lists AS old  WHERE old.board_id =$3 AND old.stage_order < ( SELECT stage_limit FROM done_stage ) ) UPDATE cards SET list_id = (SELECT new_list_id FROM new_list), updated_at =$4  WHERE list_id IN ( SELECT old_list_id FROM undone_lists )"
+		query := "WITH done_stage AS ( SELECT stage_order AS stage_limit FROM lists  WHERE board_id =$1 OR DER BY stage_order DESC, id DESC LIMIT 1 ), new_list AS ( SELECT id AS new_list_id FROM lists  WHERE board_id =$2 OR DER BY stage_order ASC, id ASC LIMIT 1 ), undone_lists AS ( SELECT old.id AS old_list_id FROM lists AS old  WHERE old.board_id =$3 AND old.stage_order < ( SELECT stage_limit FROM done_stage ) ) UPDATE cards SET list_id = (SELECT new_list_id FROM new_list), updated_at =$4  WHERE list_id IN ( SELECT old_list_id FROM undone_lists )"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"src_board_id": srcBoardID,
 			"dst_board_id": dstBoardID,
 		}
 
-		evalRes0, _, err := cardpostponePrograms[0].Eval(paramMap)
+		evalRes0, _, err := cardPostponePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardPostpone: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := cardpostponePrograms[1].Eval(paramMap)
+		evalRes1, _, err := cardPostponePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardPostpone: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes1.Value())
 
-		evalRes2, _, err := cardpostponePrograms[0].Eval(paramMap)
+		evalRes2, _, err := cardPostponePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardPostpone: failed to evaluate expression: %w", err)
 		}

@@ -38,18 +38,21 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("min_age", cel.IntType))
+		opts = append(opts, cel.Variable("max_age", cel.IntType))
+		opts = append(opts, cel.Variable("departments", cel.ListType(cel.StringType)))
+		opts = append(opts, cel.Variable("active", cel.BoolType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("min_age", cel.IntType),
-			cel.Variable("max_age", cel.IntType),
-			cel.Variable("departments", cel.ListType(cel.StringType)),
-			cel.Variable("active", cel.BoolType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create GetFilteredData CEL environment 0: %v", err))
@@ -192,7 +195,7 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			if boundaryNeeded {
 				builder.WriteString(" AND ")
 			}
@@ -217,7 +220,7 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			if boundaryNeeded {
 				builder.WriteString(" AND ")
 			}
@@ -242,7 +245,7 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			{ // append static fragment
 				_frag := "department IN (?"
 				if builder.Len() > 0 {
@@ -280,7 +283,7 @@ func GetFilteredData(ctx context.Context, executor snapsqlgo.DBExecutor, minAge 
 		if err != nil {
 			return "", nil, fmt.Errorf("GetFilteredData: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			if boundaryNeeded {
 				builder.WriteString(" AND ")
 			}

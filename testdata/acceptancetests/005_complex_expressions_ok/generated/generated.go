@@ -38,23 +38,26 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("user_id", cel.IntType))
+		opts = append(opts, cel.Variable("username", cel.StringType))
+		opts = append(opts, cel.Variable("display_name", cel.BoolType))
+		opts = append(opts, cel.Variable("start_date", cel.StringType))
+		opts = append(opts, cel.Variable("end_date", cel.StringType))
+		opts = append(opts, cel.Variable("sort_field", cel.StringType))
+		opts = append(opts, cel.Variable("sort_direction", cel.StringType))
+		opts = append(opts, cel.Variable("page_size", cel.IntType))
+		opts = append(opts, cel.Variable("page", cel.IntType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("user_id", cel.IntType),
-			cel.Variable("username", cel.StringType),
-			cel.Variable("display_name", cel.BoolType),
-			cel.Variable("start_date", cel.StringType),
-			cel.Variable("end_date", cel.StringType),
-			cel.Variable("sort_field", cel.StringType),
-			cel.Variable("sort_direction", cel.StringType),
-			cel.Variable("page_size", cel.IntType),
-			cel.Variable("page", cel.IntType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create GetComplexData CEL environment 0: %v", err))
@@ -216,7 +219,7 @@ func GetComplexData(ctx context.Context, executor snapsqlgo.DBExecutor, userID i
 		if err != nil {
 			return "", nil, fmt.Errorf("GetComplexData: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			{ // append static fragment
 				_frag := "created_at BETWEEN ?"
 				if builder.Len() > 0 {

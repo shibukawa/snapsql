@@ -40,10 +40,10 @@ type CardUpdateResult struct {
 
 // CardUpdate specific CEL programs and mock path
 var (
-	cardupdatePrograms []cel.Program
+	cardUpdatePrograms []cel.Program
 )
 
-const cardupdateMockPath = ""
+const cardUpdateMockPath = ""
 
 func init() {
 
@@ -68,7 +68,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	cardupdatePrograms = make([]cel.Program, 3)
+	cardUpdatePrograms = make([]cel.Program, 3)
 	// expr_001: "title" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("title")
@@ -79,7 +79,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "title", err))
 		}
-		cardupdatePrograms[0] = program
+		cardUpdatePrograms[0] = program
 	}
 	// expr_002: "description" using environment 0
 	{
@@ -91,7 +91,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "description", err))
 		}
-		cardupdatePrograms[1] = program
+		cardUpdatePrograms[1] = program
 	}
 	// expr_003: "card_id" using environment 0
 	{
@@ -103,14 +103,14 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
 		}
-		cardupdatePrograms[2] = program
+		cardUpdatePrograms[2] = program
 	}
 }
 
 // CardUpdate Updates the title and description of a card and refreshes its timestamp.
 func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, title string, description string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardUpdateResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardupdate", "[]cardupdateresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardUpdate", "[]cardupdateresult")
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
@@ -128,20 +128,20 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 			"description": description,
 		}
 
-		evalRes0, _, err := cardupdatePrograms[0].Eval(paramMap)
+		evalRes0, _, err := cardUpdatePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := cardupdatePrograms[1].Eval(paramMap)
+		evalRes1, _, err := cardUpdatePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes1.Value())
 		args = append(args, systemValues["updated_at"])
 
-		evalRes3, _, err := cardupdatePrograms[2].Eval(paramMap)
+		evalRes3, _, err := cardUpdatePrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
 		}
@@ -155,7 +155,7 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardupdateMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(cardUpdateMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("CardUpdate: failed to get mock data: %w", err))
 				return

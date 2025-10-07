@@ -38,31 +38,32 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 2)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("users", cel.ListType(types.NewObjectType("User"))))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("users", cel.ListType(types.NewObjectType("User"))),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 0: %v", err))
 		}
 		celEnvironments[0] = env0
 	}
-	// Environment 1: Base environment
+	// Environment 1 (container: for user : users)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-			cel.Variable("user", cel.AnyType),
+			cel.Container("for user : users"),
 		}
-		env1, err := cel.NewEnv(opts...)
+		opts = append(opts, cel.Variable("user", cel.AnyType))
+		env1, err := celEnvironments[0].Extend(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create InsertUserTags CEL environment 1: %v", err))
 		}

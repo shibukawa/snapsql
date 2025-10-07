@@ -20,9 +20,8 @@ package query
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/shibukawa/snapsql"
+	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
@@ -64,10 +63,10 @@ type BoardTreeResult struct {
 
 // BoardTree specific CEL programs and mock path
 var (
-	boardtreePrograms []cel.Program
+	boardTreePrograms []cel.Program
 )
 
-const boardtreeMockPath = ""
+const boardTreeMockPath = ""
 
 func init() {
 	// Static accessor functions for each type
@@ -253,7 +252,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	boardtreePrograms = make([]cel.Program, 1)
+	boardTreePrograms = make([]cel.Program, 1)
 	// expr_001: "board_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("board_id")
@@ -264,7 +263,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "board_id", err))
 		}
-		boardtreePrograms[0] = program
+		boardTreePrograms[0] = program
 	}
 }
 
@@ -275,10 +274,10 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 2
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardtree", "boardtreeresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardTree", "boardtreeresult")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(boardtreeMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(boardTreeMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("BoardTree: failed to get mock data: %w", err)
 		}
@@ -293,13 +292,13 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT b.id, b.name, b.status, b.archived_at, b.created_at, b.updated_at, l.id AS lists__id, l.board_id AS lists__board_id, l.name AS lists__name, l.stage_order AS lists__stage_order, l.position AS lists__position, l.is_archived AS lists__is_archived, l.created_at AS lists__created_at, l.updated_at AS lists__updated_at, c.id AS lists__cards__id, c.list_id AS lists__cards__list_id, c.title AS lists__cards__title, c.description AS lists__cards__description, c.position AS lists__cards__position, c.created_at AS lists__cards__created_at, c.updated_at AS lists__cards__updated_at FROM boards b LEFT JOIN lists l ON l.board_id = b.id AND l.is_archived = 0 LEFT JOIN cards c ON c.list_id = l.id  WHERE b.id =$1 ORDER BY l.stage_order ASC, l.position ASC, c.position ASC"
+		query := "SELECT b.id, b.name, b.status, b.archived_at, b.created_at, b.updated_at, l.id AS lists__id, l.board_id AS lists__board_id, l.name AS lists__name, l.stage_order AS lists__stage_order, l.position AS lists__position, l.is_archived AS lists__is_archived, l.created_at AS lists__created_at, l.updated_at AS lists__updated_at, c.id AS lists__cards__id, c.list_id AS lists__cards__list_id, c.title AS lists__cards__title, c.description AS lists__cards__description, c.position AS lists__cards__position, c.created_at AS lists__cards__created_at, c.updated_at AS lists__cards__updated_at FROM boards b LEFT JOIN lists l ON l.board_id = b.id AND l.is_archived = 0 LEFT JOIN cards c ON c.list_id = l.id  WHERE b.id =$1 OR DER BY l.stage_order ASC, l.position ASC, c.position ASC"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"board_id": boardID,
 		}
 
-		evalRes0, _, err := boardtreePrograms[0].Eval(paramMap)
+		evalRes0, _, err := boardTreePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("BoardTree: failed to evaluate expression: %w", err)
 		}

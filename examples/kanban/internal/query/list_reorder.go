@@ -41,10 +41,10 @@ type ListReorderResult struct {
 
 // ListReorder specific CEL programs and mock path
 var (
-	listreorderPrograms []cel.Program
+	listReorderPrograms []cel.Program
 )
 
-const listreorderMockPath = ""
+const listReorderMockPath = ""
 
 func init() {
 
@@ -68,7 +68,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	listreorderPrograms = make([]cel.Program, 2)
+	listReorderPrograms = make([]cel.Program, 2)
 	// expr_001: "position" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("position")
@@ -79,7 +79,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "position", err))
 		}
-		listreorderPrograms[0] = program
+		listReorderPrograms[0] = program
 	}
 	// expr_002: "list_id" using environment 0
 	{
@@ -91,14 +91,14 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "list_id", err))
 		}
-		listreorderPrograms[1] = program
+		listReorderPrograms[1] = program
 	}
 }
 
 // ListReorder Adjusts the position value of a list to support drag and drop operations.
 func ListReorder(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, position float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListReorderResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listreorder", "[]listreorderresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listReorder", "[]listreorderresult")
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
@@ -115,14 +115,14 @@ func ListReorder(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 			"position": position,
 		}
 
-		evalRes0, _, err := listreorderPrograms[0].Eval(paramMap)
+		evalRes0, _, err := listReorderPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListReorder: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 		args = append(args, systemValues["updated_at"])
 
-		evalRes2, _, err := listreorderPrograms[1].Eval(paramMap)
+		evalRes2, _, err := listReorderPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListReorder: failed to evaluate expression: %w", err)
 		}
@@ -136,7 +136,7 @@ func ListReorder(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(listreorderMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(listReorderMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("ListReorder: failed to get mock data: %w", err))
 				return

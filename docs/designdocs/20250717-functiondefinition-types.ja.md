@@ -26,9 +26,7 @@ SnapSQLのFunctionDefinitionにおけるパラメータ型システムの仕様�
 
 | 型名        | Go型           | CEL型         | 説明                         |
 |-------------|----------------|--------------|------------------------------|
-| `date`      | time.Time      | string        | 日付型（YYYY-MM-DD）         |
-| `datetime`  | time.Time      | string        | 日時型                       |
-| `timestamp` | time.Time      | string        | タイムスタンプ型             |
+| `timestamp`（エイリアス: `datetime`, `date`, `time`） | time.Time | string | タイムスタンプ型（内部では統一） |
 | `email`     | string         | string        | メールアドレス型             |
 | `uuid`      | github.com/google/uuid.UUID | string        | UUID型         |
 | `json`      | map[string]any | map(string, dyn) | JSON型                   |

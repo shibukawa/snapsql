@@ -2,7 +2,8 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": []
+      "additional_variables": [],
+      "container": "root"
     }
   ],
   "cel_expressions": [],

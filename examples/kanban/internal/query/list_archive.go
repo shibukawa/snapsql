@@ -41,10 +41,10 @@ type ListArchiveResult struct {
 
 // ListArchive specific CEL programs and mock path
 var (
-	listarchivePrograms []cel.Program
+	listArchivePrograms []cel.Program
 )
 
-const listarchiveMockPath = ""
+const listArchiveMockPath = ""
 
 func init() {
 
@@ -68,7 +68,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	listarchivePrograms = make([]cel.Program, 2)
+	listArchivePrograms = make([]cel.Program, 2)
 	// expr_001: "is_archived" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("is_archived")
@@ -79,7 +79,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "is_archived", err))
 		}
-		listarchivePrograms[0] = program
+		listArchivePrograms[0] = program
 	}
 	// expr_002: "list_id" using environment 0
 	{
@@ -91,14 +91,14 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "list_id", err))
 		}
-		listarchivePrograms[1] = program
+		listArchivePrograms[1] = program
 	}
 }
 
 // ListArchive Sets the archive flag on a list, keeping other attributes intact.
 func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, isArchived bool, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListArchiveResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listarchive", "[]listarchiveresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listArchive", "[]listarchiveresult")
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
@@ -115,14 +115,14 @@ func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 			"is_archived": isArchived,
 		}
 
-		evalRes0, _, err := listarchivePrograms[0].Eval(paramMap)
+		evalRes0, _, err := listArchivePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListArchive: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 		args = append(args, systemValues["updated_at"])
 
-		evalRes2, _, err := listarchivePrograms[1].Eval(paramMap)
+		evalRes2, _, err := listArchivePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListArchive: failed to evaluate expression: %w", err)
 		}
@@ -136,7 +136,7 @@ func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(listarchiveMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(listArchiveMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("ListArchive: failed to get mock data: %w", err))
 				return

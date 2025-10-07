@@ -39,10 +39,10 @@ type CardCreateResult struct {
 
 // CardCreate specific CEL programs and mock path
 var (
-	cardcreatePrograms []cel.Program
+	cardCreatePrograms []cel.Program
 )
 
-const cardcreateMockPath = ""
+const cardCreateMockPath = ""
 
 func init() {
 
@@ -67,7 +67,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	cardcreatePrograms = make([]cel.Program, 3)
+	cardCreatePrograms = make([]cel.Program, 3)
 	// expr_001: "title" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("title")
@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "title", err))
 		}
-		cardcreatePrograms[0] = program
+		cardCreatePrograms[0] = program
 	}
 	// expr_002: "description" using environment 0
 	{
@@ -90,7 +90,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "description", err))
 		}
-		cardcreatePrograms[1] = program
+		cardCreatePrograms[1] = program
 	}
 	// expr_003: "position" using environment 0
 	{
@@ -102,7 +102,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "position", err))
 		}
-		cardcreatePrograms[2] = program
+		cardCreatePrograms[2] = program
 	}
 }
 
@@ -113,10 +113,10 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardcreate", "cardcreateresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardCreate", "cardcreateresult")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(cardcreateMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(cardCreateMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("CardCreate: failed to get mock data: %w", err)
 		}
@@ -146,19 +146,19 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 			"position":    position,
 		}
 
-		evalRes0, _, err := cardcreatePrograms[0].Eval(paramMap)
+		evalRes0, _, err := cardCreatePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := cardcreatePrograms[1].Eval(paramMap)
+		evalRes1, _, err := cardCreatePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes1.Value())
 
-		evalRes2, _, err := cardcreatePrograms[2].Eval(paramMap)
+		evalRes2, _, err := cardCreatePrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
 		}

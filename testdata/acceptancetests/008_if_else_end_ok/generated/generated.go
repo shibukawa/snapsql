@@ -38,17 +38,20 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("min_age", cel.IntType))
+		opts = append(opts, cel.Variable("max_age", cel.IntType))
+		opts = append(opts, cel.Variable("include_email", cel.BoolType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("min_age", cel.IntType),
-			cel.Variable("max_age", cel.IntType),
-			cel.Variable("include_email", cel.BoolType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create GetUsersWithConditions CEL environment 0: %v", err))
@@ -142,7 +145,7 @@ func GetUsersWithConditions(ctx context.Context, executor snapsqlgo.DBExecutor, 
 		if err != nil {
 			return "", nil, fmt.Errorf("GetUsersWithConditions: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			{ // append static fragment
 				_frag := "email"
 				if builder.Len() > 0 {

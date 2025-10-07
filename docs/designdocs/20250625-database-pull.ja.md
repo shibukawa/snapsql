@@ -68,7 +68,7 @@ schemas:
         columns:
           - {name: id, type: integer, snapsql_type: int, nullable: false, is_primary_key: true}
           - {name: email, type: "character varying(255)", snapsql_type: string, nullable: false}
-          - {name: created_at, type: "timestamp with time zone", snapsql_type: datetime, nullable: false}
+          - {name: created_at, type: "timestamp with time zone", snapsql_type: timestamp, nullable: false}
 ```
 
 ### テーブル別形式
@@ -100,9 +100,7 @@ metadata:
 | 整数型 | int |
 | 浮動小数点型 | float |
 | 真偽値型 | bool |
-| 日付型 | date |
-| 時刻型 | time |
-| 日時型 | datetime |
+| タイムスタンプ型 | timestamp（エイリアス: datetime, date, time） |
 | JSON型 | json |
 | バイナリ型 | binary |
 

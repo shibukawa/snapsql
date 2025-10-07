@@ -47,6 +47,9 @@ var goTypeMap = map[string]string{
 // celEnvironmentData represents a CEL environment for code generation
 type celEnvironmentData struct {
 	Index     int
+	Container string
+	HasParent bool
+	Parent    int
 	Variables []celVariableData
 	Imports   map[string]struct{} // Track required imports
 }
@@ -70,6 +73,25 @@ func processCELEnvironments(format *intermediate.IntermediateFormat) ([]celEnvir
 			Index:     env.Index,
 			Variables: make([]celVariableData, 0),
 			Imports:   make(map[string]struct{}),
+		}
+
+		if env.Container != "" {
+			envData.Container = env.Container
+		} else {
+			if env.Index == 0 {
+				envData.Container = "root"
+			} else {
+				envData.Container = fmt.Sprintf("env_%d", env.Index)
+			}
+		}
+
+		if env.ParentIndex != nil {
+			envData.HasParent = true
+			envData.Parent = *env.ParentIndex
+		} else if env.Index > 0 {
+			// Fallback for older intermediate files without explicit parent information
+			envData.HasParent = true
+			envData.Parent = env.Index - 1
 		}
 
 		// Process variables from parameters for environment 0
@@ -147,12 +169,14 @@ func processCELVariable(v intermediate.CELVariableInfo) (celVariableData, error)
 		}, nil
 	}
 
-	celType, ok := celTypeMap[strings.ToLower(baseType)]
+	normalizedBase := normalizeTemporalAlias(baseType)
+
+	celType, ok := celTypeMap[normalizedBase]
 	if !ok {
 		return celVariableData{}, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedType, v.Type)
 	}
 
-	goType, ok := goTypeMap[strings.ToLower(baseType)]
+	goType, ok := goTypeMap[normalizedBase]
 	if !ok {
 		return celVariableData{}, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedType, v.Type)
 	}

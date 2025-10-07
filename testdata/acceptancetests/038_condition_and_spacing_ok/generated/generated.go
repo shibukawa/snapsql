@@ -38,17 +38,20 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("user_id", cel.StringType))
+		opts = append(opts, cel.Variable("unread_only", cel.BoolType))
+		opts = append(opts, cel.Variable("since", cel.StringType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("user_id", cel.StringType),
-			cel.Variable("unread_only", cel.BoolType),
-			cel.Variable("since", cel.StringType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create ListUserNotifications CEL environment 0: %v", err))
@@ -160,7 +163,7 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 		if err != nil {
 			return "", nil, fmt.Errorf("ListUserNotifications: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			if boundaryNeeded {
 				builder.WriteString(" AND ")
 			}
@@ -179,7 +182,7 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 		if err != nil {
 			return "", nil, fmt.Errorf("ListUserNotifications: failed to evaluate condition: %w", err)
 		}
-		if condResult.Value().(bool) {
+		if snapsqlgo.Truthy(condResult) {
 			if boundaryNeeded {
 				builder.WriteString(" AND ")
 			}

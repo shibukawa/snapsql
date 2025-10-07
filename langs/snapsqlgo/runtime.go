@@ -246,7 +246,7 @@ func validateImplicitParamType(value any, expectedType string) bool {
 		return true
 	}
 
-	switch expectedType {
+	switch normalizeTemporalExpectedType(expectedType) {
 	case "int":
 		_, ok := value.(int)
 		return ok
@@ -256,11 +256,21 @@ func validateImplicitParamType(value any, expectedType string) bool {
 	case "bool":
 		_, ok := value.(bool)
 		return ok
-	case "datetime":
+	case "timestamp":
 		_, ok := value.(time.Time)
 		return ok
 	default:
 		return value != nil
+	}
+}
+
+func normalizeTemporalExpectedType(expectedType string) string {
+	lower := strings.ToLower(expectedType)
+	switch lower {
+	case "datetime", "timestamp", "date", "time", "time.time":
+		return "timestamp"
+	default:
+		return lower
 	}
 }
 

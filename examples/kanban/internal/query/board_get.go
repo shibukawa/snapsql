@@ -38,10 +38,10 @@ type BoardGetResult struct {
 
 // BoardGet specific CEL programs and mock path
 var (
-	boardgetPrograms []cel.Program
+	boardGetPrograms []cel.Program
 )
 
-const boardgetMockPath = ""
+const boardGetMockPath = ""
 
 func init() {
 
@@ -64,7 +64,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	boardgetPrograms = make([]cel.Program, 1)
+	boardGetPrograms = make([]cel.Program, 1)
 	// expr_001: "board_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("board_id")
@@ -75,7 +75,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "board_id", err))
 		}
-		boardgetPrograms[0] = program
+		boardGetPrograms[0] = program
 	}
 }
 
@@ -86,10 +86,10 @@ func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, o
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardget", "boardgetresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardGet", "boardgetresult")
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(boardgetMockPath, funcConfig.MockDataNames)
+		mockData, err := snapsqlgo.GetMockDataFromFiles(boardGetMockPath, funcConfig.MockDataNames)
 		if err != nil {
 			return result, fmt.Errorf("BoardGet: failed to get mock data: %w", err)
 		}
@@ -110,7 +110,7 @@ func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, o
 			"board_id": boardID,
 		}
 
-		evalRes0, _, err := boardgetPrograms[0].Eval(paramMap)
+		evalRes0, _, err := boardGetPrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("BoardGet: failed to evaluate expression: %w", err)
 		}

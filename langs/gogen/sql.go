@@ -347,13 +347,13 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "if err != nil {")
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate condition: %%w\", err)", functionName))
 				code = append(code, "}")
-				code = append(code, "if condResult.Value().(bool) {")
+				code = append(code, "if snapsqlgo.Truthy(condResult) {")
 				controlStack = append(controlStack, "if")
 			}
 
 		case "ELSEIF":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "if" {
-				code = append(code, "} else if condResult.Value().(bool) {")
+				code = append(code, "} else if snapsqlgo.Truthy(condResult) {")
 			}
 
 		case "ELSE":

@@ -24,9 +24,7 @@ This document defines the parameter type system specification for SnapSQL's Func
 
 | Type Name   | Go Type           | CEL Type         | Description                |
 |-------------|-------------------|------------------|----------------------------|
-| `date`      | time.Time         | string           | Date (YYYY-MM-DD)          |
-| `datetime`  | time.Time         | string           | Datetime                   |
-| `timestamp` | time.Time         | string           | Timestamp                  |
+| `timestamp` (aliases: `datetime`, `date`, `time`) | time.Time | string | Timestamp (normalized internally) |
 | `email`     | string            | string           | Email address              |
 | `uuid`      | github.com/google/uuid.UUID | string   | UUID type                  |
 | `json`      | map[string]any    | map(string, dyn) | JSON type                  |

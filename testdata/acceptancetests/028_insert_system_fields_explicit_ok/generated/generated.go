@@ -38,17 +38,20 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("user", cel.types.NewObjectType("User")))
+		opts = append(opts, cel.Variable("created_at", cel.TimestampType))
+		opts = append(opts, cel.Variable("updated_at", cel.TimestampType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("user", cel.types.NewObjectType("User")),
-			cel.Variable("created_at", cel.TimestampType),
-			cel.Variable("updated_at", cel.TimestampType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create InsertUser CEL environment 0: %v", err))

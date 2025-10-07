@@ -40,10 +40,10 @@ type CardMoveResult struct {
 
 // CardMove specific CEL programs and mock path
 var (
-	cardmovePrograms []cel.Program
+	cardMovePrograms []cel.Program
 )
 
-const cardmoveMockPath = ""
+const cardMoveMockPath = ""
 
 func init() {
 
@@ -68,7 +68,7 @@ func init() {
 	}
 
 	// Create programs for each expression using the corresponding environment
-	cardmovePrograms = make([]cel.Program, 3)
+	cardMovePrograms = make([]cel.Program, 3)
 	// expr_001: "target_list_id" using environment 0
 	{
 		ast, issues := celEnvironments[0].Compile("target_list_id")
@@ -79,7 +79,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "target_list_id", err))
 		}
-		cardmovePrograms[0] = program
+		cardMovePrograms[0] = program
 	}
 	// expr_002: "target_position" using environment 0
 	{
@@ -91,7 +91,7 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "target_position", err))
 		}
-		cardmovePrograms[1] = program
+		cardMovePrograms[1] = program
 	}
 	// expr_003: "card_id" using environment 0
 	{
@@ -103,14 +103,14 @@ func init() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
 		}
-		cardmovePrograms[2] = program
+		cardMovePrograms[2] = program
 	}
 }
 
 // CardMove Moves a card to a target list and position, using a transactional update for drag-and-drop operations.
 func CardMove(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, targetListID int, targetPosition float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardMoveResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardmove", "[]cardmoveresult")
+	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardMove", "[]cardmoveresult")
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
@@ -128,20 +128,20 @@ func CardMove(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, ta
 			"target_position": targetPosition,
 		}
 
-		evalRes0, _, err := cardmovePrograms[0].Eval(paramMap)
+		evalRes0, _, err := cardMovePrograms[0].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardMove: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes0.Value())
 
-		evalRes1, _, err := cardmovePrograms[1].Eval(paramMap)
+		evalRes1, _, err := cardMovePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardMove: failed to evaluate expression: %w", err)
 		}
 		args = append(args, evalRes1.Value())
 		args = append(args, systemValues["updated_at"])
 
-		evalRes3, _, err := cardmovePrograms[2].Eval(paramMap)
+		evalRes3, _, err := cardMovePrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardMove: failed to evaluate expression: %w", err)
 		}
@@ -155,7 +155,7 @@ func CardMove(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, ta
 			return
 		}
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardmoveMockPath, funcConfig.MockDataNames)
+			mockData, err := snapsqlgo.GetMockDataFromFiles(cardMoveMockPath, funcConfig.MockDataNames)
 			if err != nil {
 				_ = yield(nil, fmt.Errorf("CardMove: failed to get mock data: %w", err))
 				return
