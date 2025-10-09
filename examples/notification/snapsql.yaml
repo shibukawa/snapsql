@@ -1,0 +1,56 @@
+# SQL dialect configuration
+dialect: "postgres"  # postgres, mysql, sqlite
+
+# Database connection settings
+databases:
+  development:
+    driver: "postgres"
+    connection: "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    schema: "public"
+  
+  production:
+    driver: "postgres"
+    connection: "postgres://${PROD_DB_USER}:${PROD_DB_PASS}@${PROD_DB_HOST}:${PROD_DB_PORT}/${PROD_DB_NAME}"
+    schema: "public"
+
+# Constant definition files (expandable with /*# */)
+constant_files:
+  - "./constants/database.yaml"
+  - "./constants/tables.yaml"
+
+# Generation settings
+generation:
+  validate: true
+  generators:
+    go:
+      output: "./internal/query"
+      disabled: false
+      preserve_hierarchy: true
+      settings:
+        package: "query"
+
+    json:
+      output: "./generated"
+      disabled: true
+
+# Validation settings
+validation:
+  strict: false
+  rules:
+    - "no-dynamic-table-names"
+    - "require-parameter-types"
+
+system:
+  fields:
+    - name: created_at
+      type: timestamp
+      exclude_from_select: false
+      on_insert:
+        default: NOW()
+    - name: updated_at
+      type: timestamp
+      exclude_from_select: false
+      on_insert:
+        default: NOW()
+      on_update:
+        default: NOW()

@@ -381,11 +381,33 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 					code = append(code, "}")
 				} else {
 					// Outside a loop (e.g., in IF blocks): emit conditionally based on boundaryNeeded
-					padded := padBoundaryToken(inst.Value)
+					// Check the next instruction to determine if we should skip
+					shouldSkip := false
 
-					code = append(code, "if boundaryNeeded {")
-					code = append(code, fmt.Sprintf("    builder.WriteString(%q)", padded))
-					code = append(code, "}")
+					if i+1 < len(instructions) {
+						nextInst := instructions[i+1]
+						// Skip only if next token starts with ')' or if it's the last token in the clause
+						if nextInst.Op == "EMIT_STATIC" && len(nextInst.Value) > 0 {
+							firstChar := strings.TrimSpace(nextInst.Value)[0:1]
+							if firstChar == ")" {
+								shouldSkip = true
+							}
+						} else if nextInst.Op == "END" || nextInst.Op == "BOUNDARY" {
+							// Last token in the clause
+							shouldSkip = true
+						}
+					} else {
+						// Last instruction overall
+						shouldSkip = true
+					}
+
+					if !shouldSkip {
+						padded := padBoundaryToken(inst.Value)
+
+						code = append(code, "if boundaryNeeded {")
+						code = append(code, fmt.Sprintf("    builder.WriteString(%q)", padded))
+						code = append(code, "}")
+					}
 					// Don't set boundaryNeeded = true here, as this is a boundary delimiter
 				}
 			}
