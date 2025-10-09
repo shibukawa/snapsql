@@ -3,7 +3,15 @@ cmd/snapsql/snapsql
 cmd/snapsql/snapsql.exe
 examples/kanban/cmd/kanban/dist/*
 !examples/kanban/cmd/kanban/dist/.keep
-
+examples/kanban/dbdoc
+examples/kanban/generated
+examples/kanban/kanban
+examples/kanban/kanban.exe
+examples/notification/docs
+examples/notification/generated
+examples/notification/notification
+examples/notification/notification.exe
+examples/notification/.gocache/
 
 # Ignore generated Go files produced by acceptance tests
 testdata/acceptancetests/*/generated

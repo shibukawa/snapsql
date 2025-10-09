@@ -1,0 +1,23 @@
+# .tbls.yml configuration for notification system schema documentation
+
+dsn: postgres://notification:notification@localhost:5432/notification?sslmode=disable
+
+docPath: docs/schema
+
+er:
+  distance: 1
+  format: svg
+
+lint:
+  requireColumnComment:
+    enabled: false
+  requireTableComment:
+    enabled: false
+
+comments:
+  - table: users
+    comment: "User master table. Stores employee information."
+  - table: notifications
+    comment: "Notification master table. Stores notification content and metadata."
+  - table: inbox
+    comment: "User inbox table. Tracks which notifications are delivered to which users and their read status."
