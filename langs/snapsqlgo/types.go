@@ -14,6 +14,7 @@ package snapsqlgo
 
 import (
 	"fmt"
+	"iter"
 	"reflect"
 	"strings"
 	"time"
@@ -381,4 +382,86 @@ func celNameToGoName(celName string) string {
 	}
 
 	return strings.Join(parts, "")
+}
+
+// AsIterableAny converts any slice type ([]string, []int, []any, etc.) to iter.Seq[any]
+// using reflection. This allows generated code to iterate over collections without
+// needing to know the concrete slice type at code generation time.
+//
+// Example usage in generated code:
+//
+//	collectionResult, _, err := program.Eval(paramMap)
+//	if err != nil {
+//	    return "", nil, err
+//	}
+//	for item := range snapsqlgo.AsIterableAny(collectionResult.Value()) {
+//	    paramMap["loop_var"] = item
+//	    // ... use item in loop body
+//	}
+func AsIterableAny(v any) iter.Seq[any] {
+	return func(yield func(any) bool) {
+		// Handle nil
+		if v == nil {
+			return
+		}
+
+		// Use reflection to iterate over any slice type
+		rv := reflect.ValueOf(v)
+		if rv.Kind() != reflect.Slice {
+			// Not a slice - yield the value itself
+			yield(v)
+			return
+		}
+
+		// Iterate over slice elements
+		length := rv.Len()
+		for i := range length {
+			if !yield(rv.Index(i).Interface()) {
+				return
+			}
+		}
+	}
+}
+
+// AsIterableAnyWithLast converts any value to an iterator that yields both the item and a boolean
+// indicating whether this is the last item in the collection.
+// This is useful for handling trailing delimiters in loops (e.g., commas in SQL VALUES clauses).
+//
+// Example usage in generated code:
+//
+//	collectionResult, _, err := program.Eval(paramMap)
+//	if err != nil {
+//	    return "", nil, err
+//	}
+//	for item, isLast := range snapsqlgo.AsIterableAnyWithLast(collectionResult.Value()) {
+//	    paramMap["loop_var"] = item
+//	    // ... use item in loop body
+//	    if !isLast {
+//	        builder.WriteString(",")
+//	    }
+//	}
+func AsIterableAnyWithLast(v any) iter.Seq2[any, bool] {
+	return func(yield func(any, bool) bool) {
+		// Handle nil
+		if v == nil {
+			return
+		}
+
+		// Use reflection to iterate over any slice type
+		rv := reflect.ValueOf(v)
+		if rv.Kind() != reflect.Slice {
+			// Not a slice - yield the value itself as the only (and last) item
+			yield(v, true)
+			return
+		}
+
+		// Iterate over slice elements
+		length := rv.Len()
+		for i := range length {
+			isLast := (i == length-1)
+			if !yield(rv.Index(i).Interface(), isLast) {
+				return
+			}
+		}
+	}
 }

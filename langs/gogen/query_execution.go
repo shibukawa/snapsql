@@ -245,7 +245,7 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 
 	code = append(code, "stmt, err := executor.PrepareContext(ctx, query)")
 	code = append(code, "if err != nil {")
-	code = append(code, fmt.Sprintf("\t_ = yield(nil, fmt.Errorf(\"%sfailed to prepare statement: %%w\", err))", prefix))
+	code = append(code, fmt.Sprintf("\t_ = yield(nil, fmt.Errorf(\"%sfailed to prepare statement: %%w (query: %%s)\", err, query))", prefix))
 	code = append(code, "\treturn")
 	code = append(code, "}")
 	code = append(code, "defer stmt.Close()")

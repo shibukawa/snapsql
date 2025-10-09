@@ -38,6 +38,7 @@ linters:
     - testifylint # 一旦無効のまま（testifyライブラリ使用時のみ有用）
     - exhaustive
     - dupword
+    - gomoddirectives
   settings:
     tagliatelle:
       case:

@@ -254,15 +254,41 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 	condVarDeclared := false
 	evalCounter := 0
 
-	// Track control flow stack
-	controlStack := []string{}
+	// Track control flow stack with loop variable names
+	type controlFrame struct {
+		typ     string // "if" or "for"
+		loopVar string // loop variable name (for "for" frames only)
+	}
+
+	controlStack := []controlFrame{}
 
 	needsBoundaryTracking := slices.ContainsFunc(instructions, func(inst intermediate.OptimizedInstruction) bool {
-		return inst.Op == "EMIT_UNLESS_BOUNDARY" || inst.Op == "BOUNDARY"
+		return inst.Op == "EMIT_UNLESS_BOUNDARY" || inst.Op == "BOUNDARY" || inst.Op == "LOOP_START"
 	})
 
-	// Add boundary tracking variables
+	// Check if boundaryNeeded variable is actually used (i.e., EMIT_UNLESS_BOUNDARY outside loops)
+	needsBoundaryNeededVar := false
+
 	if needsBoundaryTracking {
+		loopDepth := 0
+
+		for _, inst := range instructions {
+			switch inst.Op {
+			case "LOOP_START":
+				loopDepth++
+			case "LOOP_END":
+				loopDepth--
+			case "EMIT_UNLESS_BOUNDARY", "BOUNDARY":
+				if loopDepth == 0 {
+					// EMIT_UNLESS_BOUNDARY or BOUNDARY outside a loop - need boundaryNeeded variable
+					needsBoundaryNeededVar = true
+				}
+			}
+		}
+	}
+
+	// Add boundary tracking variables
+	if needsBoundaryNeededVar {
 		code = append(code, "var boundaryNeeded bool")
 	}
 
@@ -274,7 +300,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 
 	code = append(code, "}")
 
-	for _, inst := range instructions {
+	for i, inst := range instructions {
 		switch inst.Op {
 		case "EMIT_STATIC":
 			// WHERE/RETURNING の前にスペースを強制する
@@ -283,17 +309,34 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 			val = strings.ReplaceAll(val, "RETURNING", " RETURNING")
 			val = ensureSpaceBeforePlaceholders(val)
 			val = ensureKeywordSpacing(val)
-			frag := fmt.Sprintf("%q", val)
-			// 直前に出力がある場合のみワンスペースを追加する
-			code = append(code, fmt.Sprintf(`{ // append static fragment
+
+			// Normal static content processing
+			inLoop := slices.ContainsFunc(controlStack, func(f controlFrame) bool { return f.typ == "for" })
+			{
+				// Normal static content processing
+				frag := fmt.Sprintf("%q", val)
+				// 直前に出力がある場合のみワンスペースを追加する
+				code = append(code, fmt.Sprintf(`{ // append static fragment
 	_frag := %s
 	if builder.Len() > 0 {
 		builder.WriteByte(' ')
 	}
 	builder.WriteString(_frag)
 }`, frag))
-			if needsBoundaryTracking {
-				code = append(code, "boundaryNeeded = true")
+
+				if needsBoundaryNeededVar && !inLoop {
+					// Only set boundaryNeeded = true outside of loops
+					// Check if the next instruction is EMIT_UNLESS_BOUNDARY
+					// If so, don't set boundaryNeeded to true (let EMIT_UNLESS_BOUNDARY handle it)
+					nextIsEmitUnlessBoundary := false
+					if i+1 < len(instructions) && instructions[i+1].Op == "EMIT_UNLESS_BOUNDARY" {
+						nextIsEmitUnlessBoundary = true
+					}
+
+					if !nextIsEmitUnlessBoundary {
+						code = append(code, "boundaryNeeded = true")
+					}
+				}
 			}
 
 		case "ADD_PARAM":
@@ -319,16 +362,36 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 
 		case "EMIT_UNLESS_BOUNDARY":
 			if needsBoundaryTracking {
-				padded := padBoundaryToken(inst.Value)
+				// Check if we're inside a loop
+				var loopVar string
 
-				code = append(code, "if boundaryNeeded {")
-				code = append(code, fmt.Sprintf("    builder.WriteString(%q)", padded))
-				code = append(code, "}")
-				code = append(code, "boundaryNeeded = true")
+				for j := len(controlStack) - 1; j >= 0; j-- {
+					if controlStack[j].typ == "for" {
+						loopVar = controlStack[j].loopVar
+						break
+					}
+				}
+
+				if loopVar != "" {
+					// Inside a loop: emit delimiter only if NOT the last iteration
+					padded := padBoundaryToken(inst.Value)
+
+					code = append(code, fmt.Sprintf("if !%sIsLast {", loopVar))
+					code = append(code, fmt.Sprintf("    builder.WriteString(%q)", padded))
+					code = append(code, "}")
+				} else {
+					// Outside a loop (e.g., in IF blocks): emit conditionally based on boundaryNeeded
+					padded := padBoundaryToken(inst.Value)
+
+					code = append(code, "if boundaryNeeded {")
+					code = append(code, fmt.Sprintf("    builder.WriteString(%q)", padded))
+					code = append(code, "}")
+					// Don't set boundaryNeeded = true here, as this is a boundary delimiter
+				}
 			}
 
 		case "BOUNDARY":
-			if needsBoundaryTracking {
+			if needsBoundaryNeededVar {
 				code = append(code, "boundaryNeeded = false")
 			}
 
@@ -348,16 +411,16 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate condition: %%w\", err)", functionName))
 				code = append(code, "}")
 				code = append(code, "if snapsqlgo.Truthy(condResult) {")
-				controlStack = append(controlStack, "if")
+				controlStack = append(controlStack, controlFrame{typ: "if"})
 			}
 
 		case "ELSEIF":
-			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "if" {
+			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "if" {
 				code = append(code, "} else if snapsqlgo.Truthy(condResult) {")
 			}
 
 		case "ELSE":
-			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "if" {
+			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "if" {
 				code = append(code, "} else {")
 			}
 
@@ -369,22 +432,29 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 				code = append(code, "if err != nil {")
 				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate collection: %%w\", err)", functionName))
 				code = append(code, "}")
-				code = append(code, fmt.Sprintf("collection%d := collectionResult%d.Value().([]any)",
-					*inst.CollectionExprIndex, *inst.CollectionExprIndex))
-				code = append(code, fmt.Sprintf("for _, %sLoopVar := range collection%d {",
-					inst.Variable, *inst.CollectionExprIndex))
+
+				// Use AsIterableAnyWithLast to get both the item and isLast flag for boundary tracking
+				if needsBoundaryTracking {
+					code = append(code, fmt.Sprintf("for %sLoopVar, %sIsLast := range snapsqlgo.AsIterableAnyWithLast(collectionResult%d.Value()) {",
+						inst.Variable, inst.Variable, *inst.CollectionExprIndex))
+				} else {
+					code = append(code, fmt.Sprintf("for %sLoopVar := range snapsqlgo.AsIterableAny(collectionResult%d.Value()) {",
+						inst.Variable, *inst.CollectionExprIndex))
+				}
+
 				code = append(code, fmt.Sprintf("    paramMap[%q] = %sLoopVar", inst.Variable, inst.Variable))
-				controlStack = append(controlStack, "for")
+
+				controlStack = append(controlStack, controlFrame{typ: "for", loopVar: inst.Variable})
 			}
 
 		case "LOOP_END":
-			if len(controlStack) > 0 && controlStack[len(controlStack)-1] == "for" {
+			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "for" {
 				// Find the corresponding LOOP_START to get the variable name
 				var loopVar string
 
-				for i := len(instructions) - 1; i >= 0; i-- {
-					if instructions[i].Op == "LOOP_START" && instructions[i].EnvIndex == inst.EnvIndex {
-						loopVar = instructions[i].Variable
+				for j := len(instructions) - 1; j >= 0; j-- {
+					if instructions[j].Op == "LOOP_START" && instructions[j].EnvIndex == inst.EnvIndex {
+						loopVar = instructions[j].Variable
 						break
 					}
 				}
@@ -399,7 +469,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 
 		case "END":
 			if len(controlStack) > 0 {
-				controlType := controlStack[len(controlStack)-1]
+				controlType := controlStack[len(controlStack)-1].typ
 				controlStack = controlStack[:len(controlStack)-1]
 
 				switch controlType {
