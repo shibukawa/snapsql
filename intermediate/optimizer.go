@@ -310,3 +310,84 @@ func HasDynamicInstructions(instructions []OptimizedInstruction) bool {
 
 	return false
 }
+
+// OptimizeLoopBoundaries analyzes EMIT_UNLESS_BOUNDARY instructions within loops
+// and converts non-trailing ones to EMIT_STATIC.
+// Only the last EMIT_UNLESS_BOUNDARY in each loop iteration should remain conditional.
+func OptimizeLoopBoundaries(instructions []OptimizedInstruction) []OptimizedInstruction {
+	result := make([]OptimizedInstruction, 0, len(instructions))
+
+	for i := 0; i < len(instructions); i++ {
+		inst := instructions[i]
+
+		// Check if this is a LOOP_START
+		if inst.Op == "LOOP_START" {
+			result = append(result, inst)
+
+			// Find the matching LOOP_END
+			loopDepth := 1
+			loopStart := i
+			loopEnd := -1
+
+			for j := i + 1; j < len(instructions); j++ {
+				if instructions[j].Op == "LOOP_START" {
+					loopDepth++
+				} else if instructions[j].Op == "LOOP_END" {
+					loopDepth--
+					if loopDepth == 0 {
+						loopEnd = j
+						break
+					}
+				}
+			}
+
+			if loopEnd == -1 {
+				// No matching LOOP_END found, just continue
+				continue
+			}
+
+			// Find all EMIT_UNLESS_BOUNDARY instructions in this loop
+			var boundaryIndices []int
+
+			for j := loopStart + 1; j < loopEnd; j++ {
+				if instructions[j].Op == "EMIT_UNLESS_BOUNDARY" {
+					boundaryIndices = append(boundaryIndices, j)
+				}
+			}
+
+			// Process loop body
+			for j := i + 1; j < loopEnd; j++ {
+				loopInst := instructions[j]
+
+				// Check if this is an EMIT_UNLESS_BOUNDARY
+				if loopInst.Op == "EMIT_UNLESS_BOUNDARY" {
+					// Check if this is the last EMIT_UNLESS_BOUNDARY in the loop
+					isLast := len(boundaryIndices) > 0 && j == boundaryIndices[len(boundaryIndices)-1]
+
+					if isLast {
+						// Keep as EMIT_UNLESS_BOUNDARY (will be handled with isLast flag)
+						result = append(result, loopInst)
+					} else {
+						// Convert to EMIT_STATIC (always emit)
+						result = append(result, OptimizedInstruction{
+							Op:    "EMIT_STATIC",
+							Value: loopInst.Value,
+						})
+					}
+				} else {
+					result = append(result, loopInst)
+				}
+			}
+
+			// Add LOOP_END
+			result = append(result, instructions[loopEnd])
+
+			// Skip to after the loop
+			i = loopEnd
+		} else {
+			result = append(result, inst)
+		}
+	}
+
+	return result
+}

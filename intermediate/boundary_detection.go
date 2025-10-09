@@ -13,7 +13,7 @@ type BoundaryPattern struct {
 	Description string
 }
 
-// Common boundary patterns
+// Common boundary patterns (leading)
 var boundaryPatterns = []BoundaryPattern{
 	{
 		Pattern:     regexp.MustCompile(`^,`),
@@ -29,9 +29,35 @@ var boundaryPatterns = []BoundaryPattern{
 	},
 }
 
-// detectBoundaryDelimiter checks if a token value starts with a boundary delimiter
+// Trailing boundary patterns (for loop contexts)
+// These patterns match tokens that END with a boundary delimiter
+// but also contain other content before it (e.g., "),")
+var trailingBoundaryPatterns = []BoundaryPattern{
+	{
+		Pattern:     regexp.MustCompile(`.+,$`),
+		Description: "Trailing comma (for VALUES clauses in loops, e.g., '),')",
+	},
+	{
+		Pattern:     regexp.MustCompile(`.+\s+AND$`),
+		Description: "Trailing AND keyword (for WHERE clauses in loops)",
+	},
+	{
+		Pattern:     regexp.MustCompile(`.+\s+OR$`),
+		Description: "Trailing OR keyword (for WHERE clauses in loops)",
+	},
+}
+
+// detectBoundaryDelimiter checks if a token value starts or ends with a boundary delimiter
 func detectBoundaryDelimiter(value string) bool {
+	// Check leading boundary patterns
 	for _, pattern := range boundaryPatterns {
+		if pattern.Pattern.MatchString(value) {
+			return true
+		}
+	}
+
+	// Check trailing boundary patterns
+	for _, pattern := range trailingBoundaryPatterns {
 		if pattern.Pattern.MatchString(value) {
 			return true
 		}
@@ -85,7 +111,19 @@ func findConditionalBoundaries(tokens []tokenizer.Token) map[int]string {
 			(token.Type != tokenizer.BLOCK_COMMENT || token.Directive == nil) &&
 			isInConditionalBlock(tokens, i) {
 			if detectBoundaryDelimiter(token.Value) {
-				boundaries[i] = "EMIT_UNLESS_BOUNDARY"
+				// Check if we're in a FOR loop
+				inForLoop := isInForLoop(tokens, i)
+
+				if inForLoop {
+					// In a FOR loop: only mark as EMIT_UNLESS_BOUNDARY if it's the last boundary delimiter before LOOP_END
+					if isLastBoundaryInLoop(tokens, i) {
+						boundaries[i] = "EMIT_UNLESS_BOUNDARY"
+					}
+					// Otherwise, leave it as regular EMIT_STATIC (don't add to boundaries map)
+				} else {
+					// In an IF block: always mark as EMIT_UNLESS_BOUNDARY
+					boundaries[i] = "EMIT_UNLESS_BOUNDARY"
+				}
 			}
 		}
 
@@ -101,25 +139,34 @@ func findConditionalBoundaries(tokens []tokenizer.Token) map[int]string {
 	return boundaries
 }
 
-// isInConditionalBlock checks if a token at the given index is inside a conditional block
+// isInConditionalBlock checks if a token at the given index is inside a conditional block (IF/ELSEIF/FOR)
 func isInConditionalBlock(tokens []tokenizer.Token, index int) bool {
-	// Look backwards to find the nearest IF/END pair
-	ifCount := 0
+	// Use a stack to track directive nesting accurately
+	// When traversing backwards, END means we need to skip a block,
+	// and IF/ELSEIF/FOR means we're entering (from the perspective of going backwards)
+	depth := 0
 
 	for i := index - 1; i >= 0; i-- {
 		token := tokens[i]
 		if token.Type == tokenizer.BLOCK_COMMENT && token.Directive != nil {
 			switch token.Directive.Type {
-			case "if", "elseif":
-				ifCount++
+			case "if", "elseif", "for":
+				// When going backwards, if we hit an opening directive
+				if depth == 0 {
+					// We found an opening directive without a matching END, so we're inside it
+					return true
+				}
+				// Otherwise, this opening matches an END we saw earlier
+				depth--
 			case "end":
-				ifCount--
+				// When going backwards, END means we need to skip over a block
+				depth++
 			}
 		}
 	}
 
-	// If ifCount > 0, we're inside a conditional block
-	return ifCount > 0
+	// If we didn't find any opening directive at depth 0, we're not inside a block
+	return false
 }
 
 // hasConditionalBlockBefore checks if there are any conditional blocks before the given index
@@ -138,4 +185,96 @@ func hasConditionalBlockBefore(tokens []tokenizer.Token, index int) bool {
 	}
 
 	return false
+}
+
+// isInForLoop checks if a token at the given index is inside a FOR loop
+func isInForLoop(tokens []tokenizer.Token, index int) bool {
+	depth := 0
+
+	for i := index - 1; i >= 0; i-- {
+		token := tokens[i]
+		if token.Type == tokenizer.BLOCK_COMMENT && token.Directive != nil {
+			switch token.Directive.Type {
+			case "for":
+				if depth == 0 {
+					return true
+				}
+
+				depth--
+			case "if", "elseif":
+				if depth == 0 {
+					return false
+				}
+
+				depth--
+			case "end":
+				depth++
+			}
+		}
+	}
+
+	return false
+}
+
+// isLastBoundaryInLoop checks if a boundary delimiter token is the last one before the **innermost** loop ends
+func isLastBoundaryInLoop(tokens []tokenizer.Token, index int) bool {
+	// Find the matching END directive for the innermost loop containing this token
+	depth := 0
+	foundEnd := false
+	endIndex := -1
+
+	// Look forward to find the next END directive at depth 0 (innermost loop's end)
+	for i := index + 1; i < len(tokens); i++ {
+		token := tokens[i]
+		if token.Type == tokenizer.BLOCK_COMMENT && token.Directive != nil {
+			switch token.Directive.Type {
+			case "for", "if", "elseif":
+				depth++
+			case "end":
+				if depth == 0 {
+					foundEnd = true
+					endIndex = i
+
+					break
+				}
+
+				depth--
+			}
+		}
+	}
+
+	if !foundEnd {
+		return false
+	}
+
+	// Check if there are any other boundary delimiters between this token and the END
+	// We need to check at the same nesting level (depth 0)
+	checkDepth := 0
+
+	for i := index + 1; i < endIndex; i++ {
+		token := tokens[i]
+
+		// Track nesting depth
+		if token.Type == tokenizer.BLOCK_COMMENT && token.Directive != nil {
+			switch token.Directive.Type {
+			case "for", "if", "elseif":
+				checkDepth++
+			case "end":
+				checkDepth--
+			}
+		}
+
+		// Only check for boundary delimiters at the same nesting level (depth 0)
+		if checkDepth == 0 &&
+			token.Type != tokenizer.WHITESPACE && token.Type != tokenizer.LINE_COMMENT &&
+			(token.Type != tokenizer.BLOCK_COMMENT || token.Directive == nil) {
+			if detectBoundaryDelimiter(token.Value) {
+				// Found another boundary delimiter after this one at the same level
+				return false
+			}
+		}
+	}
+
+	// This is the last boundary delimiter before the innermost loop ends
+	return true
 }

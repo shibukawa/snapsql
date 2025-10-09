@@ -117,9 +117,8 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to process parameters: %w", err)
 	}
 
-	// Extract additional parameters from CEL environments
-	additionalParams := extractCELParameters(g.Format.CELEnvironments, parameters)
-	parameters = append(parameters, additionalParams...)
+	// Note: Loop variables and other CEL environment variables are NOT function parameters
+	// They are handled internally within the function body
 
 	// Process response type
 	responseType, err := processResponseType(g.Format)
@@ -1429,7 +1428,7 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 		// Execute query
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w", err)
+			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w (query: %s)", err, query)
 		}
 		defer stmt.Close()
 
@@ -1611,6 +1610,12 @@ func extractCELParameters(celEnvs []intermediate.CELEnvironment, existingParams 
 
 	// Extract variables from CEL environments
 	for _, env := range celEnvs {
+		// Skip loop environments (container starts with "for ")
+		// Loop variables are not function parameters
+		if strings.HasPrefix(env.Container, "for ") {
+			continue
+		}
+
 		for _, variable := range env.AdditionalVariables {
 			// Convert snake_case to camelCase for Go parameter name
 			paramName := snakeToCamelLower(variable.Name)

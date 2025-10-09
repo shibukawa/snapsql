@@ -65,7 +65,7 @@
     },
     {"op": "EMIT_STATIC", "pos": "7:31", "value": "("},
     {"op": "EMIT_EVAL", "pos": "7:32", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "7:46", "value": ","},
+    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "7:46", "value": ","},
     {"op": "EMIT_EVAL", "pos": "7:48", "expr_index": 2},
     {"op": "EMIT_STATIC", "pos": "7:64", "value": ")"},
     {"op": "LOOP_END", "pos": "7:66", "env_index": 0}
