@@ -34,5 +34,9 @@
   "parameters": [
     {"name": "department", "type": "string"}
   ],
-  "response_affinity": "many"
+  "response_affinity": "many",
+  "table_references": [
+    {"name": "u", "table_name": "users", "alias": "u", "context": "main"},
+    {"name": "j", "table_name": "jobs", "alias": "j", "context": "main"}
+  ]
 }

@@ -1,8 +1,9 @@
 package parsercommon
 
 import (
-	"github.com/shibukawa/snapsql/tokenizer"
 	"strings"
+
+	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // Clause structures
@@ -412,6 +413,7 @@ type CTEDefinition struct {
 	Name           string
 	Select         AstNode
 	TrailingTokens []tokenizer.Token
+	RawTokens      []tokenizer.Token // Raw tokens for the SELECT statement (for re-parsing)
 }
 
 func (n CTEDefinition) String() string {

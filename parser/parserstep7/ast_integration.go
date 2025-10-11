@@ -1,16 +1,21 @@
 package parserstep7
 
 import (
+	"errors"
 	"fmt"
 
 	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
+	"github.com/shibukawa/snapsql/parser/parserstep2"
+	"github.com/shibukawa/snapsql/parser/parserstep3"
+	"github.com/shibukawa/snapsql/parser/parserstep4"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // Sentinel errors
 var (
 	ErrSubqueryExtraction = snapsql.ErrSubqueryExtraction
+	ErrNoTokensToParse    = errors.New("no tokens to parse")
 )
 
 // ASTIntegrator integrates with actual SQL AST structures to detect and parse subqueries
@@ -37,7 +42,13 @@ func (ai *ASTIntegrator) ExtractSubqueries(stmt cmn.StatementNode) error {
 		ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
 	}
 
-	// Note: FROM clause and SELECT clause subquery extraction to be implemented in future versions
+	// Extract subqueries from FROM clause
+	err = ai.extractFromClauseSubqueries(stmt)
+	if err != nil {
+		ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+	}
+
+	// Note: SELECT clause subquery extraction to be implemented in future versions
 
 	if ai.errorHandler.HasErrors() {
 		return ErrSubqueryExtraction
@@ -62,22 +73,101 @@ func (ai *ASTIntegrator) extractCTEDependencies(stmt cmn.StatementNode) error {
 	}
 	ai.parser.dependencies.AddNode(mainNode)
 
-	// Process each CTE - register them as dependency nodes
-	// Note: Future implementation would recursively parse each CTE's Select statement
+	// Process each CTE - extract SelectFields and ReferencedTables
 	for _, cteDef := range cte.CTEs {
-		cteID := ai.parser.idGenerator.Generate("cte_" + cteDef.Name)
+		cteID := cteDef.Name // Use CTE name directly without prefix/suffix
 
-		// Create placeholder StatementNode for the CTE
-		// Note: Full implementation would parse cteDef.Select as StatementNode
+		// Parse CTE's raw tokens to get SelectStatement
+		var cteStmt cmn.StatementNode
+
+		var selectFields []cmn.SelectField
+
+		var referencedTables []string
+
+		// First, check if Select is already a SelectStatement (e.g., in tests)
+		if selectStmt, ok := cteDef.Select.(*cmn.SelectStatement); ok && selectStmt != nil {
+			cteStmt = selectStmt
+
+			// Extract SelectFields from existing SelectStatement
+			if selectStmt.Select != nil {
+				selectFields = selectStmt.Select.Fields
+				// Extract internal table references
+				tableRefs := extractTableRefsFromStatement(selectStmt)
+				for _, tr := range tableRefs {
+					referencedTables = append(referencedTables, tr.Name)
+				}
+			}
+		} else if len(cteDef.RawTokens) > 0 {
+			// Use RawTokens to re-parse the CTE SELECT statement
+			stmt, err := parseRawTokensToSelectStatement(cteDef.RawTokens)
+			if err == nil && stmt != nil {
+				cteStmt = stmt
+
+				// Extract SelectFields from parsed SelectStatement
+				if selectStmt, ok := stmt.(*cmn.SelectStatement); ok && selectStmt.Select != nil {
+					selectFields = selectStmt.Select.Fields
+					// Extract internal table references
+					tableRefs := extractTableRefsFromStatement(selectStmt)
+					for _, tr := range tableRefs {
+						referencedTables = append(referencedTables, tr.Name)
+					}
+				}
+			}
+		}
+
+		// Store extracted CTE information in parser context
+		// This will be used by intermediate layer
+		derivedTable := cmn.DerivedTableInfo{
+			Name:             cteDef.Name,
+			SourceType:       "cte",
+			SelectFields:     selectFields,
+			ReferencedTables: referencedTables,
+		}
+		ai.parser.derivedTables = append(ai.parser.derivedTables, derivedTable)
+
+		// Create CTE dependency node
 		cteNode := &cmn.SQDependencyNode{
 			ID:        cteID,
-			Statement: nil, // Placeholder for future CTE statement parsing
+			Statement: cteStmt,
 			NodeType:  cmn.SQDependencyCTE,
 		}
 		ai.parser.dependencies.AddNode(cteNode)
 
 		// Add dependency from main to CTE
 		ai.parser.dependencies.AddDependency(mainID, cteID)
+	}
+
+	return nil
+}
+
+// extractFromClauseSubqueries extracts subqueries from FROM clause
+func (ai *ASTIntegrator) extractFromClauseSubqueries(stmt cmn.StatementNode) error {
+	// Only process SELECT statements with FROM clause
+	selectStmt, ok := stmt.(*cmn.SelectStatement)
+	if !ok || selectStmt.From == nil {
+		return nil
+	}
+
+	// Process each table in FROM clause
+	for _, table := range selectStmt.From.Tables {
+		// Check if this is a subquery
+		if !table.IsSubquery && !looksLikeSubquery(table) {
+			continue
+		}
+
+		// Try to parse the subquery expression
+		// For now, we'll create a placeholder entry
+		// Full implementation would parse the subquery tokens into a StatementNode
+		if table.Name != "" {
+			// Extract alias name (subquery must have an alias)
+			derivedTable := cmn.DerivedTableInfo{
+				Name:             table.Name,
+				SourceType:       "subquery",
+				SelectFields:     []cmn.SelectField{}, // TODO: Parse subquery to extract fields
+				ReferencedTables: []string{},          // TODO: Parse subquery to extract tables
+			}
+			ai.parser.derivedTables = append(ai.parser.derivedTables, derivedTable)
+		}
 	}
 
 	return nil
@@ -271,4 +361,42 @@ func (ai *ASTIntegrator) GetDependencyGraph() *cmn.SQDependencyGraph {
 // GetErrors returns any errors encountered during processing
 func (ai *ASTIntegrator) GetErrors() []*cmn.SQParseError {
 	return ai.errorHandler.GetErrors()
+}
+
+// parseRawTokensToSelectStatement attempts to re-parse raw tokens into a SelectStatement
+// This is used to parse CTE SELECT statements from their raw token representation
+func parseRawTokensToSelectStatement(rawTokens []tokenizer.Token) (cmn.StatementNode, error) {
+	if len(rawTokens) == 0 {
+		return nil, ErrNoTokensToParse
+	}
+
+	// CTE tokens include surrounding parentheses: ( SELECT ... )
+	// We need to remove them before parsing
+	tokens := rawTokens
+	if len(tokens) > 0 && tokens[0].Type == tokenizer.OPENED_PARENS {
+		// Remove first and last tokens (parentheses)
+		if len(tokens) >= 2 && tokens[len(tokens)-1].Type == tokenizer.CLOSED_PARENS {
+			tokens = tokens[1 : len(tokens)-1]
+		}
+	}
+
+	// Step 1: Use parserstep2.Execute to parse the tokens into StatementNode with clauses
+	stmt, err := parserstep2.Execute(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CTE tokens (step2): %w", err)
+	}
+
+	// Step 2: Use parserstep3.Execute to assign clauses to statement fields
+	err = parserstep3.Execute(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign clauses (step3): %w", err)
+	}
+
+	// Step 3: Use parserstep4.Execute to finalize and validate clauses
+	err = parserstep4.Execute(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to finalize clauses (step4): %w", err)
+	}
+
+	return stmt, nil
 }

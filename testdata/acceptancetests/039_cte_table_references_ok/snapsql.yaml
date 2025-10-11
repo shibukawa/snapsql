@@ -1,0 +1,5 @@
+dialect: postgres
+schema_files:
+  - schema.yaml
+
+

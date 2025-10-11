@@ -79,7 +79,6 @@ type Parameter struct {
 type Response struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`
-	BaseType   string `json:"base_type,omitempty"`
 	IsNullable bool   `json:"is_nullable,omitempty"`
 	MaxLength  *int   `json:"max_length,omitempty"`
 	Precision  *int   `json:"precision,omitempty"`
@@ -98,6 +97,24 @@ type ImplicitParameter struct {
 	Name    string `json:"name"`
 	Type    string `json:"type"`
 	Default any    `json:"default,omitempty"`
+}
+
+// TableReferenceInfo represents a table reference in the query (including CTEs, subqueries, and joins)
+type TableReferenceInfo struct {
+	// Table name or alias (if present, otherwise original name)
+	Name string `json:"name"`
+
+	// Original table name (empty for subquery/CTE)
+	TableName string `json:"table_name,omitempty"`
+
+	// Alias explicitly specified with AS keyword
+	Alias string `json:"alias,omitempty"`
+
+	// Context where this table is used ("main", "cte", "subquery")
+	Context string `json:"context,omitempty"`
+
+	// CTE name if this reference is within a CTE
+	CTEName string `json:"cte_name,omitempty"`
 }
 
 // SystemFieldInfo represents system field configuration in intermediate format
@@ -169,6 +186,9 @@ type IntermediateFormat struct {
 
 	// Implicit parameters that should be obtained from context/TLS
 	ImplicitParameters []ImplicitParameter `json:"implicit_parameters,omitempty"`
+
+	// Table references used in the query (including CTEs, subqueries, and joins)
+	TableReferences []TableReferenceInfo `json:"table_references,omitempty"`
 
 	// Indicates whether the main statement guarantees ordered results via ORDER BY
 	HasOrderedResult bool `json:"has_ordered_result,omitempty"`

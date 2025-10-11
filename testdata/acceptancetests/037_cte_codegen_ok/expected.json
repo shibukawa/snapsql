@@ -20,5 +20,12 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "response_affinity": "many"
+  "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1}
+  ],
+  "table_references": [
+    {"name": "pending", "alias": "pending", "context": "cte"},
+    {"name": "pending", "table_name": "pending", "context": "main"}
+  ]
 }

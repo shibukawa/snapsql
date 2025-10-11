@@ -66,5 +66,8 @@
     {"name": "max_age", "type": "int"},
     {"name": "include_email", "type": "bool"}
   ],
-  "response_affinity": "many"
+  "response_affinity": "many",
+  "table_references": [
+    {"name": "users", "table_name": "users", "context": "main"}
+  ]
 }

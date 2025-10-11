@@ -9,8 +9,9 @@ import (
 
 // SubqueryParser handles subquery parsing and dependency resolution
 type SubqueryParser struct {
-	idGenerator  *IDGenerator
-	dependencies *cmn.SQDependencyGraph
+	idGenerator   *IDGenerator
+	dependencies  *cmn.SQDependencyGraph
+	derivedTables []cmn.DerivedTableInfo // CTE and subquery information
 }
 
 // NewSubqueryParser creates a new subquery parser
@@ -23,9 +24,10 @@ func NewSubqueryParser() *SubqueryParser {
 
 // ParseSubqueries parses subqueries and builds field source information
 func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
-	// 1. Initialize dependency graph
+	// 1. Initialize dependency graph and derived tables
 	sp.dependencies = NewDependencyGraph()
 	sp.idGenerator.ResetAll()
+	sp.derivedTables = []cmn.DerivedTableInfo{} // Reset derived tables
 
 	// 2. Build dependency graph by detecting subqueries
 	if err := sp.buildDependencyGraph(stmt); err != nil {
@@ -72,7 +74,7 @@ func (sp *SubqueryParser) buildDependencyGraph(stmt cmn.StatementNode) error {
 	// Build dependencies for WITH clauses
 	if cte := stmt.CTE(); cte != nil {
 		for _, cteDef := range cte.CTEs {
-			cteID := sp.idGenerator.Generate("cte_" + cteDef.Name)
+			cteID := cteDef.Name // Use CTE name directly without prefix/suffix
 
 			// CTEDefinition.Select is AstNode, need to check if it's StatementNode
 			if cteStmt, ok := cteDef.Select.(cmn.StatementNode); ok {
@@ -249,4 +251,9 @@ func (sp *SubqueryParser) resolveTableSource(tableName, fieldName string, tableR
 	tableRefs[tableName] = tableRef
 
 	return tableRef
+}
+
+// GetDerivedTables returns the extracted CTE and subquery information
+func (sp *SubqueryParser) GetDerivedTables() []cmn.DerivedTableInfo {
+	return sp.derivedTables
 }

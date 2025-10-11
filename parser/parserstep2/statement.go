@@ -149,8 +149,9 @@ func parseCTE() pc.Parser[Entity] {
 		offset += consume
 
 		cteDefs = append(cteDefs, cmn.CTEDefinition{
-			Name:   match[0].Val.Original.Value,
-			Select: match[2].Val.NewValue,
+			Name:      match[0].Val.Original.Value,
+			Select:    match[2].Val.NewValue,
+			RawTokens: match[2].Val.RawTokens(),
 		})
 
 		// second and subsequent CTEs
@@ -171,8 +172,9 @@ func parseCTE() pc.Parser[Entity] {
 			offset += consume
 
 			cteDefs = append(cteDefs, cmn.CTEDefinition{
-				Name:   match[1].Val.Original.Value,
-				Select: match[3].Val.NewValue,
+				Name:      match[1].Val.Original.Value,
+				Select:    match[3].Val.NewValue,
+				RawTokens: match[3].Val.RawTokens(),
 			})
 		}
 

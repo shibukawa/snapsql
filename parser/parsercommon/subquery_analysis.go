@@ -1,5 +1,14 @@
 package parsercommon
 
+// DerivedTableInfo represents a CTE or subquery that acts as a derived table
+// This structure unifies CTE and subquery information for type inference
+type DerivedTableInfo struct {
+	Name             string        // CTE name or subquery alias
+	SourceType       string        // "cte" or "subquery"
+	SelectFields     []SelectField // SELECT clause fields (for type inference)
+	ReferencedTables []string      // Internal table references (aliases included)
+}
+
 // SubqueryAnalysisResult contains subquery analysis information from parserstep7
 // This provides a public interface to parserstep7 functionality with typed field access
 type SubqueryAnalysisResult struct {
@@ -11,6 +20,7 @@ type SubqueryAnalysisResult struct {
 	ProcessingOrder  []string                     // Recommended processing order for subqueries
 	ValidationErrors []ValidationError            // Validation errors from subquery analysis
 	HasErrors        bool                         // Whether analysis had errors
+	DerivedTables    []DerivedTableInfo           // CTE and subquery information (unified)
 }
 
 // ValidationError represents a validation error from subquery analysis

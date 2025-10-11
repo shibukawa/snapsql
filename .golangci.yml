@@ -39,6 +39,7 @@ linters:
     - exhaustive
     - dupword
     - gomoddirectives
+    - godox
   settings:
     tagliatelle:
       case:

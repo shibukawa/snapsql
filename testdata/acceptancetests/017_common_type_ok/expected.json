@@ -35,5 +35,8 @@
     {"name": "user_id", "type": "int"},
     {"name": "user", "type": "../testdata/acceptancetests/017_common_type_ok/User"}
   ],
-  "response_affinity": "many"
+  "response_affinity": "many",
+  "table_references": [
+    {"name": "u", "table_name": "users", "alias": "u", "context": "main"}
+  ]
 }

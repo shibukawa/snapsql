@@ -1,0 +1,35 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": [],
+      "container": "root"
+    }
+  ],
+  "cel_expressions": [],
+  "format_version": "1",
+  "function_name": "input",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "4:1", "value": "WITH active_users AS ( SELECT u.id, u.name, u.email FROM users u JOIN user_status us ON u.id = us.user_id WHERE us.status = 'active' ) SELECT au.id, au.name, au.email, o.total FROM active_users au LEFT JOIN orders o ON au.id = o.user_id"},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
+  ],
+  "response_affinity": "many",
+  "responses": [
+    {"name": "au.id", "type": "integer", "hierarchy_key_level": 1},
+    {"name": "au.name", "type": "text"},
+    {"name": "au.email", "type": "text"},
+    {"name": "o.total", "type": "numeric", "is_nullable": true}
+  ],
+  "table_references": [
+    {"name": "active_users", "alias": "active_users", "context": "cte"},
+    {"name": "au", "table_name": "active_users", "alias": "au", "context": "main"},
+    {"name": "o", "table_name": "orders", "alias": "o", "context": "main"}
+  ]
+}

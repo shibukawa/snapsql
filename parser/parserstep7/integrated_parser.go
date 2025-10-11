@@ -95,6 +95,21 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 	cmn.SetSubqueryDependencies(stmt, graph)
 	cmn.SetProcessingOrder(stmt, order)
 
+	// 8. Store DerivedTables (CTE and subquery information) in SubqueryAnalysisResult
+	derivedTables := spi.parser.GetDerivedTables()
+	analysis := &cmn.SubqueryAnalysisResult{
+		HasSubqueries:    len(allNodes) > 0,
+		SubqueryTables:   []string{},
+		FieldSources:     fieldSources,
+		TableReferences:  tableReferences,
+		DependencyInfo:   graph,
+		ProcessingOrder:  order,
+		ValidationErrors: []cmn.ValidationError{},
+		HasErrors:        spi.errorHandler.HasErrors(),
+		DerivedTables:    derivedTables,
+	}
+	cmn.SetSubqueryAnalysis(stmt, analysis)
+
 	return nil
 }
 
