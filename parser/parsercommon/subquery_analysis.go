@@ -5,7 +5,7 @@ package parsercommon
 type DerivedTableInfo struct {
 	Name             string        // CTE name or subquery alias
 	SourceType       string        // "cte" or "subquery"
-	SelectFields     []SelectField // SELECT clause fields (for type inference) - fully processed by parserstep4
+	SelectFields     []SelectField // SELECT clause fields (for type inference)
 	ReferencedTables []string      // Internal table references (aliases included)
 }
 
