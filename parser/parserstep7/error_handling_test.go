@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
 func TestErrorHandling(t *testing.T) {
 	reporter := NewErrorReporter()
 
 	// Test adding errors
-	pos := Position{Line: 10, Column: 5, File: "test.sql"}
-	reporter.AddError(ErrorTypeUnresolvedReference, "Field not found", pos)
+	pos := cmn.SQPosition{Line: 10, Column: 5, File: "test.sql"}
+	reporter.AddError(cmn.SQErrorTypeUnresolvedReference, "Field not found", pos)
 
 	assert.True(t, reporter.HasErrors())
 	assert.False(t, reporter.HasWarnings())
@@ -21,12 +22,12 @@ func TestErrorHandling(t *testing.T) {
 func TestErrorReporter(t *testing.T) {
 	reporter := NewErrorReporter()
 
-	pos1 := Position{Line: 1, Column: 1, File: "test.sql"}
-	pos2 := Position{Line: 2, Column: 1, File: "test.sql"}
+	pos1 := cmn.SQPosition{Line: 1, Column: 1, File: "test.sql"}
+	pos2 := cmn.SQPosition{Line: 2, Column: 1, File: "test.sql"}
 
 	// Add multiple errors
-	reporter.AddError(ErrorTypeCircularDependency, "Circular dependency", pos1)
-	reporter.AddWarning(ErrorTypeScopeViolation, "Scope issue", pos2)
+	reporter.AddError(cmn.SQErrorTypeCircularDependency, "Circular dependency", pos1)
+	reporter.AddWarning(cmn.SQErrorTypeScopeViolation, "Scope issue", pos2)
 
 	assert.True(t, reporter.HasErrors())
 	assert.True(t, reporter.HasWarnings())
@@ -34,29 +35,29 @@ func TestErrorReporter(t *testing.T) {
 	assert.Equal(t, 1, len(reporter.GetWarnings()))
 
 	// Test filtering by type
-	circularErrors := reporter.GetErrorsByType(ErrorTypeCircularDependency)
+	circularErrors := reporter.GetErrorsByType(cmn.SQErrorTypeCircularDependency)
 	assert.Equal(t, 1, len(circularErrors))
-	assert.Equal(t, ErrorTypeCircularDependency, circularErrors[0].Type)
+	assert.Equal(t, cmn.SQErrorTypeCircularDependency, circularErrors[0].Type)
 }
 
 func TestErrorReporterMaxErrors(t *testing.T) {
 	reporter := NewErrorReporter()
 	reporter.maxErrors = 2 // Set low limit for testing
 
-	pos := Position{Line: 1, Column: 1, File: "test.sql"}
+	pos := cmn.SQPosition{Line: 1, Column: 1, File: "test.sql"}
 
 	// Add more errors than the limit
-	reporter.AddError(ErrorTypeUnknown, "Error 1", pos)
-	reporter.AddError(ErrorTypeUnknown, "Error 2", pos)
-	reporter.AddError(ErrorTypeUnknown, "Error 3", pos) // This should be ignored
+	reporter.AddError(cmn.SQErrorTypeUnknown, "Error 1", pos)
+	reporter.AddError(cmn.SQErrorTypeUnknown, "Error 2", pos)
+	reporter.AddError(cmn.SQErrorTypeUnknown, "Error 3", pos) // This should be ignored
 
 	assert.Equal(t, 2, len(reporter.GetErrors()))
 }
 
 func TestParseError(t *testing.T) {
-	pos := Position{Line: 10, Column: 5, File: "test.sql"}
-	err := &ParseError{
-		Type:        ErrorTypeUnresolvedReference,
+	pos := cmn.SQPosition{Line: 10, Column: 5, File: "test.sql"}
+	err := &cmn.SQParseError{
+		Type:        cmn.SQErrorTypeUnresolvedReference,
 		Message:     "Field 'unknown_field' not found",
 		Position:    pos,
 		Context:     "SELECT unknown_field FROM table",
@@ -76,26 +77,26 @@ func TestParseError(t *testing.T) {
 
 func TestPosition(t *testing.T) {
 	// Test position with file
-	pos1 := Position{Line: 10, Column: 5, File: "test.sql"}
+	pos1 := cmn.SQPosition{Line: 10, Column: 5, File: "test.sql"}
 	assert.Equal(t, "test.sql:10:5", pos1.String())
 
 	// Test position without file
-	pos2 := Position{Line: 10, Column: 5}
+	pos2 := cmn.SQPosition{Line: 10, Column: 5}
 	assert.Equal(t, "10:5", pos2.String())
 }
 
 func TestErrorType(t *testing.T) {
 	tests := []struct {
-		errorType ErrorType
+		errorType cmn.SQErrorType
 		expected  string
 	}{
-		{ErrorTypeCircularDependency, "CircularDependency"},
-		{ErrorTypeUnresolvedReference, "UnresolvedReference"},
-		{ErrorTypeInvalidSubquery, "InvalidSubquery"},
-		{ErrorTypeScopeViolation, "ScopeViolation"},
-		{ErrorTypeTypeIncompatibility, "TypeIncompatibility"},
-		{ErrorTypeSyntaxError, "SyntaxError"},
-		{ErrorTypeUnknown, "Unknown"},
+		{cmn.SQErrorTypeCircularDependency, "CircularDependency"},
+		{cmn.SQErrorTypeUnresolvedReference, "UnresolvedReference"},
+		{cmn.SQErrorTypeInvalidSubquery, "InvalidSubquery"},
+		{cmn.SQErrorTypeScopeViolation, "ScopeViolation"},
+		{cmn.SQErrorTypeTypeIncompatibility, "TypeIncompatibility"},
+		{cmn.SQErrorTypeSyntaxError, "SyntaxError"},
+		{cmn.SQErrorTypeUnknown, "Unknown"},
 	}
 
 	for _, test := range tests {
@@ -107,7 +108,7 @@ func TestErrorCollector(t *testing.T) {
 	reporter := NewErrorReporter()
 	collector := NewErrorCollector(reporter)
 
-	pos := Position{Line: 1, Column: 1, File: "test.sql"}
+	pos := cmn.SQPosition{Line: 1, Column: 1, File: "test.sql"}
 
 	// Test circular dependency reporting
 	path := []string{"a", "b", "c", "a"}
@@ -115,7 +116,7 @@ func TestErrorCollector(t *testing.T) {
 
 	errors := reporter.GetErrors()
 	assert.Equal(t, 1, len(errors))
-	assert.Equal(t, ErrorTypeCircularDependency, errors[0].Type)
+	assert.Equal(t, cmn.SQErrorTypeCircularDependency, errors[0].Type)
 	assert.Contains(t, errors[0].Message, "a -> b -> c -> a")
 }
 
@@ -123,14 +124,14 @@ func TestErrorCollectorUnresolvedReference(t *testing.T) {
 	reporter := NewErrorReporter()
 	collector := NewErrorCollector(reporter)
 
-	pos := Position{Line: 5, Column: 10, File: "query.sql"}
+	pos := cmn.SQPosition{Line: 5, Column: 10, File: "query.sql"}
 	availableFields := []string{"id", "name", "email"}
 
 	collector.ReportUnresolvedReference("unknown_field", availableFields, pos)
 
 	errors := reporter.GetErrors()
 	assert.Equal(t, 1, len(errors))
-	assert.Equal(t, ErrorTypeUnresolvedReference, errors[0].Type)
+	assert.Equal(t, cmn.SQErrorTypeUnresolvedReference, errors[0].Type)
 	assert.Contains(t, errors[0].Message, "unknown_field")
 	assert.Contains(t, errors[0].Error(), "Available fields")
 	assert.Contains(t, errors[0].Error(), "id")
@@ -142,13 +143,13 @@ func TestErrorCollectorScopeViolation(t *testing.T) {
 	reporter := NewErrorReporter()
 	collector := NewErrorCollector(reporter)
 
-	pos := Position{Line: 3, Column: 15, File: "complex.sql"}
+	pos := cmn.SQPosition{Line: 3, Column: 15, File: "complex.sql"}
 
 	collector.ReportScopeViolation("outer_field", "inner_scope", "outer_scope", pos)
 
 	errors := reporter.GetErrors()
 	assert.Equal(t, 1, len(errors))
-	assert.Equal(t, ErrorTypeScopeViolation, errors[0].Type)
+	assert.Equal(t, cmn.SQErrorTypeScopeViolation, errors[0].Type)
 	assert.Contains(t, errors[0].Message, "outer_field")
 	assert.Contains(t, errors[0].Context, "outer_scope")
 	assert.Contains(t, errors[0].Context, "inner_scope")
@@ -158,13 +159,13 @@ func TestErrorCollectorInvalidSubquery(t *testing.T) {
 	reporter := NewErrorReporter()
 	collector := NewErrorCollector(reporter)
 
-	pos := Position{Line: 8, Column: 20, File: "subquery.sql"}
+	pos := cmn.SQPosition{Line: 8, Column: 20, File: "subquery.sql"}
 
 	collector.ReportInvalidSubquery("sub1", "missing SELECT clause", pos)
 
 	errors := reporter.GetErrors()
 	assert.Equal(t, 1, len(errors))
-	assert.Equal(t, ErrorTypeInvalidSubquery, errors[0].Type)
+	assert.Equal(t, cmn.SQErrorTypeInvalidSubquery, errors[0].Type)
 	assert.Contains(t, errors[0].Message, "sub1")
 	assert.Contains(t, errors[0].Message, "missing SELECT clause")
 	assert.Equal(t, []string{"sub1"}, errors[0].RelatedIDs)
@@ -173,11 +174,11 @@ func TestErrorCollectorInvalidSubquery(t *testing.T) {
 func TestErrorReporterString(t *testing.T) {
 	reporter := NewErrorReporter()
 
-	pos1 := Position{Line: 1, Column: 1, File: "test.sql"}
-	pos2 := Position{Line: 2, Column: 1, File: "test.sql"}
+	pos1 := cmn.SQPosition{Line: 1, Column: 1, File: "test.sql"}
+	pos2 := cmn.SQPosition{Line: 2, Column: 1, File: "test.sql"}
 
-	reporter.AddError(ErrorTypeUnresolvedReference, "Error message", pos1)
-	reporter.AddWarning(ErrorTypeScopeViolation, "Warning message", pos2)
+	reporter.AddError(cmn.SQErrorTypeUnresolvedReference, "Error message", pos1)
+	reporter.AddWarning(cmn.SQErrorTypeScopeViolation, "Warning message", pos2)
 
 	output := reporter.String()
 
@@ -190,9 +191,9 @@ func TestErrorReporterString(t *testing.T) {
 func TestErrorReporterClear(t *testing.T) {
 	reporter := NewErrorReporter()
 
-	pos := Position{Line: 1, Column: 1, File: "test.sql"}
-	reporter.AddError(ErrorTypeUnknown, "Error", pos)
-	reporter.AddWarning(ErrorTypeUnknown, "Warning", pos)
+	pos := cmn.SQPosition{Line: 1, Column: 1, File: "test.sql"}
+	reporter.AddError(cmn.SQErrorTypeUnknown, "Error", pos)
+	reporter.AddWarning(cmn.SQErrorTypeUnknown, "Warning", pos)
 
 	assert.True(t, reporter.HasErrors())
 	assert.True(t, reporter.HasWarnings())

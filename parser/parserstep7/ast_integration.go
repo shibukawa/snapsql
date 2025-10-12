@@ -14,8 +14,7 @@ import (
 
 // Sentinel errors
 var (
-	ErrSubqueryExtraction = snapsql.ErrSubqueryExtraction
-	ErrNoTokensToParse    = errors.New("no tokens to parse")
+	ErrNoTokensToParse = errors.New("no tokens to parse")
 )
 
 // ASTIntegrator integrates with actual SQL AST structures to detect and parse subqueries
@@ -61,19 +60,19 @@ func (ai *ASTIntegrator) ExtractSubqueries(stmt cmn.StatementNode) error {
 	// Process different types of subqueries
 	err := ai.extractCTEDependencies(cte, stmt)
 	if err != nil {
-		ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+		ai.errorHandler.AddError(cmn.SQErrorTypeInvalidSubquery, err.Error(), cmn.SQPosition{})
 	}
 
 	// Extract subqueries from FROM clause
 	err = ai.extractFromClauseSubqueries(stmt)
 	if err != nil {
-		ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+		ai.errorHandler.AddError(cmn.SQErrorTypeInvalidSubquery, err.Error(), cmn.SQPosition{})
 	}
 
 	// Note: SELECT clause subquery extraction to be implemented in future versions
 
 	if ai.errorHandler.HasErrors() {
-		return ErrSubqueryExtraction
+		return snapsql.ErrSubqueryExtraction
 	}
 
 	return nil
@@ -245,7 +244,7 @@ func (ai *ASTIntegrator) extractFromClauseSubqueries(stmt cmn.StatementNode) err
 					// Recursively extract nested subqueries from this subquery
 					if err := ai.extractFromClauseSubqueries(parsedStmt); err != nil {
 						// Log error but continue processing
-						ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+						ai.errorHandler.AddError(cmn.SQErrorTypeInvalidSubquery, err.Error(), cmn.SQPosition{})
 					}
 				}
 			}

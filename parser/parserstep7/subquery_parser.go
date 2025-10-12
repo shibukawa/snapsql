@@ -16,14 +16,14 @@ type SubqueryParser struct {
 // NewSubqueryParser creates a new subquery parser
 func NewSubqueryParser() *SubqueryParser {
 	return &SubqueryParser{
-		dependencies: NewDependencyGraph(),
+		dependencies: cmn.NewSQDependencyGraph(),
 	}
 }
 
 // ParseSubqueries parses subqueries and builds field source information
 func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
 	// 1. Initialize dependency graph and derived tables
-	sp.dependencies = NewDependencyGraph()
+	sp.dependencies = cmn.NewSQDependencyGraph()
 	sp.derivedTables = []cmn.DerivedTableInfo{} // Reset derived tables
 
 	// 2. Build dependency graph by detecting subqueries
@@ -33,7 +33,7 @@ func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
 
 	// 3. Check for circular dependencies
 	if cmn.HasCircularDependencyInGraph(sp.dependencies) {
-		return ErrCircularDependency
+		return cmn.ErrCircularDependency
 	}
 
 	// 4. Determine processing order (topological sort)
@@ -148,8 +148,8 @@ func (sp *SubqueryParser) parseSubqueryNode(nodeID string) error {
 
 // buildFieldSources builds field source information for the statement
 func (sp *SubqueryParser) buildFieldSources(stmt cmn.StatementNode) error {
-	fieldSources := make(map[string]*FieldSource)
-	tableReferences := make(map[string]*TableReference)
+	fieldSources := make(map[string]*cmn.SQFieldSource)
+	tableReferences := make(map[string]*cmn.SQTableReference)
 
 	// 1. Build table references
 	err := sp.buildTableReferences(stmt, tableReferences)
@@ -182,30 +182,30 @@ func (sp *SubqueryParser) buildFieldSources(stmt cmn.StatementNode) error {
 }
 
 // buildTableReferences builds table reference information
-func (sp *SubqueryParser) buildTableReferences(stmt cmn.StatementNode, tableRefs map[string]*TableReference) error {
+func (sp *SubqueryParser) buildTableReferences(stmt cmn.StatementNode, tableRefs map[string]*cmn.SQTableReference) error {
 	// Implementation placeholder
 	return nil
 }
 
 // buildSelectFieldSources builds field source information from SELECT clause
-func (sp *SubqueryParser) buildSelectFieldSources(stmt cmn.StatementNode, fieldSources map[string]*FieldSource, tableRefs map[string]*TableReference) error {
+func (sp *SubqueryParser) buildSelectFieldSources(stmt cmn.StatementNode, fieldSources map[string]*cmn.SQFieldSource, tableRefs map[string]*cmn.SQTableReference) error {
 	for _, clause := range stmt.Clauses() {
 		if selectClause, ok := clause.(*cmn.SelectClause); ok {
 			for _, field := range selectClause.Fields {
-				source := &FieldSource{
+				source := &cmn.SQFieldSource{
 					Name:  field.FieldName,
 					Alias: field.FieldName, // SelectField doesn't have separate alias field
 				}
 
 				// Determine source type based on available fields
 				if field.FieldKind == cmn.FunctionField {
-					source.SourceType = SourceTypeExpression
+					source.SourceType = cmn.SQSourceTypeExpression
 					source.ExprSource = field.OriginalField
 				} else if field.TableName != "" {
-					source.SourceType = SourceTypeTable
+					source.SourceType = cmn.SQSourceTypeTable
 					source.TableSource = sp.resolveTableSource(field.TableName, field.FieldName, tableRefs)
 				} else {
-					source.SourceType = SourceTypeLiteral
+					source.SourceType = cmn.SQSourceTypeLiteral
 					source.ExprSource = field.OriginalField
 				}
 
@@ -223,17 +223,17 @@ func (sp *SubqueryParser) buildSelectFieldSources(stmt cmn.StatementNode, fieldS
 }
 
 // Helper methods
-func (sp *SubqueryParser) resolveTableSource(tableName, fieldName string, tableRefs map[string]*TableReference) *TableReference {
+func (sp *SubqueryParser) resolveTableSource(tableName, fieldName string, tableRefs map[string]*cmn.SQTableReference) *cmn.SQTableReference {
 	// Try to find existing table reference or create a new one
 	if ref, exists := tableRefs[tableName]; exists {
 		return ref
 	}
 
 	// Create new table reference
-	tableRef := &TableReference{
+	tableRef := &cmn.SQTableReference{
 		Name:     tableName,
 		RealName: tableName,
-		Fields:   []*FieldSource{},
+		Fields:   []*cmn.SQFieldSource{},
 	}
 	tableRefs[tableName] = tableRef
 
