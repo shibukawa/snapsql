@@ -154,7 +154,7 @@ func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference) []T
 func overrideFromStep7(t TableRef, tr *cmn.SQTableReference) TableRef {
 	// Keep base Name/Alias/Schema as parsed from AST to avoid inconsistencies.
 	// Prefer Step7's classification for source/join only.
-	if s := tr.Source.String(); s != "" && s != "unknown" {
+	if s := tr.Context.String(); s != "" && s != "unknown" {
 		t.Source = s
 	}
 
@@ -314,7 +314,7 @@ func extractFromClause(with *cmn.WithClause, from *cmn.FromClause) []TableRef {
 }
 
 func isSubqueryCandidate(t cmn.TableReferenceForFrom) bool {
-	if t.IsSubquery {
+	if len(t.RawTokens) > 0 {
 		return true
 	}
 

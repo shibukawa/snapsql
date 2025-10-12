@@ -20,24 +20,46 @@ var (
 
 // ASTIntegrator integrates with actual SQL AST structures to detect and parse subqueries
 type ASTIntegrator struct {
-	parser       *SubqueryParser
-	errorHandler *ErrorReporter
+	parser          *SubqueryParser
+	errorHandler    *ErrorReporter
+	subqueryCounter int // Counter for generating unique subquery IDs
 }
 
 // NewASTIntegrator creates a new AST integrator
 func NewASTIntegrator(parser *SubqueryParser) *ASTIntegrator {
 	return &ASTIntegrator{
-		parser:       parser,
-		errorHandler: NewErrorReporter(),
+		parser:          parser,
+		errorHandler:    NewErrorReporter(),
+		subqueryCounter: 0,
 	}
+}
+
+// ExtractMainTableReferences extracts table references from the main query
+// This is called before subquery extraction to ensure main query tables are recorded
+func (ai *ASTIntegrator) ExtractMainTableReferences(stmt cmn.StatementNode) []*cmn.SQTableReference {
+	return extractTableRefsFromStatement(stmt)
 }
 
 // ExtractSubqueries extracts subqueries from the given statement and builds dependency graph
 func (ai *ASTIntegrator) ExtractSubqueries(stmt cmn.StatementNode) error {
 	ai.errorHandler.Clear()
 
+	// Create main node first
+	mainNode := &cmn.SQDependencyNode{
+		ID:        "main",
+		Statement: stmt,
+		NodeType:  cmn.SQDependencyMain,
+	}
+	ai.parser.dependencies.AddNode(mainNode)
+
+	// Extract CTE from statement
+	var cte *cmn.WithClause
+	if selectStmt, ok := stmt.(*cmn.SelectStatement); ok {
+		cte = selectStmt.CTE()
+	}
+
 	// Process different types of subqueries
-	err := ai.extractCTEDependencies(stmt)
+	err := ai.extractCTEDependencies(cte, stmt)
 	if err != nil {
 		ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
 	}
@@ -58,22 +80,16 @@ func (ai *ASTIntegrator) ExtractSubqueries(stmt cmn.StatementNode) error {
 }
 
 // extractCTEDependencies extracts WITH clause CTEs and builds their dependencies
-func (ai *ASTIntegrator) extractCTEDependencies(stmt cmn.StatementNode) error {
-	cte := stmt.CTE()
-	if cte == nil {
+func (ai *ASTIntegrator) extractCTEDependencies(cte *cmn.WithClause, stmt cmn.StatementNode) error {
+	if cte == nil || len(cte.CTEs) == 0 {
 		return nil
 	}
 
-	// Create main statement node
-	mainID := ai.parser.idGenerator.Generate("main")
-	mainNode := &cmn.SQDependencyNode{
-		ID:        mainID,
-		Statement: stmt,
-		NodeType:  cmn.SQDependencyMain,
-	}
-	ai.parser.dependencies.AddNode(mainNode)
+	mainID := "main"
 
-	// Process each CTE - extract SelectFields and ReferencedTables
+	// Build a map of already-processed CTEs for dependency checking
+	processedCTEs := make(map[string]struct{})
+
 	for _, cteDef := range cte.CTEs {
 		cteID := cteDef.Name // Use CTE name directly without prefix/suffix
 
@@ -91,8 +107,8 @@ func (ai *ASTIntegrator) extractCTEDependencies(stmt cmn.StatementNode) error {
 			// Extract SelectFields from existing SelectStatement
 			if selectStmt.Select != nil {
 				selectFields = selectStmt.Select.Fields
-				// Extract internal table references
-				tableRefs := extractTableRefsFromStatement(selectStmt)
+				// Extract internal table references (with CTE context)
+				tableRefs := extractTableRefsFromStatementWithCTEs(selectStmt, processedCTEs)
 				for _, tr := range tableRefs {
 					referencedTables = append(referencedTables, tr.Name)
 				}
@@ -106,8 +122,8 @@ func (ai *ASTIntegrator) extractCTEDependencies(stmt cmn.StatementNode) error {
 				// Extract SelectFields from parsed SelectStatement
 				if selectStmt, ok := stmt.(*cmn.SelectStatement); ok && selectStmt.Select != nil {
 					selectFields = selectStmt.Select.Fields
-					// Extract internal table references
-					tableRefs := extractTableRefsFromStatement(selectStmt)
+					// Extract internal table references (with CTE context)
+					tableRefs := extractTableRefsFromStatementWithCTEs(selectStmt, processedCTEs)
 					for _, tr := range tableRefs {
 						referencedTables = append(referencedTables, tr.Name)
 					}
@@ -131,10 +147,43 @@ func (ai *ASTIntegrator) extractCTEDependencies(stmt cmn.StatementNode) error {
 			Statement: cteStmt,
 			NodeType:  cmn.SQDependencyCTE,
 		}
+
+		// Add internal table references from CTE's SELECT statement
+		// These represent the tables used inside the CTE definition
+		if cteStmt != nil {
+			internalTableRefs := extractTableRefsFromStatementWithCTEs(cteStmt, processedCTEs)
+			for _, internalRef := range internalTableRefs {
+				// Mark these as belonging to this CTE
+				internalRef.QueryName = cteDef.Name
+				internalRef.Context = cmn.SQTableContextCTE
+				cteNode.TableRefs = append(cteNode.TableRefs, internalRef)
+			}
+		}
+
+		// Add node first before adding dependencies
 		ai.parser.dependencies.AddNode(cteNode)
 
-		// Add dependency from main to CTE
-		ai.parser.dependencies.AddDependency(mainID, cteID)
+		// Add dependencies after node is added
+		if cteStmt != nil {
+			internalTableRefs := extractTableRefsFromStatementWithCTEs(cteStmt, processedCTEs)
+			for _, internalRef := range internalTableRefs {
+				// Check if this reference is to another CTE (RealName is empty for CTE references)
+				if internalRef.RealName == "" && internalRef.Name != "" {
+					// This CTE depends on another CTE
+					if _, isProcessedCTE := processedCTEs[internalRef.Name]; isProcessedCTE {
+						// Add dependency: referencedCTE -> currentCTE
+						// (referencedCTE must be processed before currentCTE)
+						ai.parser.dependencies.AddDependency(internalRef.Name, cteID)
+					}
+				}
+			}
+		}
+
+		// Add dependency from CTE to main (CTE must be processed before main)
+		ai.parser.dependencies.AddDependency(cteID, mainID)
+
+		// Mark this CTE as processed for subsequent CTEs
+		processedCTEs[cteDef.Name] = struct{}{}
 	}
 
 	return nil
@@ -148,25 +197,94 @@ func (ai *ASTIntegrator) extractFromClauseSubqueries(stmt cmn.StatementNode) err
 		return nil
 	}
 
+	// Build a map of CTEs defined in this statement
+	cteMap := make(map[string]struct{})
+
+	if cte := selectStmt.CTE(); cte != nil {
+		for _, cteDef := range cte.CTEs {
+			cteMap[cteDef.Name] = struct{}{}
+		}
+	}
+
 	// Process each table in FROM clause
 	for _, table := range selectStmt.From.Tables {
 		// Check if this is a subquery
-		if !table.IsSubquery && !looksLikeSubquery(table) {
+		if !looksLikeSubquery(table) {
 			continue
 		}
 
-		// Try to parse the subquery expression
-		// For now, we'll create a placeholder entry
-		// Full implementation would parse the subquery tokens into a StatementNode
+		// Generate unique subquery ID
+		ai.subqueryCounter++
+		subqueryID := fmt.Sprintf("subquery_%d", ai.subqueryCounter)
+
+		var (
+			selectFields     []cmn.SelectField
+			referencedTables []string
+			subqueryStmt     cmn.StatementNode
+		)
+
+		// Parse subquery from RawTokens
+
+		if len(table.RawTokens) > 0 {
+			parsedStmt, err := parseRawTokensToSelectStatement(table.RawTokens)
+			if err == nil && parsedStmt != nil {
+				subqueryStmt = parsedStmt
+
+				// Extract SelectFields from parsed SelectStatement
+				if parsedSelectStmt, ok := parsedStmt.(*cmn.SelectStatement); ok {
+					if parsedSelectStmt.Select != nil {
+						selectFields = parsedSelectStmt.Select.Fields
+					}
+
+					// Extract internal table references
+					tableRefs := extractTableRefsFromStatement(parsedStmt)
+					for _, tr := range tableRefs {
+						referencedTables = append(referencedTables, tr.Name)
+					}
+
+					// Recursively extract nested subqueries from this subquery
+					if err := ai.extractFromClauseSubqueries(parsedStmt); err != nil {
+						// Log error but continue processing
+						ai.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+					}
+				}
+			}
+		}
+
+		// Extract alias name (subquery must have an alias)
 		if table.Name != "" {
-			// Extract alias name (subquery must have an alias)
 			derivedTable := cmn.DerivedTableInfo{
 				Name:             table.Name,
 				SourceType:       "subquery",
-				SelectFields:     []cmn.SelectField{}, // TODO: Parse subquery to extract fields
-				ReferencedTables: []string{},          // TODO: Parse subquery to extract tables
+				SelectFields:     selectFields,
+				ReferencedTables: referencedTables,
 			}
 			ai.parser.derivedTables = append(ai.parser.derivedTables, derivedTable)
+
+			// Create subquery dependency node with table references
+			if subqueryStmt != nil {
+				subqueryNode := &cmn.SQDependencyNode{
+					ID:        subqueryID,
+					Statement: subqueryStmt,
+					NodeType:  cmn.SQDependencyFromSubquery,
+				}
+
+				// Add internal table references from subquery's SELECT statement
+				// These represent the tables used inside the subquery
+				internalTableRefs := extractTableRefsFromStatementWithCTEs(subqueryStmt, cteMap)
+				for _, internalRef := range internalTableRefs {
+					// Mark these as belonging to this subquery
+					internalRef.QueryName = table.Name
+					internalRef.Context = cmn.SQTableContextSubquery
+					subqueryNode.TableRefs = append(subqueryNode.TableRefs, internalRef)
+				}
+
+				ai.parser.dependencies.AddNode(subqueryNode)
+
+				// Add dependency from main to subquery
+				mainID := "main"
+				ai.parser.dependencies.AddDependency(mainID, subqueryID)
+			}
 		}
 	}
 
@@ -204,10 +322,36 @@ func (ai *ASTIntegrator) buildNodeFieldSources(node *cmn.SQDependencyNode) error
 	}
 
 	// Populate table references for this node from the AST
-	node.TableRefs = extractTableRefsFromStatement(node.Statement)
+	// Only populate if TableRefs is empty (to avoid overwriting already set TableRefs from ExtractSubqueries)
+	if len(node.TableRefs) == 0 {
+		node.TableRefs = extractTableRefsFromStatement(node.Statement)
+	}
 
-	// Field source分析は将来対応（現状は未実装）
+	// Field source分析は将来対応(現状は未実装)
 	return nil
+}
+
+// extractTableRefsFromStatementWithCTEs extracts table references with context of already-defined CTEs
+func extractTableRefsFromStatementWithCTEs(stmt cmn.StatementNode, processedCTEs map[string]struct{}) []*cmn.SQTableReference {
+	var refs []*cmn.SQTableReference
+
+	switch s := stmt.(type) {
+	case *cmn.SelectStatement:
+		// Create a minimal WithClause with processed CTEs for checking
+		var withClause *cmn.WithClause
+		if len(processedCTEs) > 0 {
+			withClause = &cmn.WithClause{
+				CTEs: make([]cmn.CTEDefinition, 0, len(processedCTEs)),
+			}
+			for name := range processedCTEs {
+				withClause.CTEs = append(withClause.CTEs, cmn.CTEDefinition{Name: name})
+			}
+		}
+
+		refs = append(refs, extractFromClauseTablesWithCTE(withClause, s.From)...)
+	}
+
+	return refs
 }
 
 // extractTableRefsFromStatement collects tables referenced by the statement.
@@ -225,7 +369,7 @@ func extractTableRefsFromStatement(stmt cmn.StatementNode) []*cmn.SQTableReferen
 				RealName: realName(s.Into.Table),
 				Schema:   s.Into.Table.SchemaName,
 				Join:     cmn.JoinNone,
-				Source:   cmn.SQTableSourceMain,
+				Context:  cmn.SQTableContextMain,
 			}
 			refs = append(refs, tr)
 		}
@@ -238,7 +382,7 @@ func extractTableRefsFromStatement(stmt cmn.StatementNode) []*cmn.SQTableReferen
 				RealName: realName(s.Update.Table),
 				Schema:   s.Update.Table.SchemaName,
 				Join:     cmn.JoinNone,
-				Source:   cmn.SQTableSourceMain,
+				Context:  cmn.SQTableContextMain,
 			}
 			refs = append(refs, tr)
 		}
@@ -249,7 +393,7 @@ func extractTableRefsFromStatement(stmt cmn.StatementNode) []*cmn.SQTableReferen
 				RealName: realName(s.From.Table),
 				Schema:   s.From.Table.SchemaName,
 				Join:     cmn.JoinNone,
-				Source:   cmn.SQTableSourceMain,
+				Context:  cmn.SQTableContextMain,
 			}
 			refs = append(refs, tr)
 		}
@@ -276,8 +420,8 @@ func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) 
 	out := make([]*cmn.SQTableReference, 0, len(from.Tables))
 
 	for i, t := range from.Tables {
-		// Heuristic: some earlier steps don't flag IsSubquery; detect via Expression tokens
-		isSub := t.IsSubquery || looksLikeSubquery(t)
+		// Heuristic: detect subquery via RawTokens or Expression tokens
+		isSub := len(t.RawTokens) > 0 || looksLikeSubquery(t)
 
 		tr := &cmn.SQTableReference{
 			Name:       t.Name,
@@ -285,17 +429,21 @@ func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) 
 			Schema:     t.SchemaName,
 			IsSubquery: isSub,
 			Join:       t.JoinType,
-			Source:     cmn.SQTableSourceJoin,
+			Context:    cmn.SQTableContextJoin,
 		}
 		if i == 0 {
 			tr.Join = cmn.JoinNone
-			tr.Source = cmn.SQTableSourceMain
+			tr.Context = cmn.SQTableContextMain
 		}
 
 		if _, ok := ctes[tr.RealName]; ok {
-			tr.Source = cmn.SQTableSourceCTE
+			// CTE reference: RealName should be empty (CTE is not a physical table)
+			tr.RealName = ""
 		} else if tr.IsSubquery {
-			tr.Source = cmn.SQTableSourceSubquery
+			// Subquery reference: RealName should be empty (subquery is not a physical table)
+			// Note: The subquery alias itself remains in its current context (Main or Join)
+			// Only the tables INSIDE the subquery get Context=Subquery (handled separately)
+			tr.RealName = ""
 		}
 
 		out = append(out, tr)

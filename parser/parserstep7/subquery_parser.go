@@ -9,7 +9,6 @@ import (
 
 // SubqueryParser handles subquery parsing and dependency resolution
 type SubqueryParser struct {
-	idGenerator   *IDGenerator
 	dependencies  *cmn.SQDependencyGraph
 	derivedTables []cmn.DerivedTableInfo // CTE and subquery information
 }
@@ -17,7 +16,6 @@ type SubqueryParser struct {
 // NewSubqueryParser creates a new subquery parser
 func NewSubqueryParser() *SubqueryParser {
 	return &SubqueryParser{
-		idGenerator:  NewIDGenerator(),
 		dependencies: NewDependencyGraph(),
 	}
 }
@@ -26,7 +24,6 @@ func NewSubqueryParser() *SubqueryParser {
 func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
 	// 1. Initialize dependency graph and derived tables
 	sp.dependencies = NewDependencyGraph()
-	sp.idGenerator.ResetAll()
 	sp.derivedTables = []cmn.DerivedTableInfo{} // Reset derived tables
 
 	// 2. Build dependency graph by detecting subqueries
@@ -63,9 +60,8 @@ func (sp *SubqueryParser) ParseSubqueries(stmt cmn.StatementNode) error {
 
 // buildDependencyGraph builds the dependency graph for subqueries
 func (sp *SubqueryParser) buildDependencyGraph(stmt cmn.StatementNode) error {
-	mainID := sp.idGenerator.Generate("main")
 	mainNode := &cmn.SQDependencyNode{
-		ID:        mainID,
+		ID:        "main",
 		Statement: stmt,
 		NodeType:  cmn.SQDependencyMain,
 	}
@@ -96,7 +92,7 @@ func (sp *SubqueryParser) buildDependencyGraph(stmt cmn.StatementNode) error {
 
 	// Build dependencies for each clause
 	for _, clause := range stmt.Clauses() {
-		err := sp.buildClauseDependencies(clause, mainID)
+		err := sp.buildClauseDependencies(clause, "main")
 		if err != nil {
 			return err
 		}
@@ -128,15 +124,6 @@ func (sp *SubqueryParser) buildSelectFieldDependencies(fields []cmn.SelectField,
 
 // buildFromDependencies builds dependencies for FROM clause tables
 func (sp *SubqueryParser) buildFromDependencies(tables []cmn.TableReferenceForFrom, parentID string) error {
-	for _, table := range tables {
-		if table.IsSubquery {
-			subqueryID := sp.idGenerator.Generate("from_subquery")
-			// TableReferenceForFrom doesn't have Subquery field yet
-			// This would need to be implemented when subquery support is added
-			_ = subqueryID
-		}
-	}
-
 	return nil
 }
 

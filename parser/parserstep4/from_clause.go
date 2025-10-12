@@ -33,6 +33,8 @@ var (
 				natural, left, right, full, inner, outer, cross, join,
 			)),
 		),
+		cmn.ParenOpen,
+		cmn.ParenClose,
 	)
 )
 
@@ -56,8 +58,47 @@ func finalizeFromClauseWithOptions(clause *cmn.FromClause, perr *cmn.ParseError,
 	pctx := pc.NewParseContext[tok.Token]()
 	pTokens := cmn.ToParserToken(tokens)
 
+	nest := 0
+
+	var accumulated []pc.Token[tok.Token]
+
 	for _, part := range pc.FindIter(pctx, fromClauseSplitter, pTokens) {
+		// Track parentheses nesting
+		if len(part.Match) > 0 {
+			matchToken := part.Match[0].Val
+			if matchToken.Type == tok.OPENED_PARENS {
+				// Start accumulating tokens inside parentheses
+				accumulated = append(accumulated, part.Skipped...)
+				accumulated = append(accumulated, part.Match...)
+				nest++
+
+				continue
+			} else if matchToken.Type == tok.CLOSED_PARENS {
+				// Continue accumulating tokens
+				accumulated = append(accumulated, part.Skipped...)
+				accumulated = append(accumulated, part.Match...)
+				nest--
+
+				continue
+			}
+		}
+
+		// Skip processing when inside parentheses
+		if nest > 0 {
+			accumulated = append(accumulated, part.Skipped...)
+			if len(part.Match) > 0 {
+				accumulated = append(accumulated, part.Match...)
+			}
+
+			continue
+		}
+
+		// Combine accumulated tokens with current skipped tokens
 		joinBody := part.Skipped
+		if len(accumulated) > 0 {
+			joinBody = append(accumulated, joinBody...)
+			accumulated = nil
+		}
 
 		tableRef, err := parseTableReferenceWithOptions(pctx, joinHead, joinBody, inspectMode)
 		if err != nil {
@@ -282,6 +323,8 @@ func parseTableReferenceWithOptions(pctx *pc.ParseContext[tok.Token], head, body
 					result.TableName = match[1].Val.Value
 				case "subquery":
 					result.Name = alias[0].Val.Value
+					// Store raw tokens for parserstep7 to re-parse the subquery
+					result.RawTokens = cmn.ToToken(beforeAlias)
 				}
 			} else {
 				// no alias: identifier
@@ -303,6 +346,8 @@ func parseTableReferenceWithOptions(pctx *pc.ParseContext[tok.Token], head, body
 				result.TableName = match[0].Val.Value
 			case 2: // subquery
 				result.Name = alias[0].Val.Value
+				// Store raw tokens for parserstep7 to re-parse the subquery
+				result.RawTokens = cmn.ToToken(beforeAlias)
 			case 3: // table with schema
 				result.Name = alias[0].Val.Value
 				result.SchemaName = match[0].Val.Value

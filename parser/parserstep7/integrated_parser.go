@@ -41,6 +41,9 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 		return ErrInvalidStatement
 	}
 
+	// 0. Extract main query table references first
+	mainTableRefs := spi.integrator.ExtractMainTableReferences(stmt)
+
 	// 1. Extract subqueries and build dependency graph
 	if err := spi.integrator.ExtractSubqueries(stmt); err != nil {
 		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
@@ -62,8 +65,8 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 		return ErrCircularDependency
 	}
 
-	// 6. Get processing order
-	order, err := cmn.GetProcessingOrderFromGraph(graph)
+	// 6. Get processing order using Kahn's algorithm from dependency graph
+	order, err := graph.GetProcessingOrder()
 	if err != nil {
 		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
 		return err
@@ -72,6 +75,12 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 	// 7. Store results directly in the StatementNode
 	fieldSources := make(map[string]*cmn.SQFieldSource)
 	tableReferences := make(map[string]*cmn.SQTableReference)
+
+	// Add main query table references first
+	for i, tr := range mainTableRefs {
+		key := fmt.Sprintf("main_table_%d", i)
+		tableReferences[key] = tr
+	}
 
 	// Convert and store field sources from dependency graph nodes
 	allNodes := cmn.GetDependencyNodes(graph)

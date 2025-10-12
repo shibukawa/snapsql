@@ -41,9 +41,16 @@ func extractTableReferences(stmt parser.StatementNode) []TableReferenceInfo {
 				}
 				refs = append(refs, ref)
 
-				// Note: ReferencedTables (internal tables within CTE/subquery) are NOT
-				// added as separate table references. They are implementation details
-				// of the CTE/subquery and should not appear in the table_references output.
+				// Add internal table references (ReferencedTables) from CTE/subquery
+				// These are the tables that the CTE/subquery uses internally
+				for _, tableName := range dt.ReferencedTables {
+					internalRef := TableReferenceInfo{
+						Name:      tableName,
+						TableName: tableName,
+						Context:   "main", // These are actual tables from the database
+					}
+					refs = append(refs, internalRef)
+				}
 			}
 		}
 	}
@@ -70,7 +77,7 @@ func extractMainTableReferences(stmt parser.StatementNode) []TableReferenceInfo 
 		for _, table := range selectStmt.From.Tables {
 			// Skip CTE references (they're already added from DerivedTables)
 			// We only want actual table references here
-			if table.IsSubquery {
+			if len(table.RawTokens) > 0 {
 				continue // Subqueries handled separately
 			}
 

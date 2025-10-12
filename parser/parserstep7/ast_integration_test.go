@@ -53,7 +53,7 @@ func TestExtractCTEDependencies_SingleCTE(t *testing.T) {
 	integrator := NewASTIntegrator(parser)
 
 	// Extract CTE dependencies
-	err := integrator.extractCTEDependencies(mainStmt)
+	err := integrator.extractCTEDependencies(mainStmt.CTE(), mainStmt)
 	if err != nil {
 		t.Fatalf("extractCTEDependencies failed: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestExtractCTEDependencies_MultipleCTEs(t *testing.T) {
 	integrator := NewASTIntegrator(parser)
 
 	// Extract CTE dependencies
-	err := integrator.extractCTEDependencies(mainStmt)
+	err := integrator.extractCTEDependencies(mainStmt.CTE(), mainStmt)
 	if err != nil {
 		t.Fatalf("extractCTEDependencies failed: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestExtractCTEDependencies_CTEWithJoin(t *testing.T) {
 	integrator := NewASTIntegrator(parser)
 
 	// Extract CTE dependencies
-	err := integrator.extractCTEDependencies(mainStmt)
+	err := integrator.extractCTEDependencies(mainStmt.CTE(), mainStmt)
 	if err != nil {
 		t.Fatalf("extractCTEDependencies failed: %v", err)
 	}
@@ -301,7 +301,8 @@ func TestExtractFromClauseSubqueries_SimpleSubquery(t *testing.T) {
 					TableReference: cmn.TableReference{
 						Name: "user_summary",
 					},
-					IsSubquery: true,
+					// Note: RawTokens would contain the subquery content in real parsing
+					RawTokens: []tokenizer.Token{},
 				},
 			},
 		},
@@ -380,8 +381,9 @@ func TestExtractSubqueries_MixedCTEAndSubquery(t *testing.T) {
 				TableReference: cmn.TableReference{
 					Name: "o",
 				},
-				IsSubquery: true,
-				JoinType:   cmn.JoinInner,
+				// Note: RawTokens would contain the subquery content in real parsing
+				RawTokens: []tokenizer.Token{},
+				JoinType:  cmn.JoinInner,
 			},
 		},
 	}
