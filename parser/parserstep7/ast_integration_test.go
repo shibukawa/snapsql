@@ -416,3 +416,107 @@ func TestExtractSubqueries_MixedCTEAndSubquery(t *testing.T) {
 		t.Errorf("expected second derived table to be subquery, got '%s'", dt2.SourceType)
 	}
 }
+
+// Test that SelectFields contain detailed field information for type inference
+func TestDerivedTableInfo_SelectFieldsDetail(t *testing.T) {
+	// Create a CTE with various field types: WITH cte AS (SELECT id, name, COUNT(*) as cnt FROM users) SELECT * FROM cte
+	cteSelect := &cmn.SelectStatement{
+		Select: &cmn.SelectClause{
+			Fields: []cmn.SelectField{
+				{
+					FieldKind:     cmn.TableField,
+					OriginalField: "users.id",
+					TableName:     "users",
+					FieldName:     "id",
+				},
+				{
+					FieldKind:     cmn.SingleField,
+					OriginalField: "name",
+					FieldName:     "name",
+				},
+				{
+					FieldKind:     cmn.FunctionField,
+					OriginalField: "COUNT(*)",
+					FieldName:     "cnt",
+				},
+			},
+		},
+		From: &cmn.FromClause{
+			Tables: []cmn.TableReferenceForFrom{
+				{
+					TableReference: cmn.TableReference{
+						TableName: "users",
+						Name:      "users",
+					},
+				},
+			},
+		},
+	}
+
+	withClause := &cmn.WithClause{
+		CTEs: []cmn.CTEDefinition{
+			{
+				Name:   "cte",
+				Select: cteSelect,
+			},
+		},
+	}
+
+	mainStmt := cmn.NewSelectStatement([]tokenizer.Token{}, withClause, []cmn.ClauseNode{})
+
+	// Create parser and integrator
+	parser := NewSubqueryParser()
+	integrator := NewASTIntegrator(parser)
+
+	// Extract CTE dependencies
+	err := integrator.extractCTEDependencies(mainStmt.CTE(), mainStmt)
+	if err != nil {
+		t.Fatalf("extractCTEDependencies failed: %v", err)
+	}
+
+	// Verify DerivedTables
+	derivedTables := parser.GetDerivedTables()
+	if len(derivedTables) != 1 {
+		t.Fatalf("expected 1 derived table, got %d", len(derivedTables))
+	}
+
+	dt := derivedTables[0]
+
+	// Verify SelectFields detail
+	if len(dt.SelectFields) != 3 {
+		t.Fatalf("expected 3 SelectFields, got %d", len(dt.SelectFields))
+	}
+
+	// Verify first field (users.id - TableField)
+	field1 := dt.SelectFields[0]
+	if field1.FieldKind != cmn.TableField {
+		t.Errorf("expected field 1 to be TableField, got %v", field1.FieldKind)
+	}
+	if field1.FieldName != "id" {
+		t.Errorf("expected field 1 name to be 'id', got '%s'", field1.FieldName)
+	}
+	if field1.TableName != "users" {
+		t.Errorf("expected field 1 table name to be 'users', got '%s'", field1.TableName)
+	}
+
+	// Verify second field (name - SingleField)
+	field2 := dt.SelectFields[1]
+	if field2.FieldKind != cmn.SingleField {
+		t.Errorf("expected field 2 to be SingleField, got %v", field2.FieldKind)
+	}
+	if field2.FieldName != "name" {
+		t.Errorf("expected field 2 name to be 'name', got '%s'", field2.FieldName)
+	}
+
+	// Verify third field (COUNT(*) - FunctionField)
+	field3 := dt.SelectFields[2]
+	if field3.FieldKind != cmn.FunctionField {
+		t.Errorf("expected field 3 to be FunctionField, got %v", field3.FieldKind)
+	}
+	if field3.FieldName != "cnt" {
+		t.Errorf("expected field 3 name to be 'cnt', got '%s'", field3.FieldName)
+	}
+	if field3.OriginalField != "COUNT(*)" {
+		t.Errorf("expected field 3 original field to be 'COUNT(*)', got '%s'", field3.OriginalField)
+	}
+}

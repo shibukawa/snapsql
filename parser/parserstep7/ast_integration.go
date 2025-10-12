@@ -131,7 +131,8 @@ func (ai *ASTIntegrator) extractCTEDependencies(cte *cmn.WithClause, stmt cmn.St
 		}
 
 		// Store extracted CTE information in parser context
-		// This will be used by intermediate layer
+		// This will be used by intermediate layer for type inference
+		// SelectFields are already fully processed by parserstep4
 		derivedTable := cmn.DerivedTableInfo{
 			Name:             cteDef.Name,
 			SourceType:       "cte",
