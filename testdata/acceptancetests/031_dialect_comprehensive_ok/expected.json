@@ -36,7 +36,29 @@
     {"name": "user_id", "type": "int"}
   ],
   "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
+    {"name": "name", "type": "any", "is_nullable": true},
+    {"name": "age_cast_standard", "type": "any", "is_nullable": true},
+    {"name": "price", "type": "any", "is_nullable": true},
+    {"name": "first_name", "type": "any", "is_nullable": true},
+    {"name": "field_6", "type": "any", "is_nullable": true},
+    {"name": "full_name_mysql", "type": "any", "is_nullable": true},
+    {"name": "full_name_postgresql", "type": "any", "is_nullable": true},
+    {"name": "time_mysql", "type": "any", "is_nullable": true},
+    {"name": "time_standard", "type": "any", "is_nullable": true},
+    {"name": "bool_true", "type": "any", "is_nullable": true},
+    {"name": "bool_false", "type": "any", "is_nullable": true},
+    {"name": "random_mysql", "type": "any", "is_nullable": true},
+    {"name": "random_postgresql", "type": "any", "is_nullable": true},
+    {"name": "nested_cast_time", "type": "any", "is_nullable": true},
+    {"name": "field_16", "type": "any", "is_nullable": true}
+  ],
   "table_references": [
-    {"name": "users", "table_name": "users", "context": "main"}
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided",
+    "type inference unavailable: generated fallback responses with any type"
   ]
 }

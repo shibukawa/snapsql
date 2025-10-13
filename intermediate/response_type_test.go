@@ -71,7 +71,7 @@ func TestDetermineResponseType(t *testing.T) {
 		assert.Equal(t, 3, len(ordersTable.Columns))
 	})
 
-	// Fallback extraction removed: when no schema is provided, determineResponseType returns empty
+	// When no schema is provided, determineResponseType synthesizes fallback responses with warnings
 	t.Run("FallbackExtraction", func(t *testing.T) {
 		// Prepare a very small in-memory SQL to parse
 		md := "" +
@@ -86,9 +86,34 @@ func TestDetermineResponseType(t *testing.T) {
 		stmt, _, err := parser.ParseMarkdownFile(doc, "memory.md", ".", nil, parser.DefaultOptions)
 		assert.NoError(t, err)
 
-		// Call determineResponseType with empty schema (no fallback path)
-		responses := determineResponseType(stmt, nil)
-		// Expect empty due to strict schema requirement
-		assert.Equal(t, 0, len(responses))
+		// Call determineResponseType with empty schema to trigger fallback any responses
+		responses, warnings := determineResponseType(stmt, nil)
+		assert.Equal(t, 3, len(responses))
+		assert.Equal(t, "parent__id", responses[0].Name)
+		assert.Equal(t, "any", responses[0].Type)
+		assert.NotZero(t, len(warnings))
+		assert.Contains(t, strings.Join(warnings, ";"), "fallback")
 	})
+}
+
+func TestNormalizeColumnNameSubquery(t *testing.T) {
+	assert.Equal(t, "id", cleanIdentifier("sq.id"))
+	assert.Equal(t, "name", cleanIdentifier("\"sq\".\"name\""))
+}
+
+func TestFallbackFieldNamingFromSQL(t *testing.T) {
+	sql := "SELECT sq.id, sq.name FROM (SELECT id, name FROM users) AS sq"
+	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "inline.sql", "", parser.DefaultOptions)
+	assert.NoError(t, err)
+	selectStmt, ok := stmt.(*parser.SelectStatement)
+	assert.True(t, ok)
+	if ok {
+		field := selectStmt.Select.Fields[0]
+		t.Logf("FieldName=%q OriginalField=%q", field.FieldName, field.OriginalField)
+	}
+
+	responses := buildFallbackResponses(stmt)
+	assert.Equal(t, 2, len(responses))
+	assert.Equal(t, "id", responses[0].Name)
+	assert.Equal(t, "name", responses[1].Name)
 }

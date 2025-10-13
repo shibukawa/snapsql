@@ -97,7 +97,7 @@ func tryFullParserWithInspect(sql string, opt InspectOptions) (InspectResult, bo
 
 	base := extractTables(stmt)
 	if len(step7) > 0 {
-		base = mergeWithStep7(base, step7)
+		base = mergeWithStep7(base, step7, collectCTENames(stmt))
 	}
 
 	res.Tables = base
@@ -107,10 +107,15 @@ func tryFullParserWithInspect(sql string, opt InspectOptions) (InspectResult, bo
 
 // mergeWithStep7 overrides name/alias/schema with Step7 SQTableReference info while keeping
 // source/joinType determined from AST. Matching is done by alias if present, otherwise by name.
-func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference) []TableRef {
+func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference, cteNames map[string]struct{}) []TableRef {
 	// Build lookup by alias and by real name
 	byAlias := map[string]*cmn.SQTableReference{}
 	byReal := map[string]*cmn.SQTableReference{}
+	cteTargets := map[string]struct{}{}
+	subqueryTargets := map[string]struct{}{}
+	for name := range cteNames {
+		cteTargets[name] = struct{}{}
+	}
 
 	for _, tr := range step7 {
 		alias := ""
@@ -130,18 +135,35 @@ func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference) []T
 		if key != "" {
 			byReal[key] = tr
 		}
+
+		switch tr.Context {
+		case cmn.SQTableContextCTE:
+			if tr.QueryName != "" {
+				cteTargets[tr.QueryName] = struct{}{}
+			}
+			if tr.RealName != "" {
+				cteTargets[tr.RealName] = struct{}{}
+			}
+		case cmn.SQTableContextSubquery:
+			if tr.QueryName != "" {
+				subqueryTargets[tr.QueryName] = struct{}{}
+			}
+			if tr.RealName != "" {
+				subqueryTargets[tr.RealName] = struct{}{}
+			}
+		}
 	}
 
 	out := make([]TableRef, len(base))
 
 	for i, t := range base {
 		if tr, ok := byAlias[t.Alias]; ok && t.Alias != "" {
-			out[i] = overrideFromStep7(t, tr)
+			out[i] = overrideFromStep7(t, tr, cteTargets, subqueryTargets)
 			continue
 		}
 
 		if tr, ok := byReal[t.Name]; ok {
-			out[i] = overrideFromStep7(t, tr)
+			out[i] = overrideFromStep7(t, tr, cteTargets, subqueryTargets)
 			continue
 		}
 
@@ -151,16 +173,52 @@ func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference) []T
 	return out
 }
 
-func overrideFromStep7(t TableRef, tr *cmn.SQTableReference) TableRef {
+func overrideFromStep7(t TableRef, tr *cmn.SQTableReference, cteTargets, subqueryTargets map[string]struct{}) TableRef {
 	// Keep base Name/Alias/Schema as parsed from AST to avoid inconsistencies.
 	// Prefer Step7's classification for source/join only.
 	if s := tr.Context.String(); s != "" && s != "unknown" {
-		t.Source = s
+		switch s {
+		case "cte", "subquery":
+			t.Source = s
+		case "join":
+			if t.Source != "main" {
+				t.Source = s
+			}
+		default:
+			t.Source = s
+		}
 	}
 
-	t.JoinType = joinToString(tr.Join)
+	if !(t.Source == "main" && t.JoinType == "none") {
+		t.JoinType = joinToString(tr.Join)
+	}
+
+	if tr.RealName != "" {
+		if _, ok := cteTargets[tr.RealName]; ok {
+			t.Source = "cte"
+		} else if _, ok := subqueryTargets[tr.RealName]; ok && tr.Context == cmn.SQTableContextMain {
+			// Alias of derived table should remain main for readability; leave as-is.
+		}
+	}
 
 	return t
+}
+
+func collectCTENames(stmt cmn.StatementNode) map[string]struct{} {
+	res := map[string]struct{}{}
+	if stmt == nil {
+		return res
+	}
+
+	if with := stmt.CTE(); with != nil {
+		for _, def := range with.CTEs {
+			if def.Name != "" {
+				res[def.Name] = struct{}{}
+			}
+		}
+	}
+
+	return res
 }
 
 func kindToString(tp cmn.NodeType) string {

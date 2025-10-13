@@ -74,7 +74,15 @@
     {"name": "since", "type": "string"}
   ],
   "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
+    {"name": "title", "type": "any", "is_nullable": true}
+  ],
   "table_references": [
-    {"name": "i", "table_name": "inbox", "alias": "i", "context": "main"}
+    {"name": "inbox", "alias": "i", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided",
+    "type inference unavailable: generated fallback responses with any type"
   ]
 }

@@ -1,6 +1,10 @@
 package intermediate
 
 import (
+	"sort"
+	"strings"
+
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
@@ -13,88 +17,112 @@ func (p *TableReferencesProcessor) Name() string {
 }
 
 func (p *TableReferencesProcessor) Process(ctx *ProcessingContext) error {
-	// Extract table references from statement
-	tableRefs := extractTableReferences(ctx.Statement)
-
-	// Store in context
-	ctx.TableReferences = tableRefs
-
+	ctx.TableReferences = convertTableReferences(ctx.Statement, ctx.TableInfo)
 	return nil
 }
 
-// extractTableReferences extracts all table references from a statement
-func extractTableReferences(stmt parser.StatementNode) []TableReferenceInfo {
-	var refs []TableReferenceInfo
-
-	// Get subquery analysis result (contains DerivedTables)
-	if stmt.HasSubqueryAnalysis() {
-		analysis := stmt.GetSubqueryAnalysis()
-		if analysis != nil {
-			// Extract CTE and subquery references from DerivedTables
-			for _, dt := range analysis.DerivedTables {
-				// Add the CTE/subquery itself as a table reference
-				ref := TableReferenceInfo{
-					Name:      dt.Name,
-					TableName: "", // CTEs and subqueries don't have original table names
-					Alias:     dt.Name,
-					Context:   dt.SourceType, // "cte" or "subquery"
-				}
-				refs = append(refs, ref)
-
-				// Add internal table references (ReferencedTables) from CTE/subquery
-				// These are the tables that the CTE/subquery uses internally
-				for _, tableName := range dt.ReferencedTables {
-					internalRef := TableReferenceInfo{
-						Name:      tableName,
-						TableName: tableName,
-						Context:   "main", // These are actual tables from the database
-					}
-					refs = append(refs, internalRef)
-				}
-			}
-		}
+func convertTableReferences(stmt parser.StatementNode, tableInfo map[string]*snapsql.TableInfo) []TableReferenceInfo {
+	if stmt == nil {
+		return nil
 	}
 
-	// Extract main query table references
-	refs = append(refs, extractMainTableReferences(stmt)...)
+	tableMap := stmt.GetTableReferences()
+	if len(tableMap) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(tableMap))
+	for key := range tableMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	refs := make([]TableReferenceInfo, 0, len(keys))
+	for _, key := range keys {
+		ref := tableMap[key]
+		if ref == nil {
+			continue
+		}
+
+		refs = append(refs, convertSQTableReference(ref, tableInfo))
+	}
 
 	return refs
 }
 
-// extractMainTableReferences extracts table references from main query (not CTE internals)
-func extractMainTableReferences(stmt parser.StatementNode) []TableReferenceInfo {
-	var refs []TableReferenceInfo
+func convertSQTableReference(ref *cmn.SQTableReference, tableInfo map[string]*snapsql.TableInfo) TableReferenceInfo {
+	alias := strings.TrimSpace(ref.Name)
+	realName := strings.TrimSpace(ref.RealName)
 
-	// For SELECT statements, extract only from the main query's FROM/JOIN clauses
-	// This excludes tables within CTE definitions
-	selectStmt, ok := stmt.(*cmn.SelectStatement)
-	if !ok {
-		return refs
+	info := TableReferenceInfo{
+		QueryName: strings.TrimSpace(ref.QueryName),
+		Context:   mapTableContext(ref.Context),
 	}
 
-	// Extract from FROM clause
-	if selectStmt.From != nil {
-		for _, table := range selectStmt.From.Tables {
-			// Skip CTE references (they're already added from DerivedTables)
-			// We only want actual table references here
-			if len(table.RawTokens) > 0 {
-				continue // Subqueries handled separately
+	physicalName := resolvePhysicalTableName(ref, tableInfo)
+	if physicalName != "" {
+		info.TableName = physicalName
+	}
+
+	if realName != "" {
+		info.Name = realName
+	} else if physicalName != "" {
+		info.Name = physicalName
+	} else if alias != "" {
+		info.Name = alias
+	}
+
+	if alias != "" && alias != info.Name {
+		info.Alias = alias
+	}
+
+	if info.Name == "" {
+		info.Name = alias
+	}
+
+	return info
+}
+
+func resolvePhysicalTableName(ref *cmn.SQTableReference, tableInfo map[string]*snapsql.TableInfo) string {
+	if len(tableInfo) == 0 {
+		return ""
+	}
+
+	realName := strings.TrimSpace(ref.RealName)
+	if realName == "" {
+		return ""
+	}
+
+	candidates := []string{}
+	if ref.Schema != "" {
+		candidates = append(candidates, ref.Schema+"."+realName)
+	}
+	candidates = append(candidates, realName)
+
+	for _, candidate := range candidates {
+		if tbl := lookupTableInfo(tableInfo, candidate); tbl != nil {
+			if tbl.Schema != "" && !strings.Contains(candidate, ".") {
+				return tbl.Schema + "." + tbl.Name
 			}
 
-			ref := TableReferenceInfo{
-				Name:      table.Name,
-				TableName: table.TableName,
-				Context:   "main",
-			}
-
-			// Set alias if different from table name
-			if table.Name != table.TableName && table.TableName != "" {
-				ref.Alias = table.Name
-			}
-
-			refs = append(refs, ref)
+			return tbl.Name
 		}
 	}
 
-	return refs
+	return ""
+}
+
+func mapTableContext(context cmn.SQTableContextKind) string {
+	switch context {
+	case cmn.SQTableContextMain:
+		return "main"
+	case cmn.SQTableContextJoin:
+		return "join"
+	case cmn.SQTableContextCTE:
+		return "main"
+	case cmn.SQTableContextSubquery:
+		return "main"
+	default:
+		return ""
+	}
 }

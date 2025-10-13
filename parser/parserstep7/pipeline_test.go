@@ -12,7 +12,7 @@ func TestPipeline_SimpleCTE(t *testing.T) {
 WITH cte AS (
     SELECT id, name FROM users
 )
-SELECT id, name FROM cte
+SELECT c.id, name FROM cte c
 `
 
 	stmt := parseFullPipeline(t, sql)
@@ -32,7 +32,7 @@ SELECT id, name FROM cte
 	})
 	// 2. Main query uses CTE "cte" (no physical table, so RealName is empty, QueryName is "cte")
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "cte" && ref.RealName == "" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
+		return ref.Name == "c" && ref.RealName == "cte" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 
 	// Verify no dependency errors
@@ -63,7 +63,7 @@ FROM (SELECT id, name FROM users) AS sq
 
 	// Verify subquery alias itself (in main context)
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "sq" && ref.RealName == "" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
+		return ref.Name == "sq" && ref.RealName == "sq" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 
 	// Verify the underlying users table is tracked with QueryName (in subquery context)
@@ -91,13 +91,10 @@ FROM (
 
 	// Verify all table references are captured
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "users" || ref.RealName == "users"
+		return ref.Name == "sq" && ref.RealName == "sq" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "orders" || ref.RealName == "orders"
-	})
-	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "sq" || ref.RealName == "sq"
+		return ref.Name == "u" && ref.RealName == "users" && ref.QueryName == "sq" && ref.Context == cmn.SQTableContextSubquery
 	})
 
 	// Verify no dependency errors
@@ -111,7 +108,7 @@ SELECT outer_sq.id
 FROM (
     SELECT inner_sq.id
     FROM (
-        SELECT id FROM users WHERE active = true
+        SELECT id FROM users u WHERE u.active = true
     ) AS inner_sq
 ) AS outer_sq
 `
@@ -120,13 +117,13 @@ FROM (
 
 	// Verify all levels of table references
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "users" || ref.RealName == "users"
+		return ref.Name == "outer_sq" && ref.RealName == "outer_sq" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "inner_sq" || ref.RealName == "inner_sq"
+		return ref.Name == "inner_sq" && ref.RealName == "inner_sq" && ref.QueryName == "outer_sq" && ref.Context == cmn.SQTableContextSubquery
 	})
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "outer_sq" || ref.RealName == "outer_sq"
+		return ref.Name == "u" && ref.RealName == "users" && ref.QueryName == "inner_sq" && ref.Context == cmn.SQTableContextSubquery
 	})
 
 	// Verify no dependency errors
@@ -137,8 +134,8 @@ FROM (
 func TestPipeline_MultipleCTEs(t *testing.T) {
 	sql := `
 WITH 
-    cte1 AS (SELECT id, name FROM users),
-    cte2 AS (SELECT user_id, product_id FROM orders)
+    cte1 AS (SELECT u.id, name FROM users u),
+    cte2 AS (SELECT o.user_id, o.product_id FROM orders o)
 SELECT c1.name, c2.product_id
 FROM cte1 c1
 JOIN cte2 c2 ON c1.id = c2.user_id
@@ -156,18 +153,18 @@ JOIN cte2 c2 ON c1.id = c2.user_id
 
 	// Verify physical table references
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "users" || ref.RealName == "users"
+		return ref.Name == "u" && ref.RealName == "users" && ref.QueryName == "cte1" && ref.Context == cmn.SQTableContextCTE
 	})
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "orders" || ref.RealName == "orders"
+		return ref.Name == "o" && ref.RealName == "orders" && ref.QueryName == "cte2" && ref.Context == cmn.SQTableContextCTE
 	})
 
 	// Verify CTE references (c1 is alias for cte1, c2 is alias for cte2)
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.QueryName == "cte1" && ref.Context == cmn.SQTableContextCTE
+		return ref.Name == "c1" && ref.RealName == "cte1" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.QueryName == "cte2" && ref.Context == cmn.SQTableContextCTE
+		return ref.Name == "c2" && ref.RealName == "cte2" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 
 	// Verify no dependency errors
@@ -205,10 +202,10 @@ SELECT id, name FROM cte2
 
 	// Verify CTE references usage
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "cte1" && ref.RealName == "" && ref.QueryName == "cte2" && ref.Context == cmn.SQTableContextCTE
+		return ref.Name == "cte1" && ref.RealName == "cte1" && ref.QueryName == "cte2" && ref.Context == cmn.SQTableContextCTE
 	})
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "cte2" && ref.RealName == "" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
+		return ref.Name == "cte2" && ref.RealName == "cte2" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 
 	// Verify no dependency errors
@@ -270,10 +267,10 @@ FROM (SELECT id, name FROM active_users) AS sq
 
 	// Verify derived table references
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "active_users" && ref.RealName == "" && ref.QueryName == "sq" && ref.Context == cmn.SQTableContextSubquery
+		return ref.Name == "active_users" && ref.RealName == "active_users" && ref.QueryName == "sq" && ref.Context == cmn.SQTableContextSubquery
 	})
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "sq" && ref.RealName == "" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
+		return ref.Name == "sq" && ref.RealName == "sq" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 
 	// Verify no dependency errors
@@ -282,13 +279,13 @@ FROM (SELECT id, name FROM active_users) AS sq
 
 // TestPipeline_NoSubquery tests simple query without subqueries or CTEs
 func TestPipeline_NoSubquery(t *testing.T) {
-	sql := `SELECT id, name FROM users WHERE active = true`
+	sql := `SELECT u.id, u.name FROM users u WHERE active = true`
 
 	stmt := parseFullPipeline(t, sql)
 
 	// Verify single table reference
 	assertHasTableReference(t, stmt, func(ref *cmn.SQTableReference) bool {
-		return ref.Name == "users" || ref.RealName == "users"
+		return ref.Name == "u" && ref.RealName == "users" && ref.QueryName == "" && ref.Context == cmn.SQTableContextMain
 	})
 
 	// Verify no dependency errors

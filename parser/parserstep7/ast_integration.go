@@ -166,14 +166,17 @@ func (ai *ASTIntegrator) extractCTEDependencies(cte *cmn.WithClause, stmt cmn.St
 		if cteStmt != nil {
 			internalTableRefs := extractTableRefsFromStatementWithCTEs(cteStmt, processedCTEs)
 			for _, internalRef := range internalTableRefs {
-				// Check if this reference is to another CTE (RealName is empty for CTE references)
-				if internalRef.RealName == "" && internalRef.Name != "" {
-					// This CTE depends on another CTE
-					if _, isProcessedCTE := processedCTEs[internalRef.Name]; isProcessedCTE {
-						// Add dependency: referencedCTE -> currentCTE
-						// (referencedCTE must be processed before currentCTE)
-						ai.parser.dependencies.AddDependency(internalRef.Name, cteID)
-					}
+				// Determine referenced CTE name using RealName first, fallback to Name
+				refName := internalRef.RealName
+				if refName == "" {
+					refName = internalRef.Name
+				}
+				if refName == "" {
+					continue
+				}
+				if _, isProcessedCTE := processedCTEs[refName]; isProcessedCTE {
+					// Add dependency: referencedCTE -> currentCTE (referenced first)
+					ai.parser.dependencies.AddDependency(refName, cteID)
 				}
 			}
 		}
@@ -422,9 +425,15 @@ func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) 
 		// Heuristic: detect subquery via RawTokens or Expression tokens
 		isSub := len(t.RawTokens) > 0 || looksLikeSubquery(t)
 
+		real := realName(t.TableReference)
+		alias := t.Name
+		if alias == "" {
+			alias = real
+		}
+
 		tr := &cmn.SQTableReference{
-			Name:       t.Name,
-			RealName:   realName(t.TableReference),
+			Name:       alias,
+			RealName:   real,
 			Schema:     t.SchemaName,
 			IsSubquery: isSub,
 			Join:       t.JoinType,
@@ -435,14 +444,16 @@ func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) 
 			tr.Context = cmn.SQTableContextMain
 		}
 
-		if _, ok := ctes[tr.RealName]; ok {
-			// CTE reference: RealName should be empty (CTE is not a physical table)
-			tr.RealName = ""
+		if _, ok := ctes[real]; ok {
+			// CTE reference (FROM cte AS alias) should remain in main context
+			tr.Context = cmn.SQTableContextMain
 		} else if tr.IsSubquery {
-			// Subquery reference: RealName should be empty (subquery is not a physical table)
-			// Note: The subquery alias itself remains in its current context (Main or Join)
-			// Only the tables INSIDE the subquery get Context=Subquery (handled separately)
-			tr.RealName = ""
+			if real == alias {
+				// Derived table alias itself belongs to main query
+				tr.Context = cmn.SQTableContextMain
+			} else {
+				tr.Context = cmn.SQTableContextSubquery
+			}
 		}
 
 		out = append(out, tr)

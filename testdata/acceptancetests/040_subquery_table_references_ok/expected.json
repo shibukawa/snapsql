@@ -21,7 +21,15 @@
     {"op": "END", "pos": "0:0"}
   ],
   "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
+    {"name": "name", "type": "any", "is_nullable": true}
+  ],
   "table_references": [
-    {"name": "sq", "context": "main"}
+    {"name": "sq", "context": "main"},
+    {"name": "users", "table_name": "users", "query_name": "sq", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: validation error: Subquery node subquery_1 has no type information"
   ]
 }

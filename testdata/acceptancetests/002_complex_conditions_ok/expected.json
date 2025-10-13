@@ -118,7 +118,17 @@
     {"name": "active", "type": "bool"}
   ],
   "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
+    {"name": "name", "type": "any", "is_nullable": true},
+    {"name": "age", "type": "any", "is_nullable": true},
+    {"name": "department", "type": "any", "is_nullable": true}
+  ],
   "table_references": [
-    {"name": "users", "table_name": "users", "context": "main"}
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided",
+    "type inference unavailable: generated fallback responses with any type"
   ]
 }

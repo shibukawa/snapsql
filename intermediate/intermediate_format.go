@@ -101,20 +101,20 @@ type ImplicitParameter struct {
 
 // TableReferenceInfo represents a table reference in the query (including CTEs, subqueries, and joins)
 type TableReferenceInfo struct {
-	// Table name or alias (if present, otherwise original name)
+	// Canonical identifier for the referenced object (physical table, CTE, or subquery)
 	Name string `json:"name"`
 
-	// Original table name (empty for subquery/CTE)
+	// Physical table name when it can be resolved via schema metadata
 	TableName string `json:"table_name,omitempty"`
 
-	// Alias explicitly specified with AS keyword
+	// Alias used in the SQL text (if different from Name)
 	Alias string `json:"alias,omitempty"`
 
-	// Context where this table is used ("main", "cte", "subquery")
-	Context string `json:"context,omitempty"`
+	// Owning derived query (CTE/subquery) when the reference is defined inside it
+	QueryName string `json:"query_name,omitempty"`
 
-	// CTE name if this reference is within a CTE
-	CTEName string `json:"cte_name,omitempty"`
+	// Context where this table is used ("main", "join", "cte", "subquery")
+	Context string `json:"context,omitempty"`
 }
 
 // SystemFieldInfo represents system field configuration in intermediate format
@@ -162,6 +162,9 @@ type IntermediateFormat struct {
 
 	// Response fields (simplified structure)
 	Responses []Response `json:"responses,omitempty"`
+
+	// Warning messages emitted during intermediate generation (e.g., type inference degradation)
+	Warnings []string `json:"warnings,omitempty"`
 
 	// Response affinity (database type mapping)
 	ResponseAffinity string `json:"response_affinity,omitempty"`

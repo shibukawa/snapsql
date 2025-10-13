@@ -22,14 +22,30 @@
   ],
   "response_affinity": "many",
   "responses": [
-    {"name": "au.id", "type": "integer", "hierarchy_key_level": 1},
-    {"name": "au.name", "type": "text"},
-    {"name": "au.email", "type": "text"},
-    {"name": "o.total", "type": "numeric", "is_nullable": true}
+    {"name": "id", "type": "integer", "hierarchy_key_level": 1},
+    {"name": "name", "type": "text"},
+    {"name": "email", "type": "text"},
+    {"name": "total", "type": "numeric", "is_nullable": true}
   ],
   "table_references": [
-    {"name": "active_users", "alias": "active_users", "context": "cte"},
-    {"name": "au", "table_name": "active_users", "alias": "au", "context": "main"},
-    {"name": "o", "table_name": "orders", "alias": "o", "context": "main"}
+    {
+      "name": "users",
+      "table_name": "users",
+      "alias": "u",
+      "query_name": "active_users",
+      "context": "main"
+    },
+    {
+      "name": "user_status",
+      "table_name": "user_status",
+      "alias": "us",
+      "query_name": "active_users",
+      "context": "main"
+    },
+    {"name": "active_users", "alias": "au", "context": "main"},
+    {"name": "orders", "table_name": "orders", "alias": "o", "context": "join"}
+  ],
+  "warnings": [
+    "type inference failed: validation error: Subquery node active_users has no type information"
   ]
 }

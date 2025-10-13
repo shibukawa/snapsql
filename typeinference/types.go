@@ -2,6 +2,7 @@ package typeinference
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/shibukawa/snapsql"
@@ -117,6 +118,7 @@ type TypeInferenceEngine2 struct {
 	fieldNameGen     *FieldNameGenerator             // Basic field name generator
 	enhancedGen      *EnhancedFieldNameGenerator     // Enhanced field name generator for complex expressions (Phase 4)
 	typeCache        map[string][]*InferredFieldInfo // Type inference cache
+	warnings         map[string]struct{}             // Collected warning messages
 }
 
 // NewTypeInferenceEngine2 creates a new type inference engine.
@@ -173,6 +175,7 @@ func NewTypeInferenceEngine2(
 		fieldNameGen:     NewFieldNameGenerator(),
 		enhancedGen:      NewEnhancedFieldNameGenerator(),
 		typeCache:        make(map[string][]*InferredFieldInfo),
+		warnings:         make(map[string]struct{}),
 	}
 
 	// Create DML inference engine (Phase 6)
@@ -231,8 +234,8 @@ func (e *TypeInferenceEngine2) InferSelectTypes() ([]*InferredFieldInfo, error) 
 	if e.enhancedResolver != nil {
 		err := e.enhancedResolver.ResolveSubqueryTypesComplete()
 		if err != nil {
-			// Don't fail completely - log warning and continue with degraded mode
-			fmt.Printf("Warning: enhanced subquery type resolution failed: %v\n", err)
+			// Don't fail completely - collect warning and continue with degraded mode
+			e.addWarning(fmt.Sprintf("enhanced subquery type resolution failed: %v", err))
 		}
 	}
 
@@ -382,13 +385,21 @@ func (e *TypeInferenceEngine2) extractTableAliases(selectStmt *parser.SelectStat
 		tableName := table.TableName
 		aliasName := table.Name // Use Name field for alias
 
+		// Subquery/derived table: TableName が空の場合は alias をそのまま扱う
+		if strings.TrimSpace(tableName) == "" {
+			if aliasName != "" {
+				e.context.CurrentTables = appendIfMissing(e.context.CurrentTables, aliasName)
+			}
+			continue
+		}
+
 		if table.ExplicitName && aliasName != tableName {
-			// This is an alias
+			// Alias -> real table mapping
 			e.context.TableAliases[aliasName] = tableName
-			e.context.CurrentTables = append(e.context.CurrentTables, aliasName)
+			e.context.CurrentTables = appendIfMissing(e.context.CurrentTables, aliasName, tableName)
 		} else {
 			// No alias, use table name directly
-			e.context.CurrentTables = append(e.context.CurrentTables, tableName)
+			e.context.CurrentTables = appendIfMissing(e.context.CurrentTables, tableName)
 		}
 	}
 }
@@ -482,6 +493,54 @@ func (e *TypeInferenceEngine2) inferFieldType(field *parser.SelectField, fieldIn
 		IsGenerated:  !field.ExplicitName,
 		CastType:     field.TypeName,
 	}, nil
+}
+
+// addWarning records a warning message while avoiding duplicates and empty strings.
+func (e *TypeInferenceEngine2) addWarning(message string) {
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		return
+	}
+	if e.warnings == nil {
+		e.warnings = make(map[string]struct{})
+	}
+	e.warnings[msg] = struct{}{}
+}
+
+// Warnings returns the accumulated warnings as a sorted slice copy.
+func (e *TypeInferenceEngine2) Warnings() []string {
+	if len(e.warnings) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(e.warnings))
+	for msg := range e.warnings {
+		result = append(result, msg)
+	}
+	sort.Strings(result)
+	return result
+}
+
+// appendIfMissing appends unique table identifiers to the slice.
+func appendIfMissing(existing []string, values ...string) []string {
+	if len(values) == 0 {
+		return existing
+	}
+	seen := make(map[string]struct{}, len(existing))
+	for _, v := range existing {
+		seen[v] = struct{}{}
+	}
+	for _, v := range values {
+		key := strings.TrimSpace(v)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		existing = append(existing, key)
+		seen[key] = struct{}{}
+	}
+	return existing
 }
 
 // Type inference methods for different field kinds

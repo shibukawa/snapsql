@@ -25,7 +25,11 @@
     {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1}
   ],
   "table_references": [
-    {"name": "pending", "alias": "pending", "context": "cte"},
-    {"name": "pending", "table_name": "pending", "context": "main"}
+    {"name": "pending", "context": "main"},
+    {"name": "cards", "query_name": "pending", "context": "main"}
+  ],
+  "warnings": [
+    "enhanced subquery type resolution failed: failed to resolve subquery node pending: type inference failed for subquery pending: schema validation failed: Column 'id' does not exist in any available table",
+    "type inference failed: validation error: Subquery node pending has no type information"
   ]
 }

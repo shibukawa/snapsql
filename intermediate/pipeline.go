@@ -93,7 +93,8 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 	}
 
 	// Build the final intermediate format
-	responses := applyHierarchyKeyLevels(determineResponseType(ctx.Statement, ctx.TableInfo), ctx.TableInfo)
+	responsesRaw, responseWarnings := determineResponseType(ctx.Statement, ctx.TableInfo)
+	responses := applyHierarchyKeyLevels(responsesRaw, ctx.TableInfo)
 
 	if len(responses) == 0 {
 		fallbackResponses, err := buildDMLReturningResponses(ctx.Statement, ctx.TableInfo)
@@ -120,6 +121,10 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		ResponseAffinity:   ctx.ResponseAffinity,
 		Responses:          responses,
 		TableReferences:    ctx.TableReferences, // Add table references
+	}
+
+	if len(responseWarnings) > 0 {
+		result.Warnings = append(result.Warnings, responseWarnings...)
 	}
 
 	return result, nil

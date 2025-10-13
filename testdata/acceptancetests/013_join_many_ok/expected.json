@@ -35,8 +35,20 @@
     {"name": "department", "type": "string"}
   ],
   "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
+    {"name": "name", "type": "any", "is_nullable": true},
+    {"name": "email", "type": "any", "is_nullable": true},
+    {"name": "jobs__id", "type": "any", "is_nullable": true},
+    {"name": "jobs__title", "type": "any", "is_nullable": true},
+    {"name": "jobs__company", "type": "any", "is_nullable": true}
+  ],
   "table_references": [
-    {"name": "u", "table_name": "users", "alias": "u", "context": "main"},
-    {"name": "j", "table_name": "jobs", "alias": "j", "context": "main"}
+    {"name": "users", "alias": "u", "context": "main"},
+    {"name": "jobs", "alias": "j", "context": "join"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided",
+    "type inference unavailable: generated fallback responses with any type"
   ]
 }
