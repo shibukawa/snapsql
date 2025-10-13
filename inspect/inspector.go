@@ -199,9 +199,6 @@ func overrideFromStep7(t TableRef, tr *cmn.SQTableReference, cteTargets, subquer
 	if tr.RealName != "" {
 		if _, ok := cteTargets[tr.RealName]; ok {
 			t.Source = "cte"
-		} else if _, ok := subqueryTargets[tr.RealName]; ok && tr.Context == cmn.SQTableContextMain {
-			// Ensure subquery aliases keep source as main for readability.
-			t.Source = "main"
 		}
 	}
 

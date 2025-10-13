@@ -1036,7 +1036,7 @@ func (ftr *FixtureTestRunner) describeTable(alias string, mapping map[string]int
 		return "table '<unknown>'"
 	}
 
-	return fmt.Sprintf("table '%s'", trimmed)
+	return trimmed
 }
 
 func ensureAggregate(order *[]performanceAggregate, index map[string]int, location string) *performanceAggregate {

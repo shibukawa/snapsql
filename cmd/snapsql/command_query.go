@@ -848,10 +848,10 @@ func describeSingleTable(alias string, mapping map[string]intermediate.TableRefe
 	}
 
 	if trimmed == "" {
-		return "table '<unknown>'"
+		return "table <unknown>"
 	}
 
-	return fmt.Sprintf("table '%s'", trimmed)
+	return trimmed
 }
 
 func shouldAnalyzeSQL(sql string) bool {
