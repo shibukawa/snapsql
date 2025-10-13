@@ -113,6 +113,7 @@ func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference, cte
 	byReal := map[string]*cmn.SQTableReference{}
 	cteTargets := map[string]struct{}{}
 	subqueryTargets := map[string]struct{}{}
+
 	for name := range cteNames {
 		cteTargets[name] = struct{}{}
 	}
@@ -141,6 +142,7 @@ func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference, cte
 			if tr.QueryName != "" {
 				cteTargets[tr.QueryName] = struct{}{}
 			}
+
 			if tr.RealName != "" {
 				cteTargets[tr.RealName] = struct{}{}
 			}
@@ -148,6 +150,7 @@ func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference, cte
 			if tr.QueryName != "" {
 				subqueryTargets[tr.QueryName] = struct{}{}
 			}
+
 			if tr.RealName != "" {
 				subqueryTargets[tr.RealName] = struct{}{}
 			}
@@ -189,7 +192,7 @@ func overrideFromStep7(t TableRef, tr *cmn.SQTableReference, cteTargets, subquer
 		}
 	}
 
-	if !(t.Source == "main" && t.JoinType == "none") {
+	if t.Source != "main" || t.JoinType != "none" {
 		t.JoinType = joinToString(tr.Join)
 	}
 
@@ -197,7 +200,8 @@ func overrideFromStep7(t TableRef, tr *cmn.SQTableReference, cteTargets, subquer
 		if _, ok := cteTargets[tr.RealName]; ok {
 			t.Source = "cte"
 		} else if _, ok := subqueryTargets[tr.RealName]; ok && tr.Context == cmn.SQTableContextMain {
-			// Alias of derived table should remain main for readability; leave as-is.
+			// Ensure subquery aliases keep source as main for readability.
+			t.Source = "main"
 		}
 	}
 

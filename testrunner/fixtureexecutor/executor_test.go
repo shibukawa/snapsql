@@ -73,7 +73,7 @@ func TestExecutor_ExecuteTest(t *testing.T) {
 		Timeout:  time.Minute,
 	}
 
-	result, trace, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
+	result, trace, _, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Empty(t, trace)
@@ -156,7 +156,7 @@ func TestExecutor_ExecuteTest_UsesPreparedSQL(t *testing.T) {
 		Verbose:  true,
 	}
 
-	result, trace, err := executor.ExecuteTest(
+	result, trace, _, err := executor.ExecuteTest(
 		testCase,
 		"SELECT id, name FROM users WHERE id = /*= id */1",
 		map[string]any{"id": 2},
@@ -216,7 +216,7 @@ func TestExecutor_ExecuteTest_TraceCapturedOnExecutionError(t *testing.T) {
 		Verbose:  true,
 	}
 
-	_, trace, err := executor.ExecuteTest(
+	_, trace, _, err := executor.ExecuteTest(
 		testCase,
 		"UPDATE users SET name = 'Alice' WHERE id = 1 0",
 		map[string]any{"name": "Alice", "id": 1},
@@ -276,7 +276,7 @@ func TestExecutor_FixtureCurrentDateValue(t *testing.T) {
 		Timeout:  time.Minute,
 	}
 
-	result, trace, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
+	result, trace, _, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Empty(t, trace)
@@ -343,7 +343,7 @@ func TestExecutor_ClearInsertStrategy(t *testing.T) {
 		Timeout:  time.Minute,
 	}
 
-	result, trace, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
+	result, trace, _, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Empty(t, trace)
@@ -431,7 +431,7 @@ func TestExecutor_ClearInsertStrategy_NullPlaceholder(t *testing.T) {
 		Timeout:  time.Minute,
 	}
 
-	result, trace, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
+	result, trace, _, err := executor.ExecuteTest(testCase, "", map[string]any{}, options)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Empty(t, trace)

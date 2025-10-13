@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/explain"
+	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/markdownparser"
 )
 
@@ -23,6 +25,7 @@ type TestResult struct {
 	ActualErrorType   string  // Classified error type
 	ErrorMatch        bool    // Whether error matched expected
 	ErrorMatchMessage string  // Detailed error match message
+	Performance       *explain.PerformanceEvaluation
 }
 
 // TestSummary represents the overall test execution summary
@@ -36,11 +39,12 @@ type TestSummary struct {
 
 // TestRunner manages parallel test execution
 type TestRunner struct {
-	executor   *Executor
-	workerPool chan struct{} // セマフォ
-	options    *ExecutionOptions
-	sql        string         // SQL query from document
-	parameters map[string]any // Default parameters from document
+	executor        *Executor
+	workerPool      chan struct{} // セマフォ
+	options         *ExecutionOptions
+	sql             string         // SQL query from document
+	parameters      map[string]any // Default parameters from document
+	tableReferences map[*markdownparser.TestCase]map[string]intermediate.TableReferenceInfo
 }
 
 // NewTestRunner creates a new test runner
@@ -50,10 +54,11 @@ func NewTestRunner(db *sql.DB, dialect string, options *ExecutionOptions) *TestR
 	}
 
 	return &TestRunner{
-		executor:   NewExecutor(db, dialect, make(map[string]*snapsql.TableInfo)), // schema info can be injected later via SetTableInfo
-		workerPool: make(chan struct{}, options.Parallel),
-		options:    options,
-		parameters: make(map[string]any),
+		executor:        NewExecutor(db, dialect, make(map[string]*snapsql.TableInfo)), // schema info can be injected later via SetTableInfo
+		workerPool:      make(chan struct{}, options.Parallel),
+		options:         options,
+		parameters:      make(map[string]any),
+		tableReferences: make(map[*markdownparser.TestCase]map[string]intermediate.TableReferenceInfo),
 	}
 }
 
@@ -82,6 +87,16 @@ func (tr *TestRunner) SetSQL(sql string) {
 // SetParameters sets the default parameters for test execution
 func (tr *TestRunner) SetParameters(parameters map[string]any) {
 	tr.parameters = parameters
+}
+
+// SetTableReferences injects per-test table reference maps resolved from intermediate metadata.
+func (tr *TestRunner) SetTableReferences(refs map[*markdownparser.TestCase]map[string]intermediate.TableReferenceInfo) {
+	if refs == nil {
+		tr.tableReferences = make(map[*markdownparser.TestCase]map[string]intermediate.TableReferenceInfo)
+		return
+	}
+
+	tr.tableReferences = refs
 }
 
 // SetVerbose toggles verbose SQL tracing.
@@ -159,21 +174,25 @@ func (tr *TestRunner) executeTestWithTimeout(ctx context.Context, testCase *mark
 	startTime := time.Now()
 
 	// Execute test
-	result, trace, err := tr.executeTestWithContext(testCtx, testCase)
+	result, trace, perf, err := tr.executeTestWithContext(testCtx, testCase)
 
 	// Handle error test cases
 	if testCase.ExpectedError != nil {
-		return tr.handleErrorTest(testCase, result, trace, err, time.Since(startTime))
+		res := tr.handleErrorTest(testCase, result, trace, err, time.Since(startTime))
+		res.Performance = perf
+
+		return res
 	}
 
 	// Handle normal test cases
 	return TestResult{
-		TestCase: testCase,
-		Success:  err == nil,
-		Duration: time.Since(startTime),
-		Result:   result,
-		Trace:    trace,
-		Error:    err,
+		TestCase:    testCase,
+		Success:     err == nil,
+		Duration:    time.Since(startTime),
+		Result:      result,
+		Trace:       trace,
+		Error:       err,
+		Performance: perf,
 	}
 }
 
@@ -210,11 +229,11 @@ func (tr *TestRunner) handleErrorTest(testCase *markdownparser.TestCase, result 
 }
 
 // executeTestWithContext executes a test within a context
-func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *markdownparser.TestCase) (*ValidationResult, []SQLTrace, error) {
+func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *markdownparser.TestCase) (*ValidationResult, []SQLTrace, *explain.PerformanceEvaluation, error) {
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
-		return nil, nil, ctx.Err()
+		return nil, nil, nil, ctx.Err()
 	default:
 	}
 
@@ -233,8 +252,21 @@ func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *mark
 		sql = tr.sql
 	}
 
-	// Execute the test
-	return tr.executor.ExecuteTest(testCase, sql, parameters, tr.options)
+	// Execute the test with per-case execution options
+	var execOptions ExecutionOptions
+	if tr.options != nil {
+		execOptions = *tr.options
+	} else {
+		execOptions = *DefaultExecutionOptions()
+	}
+
+	if refs, ok := tr.tableReferences[testCase]; ok {
+		execOptions.TableReferenceMap = refs
+	} else {
+		execOptions.TableReferenceMap = nil
+	}
+
+	return tr.executor.ExecuteTest(testCase, sql, parameters, &execOptions)
 }
 
 // NormalizeParameters walks parameter map and resolves fixture-style special tokens.

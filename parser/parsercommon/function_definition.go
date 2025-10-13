@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/goccy/go-yaml"
@@ -44,11 +45,18 @@ type FunctionDefinition struct {
 	RawParameters      yaml.MapSlice             `yaml:"parameters"`
 	Generators         map[string]map[string]any `yaml:"generators"`
 	dummyData          map[string]any
+	Performance        PerformanceDefinition `yaml:"performance"`
+	SlowQueryThreshold time.Duration         `yaml:"-"`
 
 	// Common type related fields
 	commonTypes     map[string]map[string]map[string]any // Loaded common type definitions
 	basePath        string                               // Base path for resolving relative paths (location of definition file)
 	projectRootPath string                               // Project root path
+}
+
+// PerformanceDefinition captures raw performance settings from YAML.
+type PerformanceDefinition struct {
+	SlowQueryThreshold string `yaml:"slow_query_threshold"`
 }
 
 func ParseFunctionDefinitionFromSQLComment(tokens []tokenizer.Token, basePath string, projectRootPath string) (*FunctionDefinition, error) {
@@ -81,6 +89,10 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 		// Copy metadata fields
 		FunctionName: getStringFromMap(doc.Metadata, "function_name", ""),
 		Description:  getStringFromMap(doc.Metadata, "description", ""),
+	}
+
+	if doc.Performance.SlowQueryThreshold > 0 {
+		def.SlowQueryThreshold = doc.Performance.SlowQueryThreshold
 	}
 
 	// If function name is still empty, derive from file name (without extension).
@@ -272,6 +284,18 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 	}
 
 	f.dummyData = dummy
+
+	if f.SlowQueryThreshold == 0 {
+		threshold := strings.TrimSpace(f.Performance.SlowQueryThreshold)
+		if threshold != "" {
+			dur, err := time.ParseDuration(threshold)
+			if err != nil {
+				return fmt.Errorf("invalid performance.slow_query_threshold: %w", err)
+			}
+
+			f.SlowQueryThreshold = dur
+		}
+	}
 
 	return nil
 }

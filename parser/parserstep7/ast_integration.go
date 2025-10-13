@@ -171,9 +171,11 @@ func (ai *ASTIntegrator) extractCTEDependencies(cte *cmn.WithClause, stmt cmn.St
 				if refName == "" {
 					refName = internalRef.Name
 				}
+
 				if refName == "" {
 					continue
 				}
+
 				if _, isProcessedCTE := processedCTEs[refName]; isProcessedCTE {
 					// Add dependency: referencedCTE -> currentCTE (referenced first)
 					ai.parser.dependencies.AddDependency(refName, cteID)
@@ -425,15 +427,16 @@ func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) 
 		// Heuristic: detect subquery via RawTokens or Expression tokens
 		isSub := len(t.RawTokens) > 0 || looksLikeSubquery(t)
 
-		real := realName(t.TableReference)
-		alias := t.Name
-		if alias == "" {
-			alias = real
+	resolvedName := realName(t.TableReference)
+
+	alias := t.Name
+	if alias == "" {
+		alias = resolvedName
 		}
 
 		tr := &cmn.SQTableReference{
 			Name:       alias,
-			RealName:   real,
+		RealName:   resolvedName,
 			Schema:     t.SchemaName,
 			IsSubquery: isSub,
 			Join:       t.JoinType,
@@ -444,11 +447,11 @@ func extractFromClauseTablesWithCTE(with *cmn.WithClause, from *cmn.FromClause) 
 			tr.Context = cmn.SQTableContextMain
 		}
 
-		if _, ok := ctes[real]; ok {
+	if _, ok := ctes[resolvedName]; ok {
 			// CTE reference (FROM cte AS alias) should remain in main context
 			tr.Context = cmn.SQTableContextMain
 		} else if tr.IsSubquery {
-			if real == alias {
+			if resolvedName == alias {
 				// Derived table alias itself belongs to main query
 				tr.Context = cmn.SQTableContextMain
 			} else {

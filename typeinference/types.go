@@ -390,6 +390,7 @@ func (e *TypeInferenceEngine2) extractTableAliases(selectStmt *parser.SelectStat
 			if aliasName != "" {
 				e.context.CurrentTables = appendIfMissing(e.context.CurrentTables, aliasName)
 			}
+
 			continue
 		}
 
@@ -501,9 +502,11 @@ func (e *TypeInferenceEngine2) addWarning(message string) {
 	if msg == "" {
 		return
 	}
+
 	if e.warnings == nil {
 		e.warnings = make(map[string]struct{})
 	}
+
 	e.warnings[msg] = struct{}{}
 }
 
@@ -512,11 +515,14 @@ func (e *TypeInferenceEngine2) Warnings() []string {
 	if len(e.warnings) == 0 {
 		return nil
 	}
+
 	result := make([]string, 0, len(e.warnings))
 	for msg := range e.warnings {
 		result = append(result, msg)
 	}
+
 	sort.Strings(result)
+
 	return result
 }
 
@@ -525,21 +531,26 @@ func appendIfMissing(existing []string, values ...string) []string {
 	if len(values) == 0 {
 		return existing
 	}
+
 	seen := make(map[string]struct{}, len(existing))
 	for _, v := range existing {
 		seen[v] = struct{}{}
 	}
+
 	for _, v := range values {
 		key := strings.TrimSpace(v)
 		if key == "" {
 			continue
 		}
+
 		if _, ok := seen[key]; ok {
 			continue
 		}
+
 		existing = append(existing, key)
 		seen[key] = struct{}{}
 	}
+
 	return existing
 }
 

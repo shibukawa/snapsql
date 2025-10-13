@@ -105,8 +105,10 @@ func TestFallbackFieldNamingFromSQL(t *testing.T) {
 	sql := "SELECT sq.id, sq.name FROM (SELECT id, name FROM users) AS sq"
 	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "inline.sql", "", parser.DefaultOptions)
 	assert.NoError(t, err)
+
 	selectStmt, ok := stmt.(*parser.SelectStatement)
 	assert.True(t, ok)
+
 	if ok {
 		field := selectStmt.Select.Fields[0]
 		t.Logf("FieldName=%q OriginalField=%q", field.FieldName, field.OriginalField)

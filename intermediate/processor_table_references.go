@@ -35,6 +35,7 @@ func convertTableReferences(stmt parser.StatementNode, tableInfo map[string]*sna
 	for key := range tableMap {
 		keys = append(keys, key)
 	}
+
 	sort.Strings(keys)
 
 	refs := make([]TableReferenceInfo, 0, len(keys))
@@ -97,6 +98,7 @@ func resolvePhysicalTableName(ref *cmn.SQTableReference, tableInfo map[string]*s
 	if ref.Schema != "" {
 		candidates = append(candidates, ref.Schema+"."+realName)
 	}
+
 	candidates = append(candidates, realName)
 
 	for _, candidate := range candidates {

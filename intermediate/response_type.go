@@ -23,6 +23,7 @@ func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*snap
 	schemas := convertTableInfoToSchemas(augmentedTableInfo)
 	inferredFields, inferWarnings, inferErr := typeinference.InferFieldTypesWithWarnings(schemas, stmt, nil)
 	collector.AddAll(inferWarnings)
+
 	if inferErr != nil {
 		collector.Add(fmt.Sprintf("type inference failed: %v", inferErr))
 	}
@@ -34,9 +35,11 @@ func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*snap
 			if name == "" {
 				name = field.Alias
 			}
+
 			if name == "" {
 				name = field.OriginalName
 			}
+
 			name = cleanIdentifier(name)
 			if name == "" {
 				name = fmt.Sprintf("field_%d", idx+1)
@@ -71,6 +74,7 @@ func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*snap
 		if len(inferredFields) == 0 {
 			collector.Add("type inference unavailable: generated fallback responses with any type")
 		}
+
 		return fallback, collector.List()
 	}
 
@@ -167,6 +171,7 @@ func fallbackResponseName(field parser.SelectField, index int, counter map[strin
 	if field.FieldName != "" {
 		candidates = append(candidates, field.FieldName)
 	}
+
 	if field.OriginalField != "" {
 		candidates = append(candidates, field.OriginalField)
 	}
@@ -189,17 +194,21 @@ func resolveFallbackSource(stmt parser.StatementNode, field parser.SelectField, 
 	if field.FieldName != "" {
 		keyCandidates = append(keyCandidates, field.FieldName)
 	}
+
 	if field.TableName != "" {
 		if field.FieldName != "" {
 			keyCandidates = append(keyCandidates, field.TableName+"."+field.FieldName)
 		}
+
 		if normalizedOriginal != "" {
 			keyCandidates = append(keyCandidates, field.TableName+"."+normalizedOriginal)
 		}
 	}
+
 	if field.OriginalField != "" {
 		keyCandidates = append(keyCandidates, field.OriginalField)
 	}
+
 	if normalizedOriginal != "" {
 		keyCandidates = append(keyCandidates, normalizedOriginal)
 	}
@@ -237,7 +246,9 @@ func extractSourceInfo(source *cmn.SQFieldSource) (string, string) {
 	if source == nil {
 		return "", ""
 	}
+
 	var tableName string
+
 	if source.TableSource != nil {
 		if source.TableSource.RealName != "" {
 			tableName = source.TableSource.RealName
@@ -245,6 +256,7 @@ func extractSourceInfo(source *cmn.SQFieldSource) (string, string) {
 			tableName = source.TableSource.Name
 		}
 	}
+
 	if tableName == "" && source.SubqueryRef != "" {
 		tableName = source.SubqueryRef
 	}
@@ -262,39 +274,31 @@ func cleanIdentifier(name string) string {
 	if trimmed == "" {
 		return ""
 	}
+
 	trimmed = strings.Trim(trimmed, "`\"[]")
 	if dot := strings.LastIndex(trimmed, "."); dot >= 0 {
 		trimmed = trimmed[dot+1:]
 		trimmed = strings.Trim(trimmed, "`\"[]")
 	}
+
 	trimmed = strings.TrimSpace(trimmed)
 	if trimmed == "" {
 		return ""
 	}
+
 	return trimmed
 }
 
-func normalizeFallbackName(raw string) string {
-	name := strings.TrimSpace(raw)
-	if name == "" {
-		return ""
-	}
-	replacer := strings.NewReplacer(" ", "_", "\n", "_", "\t", "_", "\r", "_")
-	name = replacer.Replace(name)
-	name = strings.Trim(name, "`\"[]")
-	if name == "" {
-		return ""
-	}
-	return name
-}
 func uniquifyName(base string, counter map[string]int) string {
 	count := counter[base]
 	if count == 0 {
 		counter[base] = 1
 		return base
 	}
+
 	count++
 	counter[base] = count
+
 	return fmt.Sprintf("%s_%d", base, count)
 }
 
@@ -311,6 +315,7 @@ func (wc *warningCollector) Add(message string) {
 	if msg == "" {
 		return
 	}
+
 	wc.set[msg] = struct{}{}
 }
 
@@ -324,11 +329,14 @@ func (wc *warningCollector) List() []string {
 	if len(wc.set) == 0 {
 		return nil
 	}
+
 	result := make([]string, 0, len(wc.set))
 	for msg := range wc.set {
 		result = append(result, msg)
 	}
+
 	sort.Strings(result)
+
 	return result
 }
 

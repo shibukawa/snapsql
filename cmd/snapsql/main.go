@@ -105,6 +105,14 @@ func (cmd *TestCmd) Run(ctx *Context) error {
 		Parallel: parallel,
 		Timeout:  timeout,
 	}
+	options.PerformanceEnabled = true
+
+	options.SlowQueryThreshold = config.Performance.SlowQueryThreshold
+	if options.SlowQueryThreshold <= 0 {
+		options.SlowQueryThreshold = 3 * time.Second
+	}
+
+	options.TableMetadata = buildTableMetadataFromConfig(config.Tables)
 
 	verbose := ctx.Verbose
 	options.Verbose = verbose

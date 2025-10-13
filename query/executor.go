@@ -64,6 +64,8 @@ type QueryResult struct {
 	SQL        string        `json:"sql"`
 	Parameters []interface{} `json:"parameters"`
 	Duration   time.Duration `json:"duration"`
+	// Table references resolved from intermediate format
+	TableReferences []intermediate.TableReferenceInfo `json:"table_references,omitempty"`
 
 	// Result data
 	Columns []string        `json:"columns"`
@@ -118,12 +120,26 @@ func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string,
 				return nil, fmt.Errorf("%w: query contains DELETE/UPDATE without WHERE clause. Use --execute-dangerous-query flag to execute anyway", ErrDangerousQuery)
 			}
 
-			return e.executeSQL(ctx, sqlText, nil, options)
+			result, execErr := e.executeSQL(ctx, sqlText, nil, options)
+			if execErr != nil {
+				return nil, execErr
+			}
+
+			result.TableReferences = append([]intermediate.TableReferenceInfo(nil), format.TableReferences...)
+
+			return result, nil
 		}
 		// If reading original SQL failed, fall back to pipeline execution
 	}
 
-	return e.Execute(ctx, format, params, options)
+	result, err := e.Execute(ctx, format, params, options)
+	if err != nil {
+		return nil, err
+	}
+
+	result.TableReferences = append([]intermediate.TableReferenceInfo(nil), format.TableReferences...)
+
+	return result, nil
 }
 
 // IsDangerousQuery checks if a query is dangerous (DELETE/UPDATE without WHERE)

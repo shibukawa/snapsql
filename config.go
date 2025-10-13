@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/joho/godotenv"
@@ -15,15 +16,17 @@ var ErrConfigValidation = errors.New("configuration validation failed")
 
 // Config represents the SnapSQL configuration
 type Config struct {
-	Dialect       string                 `yaml:"dialect"`
-	InputDir      string                 `yaml:"input_dir"` // Moved from GenerationConfig
-	Databases     map[string]Database    `yaml:"databases"`
-	ConstantFiles []string               `yaml:"constant_files"`
-	Schema        SchemaExtractionConfig `yaml:"schema_extraction"`
-	Generation    GenerationConfig       `yaml:"generation"`
-	Validation    ValidationConfig       `yaml:"validation"`
-	Query         QueryConfig            `yaml:"query"`
-	System        SystemConfig           `yaml:"system"`
+	Dialect       string                      `yaml:"dialect"`
+	InputDir      string                      `yaml:"input_dir"` // Moved from GenerationConfig
+	Databases     map[string]Database         `yaml:"databases"`
+	ConstantFiles []string                    `yaml:"constant_files"`
+	Schema        SchemaExtractionConfig      `yaml:"schema_extraction"`
+	Generation    GenerationConfig            `yaml:"generation"`
+	Validation    ValidationConfig            `yaml:"validation"`
+	Query         QueryConfig                 `yaml:"query"`
+	System        SystemConfig                `yaml:"system"`
+	Performance   PerformanceConfig           `yaml:"performance"`
+	Tables        map[string]TablePerformance `yaml:"tables"`
 }
 
 // Database represents database connection configuration
@@ -89,11 +92,22 @@ type QueryConfig struct {
 	DefaultEnvironment    string `yaml:"default_environment"`
 	Timeout               int    `yaml:"timeout"`
 	MaxRows               int    `yaml:"max_rows"`
-	Explain               bool   `yaml:"explain"`
-	ExplainAnalyze        bool   `yaml:"explain_analyze"`
 	Limit                 int    `yaml:"limit"`
 	Offset                int    `yaml:"offset"`
 	ExecuteDangerousQuery bool   `yaml:"execute_dangerous_query"`
+	DeprecatedExplain        *bool `yaml:"explain,omitempty"`
+	DeprecatedExplainAnalyze *bool `yaml:"explain_analyze,omitempty"`
+}
+
+// PerformanceConfig represents performance-related defaults
+type PerformanceConfig struct {
+	SlowQueryThreshold time.Duration `yaml:"slow_query_threshold"`
+}
+
+// TablePerformance defines per-table performance metadata
+type TablePerformance struct {
+	ExpectedRows  int64 `yaml:"expected_rows"`
+	AllowFullScan bool  `yaml:"allow_full_scan"`
 }
 
 // SystemConfig represents system-level configuration
@@ -285,6 +299,16 @@ func validateConfig(config *Config) error {
 		}
 	}
 
+	if config.Performance.SlowQueryThreshold < 0 {
+		return fmt.Errorf("%w: performance.slow_query_threshold must be >= 0, got %s", ErrConfigValidation, config.Performance.SlowQueryThreshold)
+	}
+
+	for tableName, meta := range config.Tables {
+		if meta.ExpectedRows <= 0 {
+			return fmt.Errorf("%w: tables.%s.expected_rows must be a positive integer", ErrConfigValidation, tableName)
+		}
+	}
+
 	return nil
 }
 
@@ -350,8 +374,6 @@ func getDefaultConfig() *Config {
 			DefaultEnvironment:    "development",
 			Timeout:               30,
 			MaxRows:               1000,
-			Explain:               false,
-			ExplainAnalyze:        false,
 			Limit:                 0,
 			Offset:                0,
 			ExecuteDangerousQuery: false,
@@ -400,6 +422,10 @@ func getDefaultConfig() *Config {
 				},
 			},
 		},
+		Performance: PerformanceConfig{
+			SlowQueryThreshold: 3 * time.Second,
+		},
+		Tables: make(map[string]TablePerformance),
 	}
 }
 
@@ -480,6 +506,15 @@ func applyDefaults(config *Config) {
 
 	if config.Query.MaxRows == 0 {
 		config.Query.MaxRows = 1000
+	}
+
+	// Apply performance defaults
+	if config.Performance.SlowQueryThreshold <= 0 {
+		config.Performance.SlowQueryThreshold = 3 * time.Second
+	}
+
+	if config.Tables == nil {
+		config.Tables = make(map[string]TablePerformance)
 	}
 
 	// Apply default system field settings

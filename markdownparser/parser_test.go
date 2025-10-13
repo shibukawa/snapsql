@@ -3,6 +3,7 @@ package markdownparser
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/yuin/goldmark"
@@ -79,6 +80,67 @@ include_email: true
 	assert.Equal(t, true, testCase.Parameters["include_email"])
 	assert.Equal(t, 1, len(testCase.ExpectedResult))
 	assert.Equal(t, "John", testCase.ExpectedResult[0]["name"])
+}
+
+func TestParsePerformanceFrontmatter(t *testing.T) {
+	input := `---
+function_name: sample
+performance:
+  slow_query_threshold: 1500ms
+---
+
+## Description
+
+Sample description.
+
+## SQL
+
+` + "```sql" + `
+SELECT 1;
+` + "```" + `
+
+## Test Cases
+
+### Sample
+
+**Expected Results:**
+` + "```yaml" + `
+- {value: 1}
+` + "```" + `
+`
+
+	doc, err := Parse(strings.NewReader(input))
+	assert.NoError(t, err)
+	assert.Equal(t, 1500*time.Millisecond, doc.Performance.SlowQueryThreshold)
+
+	if len(doc.TestCases) != 1 {
+		t.Fatalf("expected 1 test case, got %d", len(doc.TestCases))
+	}
+
+	assert.Equal(t, 1500*time.Millisecond, doc.TestCases[0].SlowQueryThreshold)
+}
+
+func TestParsePerformanceFrontmatterInvalidDuration(t *testing.T) {
+	input := `---
+function_name: sample
+performance:
+  slow_query_threshold: not-a-duration
+---
+
+## Description
+
+Sample description.
+
+## SQL
+
+` + "```sql" + `
+SELECT 1;
+` + "```" + `
+`
+
+	_, err := Parse(strings.NewReader(input))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "performance.slow_query_threshold")
 }
 
 func TestParseAllowsEmptyExpectedResults(t *testing.T) {
