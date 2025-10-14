@@ -23,7 +23,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.39.0
 	github.com/yuin/goldmark v1.7.13
 	golang.org/x/text v0.30.0
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1
 )
 
