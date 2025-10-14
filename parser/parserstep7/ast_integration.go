@@ -51,11 +51,8 @@ func (ai *ASTIntegrator) ExtractSubqueries(stmt cmn.StatementNode) error {
 	}
 	ai.parser.dependencies.AddNode(mainNode)
 
-	// Extract CTE from statement
-	var cte *cmn.WithClause
-	if selectStmt, ok := stmt.(*cmn.SelectStatement); ok {
-		cte = selectStmt.CTE()
-	}
+	// Extract CTE from statement (available for SELECT/INSERT/UPDATE/DELETE)
+	cte := stmt.CTE()
 
 	// Process different types of subqueries
 	err := ai.extractCTEDependencies(cte, stmt)

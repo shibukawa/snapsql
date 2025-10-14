@@ -27,7 +27,7 @@
   ],
   "table_references": [
     {"name": "sq", "context": "main"},
-    {"name": "users", "table_name": "users", "query_name": "sq", "context": "main"}
+    {"name": "users", "table_name": "users", "query_name": "sq", "context": "subquery"}
   ],
   "warnings": [
     "type inference failed: validation error: Subquery node subquery_1 has no type information"

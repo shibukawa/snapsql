@@ -121,9 +121,9 @@ func mapTableContext(context cmn.SQTableContextKind) string {
 	case cmn.SQTableContextJoin:
 		return "join"
 	case cmn.SQTableContextCTE:
-		return "main"
+		return "cte"
 	case cmn.SQTableContextSubquery:
-		return "main"
+		return "subquery"
 	default:
 		return ""
 	}

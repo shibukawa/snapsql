@@ -46,15 +46,18 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("card_id", cel.IntType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("card_id", cel.IntType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create CardCommentList CEL environment 0: %v", err))
@@ -95,7 +98,7 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCommentList: failed to evaluate expression: %w", err)
 		}
-		args = append(args, evalRes0.Value())
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
 		return query, args, nil
 	}
 	return func(yield func(*CardCommentListResult, error) bool) {
@@ -128,7 +131,7 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			_ = yield(nil, fmt.Errorf("CardCommentList: failed to prepare statement: %w", err))
+			_ = yield(nil, fmt.Errorf("CardCommentList: failed to prepare statement: %w (query: %s)", err, query))
 			return
 		}
 		defer stmt.Close()

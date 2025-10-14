@@ -1115,7 +1115,7 @@ func (e *Executor) collectPerformance(execution *TestExecution, sqlQuery string,
 	}
 
 	if len(execution.Options.TableReferenceMap) > 0 {
-		applyTableDescriptions(evaluation, execution.Options.TableReferenceMap)
+		applyTableDescriptions(evaluation, execution.Options.TableReferenceMap, e.tableInfo, execution.Options.TableMetadata)
 	}
 
 	execution.Performance = evaluation
@@ -1201,16 +1201,19 @@ func (e *Executor) collectPerformanceBeforeDML(execution *TestExecution) *explai
 	}
 
 	if len(execution.Options.TableReferenceMap) > 0 {
-		applyTableDescriptions(evaluation, execution.Options.TableReferenceMap)
+		applyTableDescriptions(evaluation, execution.Options.TableReferenceMap, e.tableInfo, execution.Options.TableMetadata)
 	}
 
 	return evaluation
 }
 
-func applyTableDescriptions(eval *explain.PerformanceEvaluation, mapping map[string]intermediate.TableReferenceInfo) {
+func applyTableDescriptions(eval *explain.PerformanceEvaluation, mapping map[string]intermediate.TableReferenceInfo, schema map[string]*snapsql.TableInfo, metadata map[string]explain.TableMetadata) {
 	if eval == nil || len(mapping) == 0 {
 		return
 	}
+
+	physical := collectPhysicalNameCandidates(schema, metadata)
+	describer := intermediate.DescribePlanTables
 
 	for i := range eval.Warnings {
 		warn := &eval.Warnings[i]
@@ -1218,39 +1221,51 @@ func applyTableDescriptions(eval *explain.PerformanceEvaluation, mapping map[str
 			continue
 		}
 
-		seen := make(map[string]struct{}, len(warn.Tables))
-		described := make([]string, 0, len(warn.Tables))
-
-		for _, key := range warn.Tables {
-			desc := describeTableAlias(key, mapping)
-			if desc == "" {
-				continue
-			}
-			if _, exists := seen[desc]; exists {
-				continue
-			}
-			described = append(described, desc)
-			seen[desc] = struct{}{}
+		described := describer(warn.Tables, mapping, physical)
+		if len(described) == 0 {
+			warn.Tables = []string{"table '<unknown>' (physical table unresolved)"}
+			continue
 		}
 
 		warn.Tables = described
 	}
 }
 
-func describeTableAlias(alias string, mapping map[string]intermediate.TableReferenceInfo) string {
-	trimmed := strings.TrimSpace(alias)
-	canonical := strings.ToLower(strings.Trim(trimmed, "`\"[]"))
-	if mapping != nil {
-		if ref, ok := mapping[canonical]; ok {
-			return intermediate.DescribeTable(ref, trimmed)
+func collectPhysicalNameCandidates(schema map[string]*snapsql.TableInfo, metadata map[string]explain.TableMetadata) []string {
+	unique := make(map[string]struct{})
+
+	add := func(name string) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return
 		}
+		unique[trimmed] = struct{}{}
 	}
 
-	if trimmed == "" {
-		return "table '<unknown>'"
+	for _, info := range schema {
+		if info == nil {
+			continue
+		}
+		if info.Schema != "" {
+			add(info.Schema + "." + info.Name)
+		}
+		add(info.Name)
 	}
 
-	return fmt.Sprintf("table '%s'", trimmed)
+	for key := range metadata {
+		add(key)
+	}
+
+	if len(unique) == 0 {
+		return nil
+	}
+
+	results := make([]string, 0, len(unique))
+	for name := range unique {
+		results = append(results, name)
+	}
+	sort.Strings(results)
+	return results
 }
 
 // executeDMLQuery executes INSERT/UPDATE/DELETE queries and returns affected rows

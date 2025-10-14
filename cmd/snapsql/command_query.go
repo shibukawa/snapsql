@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -493,7 +494,7 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 	}
 
 	if analyzeEvaluation != nil {
-		q.printPerformanceWarnings(ctx, analyzeEvaluation, result.TableReferences)
+		q.printPerformanceWarnings(ctx, analyzeEvaluation, result.TableReferences, tableMetadata)
 	}
 
 	return nil
@@ -752,7 +753,7 @@ func (q *QueryCmd) analyzePerformance(db *sql.DB, options query.QueryOptions, re
 	return evaluation
 }
 
-func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.PerformanceEvaluation, refs []intermediate.TableReferenceInfo) {
+func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.PerformanceEvaluation, refs []intermediate.TableReferenceInfo, tables map[string]explain.TableMetadata) {
 	if evaluation == nil || len(evaluation.Warnings) == 0 {
 		if ctx != nil && ctx.Verbose && evaluation != nil && len(evaluation.Estimates) > 0 {
 			q.printPerformanceEstimates(ctx, evaluation)
@@ -771,13 +772,14 @@ func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.Pe
 	}
 
 	tableMap := intermediate.BuildTableReferenceMap(refs)
+	physicalNames := physicalNameCandidatesFromMetadata(tables)
 	warnLabel := color.New(color.Bold, color.FgYellow).Sprint("WARN")
 	fmt.Fprintln(color.Output, "\nPerformance warnings:")
 
 	for _, warn := range evaluation.Warnings {
 		switch warn.Kind {
 		case explain.WarningFullScan:
-			targets := describeTablesForWarning(warn.Tables, tableMap)
+			targets := describeTablesForWarning(warn.Tables, tableMap, physicalNames)
 			if len(targets) == 0 {
 				targets = []string{"table '<unknown>'"}
 			}
@@ -793,7 +795,7 @@ func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.Pe
 		default:
 			message := warn.Message
 
-			targets := describeTablesForWarning(warn.Tables, tableMap)
+			targets := describeTablesForWarning(warn.Tables, tableMap, physicalNames)
 			if warn.Kind == explain.WarningSlowQuery {
 				if est, ok := estMap[warn.QueryPath]; ok {
 					message = fmt.Sprintf("%s (actual=%s, estimated=%s, threshold=%s, scale=%.2f)",
@@ -822,36 +824,39 @@ func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.Pe
 	}
 }
 
-func describeTablesForWarning(keys []string, mapping map[string]intermediate.TableReferenceInfo) []string {
-	if len(keys) == 0 {
+func describeTablesForWarning(keys []string, mapping map[string]intermediate.TableReferenceInfo, physicalNames []string) []string {
+	return intermediate.DescribePlanTables(keys, mapping, physicalNames)
+}
+
+func physicalNameCandidatesFromMetadata(tables map[string]explain.TableMetadata) []string {
+	if len(tables) == 0 {
 		return nil
 	}
 
-	descriptions := make([]string, 0, len(keys))
-	for _, key := range keys {
-		if desc := describeSingleTable(strings.TrimSpace(key), mapping); desc != "" {
-			descriptions = append(descriptions, desc)
+	unique := make(map[string]struct{}, len(tables)*2)
+	for key := range tables {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			continue
+		}
+
+		unique[trimmed] = struct{}{}
+		if idx := strings.Index(trimmed, "."); idx > 0 && idx < len(trimmed)-1 {
+			alias := trimmed[idx+1:]
+			if alias != "" {
+				unique[alias] = struct{}{}
+			}
 		}
 	}
 
-	return descriptions
-}
-
-func describeSingleTable(alias string, mapping map[string]intermediate.TableReferenceInfo) string {
-	trimmed := strings.TrimSpace(alias)
-
-	canonical := strings.ToLower(strings.Trim(trimmed, "`\"[]"))
-	if mapping != nil {
-		if ref, ok := mapping[canonical]; ok {
-			return intermediate.DescribeTable(ref, trimmed)
-		}
+	results := make([]string, 0, len(unique))
+	for name := range unique {
+		results = append(results, name)
 	}
 
-	if trimmed == "" {
-		return "table <unknown>"
-	}
+	sort.Strings(results)
 
-	return trimmed
+	return results
 }
 
 func shouldAnalyzeSQL(sql string) bool {

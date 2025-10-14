@@ -55,8 +55,9 @@ type fileTestSummary struct {
 }
 
 // NewFixtureTestRunner creates a new fixture test runner
+
 func NewFixtureTestRunner(projectRoot string, db *sql.DB, dialect string) *FixtureTestRunner {
-	return &FixtureTestRunner{
+	runner := &FixtureTestRunner{
 		projectRoot:  projectRoot,
 		db:           db,
 		dialect:      dialect,
@@ -65,6 +66,8 @@ func NewFixtureTestRunner(projectRoot string, db *sql.DB, dialect string) *Fixtu
 		tableInfo:    nil,
 		testCaseMeta: make(map[*markdownparser.TestCase]*testCaseMetadata),
 	}
+
+	return runner
 }
 
 // SetVerbose enables or disables verbose output
@@ -1011,32 +1014,9 @@ func (ftr *FixtureTestRunner) describeTables(keys []string, mapping map[string]i
 		return nil
 	}
 
-	descriptions := make([]string, 0, len(keys))
-	for _, key := range keys {
-		desc := ftr.describeTable(strings.TrimSpace(key), mapping)
-		if desc != "" {
-			descriptions = append(descriptions, desc)
-		}
-	}
+	physical := ftr.physicalNameCandidates()
 
-	return descriptions
-}
-
-func (ftr *FixtureTestRunner) describeTable(alias string, mapping map[string]intermediate.TableReferenceInfo) string {
-	trimmed := strings.TrimSpace(alias)
-
-	canonical := strings.ToLower(strings.Trim(trimmed, "`\"[]"))
-	if mapping != nil {
-		if ref, ok := mapping[canonical]; ok {
-			return intermediate.DescribeTable(ref, trimmed)
-		}
-	}
-
-	if trimmed == "" {
-		return "table '<unknown>'"
-	}
-
-	return trimmed
+	return intermediate.DescribePlanTables(keys, mapping, physical)
 }
 
 func ensureAggregate(order *[]performanceAggregate, index map[string]int, location string) *performanceAggregate {
@@ -1100,6 +1080,50 @@ func relativeLocation(path, location string) string {
 	}
 
 	return location
+}
+
+func (ftr *FixtureTestRunner) physicalNameCandidates() []string {
+	unique := make(map[string]struct{})
+
+	add := func(name string) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return
+		}
+
+		unique[trimmed] = struct{}{}
+	}
+
+	for _, info := range ftr.tableInfo {
+		if info == nil {
+			continue
+		}
+
+		if info.Schema != "" {
+			add(info.Schema + "." + info.Name)
+		}
+
+		add(info.Name)
+	}
+
+	if ftr.options != nil {
+		for key := range ftr.options.TableMetadata {
+			add(key)
+		}
+	}
+
+	if len(unique) == 0 {
+		return nil
+	}
+
+	results := make([]string, 0, len(unique))
+	for name := range unique {
+		results = append(results, name)
+	}
+
+	sort.Strings(results)
+
+	return results
 }
 
 func formatDuration(d time.Duration) string {

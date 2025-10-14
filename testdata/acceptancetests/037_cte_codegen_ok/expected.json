@@ -26,7 +26,7 @@
   ],
   "table_references": [
     {"name": "pending", "context": "main"},
-    {"name": "cards", "query_name": "pending", "context": "main"}
+    {"name": "cards", "query_name": "pending", "context": "cte"}
   ],
   "warnings": [
     "enhanced subquery type resolution failed: failed to resolve subquery node pending: type inference failed for subquery pending: schema validation failed: Column 'id' does not exist in any available table",

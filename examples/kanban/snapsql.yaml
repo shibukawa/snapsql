@@ -12,7 +12,7 @@ generation:
         package: "query"
     json:
       output: "./generated"
-      disabled: true
+      disabled: false
 
 system:
   fields:

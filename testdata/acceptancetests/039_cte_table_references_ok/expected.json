@@ -33,14 +33,14 @@
       "table_name": "users",
       "alias": "u",
       "query_name": "active_users",
-      "context": "main"
+      "context": "cte"
     },
     {
       "name": "user_status",
       "table_name": "user_status",
       "alias": "us",
       "query_name": "active_users",
-      "context": "main"
+      "context": "cte"
     },
     {"name": "active_users", "alias": "au", "context": "main"},
     {"name": "orders", "table_name": "orders", "alias": "o", "context": "join"}
