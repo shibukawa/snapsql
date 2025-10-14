@@ -779,9 +779,11 @@ func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.Pe
 	for _, warn := range evaluation.Warnings {
 		switch warn.Kind {
 		case explain.WarningFullScan:
+			debugDumpPlanTables("cli", warn.Tables, tableMap)
+
 			targets := describeTablesForWarning(warn.Tables, tableMap, physicalNames)
 			if len(targets) == 0 {
-				targets = []string{"table '<unknown>'"}
+				targets = fallbackPlanTableDescriptions(warn.Tables)
 			}
 
 			for _, target := range targets {
@@ -794,8 +796,13 @@ func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.Pe
 			}
 		default:
 			message := warn.Message
+			debugDumpPlanTables("cli", warn.Tables, tableMap)
 
 			targets := describeTablesForWarning(warn.Tables, tableMap, physicalNames)
+			if len(targets) == 0 {
+				targets = fallbackPlanTableDescriptions(warn.Tables)
+			}
+
 			if warn.Kind == explain.WarningSlowQuery {
 				if est, ok := estMap[warn.QueryPath]; ok {
 					message = fmt.Sprintf("%s (actual=%s, estimated=%s, threshold=%s, scale=%.2f)",
@@ -857,6 +864,59 @@ func physicalNameCandidatesFromMetadata(tables map[string]explain.TableMetadata)
 	sort.Strings(results)
 
 	return results
+}
+
+func debugDumpPlanTables(stage string, raw []string, mapping map[string]intermediate.TableReferenceInfo) {
+	if os.Getenv("SNAPSQL_DEBUG_TABLES") == "" {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] EXPLAIN tables: %v\n", stage, raw)
+
+	if len(mapping) == 0 {
+		fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] TableReferenceMap: <empty>\n", stage)
+		return
+	}
+
+	keys := make([]string, 0, len(mapping))
+	for key := range mapping {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		info := mapping[key]
+		fmt.Fprintf(
+			os.Stderr,
+			"[SNAPSQL][%s] map[%s]={Name:%s Alias:%s Table:%s Query:%s Context:%s}\n",
+			stage,
+			key,
+			info.Name,
+			info.Alias,
+			info.TableName,
+			info.QueryName,
+			info.Context,
+		)
+	}
+}
+
+func fallbackPlanTableDescriptions(raw []string) []string {
+	if len(raw) == 0 {
+		return []string{"table '<unknown>' (physical table unresolved)"}
+	}
+
+	out := make([]string, 0, len(raw))
+	for _, name := range raw {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			trimmed = "<unknown>"
+		}
+
+		out = append(out, fmt.Sprintf("table '%s' (physical table unresolved)", trimmed))
+	}
+
+	return out
 }
 
 func shouldAnalyzeSQL(sql string) bool {

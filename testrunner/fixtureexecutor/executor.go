@@ -1221,9 +1221,19 @@ func applyTableDescriptions(eval *explain.PerformanceEvaluation, mapping map[str
 			continue
 		}
 
+		debugDumpPlanTables("testrunner", warn.Tables, mapping)
+
 		described := describer(warn.Tables, mapping, physical)
 		if len(described) == 0 {
-			warn.Tables = []string{"table '<unknown>' (physical table unresolved)"}
+			fallback := make([]string, 0, len(warn.Tables))
+			for _, raw := range warn.Tables {
+				trimmed := strings.TrimSpace(raw)
+				if trimmed == "" {
+					trimmed = "<unknown>"
+				}
+				fallback = append(fallback, fmt.Sprintf("table '%s' (physical table unresolved)", trimmed))
+			}
+			warn.Tables = fallback
 			continue
 		}
 
@@ -1266,6 +1276,39 @@ func collectPhysicalNameCandidates(schema map[string]*snapsql.TableInfo, metadat
 	}
 	sort.Strings(results)
 	return results
+}
+
+func debugDumpPlanTables(stage string, raw []string, mapping map[string]intermediate.TableReferenceInfo) {
+	if os.Getenv("SNAPSQL_DEBUG_TABLES") == "" {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] EXPLAIN tables: %v\n", stage, raw)
+	if len(mapping) == 0 {
+		fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] TableReferenceMap: <empty>\n", stage)
+		return
+	}
+
+	keys := make([]string, 0, len(mapping))
+	for key := range mapping {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		info := mapping[key]
+		fmt.Fprintf(
+			os.Stderr,
+			"[SNAPSQL][%s] map[%s]={Name:%s Alias:%s Table:%s Query:%s Context:%s}\n",
+			stage,
+			key,
+			info.Name,
+			info.Alias,
+			info.TableName,
+			info.QueryName,
+			info.Context,
+		)
+	}
 }
 
 // executeDMLQuery executes INSERT/UPDATE/DELETE queries and returns affected rows

@@ -88,15 +88,15 @@ type ValidationConfig struct {
 
 // QueryConfig represents query execution settings
 type QueryConfig struct {
-	DefaultFormat         string `yaml:"default_format"`
-	DefaultEnvironment    string `yaml:"default_environment"`
-	Timeout               int    `yaml:"timeout"`
-	MaxRows               int    `yaml:"max_rows"`
-	Limit                 int    `yaml:"limit"`
-	Offset                int    `yaml:"offset"`
-	ExecuteDangerousQuery bool   `yaml:"execute_dangerous_query"`
-	DeprecatedExplain        *bool `yaml:"explain,omitempty"`
-	DeprecatedExplainAnalyze *bool `yaml:"explain_analyze,omitempty"`
+	DefaultFormat            string `yaml:"default_format"`
+	DefaultEnvironment       string `yaml:"default_environment"`
+	Timeout                  int    `yaml:"timeout"`
+	MaxRows                  int    `yaml:"max_rows"`
+	Limit                    int    `yaml:"limit"`
+	Offset                   int    `yaml:"offset"`
+	ExecuteDangerousQuery    bool   `yaml:"execute_dangerous_query"`
+	DeprecatedExplain        *bool  `yaml:"explain,omitempty"`
+	DeprecatedExplainAnalyze *bool  `yaml:"explain_analyze,omitempty"`
 }
 
 // PerformanceConfig represents performance-related defaults

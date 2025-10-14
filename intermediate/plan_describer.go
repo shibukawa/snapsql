@@ -194,20 +194,39 @@ func (d *planTableDescriber) describeFromReference(alias string, ref TableRefere
 		}
 
 		targetCanonical := CanonicalIdentifier(physical)
-		if aliasTrimmed == "" || targetCanonical == aliasCanonical {
-			if context != "" {
+		if context == "" {
+			descriptions = append(descriptions, fmt.Sprintf("table '%s'", physical))
+			continue
+		}
+
+		if aliasTrimmed != "" && targetCanonical == aliasCanonical {
+			switch context {
+			case "CTE", "subquery":
+				continue
+			case "join":
 				descriptions = append(descriptions, fmt.Sprintf("table '%s' (%s)", physical, context))
-			} else {
+			default:
 				descriptions = append(descriptions, fmt.Sprintf("table '%s'", physical))
 			}
 
 			continue
 		}
 
-		if context != "" {
-			descriptions = append(descriptions, fmt.Sprintf("table '%s' in '%s'(%s)", physical, aliasTrimmed, context))
-		} else {
-			descriptions = append(descriptions, fmt.Sprintf("table '%s' in '%s'", physical, aliasTrimmed))
+		switch context {
+		case "CTE", "subquery":
+			if aliasTrimmed == "" || targetCanonical == aliasCanonical {
+				descriptions = append(descriptions, fmt.Sprintf("table '%s' (%s)", physical, context))
+			} else {
+				descriptions = append(descriptions, fmt.Sprintf("table '%s' in '%s'(%s)", physical, aliasTrimmed, context))
+			}
+		case "join":
+			if aliasTrimmed != "" && !strings.EqualFold(aliasTrimmed, physical) {
+				descriptions = append(descriptions, fmt.Sprintf("table '%s' in '%s'(%s)", physical, aliasTrimmed, context))
+			} else {
+				descriptions = append(descriptions, fmt.Sprintf("table '%s' (%s)", physical, context))
+			}
+		default:
+			descriptions = append(descriptions, fmt.Sprintf("table '%s'", physical))
 		}
 	}
 
@@ -248,8 +267,18 @@ func (d *planTableDescriber) collectPhysicalTargets(alias string, ref TableRefer
 		}
 	}
 
+	aliasTrimmed := strings.TrimSpace(alias)
+
 	add(ref.TableName, true)
-	add(ref.Name, false)
+
+	nameTrimmed := strings.TrimSpace(ref.Name)
+
+	forceName := nameTrimmed != "" && !strings.EqualFold(nameTrimmed, aliasTrimmed)
+	if strings.EqualFold(ref.Context, "cte") || strings.EqualFold(ref.Context, "subquery") {
+		forceName = true
+	}
+
+	add(ref.Name, forceName)
 	add(alias, false)
 
 	visited := make(map[string]struct{})

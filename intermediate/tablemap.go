@@ -73,30 +73,26 @@ func DescribeTableWithResolver(ref TableReferenceInfo, alias string, isPhysical 
 		return "table '<unknown>'"
 	}
 
-	aliasIsPhysical := aliasName != "" && isPhysical != nil && isPhysical(aliasName)
-
 	contextLabel := classifyContext(ref.Context)
 	physicalDisplay := strings.TrimSpace(physical)
+	aliasIsPhysical := aliasName != "" && isPhysical != nil && isPhysical(aliasName)
 
-	// If alias is empty or identical to the physical table, just display the table.
-	if aliasName == "" || strings.EqualFold(aliasName, physicalDisplay) {
-		if contextLabel != "" {
+	switch contextLabel {
+	case "CTE", "subquery":
+		if aliasName == "" || strings.EqualFold(aliasName, physicalDisplay) {
 			return fmt.Sprintf("table '%s' (%s)", physicalDisplay, contextLabel)
 		}
 
+		return fmt.Sprintf("table '%s' in '%s'(%s)", physicalDisplay, aliasName, contextLabel)
+	case "join":
+		if aliasName != "" && !strings.EqualFold(aliasName, physicalDisplay) && !aliasIsPhysical {
+			return fmt.Sprintf("table '%s' in '%s'(%s)", physicalDisplay, aliasName, contextLabel)
+		}
+
+		return fmt.Sprintf("table '%s' (%s)", physicalDisplay, contextLabel)
+	default:
 		return fmt.Sprintf("table '%s'", physicalDisplay)
 	}
-
-	// If alias is recognized as a physical table in the schema/config, prefer that name.
-	if aliasIsPhysical && !strings.EqualFold(aliasName, physicalDisplay) {
-		return fmt.Sprintf("table '%s'", aliasName)
-	}
-
-	if contextLabel != "" {
-		return fmt.Sprintf("table '%s' in '%s'(%s)", physicalDisplay, aliasName, contextLabel)
-	}
-
-	return fmt.Sprintf("table '%s' in '%s'", physicalDisplay, aliasName)
 }
 
 // CanonicalIdentifier normalizes identifiers for case-insensitive comparisons.
@@ -116,8 +112,10 @@ func CanonicalIdentifier(name string) string {
 
 func classifyContext(ctx string) string {
 	switch strings.ToLower(strings.TrimSpace(ctx)) {
-	case "cte", "subquery":
-		return "CTE/subquery"
+	case "cte":
+		return "CTE"
+	case "subquery":
+		return "subquery"
 	case "join":
 		return "join"
 	case "main", "":

@@ -1015,8 +1015,47 @@ func (ftr *FixtureTestRunner) describeTables(keys []string, mapping map[string]i
 	}
 
 	physical := ftr.physicalNameCandidates()
+	descriptions := make([]string, 0, len(keys))
 
-	return intermediate.DescribePlanTables(keys, mapping, physical)
+	for _, key := range keys {
+		trimmed := strings.TrimSpace(key)
+
+		lower := strings.ToLower(trimmed)
+		if trimmed != "" && strings.HasPrefix(lower, "table ") {
+			descriptions = append(descriptions, trimmed)
+			continue
+		}
+
+		described := intermediate.DescribePlanTables([]string{key}, mapping, physical)
+		if len(described) == 0 {
+			fallback := fallbackPlanTableDescriptions([]string{key})
+			descriptions = append(descriptions, fallback...)
+
+			continue
+		}
+
+		descriptions = append(descriptions, described...)
+	}
+
+	return descriptions
+}
+
+func fallbackPlanTableDescriptions(raw []string) []string {
+	if len(raw) == 0 {
+		return []string{"table '<unknown>' (physical table unresolved)"}
+	}
+
+	out := make([]string, 0, len(raw))
+	for _, name := range raw {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			trimmed = "<unknown>"
+		}
+
+		out = append(out, fmt.Sprintf("table '%s' (physical table unresolved)", trimmed))
+	}
+
+	return out
 }
 
 func ensureAggregate(order *[]performanceAggregate, index map[string]int, location string) *performanceAggregate {

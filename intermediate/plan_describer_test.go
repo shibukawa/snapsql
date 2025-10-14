@@ -17,7 +17,7 @@ func TestDescribePlanTables_CTE(t *testing.T) {
 		t.Fatalf("expected 1 description, got %d", len(descriptions))
 	}
 
-	expected := "table 'lists' in 'done_stage'(CTE/subquery)"
+	expected := "table 'lists' in 'done_stage'(CTE)"
 	if descriptions[0] != expected {
 		t.Fatalf("unexpected description: got %q, want %q", descriptions[0], expected)
 	}
@@ -52,6 +52,28 @@ func TestDescribePlanTables_PhysicalAlias(t *testing.T) {
 	descriptions := DescribePlanTables([]string{"users"}, mapping, physical)
 
 	expected := []string{"table 'users'"}
+	if len(descriptions) != len(expected) {
+		t.Fatalf("unexpected length: got %d, want %d", len(descriptions), len(expected))
+	}
+
+	for i := range expected {
+		if descriptions[i] != expected[i] {
+			t.Fatalf("unexpected description[%d]: got %q, want %q", i, descriptions[i], expected[i])
+		}
+	}
+}
+
+func TestDescribePlanTables_MainAliasNoIn(t *testing.T) {
+	references := []TableReferenceInfo{
+		{Name: "list_templates", TableName: "list_templates", Alias: "lt", Context: "main"},
+	}
+
+	mapping := BuildTableReferenceMap(references)
+	physical := []string{"list_templates"}
+
+	descriptions := DescribePlanTables([]string{"lt"}, mapping, physical)
+
+	expected := []string{"table 'list_templates'"}
 	if len(descriptions) != len(expected) {
 		t.Fatalf("unexpected length: got %d, want %d", len(descriptions), len(expected))
 	}
