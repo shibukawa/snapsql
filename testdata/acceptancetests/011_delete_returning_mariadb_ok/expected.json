@@ -27,5 +27,11 @@
   "parameters": [
     {"name": "user_id", "type": "int"}
   ],
-  "response_affinity": "many"
+  "response_affinity": "many",
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ]
 }

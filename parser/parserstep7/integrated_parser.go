@@ -7,11 +7,6 @@ import (
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
-// Sentinel errors
-var (
-	ErrInvalidStatement = snapsql.ErrInvalidStatement
-)
-
 // SubqueryParserIntegrated combines all parserstep7 functionality
 type SubqueryParserIntegrated struct {
 	parser       *SubqueryParser
@@ -38,18 +33,21 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 	spi.errorHandler.Clear()
 
 	if stmt == nil {
-		return ErrInvalidStatement
+		return snapsql.ErrInvalidStatement
 	}
+
+	// 0. Extract main query table references first
+	mainTableRefs := spi.integrator.ExtractMainTableReferences(stmt)
 
 	// 1. Extract subqueries and build dependency graph
 	if err := spi.integrator.ExtractSubqueries(stmt); err != nil {
-		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+		spi.errorHandler.AddError(cmn.SQErrorTypeInvalidSubquery, err.Error(), cmn.SQPosition{})
 		return err
 	}
 
 	// 2. Build field sources
 	if err := spi.integrator.BuildFieldSources(); err != nil {
-		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+		spi.errorHandler.AddError(cmn.SQErrorTypeInvalidSubquery, err.Error(), cmn.SQPosition{})
 		return err
 	}
 
@@ -58,20 +56,26 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 
 	// 4. Check for circular dependencies
 	if cmn.HasCircularDependencyInGraph(graph) {
-		spi.errorHandler.AddError(ErrorTypeCircularDependency, "circular dependencies detected", Position{})
-		return ErrCircularDependency
+		spi.errorHandler.AddError(cmn.SQErrorTypeCircularDependency, "circular dependencies detected", cmn.SQPosition{})
+		return cmn.ErrCircularDependency
 	}
 
-	// 6. Get processing order
-	order, err := cmn.GetProcessingOrderFromGraph(graph)
+	// 6. Get processing order using Kahn's algorithm from dependency graph
+	order, err := graph.GetProcessingOrder()
 	if err != nil {
-		spi.errorHandler.AddError(ErrorTypeInvalidSubquery, err.Error(), Position{})
+		spi.errorHandler.AddError(cmn.SQErrorTypeInvalidSubquery, err.Error(), cmn.SQPosition{})
 		return err
 	}
 
 	// 7. Store results directly in the StatementNode
 	fieldSources := make(map[string]*cmn.SQFieldSource)
 	tableReferences := make(map[string]*cmn.SQTableReference)
+
+	// Add main query table references first
+	for i, tr := range mainTableRefs {
+		key := fmt.Sprintf("main_table_%d", i)
+		tableReferences[key] = tr
+	}
 
 	// Convert and store field sources from dependency graph nodes
 	allNodes := cmn.GetDependencyNodes(graph)
@@ -94,6 +98,21 @@ func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, func
 	cmn.SetTableReferences(stmt, tableReferences)
 	cmn.SetSubqueryDependencies(stmt, graph)
 	cmn.SetProcessingOrder(stmt, order)
+
+	// 8. Store DerivedTables (CTE and subquery information) in SubqueryAnalysisResult
+	derivedTables := spi.parser.GetDerivedTables()
+	analysis := &cmn.SubqueryAnalysisResult{
+		HasSubqueries:    len(allNodes) > 0,
+		SubqueryTables:   []string{},
+		FieldSources:     fieldSources,
+		TableReferences:  tableReferences,
+		DependencyInfo:   graph,
+		ProcessingOrder:  order,
+		ValidationErrors: []cmn.ValidationError{},
+		HasErrors:        spi.errorHandler.HasErrors(),
+		DerivedTables:    derivedTables,
+	}
+	cmn.SetSubqueryAnalysis(stmt, analysis)
 
 	return nil
 }
@@ -122,19 +141,19 @@ func (spi *SubqueryParserIntegrated) GetScopeVisualization() string {
 }
 
 // AddFieldSourceToNode adds a field source to a specific node
-func (spi *SubqueryParserIntegrated) AddFieldSourceToNode(nodeID string, fieldSource *FieldSource) error {
+func (spi *SubqueryParserIntegrated) AddFieldSourceToNode(nodeID string, fieldSource *cmn.SQFieldSource) error {
 	graph := spi.integrator.GetDependencyGraph()
 	return cmn.AddFieldSourceToNodeInGraph(graph, nodeID, fieldSource)
 }
 
 // AddTableReferenceToNode adds a table reference to a specific node
-func (spi *SubqueryParserIntegrated) AddTableReferenceToNode(nodeID string, tableRef *TableReference) error {
+func (spi *SubqueryParserIntegrated) AddTableReferenceToNode(nodeID string, tableRef *cmn.SQTableReference) error {
 	graph := spi.integrator.GetDependencyGraph()
 	return cmn.AddTableReferenceToNodeInGraph(graph, nodeID, tableRef)
 }
 
 // GetAccessibleFieldsForNode returns all fields accessible from a specific node
-func (spi *SubqueryParserIntegrated) GetAccessibleFieldsForNode(nodeID string) ([]*FieldSource, error) {
+func (spi *SubqueryParserIntegrated) GetAccessibleFieldsForNode(nodeID string) ([]*cmn.SQFieldSource, error) {
 	graph := spi.integrator.GetDependencyGraph()
 
 	result, err := cmn.GetAccessibleFieldsForNodeInGraph(graph, nodeID)
@@ -142,7 +161,7 @@ func (spi *SubqueryParserIntegrated) GetAccessibleFieldsForNode(nodeID string) (
 		return nil, err
 	}
 
-	if fields, ok := result.([]*FieldSource); ok {
+	if fields, ok := result.([]*cmn.SQFieldSource); ok {
 		return fields, nil
 	}
 
@@ -156,7 +175,7 @@ func (spi *SubqueryParserIntegrated) ValidateFieldAccess(nodeID, fieldName strin
 }
 
 // ResolveFieldReference resolves a field reference from a specific node's perspective
-func (spi *SubqueryParserIntegrated) ResolveFieldReference(nodeID, fieldName string) ([]*FieldSource, error) {
+func (spi *SubqueryParserIntegrated) ResolveFieldReference(nodeID, fieldName string) ([]*cmn.SQFieldSource, error) {
 	graph := spi.integrator.GetDependencyGraph()
 
 	result, err := cmn.ResolveFieldInNodeFromGraph(graph, nodeID, fieldName)
@@ -164,7 +183,7 @@ func (spi *SubqueryParserIntegrated) ResolveFieldReference(nodeID, fieldName str
 		return nil, err
 	}
 
-	if fields, ok := result.([]*FieldSource); ok {
+	if fields, ok := result.([]*cmn.SQFieldSource); ok {
 		return fields, nil
 	}
 

@@ -20,5 +20,16 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "response_affinity": "many"
+  "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1}
+  ],
+  "table_references": [
+    {"name": "pending", "context": "main"},
+    {"name": "cards", "query_name": "pending", "context": "cte"}
+  ],
+  "warnings": [
+    "enhanced subquery type resolution failed: failed to resolve subquery node pending: type inference failed for subquery pending: schema validation failed: Column 'id' does not exist in any available table",
+    "type inference failed: validation error: Subquery node pending has no type information"
+  ]
 }

@@ -48,14 +48,17 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create BoardArchive CEL environment 0: %v", err))
@@ -83,7 +86,7 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 		query := "UPDATE boards SET status = 'archived', archived_at = CURRENT_TIMESTAMP, updated_at =$1  WHERE status = 'active'  RETURNING id, name, status, archived_at, created_at, updated_at"
 		args := make([]any, 0)
 
-		args = append(args, systemValues["updated_at"])
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
 
 		return query, args, nil
 	}
@@ -117,7 +120,7 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			_ = yield(nil, fmt.Errorf("BoardArchive: failed to prepare statement: %w", err))
+			_ = yield(nil, fmt.Errorf("BoardArchive: failed to prepare statement: %w (query: %s)", err, query))
 			return
 		}
 		defer stmt.Close()

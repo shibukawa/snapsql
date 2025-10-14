@@ -7,47 +7,29 @@ import (
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 )
 
-// Type aliases for backward compatibility
-type (
-	ErrorType  = cmn.SQErrorType
-	Position   = cmn.SQPosition
-	ParseError = cmn.SQParseError
-)
-
-// Constants for error types
-const (
-	ErrorTypeUnknown             = cmn.SQErrorTypeUnknown
-	ErrorTypeCircularDependency  = cmn.SQErrorTypeCircularDependency
-	ErrorTypeUnresolvedReference = cmn.SQErrorTypeUnresolvedReference
-	ErrorTypeInvalidSubquery     = cmn.SQErrorTypeInvalidSubquery
-	ErrorTypeScopeViolation      = cmn.SQErrorTypeScopeViolation
-	ErrorTypeTypeIncompatibility = cmn.SQErrorTypeTypeIncompatibility
-	ErrorTypeSyntaxError         = cmn.SQErrorTypeSyntaxError
-)
-
 // ErrorReporter collects and manages parsing errors
 type ErrorReporter struct {
-	errors    []*ParseError
-	warnings  []*ParseError
+	errors    []*cmn.SQParseError
+	warnings  []*cmn.SQParseError
 	maxErrors int
 }
 
 // NewErrorReporter creates a new error reporter
 func NewErrorReporter() *ErrorReporter {
 	return &ErrorReporter{
-		errors:    make([]*ParseError, 0),
-		warnings:  make([]*ParseError, 0),
+		errors:    make([]*cmn.SQParseError, 0),
+		warnings:  make([]*cmn.SQParseError, 0),
 		maxErrors: 100, // Prevent excessive error collection
 	}
 }
 
 // AddError adds a new error
-func (er *ErrorReporter) AddError(errorType ErrorType, message string, position Position) {
+func (er *ErrorReporter) AddError(errorType cmn.SQErrorType, message string, position cmn.SQPosition) {
 	if len(er.errors) >= er.maxErrors {
 		return
 	}
 
-	err := &ParseError{
+	err := &cmn.SQParseError{
 		Type:     errorType,
 		Message:  message,
 		Position: position,
@@ -56,12 +38,12 @@ func (er *ErrorReporter) AddError(errorType ErrorType, message string, position 
 }
 
 // AddErrorWithContext adds a new error with context
-func (er *ErrorReporter) AddErrorWithContext(errorType ErrorType, message string, position Position, context string, suggestions []string, relatedIDs []string) {
+func (er *ErrorReporter) AddErrorWithContext(errorType cmn.SQErrorType, message string, position cmn.SQPosition, context string, suggestions []string, relatedIDs []string) {
 	if len(er.errors) >= er.maxErrors {
 		return
 	}
 
-	err := &ParseError{
+	err := &cmn.SQParseError{
 		Type:        errorType,
 		Message:     message,
 		Position:    position,
@@ -73,8 +55,8 @@ func (er *ErrorReporter) AddErrorWithContext(errorType ErrorType, message string
 }
 
 // AddWarning adds a new warning
-func (er *ErrorReporter) AddWarning(errorType ErrorType, message string, position Position) {
-	err := &ParseError{
+func (er *ErrorReporter) AddWarning(errorType cmn.SQErrorType, message string, position cmn.SQPosition) {
+	err := &cmn.SQParseError{
 		Type:     errorType,
 		Message:  message,
 		Position: position,
@@ -93,18 +75,18 @@ func (er *ErrorReporter) HasWarnings() bool {
 }
 
 // GetErrors returns all errors
-func (er *ErrorReporter) GetErrors() []*ParseError {
+func (er *ErrorReporter) GetErrors() []*cmn.SQParseError {
 	return er.errors
 }
 
 // GetWarnings returns all warnings
-func (er *ErrorReporter) GetWarnings() []*ParseError {
+func (er *ErrorReporter) GetWarnings() []*cmn.SQParseError {
 	return er.warnings
 }
 
 // GetErrorsByType returns errors of a specific type
-func (er *ErrorReporter) GetErrorsByType(errorType ErrorType) []*ParseError {
-	var filtered []*ParseError
+func (er *ErrorReporter) GetErrorsByType(errorType cmn.SQErrorType) []*cmn.SQParseError {
+	var filtered []*cmn.SQParseError
 
 	for _, err := range er.errors {
 		if err.Type == errorType {
@@ -164,7 +146,7 @@ func NewErrorCollector(reporter *ErrorReporter) *ErrorCollector {
 }
 
 // ReportCircularDependency reports a circular dependency error
-func (ec *ErrorCollector) ReportCircularDependency(path []string, position Position) {
+func (ec *ErrorCollector) ReportCircularDependency(path []string, position cmn.SQPosition) {
 	message := "Circular dependency detected in path: " + strings.Join(path, " -> ")
 	context := "Dependency chain forms a cycle"
 	suggestions := []string{
@@ -173,7 +155,7 @@ func (ec *ErrorCollector) ReportCircularDependency(path []string, position Posit
 	}
 
 	ec.reporter.AddErrorWithContext(
-		ErrorTypeCircularDependency,
+		cmn.SQErrorTypeCircularDependency,
 		message,
 		position,
 		context,
@@ -183,7 +165,7 @@ func (ec *ErrorCollector) ReportCircularDependency(path []string, position Posit
 }
 
 // ReportUnresolvedReference reports an unresolved reference error
-func (ec *ErrorCollector) ReportUnresolvedReference(fieldName string, availableFields []string, position Position) {
+func (ec *ErrorCollector) ReportUnresolvedReference(fieldName string, availableFields []string, position cmn.SQPosition) {
 	message := fmt.Sprintf("Unresolved field reference: '%s'", fieldName)
 	context := fmt.Sprintf("Field '%s' is not available in current scope", fieldName)
 
@@ -199,7 +181,7 @@ func (ec *ErrorCollector) ReportUnresolvedReference(fieldName string, availableF
 	suggestions = append(suggestions, "Ensure the field is defined in an accessible scope")
 
 	ec.reporter.AddErrorWithContext(
-		ErrorTypeUnresolvedReference,
+		cmn.SQErrorTypeUnresolvedReference,
 		message,
 		position,
 		context,
@@ -209,7 +191,7 @@ func (ec *ErrorCollector) ReportUnresolvedReference(fieldName string, availableF
 }
 
 // ReportScopeViolation reports a scope violation error
-func (ec *ErrorCollector) ReportScopeViolation(fieldName string, currentScope string, requiredScope string, position Position) {
+func (ec *ErrorCollector) ReportScopeViolation(fieldName string, currentScope string, requiredScope string, position cmn.SQPosition) {
 	message := fmt.Sprintf("Scope violation: field '%s' not accessible from %s", fieldName, currentScope)
 	context := fmt.Sprintf("Field requires scope '%s' but current scope is '%s'", requiredScope, currentScope)
 	suggestions := []string{
@@ -218,7 +200,7 @@ func (ec *ErrorCollector) ReportScopeViolation(fieldName string, currentScope st
 	}
 
 	ec.reporter.AddErrorWithContext(
-		ErrorTypeScopeViolation,
+		cmn.SQErrorTypeScopeViolation,
 		message,
 		position,
 		context,
@@ -228,7 +210,7 @@ func (ec *ErrorCollector) ReportScopeViolation(fieldName string, currentScope st
 }
 
 // ReportInvalidSubquery reports an invalid subquery error
-func (ec *ErrorCollector) ReportInvalidSubquery(subqueryID string, reason string, position Position) {
+func (ec *ErrorCollector) ReportInvalidSubquery(subqueryID string, reason string, position cmn.SQPosition) {
 	message := fmt.Sprintf("Invalid subquery '%s': %s", subqueryID, reason)
 	context := "Subquery validation failed"
 	suggestions := []string{
@@ -238,7 +220,7 @@ func (ec *ErrorCollector) ReportInvalidSubquery(subqueryID string, reason string
 	}
 
 	ec.reporter.AddErrorWithContext(
-		ErrorTypeInvalidSubquery,
+		cmn.SQErrorTypeInvalidSubquery,
 		message,
 		position,
 		context,

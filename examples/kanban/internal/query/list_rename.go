@@ -50,16 +50,19 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("list_id", cel.IntType))
+		opts = append(opts, cel.Variable("name", cel.StringType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("list_id", cel.IntType),
-			cel.Variable("name", cel.StringType),
-		}
+		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
 			panic(fmt.Sprintf("failed to create ListRename CEL environment 0: %v", err))
@@ -119,14 +122,14 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 		if err != nil {
 			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
 		}
-		args = append(args, evalRes0.Value())
-		args = append(args, systemValues["updated_at"])
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
 
 		evalRes2, _, err := listRenamePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
 		}
-		args = append(args, evalRes2.Value())
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
 		return query, args, nil
 	}
 	return func(yield func(*ListRenameResult, error) bool) {
@@ -159,7 +162,7 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			_ = yield(nil, fmt.Errorf("ListRename: failed to prepare statement: %w", err))
+			_ = yield(nil, fmt.Errorf("ListRename: failed to prepare statement: %w (query: %s)", err, query))
 			return
 		}
 		defer stmt.Close()

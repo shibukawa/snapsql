@@ -6,10 +6,13 @@ generation:
   generators:
     go:
       output: "./internal/query"
-      enabled: true
+      disabled: false
       preserve_hierarchy: true
       settings:
         package: "query"
+    json:
+      output: "./generated"
+      disabled: false
 
 system:
   fields:

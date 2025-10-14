@@ -222,15 +222,16 @@ func (st SQSourceType) String() string {
 
 // SQTableReference represents table reference information
 type SQTableReference struct {
-	Name       string           // Table name or alias
-	RealName   string           // Actual table name
+	Name       string           // Table name or alias used in the query
+	RealName   string           // Actual table name (for base tables) or CTE/subquery name
+	QueryName  string           // CTE or subquery alias (e.g., "sq" for "AS sq", "cte" for CTE name)
 	Schema     string           // Schema name
 	IsSubquery bool             // Whether this is a subquery
 	SubqueryID string           // Subquery ID (if subquery)
 	Fields     []*SQFieldSource // Available fields
 	// Added classifications for inspect/analysis consumers
-	Join   JoinType          // Join type relative to preceding table (main is JoinNone)
-	Source SQTableSourceKind // Source classification: main|join|cte|subquery
+	Join    JoinType           // Join type relative to preceding table (main is JoinNone)
+	Context SQTableContextKind // Context classification: main|join|cte|subquery
 }
 
 // GetField returns a field by name
@@ -244,25 +245,25 @@ func (tr *SQTableReference) GetField(fieldName string) *SQFieldSource {
 	return nil
 }
 
-// SQTableSourceKind represents origin of a table reference
-type SQTableSourceKind int
+// SQTableContextKind represents the context where a table reference exists
+type SQTableContextKind int
 
 const (
-	SQTableSourceMain SQTableSourceKind = iota
-	SQTableSourceJoin
-	SQTableSourceCTE
-	SQTableSourceSubquery
+	SQTableContextMain SQTableContextKind = iota
+	SQTableContextJoin
+	SQTableContextCTE
+	SQTableContextSubquery
 )
 
-func (sk SQTableSourceKind) String() string {
+func (sk SQTableContextKind) String() string {
 	switch sk {
-	case SQTableSourceMain:
+	case SQTableContextMain:
 		return "main"
-	case SQTableSourceJoin:
+	case SQTableContextJoin:
 		return "join"
-	case SQTableSourceCTE:
+	case SQTableContextCTE:
 		return "cte"
-	case SQTableSourceSubquery:
+	case SQTableContextSubquery:
 		return "subquery"
 	default:
 		return "unknown"

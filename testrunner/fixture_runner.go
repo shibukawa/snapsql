@@ -13,6 +13,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/explain"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/query"
@@ -36,6 +37,7 @@ type FixtureTestRunner struct {
 	options      *fixtureexecutor.ExecutionOptions
 	tableInfo    map[string]*snapsql.TableInfo
 	includePaths []string
+	testCaseMeta map[*markdownparser.TestCase]*testCaseMetadata
 }
 
 type preparationIssue struct {
@@ -53,15 +55,19 @@ type fileTestSummary struct {
 }
 
 // NewFixtureTestRunner creates a new fixture test runner
+
 func NewFixtureTestRunner(projectRoot string, db *sql.DB, dialect string) *FixtureTestRunner {
-	return &FixtureTestRunner{
-		projectRoot: projectRoot,
-		db:          db,
-		dialect:     dialect,
-		verbose:     false,
-		options:     fixtureexecutor.DefaultExecutionOptions(),
-		tableInfo:   nil,
+	runner := &FixtureTestRunner{
+		projectRoot:  projectRoot,
+		db:           db,
+		dialect:      dialect,
+		verbose:      false,
+		options:      fixtureexecutor.DefaultExecutionOptions(),
+		tableInfo:    nil,
+		testCaseMeta: make(map[*markdownparser.TestCase]*testCaseMetadata),
 	}
+
+	return runner
 }
 
 // SetVerbose enables or disables verbose output
@@ -230,6 +236,8 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 			runner.SetTableInfo(ftr.tableInfo)
 		}
 
+		runner.SetTableReferences(ftr.collectTableReferences(runnableCases))
+
 		summary, err = runner.RunTests(ctx, runnableCases)
 		if err != nil {
 			return nil, fmt.Errorf("failed to run tests: %w", err)
@@ -264,6 +272,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 
 		fixtureSummary.Results = append(fixtureSummary.Results, FixtureTestResult{
 			TestName:    testName,
+			TestCase:    result.TestCase,
 			Success:     result.Success,
 			Duration:    result.Duration,
 			Error:       result.Error,
@@ -271,6 +280,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 			SourceFile:  sourceFile,
 			SourceLine:  sourceLine,
 			ExecutedSQL: result.Trace,
+			Performance: result.Performance,
 		})
 
 		if !result.Success {
@@ -434,6 +444,9 @@ func (ftr *FixtureTestRunner) prepareTestCases(summaries []fileTestSummary) ([]*
 			continue
 		}
 
+		tableMap := intermediate.BuildTableReferenceMap(format.TableReferences)
+		ftr.registerTableReferences(summary.cases, tableMap)
+
 		generator := query.NewSQLGenerator(format, config.Dialect)
 		ordered := format.HasOrderedResult
 
@@ -496,6 +509,7 @@ func (pi preparationIssue) toFixtureResult() FixtureTestResult {
 
 	return FixtureTestResult{
 		TestName:    name,
+		TestCase:    pi.testCase,
 		Success:     false,
 		Error:       pi.err,
 		FailureKind: fixtureexecutor.FailureKindDefinition,
@@ -591,6 +605,7 @@ func (ftr *FixtureTestRunner) filterTestFiles(testFiles []string) []string {
 // FixtureTestResult represents the result of a fixture test
 type FixtureTestResult struct {
 	TestName    string
+	TestCase    *markdownparser.TestCase
 	Success     bool
 	Duration    time.Duration
 	Error       error
@@ -598,6 +613,7 @@ type FixtureTestResult struct {
 	SourceFile  string
 	SourceLine  int
 	ExecutedSQL []fixtureexecutor.SQLTrace
+	Performance *explain.PerformanceEvaluation
 }
 
 // FixtureTestSummary represents the summary of fixture test execution
@@ -625,6 +641,12 @@ func (ftr *FixtureTestRunner) PrintSummary(summary *FixtureTestSummary) {
 	}
 
 	fmt.Fprintf(color.Output, "Duration: %.3fs\n", summary.TotalDuration.Seconds())
+
+	fileOrder, fileGroups := groupResultsByFile(summary.Results)
+
+	if ftr.verbose {
+		ftr.printVerboseFileReports(fileOrder, fileGroups)
+	}
 
 	if summary.FailedTests > 0 {
 		fmt.Fprintln(color.Output, "\nFailed tests:")
@@ -748,6 +770,415 @@ func (ftr *FixtureTestRunner) PrintSummary(summary *FixtureTestSummary) {
 	} else {
 		fmt.Fprintln(color.Output, "\nSome fixture tests failed! ❌")
 	}
+}
+
+type testCaseMetadata struct {
+	tableMap map[string]intermediate.TableReferenceInfo
+}
+
+func (ftr *FixtureTestRunner) registerTableReferences(cases []*markdownparser.TestCase, mapping map[string]intermediate.TableReferenceInfo) {
+	if len(cases) == 0 {
+		return
+	}
+
+	for _, tc := range cases {
+		if tc == nil {
+			continue
+		}
+
+		meta, ok := ftr.testCaseMeta[tc]
+		if !ok {
+			meta = &testCaseMetadata{}
+			ftr.testCaseMeta[tc] = meta
+		}
+
+		if len(mapping) > 0 {
+			meta.tableMap = mapping
+		}
+	}
+}
+
+func (ftr *FixtureTestRunner) tableMapFor(tc *markdownparser.TestCase) map[string]intermediate.TableReferenceInfo {
+	if tc == nil {
+		return nil
+	}
+
+	if meta, ok := ftr.testCaseMeta[tc]; ok {
+		return meta.tableMap
+	}
+
+	return nil
+}
+
+func (ftr *FixtureTestRunner) collectTableReferences(cases []*markdownparser.TestCase) map[*markdownparser.TestCase]map[string]intermediate.TableReferenceInfo {
+	if len(cases) == 0 {
+		return make(map[*markdownparser.TestCase]map[string]intermediate.TableReferenceInfo)
+	}
+
+	refs := make(map[*markdownparser.TestCase]map[string]intermediate.TableReferenceInfo, len(cases))
+	for _, tc := range cases {
+		if tc == nil {
+			continue
+		}
+
+		if mapping := ftr.tableMapFor(tc); len(mapping) > 0 {
+			refs[tc] = mapping
+		}
+	}
+
+	return refs
+}
+
+func groupResultsByFile(results []FixtureTestResult) ([]string, map[string][]FixtureTestResult) {
+	groups := make(map[string][]FixtureTestResult)
+	order := make([]string, 0)
+
+	for _, res := range results {
+		path := res.SourceFile
+		if path == "" && res.TestCase != nil {
+			path = res.TestCase.SourceFile
+		}
+
+		if path == "" {
+			path = "<unknown>"
+		}
+
+		if _, exists := groups[path]; !exists {
+			order = append(order, path)
+			groups[path] = make([]FixtureTestResult, 0, 1)
+		}
+
+		groups[path] = append(groups[path], res)
+	}
+
+	return order, groups
+}
+
+func (ftr *FixtureTestRunner) printVerboseFileReports(fileOrder []string, groups map[string][]FixtureTestResult) {
+	if len(fileOrder) == 0 {
+		return
+	}
+
+	passLabel := color.New(color.Bold, color.FgGreen).Sprint("PASS")
+	failLabel := color.New(color.Bold, color.FgRed).Sprint("FAIL")
+	infoLabel := color.New(color.Bold, color.FgCyan).Sprint("INFO")
+	warnLabel := color.New(color.Bold, color.FgYellow).Sprint("WARN")
+
+	fmt.Fprintln(color.Output, "\nDetailed results by file:")
+
+	for _, path := range fileOrder {
+		results := groups[path]
+		fmt.Fprintf(color.Output, "%s\n", path)
+
+		for _, res := range results {
+			statusLabel := passLabel
+			if !res.Success {
+				statusLabel = failLabel
+			}
+
+			name := res.TestName
+			if strings.TrimSpace(name) == "" && res.TestCase != nil {
+				name = res.TestCase.Name
+			}
+
+			fmt.Fprintf(color.Output, "  %s %s (%s)\n", statusLabel, strings.TrimSpace(name), formatDuration(res.Duration))
+
+			if !res.Success && res.Error != nil {
+				fmt.Fprintf(color.Output, "    error: %v\n", res.Error)
+			}
+		}
+
+		perfs := ftr.aggregatePerformance(results, true)
+		if len(perfs) > 0 {
+			fmt.Fprintln(color.Output, "  Performance:")
+
+			for _, agg := range perfs {
+				rel := relativeLocation(path, agg.Location)
+				for _, msg := range agg.WarnMessages {
+					fmt.Fprintf(color.Output, "    - %s %s: %s\n", warnLabel, rel, msg)
+				}
+
+				for _, msg := range agg.InfoMessages {
+					fmt.Fprintf(color.Output, "    - %s %s: %s\n", infoLabel, rel, msg)
+				}
+			}
+		}
+
+		fmt.Fprintln(color.Output)
+	}
+}
+
+func (ftr *FixtureTestRunner) aggregatePerformance(results []FixtureTestResult, includeInfo bool) []performanceAggregate {
+	order := make([]performanceAggregate, 0)
+	index := make(map[string]int)
+
+	for _, res := range results {
+		if res.Performance == nil {
+			continue
+		}
+
+		mapping := ftr.tableMapFor(res.TestCase)
+		location := buildLocation(res)
+
+		estMap := make(map[string]explain.QueryEstimate)
+		for _, est := range res.Performance.Estimates {
+			estMap[est.QueryPath] = est
+		}
+
+		warnedPaths := make(map[string]struct{})
+
+		for _, warn := range res.Performance.Warnings {
+			targets := ftr.describeTables(warn.Tables, mapping)
+			if len(targets) == 0 {
+				targets = []string{"table '<unknown>'"}
+			}
+
+			switch warn.Kind {
+			case explain.WarningFullScan:
+				for _, target := range targets {
+					message := "full scan detected on " + target
+					if warn.QueryPath != "" {
+						message = fmt.Sprintf("%s [path=%s]", message, warn.QueryPath)
+					}
+
+					agg := ensureAggregate(&order, index, location)
+					agg.WarnMessages = append(agg.WarnMessages, message)
+				}
+			default:
+				message := warn.Message
+				if warn.Kind == explain.WarningSlowQuery {
+					if est, ok := estMap[warn.QueryPath]; ok {
+						message = fmt.Sprintf("%s (actual=%s, estimated=%s, threshold=%s, scale=%.2f)",
+							message,
+							formatDuration(est.Actual),
+							formatDuration(est.Estimated),
+							formatDuration(est.Threshold),
+							est.ScaleFactor,
+						)
+					}
+				}
+
+				if len(targets) > 0 {
+					message = fmt.Sprintf("%s (tables=%s)", message, strings.Join(targets, ", "))
+				}
+
+				if warn.QueryPath != "" {
+					message = fmt.Sprintf("%s [path=%s]", message, warn.QueryPath)
+				}
+
+				agg := ensureAggregate(&order, index, location)
+				agg.WarnMessages = append(agg.WarnMessages, message)
+			}
+
+			if warn.QueryPath != "" {
+				warnedPaths[warn.QueryPath] = struct{}{}
+			}
+		}
+
+		if includeInfo {
+			for _, est := range res.Performance.Estimates {
+				if _, exists := warnedPaths[est.QueryPath]; exists {
+					continue
+				}
+
+				message := fmt.Sprintf("estimated runtime (actual=%s, estimated=%s, threshold=%s, scale=%.2f)",
+					formatDuration(est.Actual),
+					formatDuration(est.Estimated),
+					formatDuration(est.Threshold),
+					est.ScaleFactor,
+				)
+				if est.QueryPath != "" {
+					message = fmt.Sprintf("%s [path=%s]", message, est.QueryPath)
+				}
+
+				agg := ensureAggregate(&order, index, location)
+				agg.InfoMessages = append(agg.InfoMessages, message)
+			}
+		}
+	}
+
+	filtered := make([]performanceAggregate, 0, len(order))
+	for _, agg := range order {
+		if len(agg.WarnMessages) == 0 && len(agg.InfoMessages) == 0 {
+			continue
+		}
+
+		filtered = append(filtered, agg)
+	}
+
+	return filtered
+}
+
+func (ftr *FixtureTestRunner) describeTables(keys []string, mapping map[string]intermediate.TableReferenceInfo) []string {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	physical := ftr.physicalNameCandidates()
+	descriptions := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		trimmed := strings.TrimSpace(key)
+
+		lower := strings.ToLower(trimmed)
+		if trimmed != "" && strings.HasPrefix(lower, "table ") {
+			descriptions = append(descriptions, trimmed)
+			continue
+		}
+
+		described := intermediate.DescribePlanTables([]string{key}, mapping, physical)
+		if len(described) == 0 {
+			fallback := fallbackPlanTableDescriptions([]string{key})
+			descriptions = append(descriptions, fallback...)
+
+			continue
+		}
+
+		descriptions = append(descriptions, described...)
+	}
+
+	return descriptions
+}
+
+func fallbackPlanTableDescriptions(raw []string) []string {
+	if len(raw) == 0 {
+		return []string{"table '<unknown>' (physical table unresolved)"}
+	}
+
+	out := make([]string, 0, len(raw))
+	for _, name := range raw {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			trimmed = "<unknown>"
+		}
+
+		out = append(out, fmt.Sprintf("table '%s' (physical table unresolved)", trimmed))
+	}
+
+	return out
+}
+
+func ensureAggregate(order *[]performanceAggregate, index map[string]int, location string) *performanceAggregate {
+	if location == "" {
+		location = "<unknown>"
+	}
+
+	if idx, ok := index[location]; ok {
+		return &(*order)[idx]
+	}
+
+	*order = append(*order, performanceAggregate{Location: location})
+	idx := len(*order) - 1
+	index[location] = idx
+
+	return &(*order)[idx]
+}
+
+type performanceAggregate struct {
+	Location     string
+	WarnMessages []string
+	InfoMessages []string
+}
+
+func buildLocation(res FixtureTestResult) string {
+	path := res.SourceFile
+	if path == "" && res.TestCase != nil {
+		path = res.TestCase.SourceFile
+	}
+
+	if path == "" {
+		path = "<unknown>"
+	}
+
+	line := res.SourceLine
+	if line == 0 && res.TestCase != nil {
+		line = res.TestCase.Line
+	}
+
+	if line > 0 {
+		return fmt.Sprintf("%s:%d", path, line)
+	}
+
+	return path
+}
+
+func relativeLocation(path, location string) string {
+	if location == "" {
+		return "<unknown>"
+	}
+
+	if strings.HasPrefix(location, path) {
+		rest := strings.TrimPrefix(location, path)
+
+		rest = strings.TrimPrefix(rest, ":")
+		if rest == "" {
+			return path
+		}
+
+		return "L" + rest
+	}
+
+	return location
+}
+
+func (ftr *FixtureTestRunner) physicalNameCandidates() []string {
+	unique := make(map[string]struct{})
+
+	add := func(name string) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return
+		}
+
+		unique[trimmed] = struct{}{}
+	}
+
+	for _, info := range ftr.tableInfo {
+		if info == nil {
+			continue
+		}
+
+		if info.Schema != "" {
+			add(info.Schema + "." + info.Name)
+		}
+
+		add(info.Name)
+	}
+
+	if ftr.options != nil {
+		for key := range ftr.options.TableMetadata {
+			add(key)
+		}
+	}
+
+	if len(unique) == 0 {
+		return nil
+	}
+
+	results := make([]string, 0, len(unique))
+	for name := range unique {
+		results = append(results, name)
+	}
+
+	sort.Strings(results)
+
+	return results
+}
+
+func formatDuration(d time.Duration) string {
+	if d <= 0 {
+		return "0s"
+	}
+
+	if d < time.Millisecond {
+		return fmt.Sprintf("%dus", d/time.Microsecond)
+	}
+
+	if d < time.Second {
+		return fmt.Sprintf("%.2fms", float64(d)/float64(time.Millisecond))
+	}
+
+	return d.Round(time.Millisecond).String()
 }
 
 func printColoredDiff(diffText string) {

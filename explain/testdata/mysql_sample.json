@@ -1,0 +1,23 @@
+{
+  "query_block": {
+    "select_id": 1,
+    "table": {
+      "table_name": "users",
+      "access_type": "ALL",
+      "rows": 1500000,
+      "actual_rows": 120,
+      "actual_total_time": 3.10
+    },
+    "nested_loop": [
+      {
+        "table": {
+          "table_name": "orders",
+          "access_type": "ref",
+          "rows": 1000,
+          "actual_rows": 56,
+          "actual_total_time": 0.95
+        }
+      }
+    ]
+  }
+}

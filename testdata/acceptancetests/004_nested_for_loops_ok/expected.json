@@ -144,5 +144,11 @@
   "parameters": [
     {"name": "departments", "type": "any"}
   ],
-  "response_affinity": "none"
+  "response_affinity": "none",
+  "table_references": [
+    {"name": "sub_departments", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ]
 }

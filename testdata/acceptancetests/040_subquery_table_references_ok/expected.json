@@ -1,0 +1,35 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": [],
+      "container": "root"
+    }
+  ],
+  "cel_expressions": [],
+  "format_version": "1",
+  "function_name": "input",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "1:1", "value": "SELECT sq.id, sq.name FROM ( SELECT id, name FROM users ) AS sq"},
+    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"},
+    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
+    {"op": "END", "pos": "0:0"}
+  ],
+  "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
+    {"name": "name", "type": "any", "is_nullable": true}
+  ],
+  "table_references": [
+    {"name": "sq", "context": "main"},
+    {"name": "users", "table_name": "users", "query_name": "sq", "context": "subquery"}
+  ],
+  "warnings": [
+    "type inference failed: validation error: Subquery node subquery_1 has no type information"
+  ]
+}

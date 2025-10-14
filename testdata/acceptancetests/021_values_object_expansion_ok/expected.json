@@ -27,5 +27,11 @@
   "parameters": [
     {"name": "user", "type": "../testdata/acceptancetests/021_values_object_expansion_ok/User"}
   ],
-  "response_affinity": "none"
+  "response_affinity": "none",
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ]
 }

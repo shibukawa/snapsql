@@ -20,5 +20,18 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "END", "pos": "0:0"}
   ],
-  "response_affinity": "many"
+  "response_affinity": "many",
+  "responses": [
+    {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
+    {"name": "name", "type": "any", "is_nullable": true},
+    {"name": "current_time_now", "type": "any", "is_nullable": true},
+    {"name": "current_time_standard", "type": "any", "is_nullable": true}
+  ],
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided",
+    "type inference unavailable: generated fallback responses with any type"
+  ]
 }

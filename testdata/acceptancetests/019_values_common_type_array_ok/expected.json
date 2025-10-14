@@ -30,5 +30,11 @@
       "type": "../testdata/acceptancetests/019_values_common_type_array_ok/User[]"
     }
   ],
-  "response_affinity": "none"
+  "response_affinity": "none",
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ]
 }

@@ -19,6 +19,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/explain"
+	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -72,21 +74,26 @@ const (
 
 // ExecutionOptions contains options for test execution
 type ExecutionOptions struct {
-	Mode     ExecutionMode
-	Commit   bool
-	Parallel int
-	Timeout  time.Duration
-	Verbose  bool
+	Mode               ExecutionMode
+	Commit             bool
+	Parallel           int
+	Timeout            time.Duration
+	Verbose            bool
+	PerformanceEnabled bool
+	SlowQueryThreshold time.Duration
+	TableMetadata      map[string]explain.TableMetadata
+	TableReferenceMap  map[string]intermediate.TableReferenceInfo
 }
 
 // DefaultExecutionOptions returns default execution options
 func DefaultExecutionOptions() *ExecutionOptions {
 	return &ExecutionOptions{
-		Mode:     FullTest,
-		Commit:   false,
-		Parallel: runtime.NumCPU(),
-		Timeout:  2 * time.Minute,
-		Verbose:  false,
+		Mode:               FullTest,
+		Commit:             false,
+		Parallel:           runtime.NumCPU(),
+		Timeout:            2 * time.Minute,
+		Verbose:            false,
+		PerformanceEnabled: true,
 	}
 }
 
@@ -158,15 +165,17 @@ func currentDateAnchorNow() time.Time {
 
 // TestExecution represents a single test execution context
 type TestExecution struct {
-	TestCase    *markdownparser.TestCase
-	SQL         string         // SQL query from document
-	Parameters  map[string]any // Parameters from test case
-	Args        []any          // Positional arguments for PreparedSQL
-	Options     *ExecutionOptions
-	Transaction *sql.Tx
-	Executor    *Executor
-	Trace       []SQLTrace
-	TimeAnchor  time.Time
+	TestCase           *markdownparser.TestCase
+	SQL                string         // SQL query from document
+	Parameters         map[string]any // Parameters from test case
+	Args               []any          // Positional arguments for PreparedSQL
+	Options            *ExecutionOptions
+	Transaction        *sql.Tx
+	Executor           *Executor
+	Trace              []SQLTrace
+	TimeAnchor         time.Time
+	SlowQueryThreshold time.Duration
+	Performance        *explain.PerformanceEvaluation
 }
 
 func (te *TestExecution) addTrace(label, statement string, params map[string]any, args []any, result *ValidationResult) {
@@ -404,13 +413,13 @@ func NewExecutor(db *sql.DB, dialect string, tableInfo map[string]*snapsql.Table
 func (e *Executor) SetBaseDir(dir string) { e.baseDir = dir }
 
 // ExecuteTest executes a complete test case within a transaction
-func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, []SQLTrace, error) {
+func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, parameters map[string]any, opts *ExecutionOptions) (*ValidationResult, []SQLTrace, *explain.PerformanceEvaluation, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, nil, wrapDefinitionFailure(err, "failed to begin transaction")
+		return nil, nil, nil, wrapDefinitionFailure(err, "failed to begin transaction")
 	}
 
 	defer func() {
@@ -420,6 +429,10 @@ func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, pa
 			tx.Rollback()
 		}
 	}()
+
+	if opts == nil {
+		opts = DefaultExecutionOptions()
+	}
 
 	anchor := time.Now().UTC()
 	setCurrentDateAnchor(anchor)
@@ -439,11 +452,22 @@ func (e *Executor) ExecuteTest(testCase *markdownparser.TestCase, sql string, pa
 	}
 
 	if err := NormalizeParameters(execution.Parameters); err != nil {
-		return nil, nil, wrapDefinitionFailure(err, "failed to normalize parameters")
+		return nil, nil, nil, wrapDefinitionFailure(err, "failed to normalize parameters")
+	}
+
+	if opts != nil {
+		threshold := opts.SlowQueryThreshold
+		if testCase != nil && testCase.SlowQueryThreshold > 0 {
+			threshold = testCase.SlowQueryThreshold
+		}
+		execution.SlowQueryThreshold = threshold
+		if !opts.PerformanceEnabled {
+			execution.SlowQueryThreshold = 0
+		}
 	}
 
 	result, err := e.executeTestSteps(execution)
-	return result, execution.Trace, err
+	return result, execution.Trace, execution.Performance, err
 }
 
 func formatArgsForContext(values []any) string {
@@ -683,6 +707,12 @@ func (e *Executor) executeFullTest(execution *TestExecution) (*ValidationResult,
 		return nil, wrapDefinitionFailure(err, "failed to execute fixtures")
 	}
 
+	if execution.Options != nil && execution.Options.PerformanceEnabled {
+		if detectQueryType(execution.SQL) != SelectQuery && execution.Performance == nil {
+			execution.Performance = e.collectPerformanceBeforeDML(execution)
+		}
+	}
+
 	// 2. Execute main query (only when necessary)
 	// If we only validate table state (no verify query, no direct/unnamed expected result rows),
 	// and the main SQL is a side-effect-free SELECT (e.g., "SELECT 1"), we can skip executing it.
@@ -903,6 +933,7 @@ func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, param
 		// Keep the original query type for validation logic
 		result.QueryType = queryType
 		execution.addTrace("main query", sqlQuery, parameters, args, result)
+		e.collectPerformance(execution, sqlQuery, args)
 
 		return result, nil
 	}
@@ -915,6 +946,7 @@ func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, param
 			return nil, err
 		}
 		execution.addTrace("main query", sqlQuery, parameters, args, result)
+		e.collectPerformance(execution, sqlQuery, args)
 		return result, nil
 	case InsertQuery, UpdateQuery, DeleteQuery:
 		result, err := e.executeDMLQuery(trx, sqlQuery, queryType, args)
@@ -923,6 +955,7 @@ func (e *Executor) executeQuery(execution *TestExecution, sqlQuery string, param
 			return nil, err
 		}
 		execution.addTrace("main query", sqlQuery, parameters, args, result)
+		e.collectPerformance(execution, sqlQuery, args)
 		return result, nil
 	default:
 		return nil, snapsql.ErrUnsupportedQueryType
@@ -995,6 +1028,287 @@ func (e *Executor) executeSelectQuery(tx *sql.Tx, sqlQuery string, args []any, l
 		RowsAffected: int64(len(data)),
 		QueryType:    SelectQuery,
 	}, nil
+}
+
+func (e *Executor) collectPerformance(execution *TestExecution, sqlQuery string, args []any) {
+	if execution == nil || execution.Options == nil || !execution.Options.PerformanceEnabled {
+		return
+	}
+
+	if execution.Transaction == nil {
+		return
+	}
+
+	if execution.Performance != nil {
+		return
+	}
+
+	threshold := execution.SlowQueryThreshold
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	queryType := detectQueryType(sqlQuery)
+	if queryType != SelectQuery {
+		return
+	}
+
+	expectsStructuredPlan := explain.SupportsStructuredPlan(e.dialect)
+
+	collector := explain.CollectorOptions{
+		Runner:  execution.Transaction,
+		Dialect: e.dialect,
+		SQL:     sqlQuery,
+		Args:    args,
+		Analyze: true,
+		Timeout: 10 * time.Second,
+	}
+
+	doc, err := explain.Collect(ctx, collector)
+	if err != nil {
+		if errors.Is(err, explain.ErrNoPlanRows) && !expectsStructuredPlan {
+			return
+		}
+
+		execution.Performance = &explain.PerformanceEvaluation{
+			Warnings: []explain.Warning{{
+				Kind:    explain.WarningParseError,
+				Message: err.Error(),
+			}},
+		}
+		return
+	}
+
+	if expectsStructuredPlan && len(doc.RawJSON) == 0 && len(doc.Root) == 0 {
+		execution.Performance = &explain.PerformanceEvaluation{
+			Warnings: []explain.Warning{{
+				Kind:    explain.WarningParseError,
+				Message: "explain did not return JSON output",
+			}},
+		}
+		return
+	}
+
+	analyzerOpts := explain.AnalyzerOptions{
+		Threshold: threshold,
+		Tables:    execution.Options.TableMetadata,
+	}
+
+	evaluation, err := explain.Analyze(ctx, doc, analyzerOpts)
+	if err != nil {
+		execution.Performance = &explain.PerformanceEvaluation{
+			Warnings: []explain.Warning{{
+				Kind:    explain.WarningParseError,
+				Message: err.Error(),
+			}},
+		}
+		return
+	}
+
+	if len(doc.Warnings) > 0 {
+		for _, w := range doc.Warnings {
+			evaluation.Warnings = append(evaluation.Warnings, explain.Warning{
+				Kind:    explain.WarningParseError,
+				Message: w.Error(),
+			})
+		}
+	}
+
+	if len(execution.Options.TableReferenceMap) > 0 {
+		applyTableDescriptions(evaluation, execution.Options.TableReferenceMap, e.tableInfo, execution.Options.TableMetadata)
+	}
+
+	execution.Performance = evaluation
+}
+
+func (e *Executor) collectPerformanceBeforeDML(execution *TestExecution) *explain.PerformanceEvaluation {
+	if execution.Transaction == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if _, err := execution.Transaction.ExecContext(ctx, "SAVEPOINT snapsql_explain_plan"); err != nil {
+		return &explain.PerformanceEvaluation{Warnings: []explain.Warning{{Kind: explain.WarningParseError, Message: err.Error()}}}
+	}
+
+	cleanup := func() error {
+		if _, err := execution.Transaction.ExecContext(ctx, "ROLLBACK TO SAVEPOINT snapsql_explain_plan"); err != nil {
+			return err
+		}
+		if _, err := execution.Transaction.ExecContext(ctx, "RELEASE SAVEPOINT snapsql_explain_plan"); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	expectsStructuredPlan := explain.SupportsStructuredPlan(e.dialect)
+
+	collector := explain.CollectorOptions{
+		Runner:  execution.Transaction,
+		Dialect: e.dialect,
+		SQL:     execution.SQL,
+		Args:    execution.Args,
+		Analyze: true,
+		Timeout: 10 * time.Second,
+	}
+
+	doc, err := explain.Collect(ctx, collector)
+	if err != nil {
+		cleanupErr := cleanup()
+		if errors.Is(err, explain.ErrNoPlanRows) && !expectsStructuredPlan {
+			if cleanupErr != nil {
+				return &explain.PerformanceEvaluation{Warnings: []explain.Warning{{Kind: explain.WarningParseError, Message: cleanupErr.Error()}}}
+			}
+			return nil
+		}
+
+		warns := []explain.Warning{{Kind: explain.WarningParseError, Message: err.Error()}}
+		if cleanupErr != nil {
+			warns = append(warns, explain.Warning{Kind: explain.WarningParseError, Message: cleanupErr.Error()})
+		}
+		return &explain.PerformanceEvaluation{Warnings: warns}
+	}
+
+	if err := cleanup(); err != nil {
+		return &explain.PerformanceEvaluation{Warnings: []explain.Warning{{Kind: explain.WarningParseError, Message: err.Error()}}}
+	}
+
+	if expectsStructuredPlan && len(doc.RawJSON) == 0 && len(doc.Root) == 0 {
+		return &explain.PerformanceEvaluation{
+			Warnings: []explain.Warning{{
+				Kind:    explain.WarningParseError,
+				Message: "explain did not return JSON output",
+			}},
+		}
+	}
+
+	analyzerOpts := explain.AnalyzerOptions{
+		Threshold: execution.SlowQueryThreshold,
+		Tables:    execution.Options.TableMetadata,
+	}
+
+	evaluation, err := explain.Analyze(ctx, doc, analyzerOpts)
+	if err != nil {
+		return &explain.PerformanceEvaluation{Warnings: []explain.Warning{{Kind: explain.WarningParseError, Message: err.Error()}}}
+	}
+
+	if len(doc.Warnings) > 0 {
+		for _, w := range doc.Warnings {
+			evaluation.Warnings = append(evaluation.Warnings, explain.Warning{Kind: explain.WarningParseError, Message: w.Error()})
+		}
+	}
+
+	if len(execution.Options.TableReferenceMap) > 0 {
+		applyTableDescriptions(evaluation, execution.Options.TableReferenceMap, e.tableInfo, execution.Options.TableMetadata)
+	}
+
+	return evaluation
+}
+
+func applyTableDescriptions(eval *explain.PerformanceEvaluation, mapping map[string]intermediate.TableReferenceInfo, schema map[string]*snapsql.TableInfo, metadata map[string]explain.TableMetadata) {
+	if eval == nil || len(mapping) == 0 {
+		return
+	}
+
+	physical := collectPhysicalNameCandidates(schema, metadata)
+	describer := intermediate.DescribePlanTables
+
+	for i := range eval.Warnings {
+		warn := &eval.Warnings[i]
+		if len(warn.Tables) == 0 {
+			continue
+		}
+
+		debugDumpPlanTables("testrunner", warn.Tables, mapping)
+
+		described := describer(warn.Tables, mapping, physical)
+		if len(described) == 0 {
+			fallback := make([]string, 0, len(warn.Tables))
+			for _, raw := range warn.Tables {
+				trimmed := strings.TrimSpace(raw)
+				if trimmed == "" {
+					trimmed = "<unknown>"
+				}
+				fallback = append(fallback, fmt.Sprintf("table '%s' (physical table unresolved)", trimmed))
+			}
+			warn.Tables = fallback
+			continue
+		}
+
+		warn.Tables = described
+	}
+}
+
+func collectPhysicalNameCandidates(schema map[string]*snapsql.TableInfo, metadata map[string]explain.TableMetadata) []string {
+	unique := make(map[string]struct{})
+
+	add := func(name string) {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return
+		}
+		unique[trimmed] = struct{}{}
+	}
+
+	for _, info := range schema {
+		if info == nil {
+			continue
+		}
+		if info.Schema != "" {
+			add(info.Schema + "." + info.Name)
+		}
+		add(info.Name)
+	}
+
+	for key := range metadata {
+		add(key)
+	}
+
+	if len(unique) == 0 {
+		return nil
+	}
+
+	results := make([]string, 0, len(unique))
+	for name := range unique {
+		results = append(results, name)
+	}
+	sort.Strings(results)
+	return results
+}
+
+func debugDumpPlanTables(stage string, raw []string, mapping map[string]intermediate.TableReferenceInfo) {
+	if os.Getenv("SNAPSQL_DEBUG_TABLES") == "" {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] EXPLAIN tables: %v\n", stage, raw)
+	if len(mapping) == 0 {
+		fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] TableReferenceMap: <empty>\n", stage)
+		return
+	}
+
+	keys := make([]string, 0, len(mapping))
+	for key := range mapping {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		info := mapping[key]
+		fmt.Fprintf(
+			os.Stderr,
+			"[SNAPSQL][%s] map[%s]={Name:%s Alias:%s Table:%s Query:%s Context:%s}\n",
+			stage,
+			key,
+			info.Name,
+			info.Alias,
+			info.TableName,
+			info.QueryName,
+			info.Context,
+		)
+	}
 }
 
 // executeDMLQuery executes INSERT/UPDATE/DELETE queries and returns affected rows

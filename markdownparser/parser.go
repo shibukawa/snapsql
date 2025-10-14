@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -46,6 +47,12 @@ type SnapSQLDocument struct {
 	SQL            string
 	SQLStartLine   int // Line number where SQL code block starts
 	TestCases      []TestCase
+	Performance    PerformanceSettings
+}
+
+// PerformanceSettings represents parsed performance metadata.
+type PerformanceSettings struct {
+	SlowQueryThreshold time.Duration
 }
 
 // Parse parses a markdown query file and returns a SnapSQLDocument
@@ -64,6 +71,11 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 
 	// Parse front matter manually
 	frontMatter, contentWithoutFrontMatter, err := parseFrontMatter(string(content))
+	if err != nil {
+		return nil, err
+	}
+
+	performance, err := parsePerformanceSettings(frontMatter)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +115,8 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 
 	// Build SnapSQL document
 	document := &SnapSQLDocument{
-		Metadata: frontMatter,
+		Metadata:    frontMatter,
+		Performance: performance,
 	}
 
 	// Set title if available (do not derive function_name from title)
@@ -152,6 +165,9 @@ func ParseWithOptions(reader io.Reader, options *ParseOptions) (*SnapSQLDocument
 		}
 
 		document.TestCases = testCases
+		for i := range document.TestCases {
+			document.TestCases[i].SlowQueryThreshold = performance.SlowQueryThreshold
+		}
 	}
 
 	return document, nil

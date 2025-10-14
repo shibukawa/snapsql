@@ -114,7 +114,7 @@ func TestMarkdownAcceptance(t *testing.T) {
 					for i := range doc.TestCases {
 						c := &doc.TestCases[i]
 
-						_, _, err := exec.ExecuteTest(c, doc.SQL, map[string]any{}, &fr.ExecutionOptions{Mode: fr.FullTest, Commit: false})
+						_, _, _, err := exec.ExecuteTest(c, doc.SQL, map[string]any{}, &fr.ExecutionOptions{Mode: fr.FullTest, Commit: false})
 						if err != nil {
 							if strings.Contains(err.Error(), "simple validation failed:") || strings.Contains(err.Error(), "table state validation failed:") {
 								failedAny = true

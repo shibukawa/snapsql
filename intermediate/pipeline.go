@@ -47,6 +47,9 @@ type ProcessingContext struct {
 	CELExpressions  []CELExpression
 	CELEnvironments []CELEnvironment
 
+	// Table references extracted from the statement
+	TableReferences []TableReferenceInfo
+
 	// Metadata
 	Description      string
 	FunctionName     string
@@ -90,7 +93,8 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 	}
 
 	// Build the final intermediate format
-	responses := applyHierarchyKeyLevels(determineResponseType(ctx.Statement, ctx.TableInfo), ctx.TableInfo)
+	responsesRaw, responseWarnings := determineResponseType(ctx.Statement, ctx.TableInfo)
+	responses := applyHierarchyKeyLevels(responsesRaw, ctx.TableInfo)
 
 	if len(responses) == 0 {
 		fallbackResponses, err := buildDMLReturningResponses(ctx.Statement, ctx.TableInfo)
@@ -116,6 +120,11 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		SystemFields:       ctx.SystemFields,
 		ResponseAffinity:   ctx.ResponseAffinity,
 		Responses:          responses,
+		TableReferences:    ctx.TableReferences, // Add table references
+	}
+
+	if len(responseWarnings) > 0 {
+		result.Warnings = append(result.Warnings, responseWarnings...)
 	}
 
 	return result, nil
@@ -274,7 +283,6 @@ func buildResponsesFromReturningClause(returning *parser.ReturningClause, baseTa
 		responses = append(responses, Response{
 			Name:         columnName,
 			Type:         colInfo.DataType,
-			BaseType:     colInfo.DataType,
 			IsNullable:   colInfo.Nullable,
 			MaxLength:    colInfo.MaxLength,
 			Precision:    colInfo.Precision,
@@ -354,6 +362,7 @@ func CreateDefaultPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDe
 
 	// Add processors in order
 	pipeline.AddProcessor(&MetadataExtractor{})
+	pipeline.AddProcessor(&TableReferencesProcessor{}) // Extract table references early
 	pipeline.AddProcessor(&CELExpressionExtractor{})
 	pipeline.AddProcessor(&SystemFieldProcessor{})
 	pipeline.AddProcessor(&TokenTransformer{})

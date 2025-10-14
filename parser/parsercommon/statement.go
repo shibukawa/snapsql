@@ -121,7 +121,6 @@ func (bs *baseStatement) FindTableReference(tableOrAlias string) *SQTableReferen
 type SelectStatement struct {
 	baseStatement
 
-	With    *WithClause
 	Select  *SelectClause
 	From    *FromClause
 	Where   *WhereClause
@@ -178,7 +177,6 @@ func (s *SelectStatement) String() string {
 type InsertIntoStatement struct {
 	baseStatement
 
-	With       *WithClause
 	Into       *InsertIntoClause
 	Columns    []FieldName
 	ValuesList *ValuesClause
@@ -251,7 +249,6 @@ var _ StatementNode = (*InsertIntoStatement)(nil)
 type UpdateStatement struct {
 	baseStatement
 
-	With      *WithClause
 	Update    *UpdateClause
 	Set       *SetClause
 	Where     *WhereClause
@@ -304,7 +301,6 @@ var _ StatementNode = (*UpdateStatement)(nil)
 type DeleteFromStatement struct {
 	baseStatement
 
-	With      *WithClause
 	From      *DeleteFromClause
 	Where     *WhereClause
 	Returning *ReturningClause

@@ -79,7 +79,6 @@ type Parameter struct {
 type Response struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`
-	BaseType   string `json:"base_type,omitempty"`
 	IsNullable bool   `json:"is_nullable,omitempty"`
 	MaxLength  *int   `json:"max_length,omitempty"`
 	Precision  *int   `json:"precision,omitempty"`
@@ -98,6 +97,24 @@ type ImplicitParameter struct {
 	Name    string `json:"name"`
 	Type    string `json:"type"`
 	Default any    `json:"default,omitempty"`
+}
+
+// TableReferenceInfo represents a table reference in the query (including CTEs, subqueries, and joins)
+type TableReferenceInfo struct {
+	// Canonical identifier for the referenced object (physical table, CTE, or subquery)
+	Name string `json:"name"`
+
+	// Physical table name when it can be resolved via schema metadata
+	TableName string `json:"table_name,omitempty"`
+
+	// Alias used in the SQL text (if different from Name)
+	Alias string `json:"alias,omitempty"`
+
+	// Owning derived query (CTE/subquery) when the reference is defined inside it
+	QueryName string `json:"query_name,omitempty"`
+
+	// Context where this table is used ("main", "join", "cte", "subquery")
+	Context string `json:"context,omitempty"`
 }
 
 // SystemFieldInfo represents system field configuration in intermediate format
@@ -146,6 +163,9 @@ type IntermediateFormat struct {
 	// Response fields (simplified structure)
 	Responses []Response `json:"responses,omitempty"`
 
+	// Warning messages emitted during intermediate generation (e.g., type inference degradation)
+	Warnings []string `json:"warnings,omitempty"`
+
 	// Response affinity (database type mapping)
 	ResponseAffinity string `json:"response_affinity,omitempty"`
 
@@ -169,6 +189,9 @@ type IntermediateFormat struct {
 
 	// Implicit parameters that should be obtained from context/TLS
 	ImplicitParameters []ImplicitParameter `json:"implicit_parameters,omitempty"`
+
+	// Table references used in the query (including CTEs, subqueries, and joins)
+	TableReferences []TableReferenceInfo `json:"table_references,omitempty"`
 
 	// Indicates whether the main statement guarantees ordered results via ORDER BY
 	HasOrderedResult bool `json:"has_ordered_result,omitempty"`

@@ -52,13 +52,13 @@ type BoardTreeResultLists struct {
 
 // BoardTreeResult represents the response structure for BoardTree
 type BoardTreeResult struct {
-	BID         *int                    `json:"b.id"`
-	BName       string                  `json:"b.name"`
-	BStatus     string                  `json:"b.status"`
-	BArchivedAt *time.Time              `json:"b.archived_at"`
-	BCreatedAt  time.Time               `json:"b.created_at"`
-	BUpdatedAt  time.Time               `json:"b.updated_at"`
-	Lists       []*BoardTreeResultLists `json:"lists"`
+	ID         *int                    `json:"id"`
+	Name       string                  `json:"name"`
+	Status     string                  `json:"status"`
+	ArchivedAt *time.Time              `json:"archived_at"`
+	CreatedAt  time.Time               `json:"created_at"`
+	UpdatedAt  time.Time               `json:"updated_at"`
+	Lists      []*BoardTreeResultLists `json:"lists"`
 }
 
 // BoardTree specific CEL programs and mock path
@@ -234,15 +234,18 @@ func init() {
 
 	// CEL environments based on intermediate format
 	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0: Base environment
+	// Environment 0 (container: root)
 	{
-		// Build CEL env options then expand variadic at call-site to avoid type inference issues
+		// Build CEL env options
 		opts := []cel.EnvOption{
+			cel.Container("root"),
+		}
+		opts = append(opts, cel.Variable("board_id", cel.IntType))
+		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
 			snapsqlgo.DecimalLibrary,
-			cel.Variable("board_id", cel.IntType),
-		}
+		)
 		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
@@ -302,7 +305,7 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 		if err != nil {
 			return "", nil, fmt.Errorf("BoardTree: failed to evaluate expression: %w", err)
 		}
-		args = append(args, evalRes0.Value())
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
@@ -312,7 +315,7 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("BoardTree: failed to prepare statement: %w", err)
+		return result, fmt.Errorf("BoardTree: failed to prepare statement: %w (query: %s)", err, query)
 	}
 	defer stmt.Close()
 	// Execute query for hierarchical aggregation (one affinity)
@@ -322,12 +325,12 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 		return result, fmt.Errorf("failed to query rows: %w", err)
 	}
 	defer rows.Close()
-	var col_bid *int
-	var col_bname string
-	var col_bstatus string
-	var col_barchivedat *time.Time
-	var col_bcreatedat time.Time
-	var col_bupdatedat time.Time
+	var col_id *int
+	var col_name string
+	var col_status string
+	var col_archivedat *time.Time
+	var col_createdat time.Time
+	var col_updatedat time.Time
 	var col_listsid *int
 	var col_listsboardid *int
 	var col_listsname *string
@@ -348,12 +351,12 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	var _nodeMap_lists_cards map[string]*BoardTreeResultListsCards
 	for rows.Next() {
 		err = rows.Scan(
-			&col_bid,
-			&col_bname,
-			&col_bstatus,
-			&col_barchivedat,
-			&col_bcreatedat,
-			&col_bupdatedat,
+			&col_id,
+			&col_name,
+			&col_status,
+			&col_archivedat,
+			&col_createdat,
+			&col_updatedat,
 			&col_listsid,
 			&col_listsboardid,
 			&col_listsname,
@@ -374,8 +377,8 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 			return result, fmt.Errorf("failed to scan row: %w", err)
 		}
 		var pk_parent string
-		if col_bid != nil {
-			pk_parent = fmt.Sprintf("%v", *col_bid)
+		if col_id != nil {
+			pk_parent = fmt.Sprintf("%v", *col_id)
 		} else {
 			pk_parent = "<nil>"
 		}
@@ -385,12 +388,12 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 		parentObj, _okParent := _parentMap[pk_parent]
 		if !_okParent {
 			parentObj = &BoardTreeResult{}
-			parentObj.BID = col_bid
-			parentObj.BName = col_bname
-			parentObj.BStatus = col_bstatus
-			parentObj.BArchivedAt = col_barchivedat
-			parentObj.BCreatedAt = col_bcreatedat
-			parentObj.BUpdatedAt = col_bupdatedat
+			parentObj.ID = col_id
+			parentObj.Name = col_name
+			parentObj.Status = col_status
+			parentObj.ArchivedAt = col_archivedat
+			parentObj.CreatedAt = col_createdat
+			parentObj.UpdatedAt = col_updatedat
 			parentObj.Lists = make([]*BoardTreeResultLists, 0)
 			_parentMap[pk_parent] = parentObj
 		}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/assert/v2"
 )
@@ -60,6 +61,8 @@ generation:
 	assert.NoError(t, err)
 	assert.Equal(t, "postgres", config.Dialect)
 	assert.Equal(t, "./queries", config.InputDir)
+	assert.Equal(t, 3*time.Second, config.Performance.SlowQueryThreshold)
+	assert.Equal(t, 0, len(config.Tables))
 
 	// JSON generator should be enabled by default
 	jsonGen := config.Generation.Generators["json"]
@@ -156,6 +159,60 @@ func TestValidateConfig_InvalidDefaultFormat(t *testing.T) {
 	err := validateConfig(config)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "query.default_format")
+}
+
+func TestValidateConfig_InvalidSlowQueryThreshold(t *testing.T) {
+	config := &Config{
+		Dialect: "postgres",
+		Performance: PerformanceConfig{
+			SlowQueryThreshold: -1 * time.Second,
+		},
+	}
+
+	err := validateConfig(config)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "performance.slow_query_threshold")
+}
+
+func TestValidateConfig_InvalidTableMetadata(t *testing.T) {
+	config := &Config{
+		Dialect: "postgres",
+		Tables: map[string]TablePerformance{
+			"public.users": {
+				ExpectedRows: 0,
+			},
+		},
+	}
+
+	err := validateConfig(config)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "tables.public.users.expected_rows")
+}
+
+func TestLoadConfig_PerformanceAndTables(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "snapsql.yaml")
+
+	configContent := `
+dialect: "postgres"
+performance:
+  slow_query_threshold: 2500ms
+tables:
+  public.users:
+    expected_rows: 1500000
+    allow_full_scan: false
+`
+
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	assert.NoError(t, err)
+
+	config, err := LoadConfig(configPath)
+	assert.NoError(t, err)
+	assert.Equal(t, 2500*time.Millisecond, config.Performance.SlowQueryThreshold)
+	meta, ok := config.Tables["public.users"]
+	assert.True(t, ok)
+	assert.Equal(t, int64(1500000), meta.ExpectedRows)
+	assert.False(t, meta.AllowFullScan)
 }
 
 func TestValidateConfig_ValidConfig(t *testing.T) {

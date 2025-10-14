@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	snapsql "github.com/shibukawa/snapsql"
 	"github.com/yuin/goldmark/ast"
@@ -40,21 +41,22 @@ type ExpectedResultSpec struct {
 
 // TestCase represents a single test case
 type TestCase struct {
-	Name            string
-	SQL             string
-	Fixtures        []TableFixture              // テーブルごとのfixture情報
-	Fixture         map[string][]map[string]any // 後方互換性のため残す
-	Parameters      map[string]any
-	HasParameters   bool
-	VerifyQuery     string               // 検証用SELECTクエリ
-	ExpectedResult  []map[string]any     // 従来型（無名配列）
-	ExpectedResults []ExpectedResultSpec // 新型（テーブル名・戦略付き）
-	ExpectedError   *string              // 期待されるエラータイプ（normalized form）
-	SourceFile      string               // 元となるMarkdownファイルのパス
-	Line            int                  // 見出し行番号（1-origin）
-	PreparedSQL     string               // 方言・条件適用後に評価されたSQL
-	SQLArgs         []any                // PreparedSQLに対応するパラメータ
-	ResultOrdered   bool
+	Name               string
+	SQL                string
+	Fixtures           []TableFixture              // テーブルごとのfixture情報
+	Fixture            map[string][]map[string]any // 後方互換性のため残す
+	Parameters         map[string]any
+	HasParameters      bool
+	VerifyQuery        string               // 検証用SELECTクエリ
+	ExpectedResult     []map[string]any     // 従来型（無名配列）
+	ExpectedResults    []ExpectedResultSpec // 新型（テーブル名・戦略付き）
+	ExpectedError      *string              // 期待されるエラータイプ（normalized form）
+	SourceFile         string               // 元となるMarkdownファイルのパス
+	Line               int                  // 見出し行番号（1-origin）
+	PreparedSQL        string               // 方言・条件適用後に評価されたSQL
+	SQLArgs            []any                // PreparedSQLに対応するパラメータ
+	ResultOrdered      bool
+	SlowQueryThreshold time.Duration
 }
 
 // TestSection represents a section within a test case

@@ -24,10 +24,6 @@ func ExecuteWithOptions(stmt cmn.StatementNode, inspectMode bool) error {
 
 		finalizeFromClauseWithOptions(s.From, perr, inspectMode)
 
-		if s.With != nil {
-			emptyCheck(s.With, perr)
-		}
-
 		if s.Where != nil {
 			emptyCheck(s.Where, perr)
 		}
@@ -63,10 +59,6 @@ func ExecuteWithOptions(stmt cmn.StatementNode, inspectMode bool) error {
 			for i, columnName := range s.Into.Columns {
 				s.Columns[i] = cmn.FieldName{Name: columnName}
 			}
-		}
-
-		if s.With != nil {
-			emptyCheck(s.With, perr)
 		}
 
 		if s.Select != nil {

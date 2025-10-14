@@ -57,13 +57,23 @@ func InferFieldTypes(
 	statementNode parser.StatementNode,
 	options *InferenceOptions,
 ) ([]*InferredFieldInfo, error) {
+	results, _, err := InferFieldTypesWithWarnings(databaseSchemas, statementNode, options)
+	return results, err
+}
+
+// InferFieldTypesWithWarnings behaves like InferFieldTypes but also returns collected warnings.
+func InferFieldTypesWithWarnings(
+	databaseSchemas []snapsql.DatabaseSchema,
+	statementNode parser.StatementNode,
+	options *InferenceOptions,
+) ([]*InferredFieldInfo, []string, error) {
 	// Validate inputs
 	if len(databaseSchemas) == 0 {
-		return nil, ErrNoSchemaProvided
+		return nil, nil, ErrNoSchemaProvided
 	}
 
 	if statementNode == nil {
-		return nil, ErrInvalidStatement
+		return nil, nil, ErrInvalidStatement
 	}
 
 	// Create type inference engine
@@ -96,12 +106,14 @@ func InferFieldTypes(
 		allErrors = append(allErrors, inferenceErr)
 	}
 
+	warnings := engine.Warnings()
+
 	// Return results with combined errors
 	if len(allErrors) > 0 {
-		return results, errors.Join(allErrors...)
+		return results, warnings, errors.Join(allErrors...)
 	}
 
-	return results, nil
+	return results, warnings, nil
 }
 
 // InferenceOptions provides additional options for type inference

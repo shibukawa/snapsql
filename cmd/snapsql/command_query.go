@@ -2,17 +2,23 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql/explain"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/markdownparser"
+	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/query"
 )
 
@@ -86,6 +92,15 @@ func (q *QueryCmd) Run(ctx *Context) error {
 		}
 	}
 
+	tableMetadata := buildTableMetadataFromConfig(config.Tables)
+
+	slowThreshold := config.Performance.SlowQueryThreshold
+	if slowThreshold <= 0 {
+		slowThreshold = 3 * time.Second
+	}
+
+	slowThreshold = q.extractSlowQueryThreshold(slowThreshold)
+
 	// Create query options
 	options := query.QueryOptions{
 		Timeout:               q.Timeout,
@@ -130,7 +145,7 @@ func (q *QueryCmd) Run(ctx *Context) error {
 	options.ConnectionString = connectionString
 
 	// Execute query
-	return q.executeQuery(ctx, params, options)
+	return q.executeQuery(ctx, params, options, slowThreshold, tableMetadata)
 }
 
 // loadParameters loads parameters from file and command line
@@ -415,7 +430,7 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 // removed local formatting helpers; using shared query.FormatSQLForDialect
 
 // executeQuery executes the query and outputs results
-func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options query.QueryOptions) error {
+func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options query.QueryOptions, slowThreshold time.Duration, tableMetadata map[string]explain.TableMetadata) error {
 	// Open database connection
 	db, err := query.OpenDatabase(options.Driver, options.ConnectionString, options.Timeout)
 	if err != nil {
@@ -442,6 +457,8 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 
 		return fmt.Errorf("%w: %w", ErrQueryExecution, err)
 	}
+
+	analyzeEvaluation := q.analyzePerformance(db, options, result, slowThreshold, tableMetadata)
 
 	// Determine output destination
 	var output *os.File
@@ -474,6 +491,10 @@ func (q *QueryCmd) executeQuery(ctx *Context, params map[string]any, options que
 		if err != nil {
 			return fmt.Errorf("failed to format results: %w", err)
 		}
+	}
+
+	if analyzeEvaluation != nil {
+		q.printPerformanceWarnings(ctx, analyzeEvaluation, result.TableReferences, tableMetadata)
 	}
 
 	return nil
@@ -615,6 +636,346 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedIn
 	}
 
 	return builder.String(), args, nil
+}
+
+func (q *QueryCmd) extractSlowQueryThreshold(defaultThreshold time.Duration) time.Duration {
+	templateExt := strings.ToLower(filepath.Ext(q.TemplateFile))
+	if templateExt == ".md" {
+		file, err := os.Open(q.TemplateFile)
+		if err != nil {
+			return defaultThreshold
+		}
+		defer file.Close()
+
+		doc, err := markdownparser.Parse(file)
+		if err != nil {
+			return defaultThreshold
+		}
+
+		if doc.Performance.SlowQueryThreshold > 0 {
+			return doc.Performance.SlowQueryThreshold
+		}
+	}
+
+	if templateExt == ".sql" {
+		file, err := os.Open(q.TemplateFile)
+		if err != nil {
+			return defaultThreshold
+		}
+		defer file.Close()
+
+		_, def, err := parser.ParseSQLFile(file, nil, q.TemplateFile, filepath.Dir(q.TemplateFile), parser.DefaultOptions)
+		if err != nil || def == nil {
+			return defaultThreshold
+		}
+
+		if def.SlowQueryThreshold > 0 {
+			return def.SlowQueryThreshold
+		}
+	}
+
+	return defaultThreshold
+}
+
+func (q *QueryCmd) analyzePerformance(db *sql.DB, options query.QueryOptions, result *query.QueryResult, threshold time.Duration, tables map[string]explain.TableMetadata) *explain.PerformanceEvaluation {
+	if db == nil || result == nil || strings.TrimSpace(result.SQL) == "" {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	timeout := time.Duration(options.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+
+	analyze := shouldAnalyzeSQL(result.SQL)
+
+	collector := explain.CollectorOptions{
+		Runner:  db,
+		Dialect: options.Driver,
+		SQL:     result.SQL,
+		Args:    result.Parameters,
+		Analyze: analyze,
+		Timeout: timeout,
+	}
+
+	structuredPlan := explain.SupportsStructuredPlan(options.Driver)
+
+	doc, err := explain.Collect(ctx, collector)
+	if err != nil {
+		if errors.Is(err, explain.ErrNoPlanRows) && !structuredPlan {
+			return nil
+		}
+
+		return &explain.PerformanceEvaluation{
+			Warnings: []explain.Warning{{
+				Kind:    explain.WarningParseError,
+				Message: err.Error(),
+			}},
+		}
+	}
+
+	if structuredPlan && len(doc.RawJSON) == 0 && len(doc.Root) == 0 {
+		return &explain.PerformanceEvaluation{
+			Warnings: []explain.Warning{{
+				Kind:    explain.WarningParseError,
+				Message: "explain did not return JSON output",
+			}},
+		}
+	}
+
+	analyzerOpts := explain.AnalyzerOptions{
+		Threshold: threshold,
+		Tables:    tables,
+	}
+
+	evaluation, err := explain.Analyze(ctx, doc, analyzerOpts)
+	if err != nil {
+		return &explain.PerformanceEvaluation{
+			Warnings: []explain.Warning{{
+				Kind:    explain.WarningParseError,
+				Message: err.Error(),
+			}},
+		}
+	}
+
+	if doc != nil && len(doc.Warnings) > 0 {
+		for _, w := range doc.Warnings {
+			evaluation.Warnings = append(evaluation.Warnings, explain.Warning{
+				Kind:    explain.WarningParseError,
+				Message: w.Error(),
+			})
+		}
+	}
+
+	return evaluation
+}
+
+func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.PerformanceEvaluation, refs []intermediate.TableReferenceInfo, tables map[string]explain.TableMetadata) {
+	if evaluation == nil || len(evaluation.Warnings) == 0 {
+		if ctx != nil && ctx.Verbose && evaluation != nil && len(evaluation.Estimates) > 0 {
+			q.printPerformanceEstimates(ctx, evaluation)
+		}
+
+		return
+	}
+
+	if ctx != nil && ctx.Quiet {
+		return
+	}
+
+	estMap := make(map[string]explain.QueryEstimate)
+	for _, est := range evaluation.Estimates {
+		estMap[est.QueryPath] = est
+	}
+
+	tableMap := intermediate.BuildTableReferenceMap(refs)
+	physicalNames := physicalNameCandidatesFromMetadata(tables)
+	warnLabel := color.New(color.Bold, color.FgYellow).Sprint("WARN")
+	fmt.Fprintln(color.Output, "\nPerformance warnings:")
+
+	for _, warn := range evaluation.Warnings {
+		switch warn.Kind {
+		case explain.WarningFullScan:
+			debugDumpPlanTables("cli", warn.Tables, tableMap)
+
+			targets := describeTablesForWarning(warn.Tables, tableMap, physicalNames)
+			if len(targets) == 0 {
+				targets = fallbackPlanTableDescriptions(warn.Tables)
+			}
+
+			for _, target := range targets {
+				message := "full scan detected on " + target
+				if warn.QueryPath != "" {
+					message = fmt.Sprintf("%s [path=%s]", message, warn.QueryPath)
+				}
+
+				fmt.Fprintf(color.Output, "  %s %s\n", warnLabel, message)
+			}
+		default:
+			message := warn.Message
+			debugDumpPlanTables("cli", warn.Tables, tableMap)
+
+			targets := describeTablesForWarning(warn.Tables, tableMap, physicalNames)
+			if len(targets) == 0 {
+				targets = fallbackPlanTableDescriptions(warn.Tables)
+			}
+
+			if warn.Kind == explain.WarningSlowQuery {
+				if est, ok := estMap[warn.QueryPath]; ok {
+					message = fmt.Sprintf("%s (actual=%s, estimated=%s, threshold=%s, scale=%.2f)",
+						message,
+						formatDuration(est.Actual),
+						formatDuration(est.Estimated),
+						formatDuration(est.Threshold),
+						est.ScaleFactor)
+				}
+			}
+
+			if len(targets) > 0 {
+				message = fmt.Sprintf("%s (tables=%s)", message, strings.Join(targets, ", "))
+			}
+
+			if warn.QueryPath != "" {
+				message = fmt.Sprintf("%s [path=%s]", message, warn.QueryPath)
+			}
+
+			fmt.Fprintf(color.Output, "  %s %s\n", warnLabel, message)
+		}
+	}
+
+	if ctx != nil && ctx.Verbose {
+		q.printPerformanceEstimates(ctx, evaluation)
+	}
+}
+
+func describeTablesForWarning(keys []string, mapping map[string]intermediate.TableReferenceInfo, physicalNames []string) []string {
+	return intermediate.DescribePlanTables(keys, mapping, physicalNames)
+}
+
+func physicalNameCandidatesFromMetadata(tables map[string]explain.TableMetadata) []string {
+	if len(tables) == 0 {
+		return nil
+	}
+
+	unique := make(map[string]struct{}, len(tables)*2)
+	for key := range tables {
+		trimmed := strings.TrimSpace(key)
+		if trimmed == "" {
+			continue
+		}
+
+		unique[trimmed] = struct{}{}
+		if idx := strings.Index(trimmed, "."); idx > 0 && idx < len(trimmed)-1 {
+			alias := trimmed[idx+1:]
+			if alias != "" {
+				unique[alias] = struct{}{}
+			}
+		}
+	}
+
+	results := make([]string, 0, len(unique))
+	for name := range unique {
+		results = append(results, name)
+	}
+
+	sort.Strings(results)
+
+	return results
+}
+
+func debugDumpPlanTables(stage string, raw []string, mapping map[string]intermediate.TableReferenceInfo) {
+	if os.Getenv("SNAPSQL_DEBUG_TABLES") == "" {
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] EXPLAIN tables: %v\n", stage, raw)
+
+	if len(mapping) == 0 {
+		fmt.Fprintf(os.Stderr, "[SNAPSQL][%s] TableReferenceMap: <empty>\n", stage)
+		return
+	}
+
+	keys := make([]string, 0, len(mapping))
+	for key := range mapping {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		info := mapping[key]
+		fmt.Fprintf(
+			os.Stderr,
+			"[SNAPSQL][%s] map[%s]={Name:%s Alias:%s Table:%s Query:%s Context:%s}\n",
+			stage,
+			key,
+			info.Name,
+			info.Alias,
+			info.TableName,
+			info.QueryName,
+			info.Context,
+		)
+	}
+}
+
+func fallbackPlanTableDescriptions(raw []string) []string {
+	if len(raw) == 0 {
+		return []string{"table '<unknown>' (physical table unresolved)"}
+	}
+
+	out := make([]string, 0, len(raw))
+	for _, name := range raw {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			trimmed = "<unknown>"
+		}
+
+		out = append(out, fmt.Sprintf("table '%s' (physical table unresolved)", trimmed))
+	}
+
+	return out
+}
+
+func shouldAnalyzeSQL(sql string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	if upper == "" {
+		return true
+	}
+
+	keyword := upper
+	if idx := strings.IndexAny(upper, " \n\t"); idx >= 0 {
+		keyword = upper[:idx]
+	}
+
+	switch keyword {
+	case "SELECT", "WITH":
+		return true
+	default:
+		return false
+	}
+}
+
+func (q *QueryCmd) printPerformanceEstimates(ctx *Context, evaluation *explain.PerformanceEvaluation) {
+	if ctx != nil && ctx.Quiet {
+		return
+	}
+
+	if len(evaluation.Estimates) == 0 {
+		return
+	}
+
+	infoLabel := color.New(color.Bold, color.FgCyan).Sprint("INFO")
+	fmt.Fprintln(color.Output, "\nPerformance estimates:")
+
+	printed := make(map[string]struct{})
+
+	for _, warn := range evaluation.Warnings {
+		if warn.QueryPath != "" {
+			printed[warn.QueryPath] = struct{}{}
+		}
+	}
+
+	for _, est := range evaluation.Estimates {
+		if _, exists := printed[est.QueryPath]; exists {
+			continue
+		}
+
+		message := fmt.Sprintf("actual=%s, estimated=%s, threshold=%s, scale=%.2f",
+			formatDuration(est.Actual),
+			formatDuration(est.Estimated),
+			formatDuration(est.Threshold),
+			est.ScaleFactor,
+		)
+
+		if est.QueryPath != "" {
+			fmt.Fprintf(color.Output, "  %s %s [path=%s]\n", infoLabel, message, est.QueryPath)
+		} else {
+			fmt.Fprintf(color.Output, "  %s %s\n", infoLabel, message)
+		}
+	}
 }
 
 func isOnlyWhitespace(s string) bool {

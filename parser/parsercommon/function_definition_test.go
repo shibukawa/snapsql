@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/stretchr/testify/assert"
@@ -693,4 +694,31 @@ WHERE u.id = :user.id
 	assert.Contains(t, department, "id")
 	assert.Contains(t, department, "name")
 	assert.Contains(t, department, "manager_id")
+}
+
+func TestFunctionDefinition_PerformanceThresholdFromYAML(t *testing.T) {
+	def, err := parseFunctionDefinitionFromYAML(`
+function_name: sample
+parameters:
+  id: int
+performance:
+  slow_query_threshold: 750ms
+`, "", "")
+	assert.NoError(t, err)
+	assert.Equal(t, 750*time.Millisecond, def.SlowQueryThreshold)
+}
+
+func TestFunctionDefinition_PerformanceThresholdFromDocument(t *testing.T) {
+	doc := &markdownparser.SnapSQLDocument{
+		Metadata: map[string]any{
+			"function_name": "from_doc",
+		},
+		Performance: markdownparser.PerformanceSettings{
+			SlowQueryThreshold: 2 * time.Second,
+		},
+	}
+
+	def, err := ParseFunctionDefinitionFromSnapSQLDocument(doc, "", "")
+	assert.NoError(t, err)
+	assert.Equal(t, 2*time.Second, def.SlowQueryThreshold)
 }

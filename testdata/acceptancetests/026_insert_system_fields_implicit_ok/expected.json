@@ -62,5 +62,11 @@
         "parameter": "implicit"
       }
     }
+  ],
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
   ]
 }

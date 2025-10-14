@@ -118,8 +118,8 @@ type TableReferenceForFrom struct {
 
 	JoinType      JoinType    // Join type (see constants)
 	JoinCondition []tok.Token // ON/USING clause tokens
-	IsSubquery    bool        // true if this is a subquery
 	Expression    []tok.Token // Optional expression for complex references
+	RawTokens     []tok.Token // Raw tokens for subquery or CTE (includes parentheses if subquery)
 }
 
 func (n TableReferenceForFrom) String() string {

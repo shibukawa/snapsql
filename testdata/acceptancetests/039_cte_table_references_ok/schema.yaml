@@ -1,0 +1,36 @@
+tables:
+  users:
+    columns:
+      id:
+        type: integer
+        primary_key: true
+        nullable: false
+      name:
+        type: text
+        nullable: false
+      email:
+        type: text
+        nullable: false
+  
+  user_status:
+    columns:
+      user_id:
+        type: integer
+        primary_key: true
+        nullable: false
+      status:
+        type: text
+        nullable: false
+  
+  orders:
+    columns:
+      id:
+        type: integer
+        primary_key: true
+        nullable: false
+      user_id:
+        type: integer
+        nullable: false
+      total:
+        type: numeric
+        nullable: true
