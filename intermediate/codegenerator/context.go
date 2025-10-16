@@ -1,0 +1,48 @@
+package codegenerator
+
+import (
+	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/parser"
+)
+
+// GenerationContext は命令列生成時のコンテキスト情報を保持する
+type GenerationContext struct {
+	// CEL 式のリスト（式のインデックス順）
+	Expressions []string
+
+	// 環境変数（ループ変数など）
+	Environments []string
+
+	// 方言設定（postgres, mysql, sqlite 等）
+	Dialect string
+
+	// テーブル情報（スキーマ情報）
+	TableInfo map[string]*snapsql.TableInfo
+
+	// パース済み AST（参照用、現在は未使用だが将来的に拡張可能）
+	Statement parser.StatementNode
+}
+
+// AddExpression adds a CEL expression to the context and returns its index.
+// If the same expression already exists, returns the existing index.
+func (ctx *GenerationContext) AddExpression(expr string) int {
+	// Check if expression already exists
+	for i, existingExpr := range ctx.Expressions {
+		if existingExpr == expr {
+			return i
+		}
+	}
+	// Add new expression
+	index := len(ctx.Expressions)
+	ctx.Expressions = append(ctx.Expressions, expr)
+
+	return index
+}
+
+// AddEnvironment adds an environment variable (loop variable) to the context and returns its index.
+func (ctx *GenerationContext) AddEnvironment(env string) int {
+	index := len(ctx.Environments)
+	ctx.Environments = append(ctx.Environments, env)
+
+	return index
+}

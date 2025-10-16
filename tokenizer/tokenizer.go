@@ -175,6 +175,15 @@ func (t *tokenizer) nextToken() (Token, error) {
 			t.readChar()
 
 			return token, nil
+		case '|':
+			if t.peekChar() == '|' {
+				t.readChar()
+				t.readChar()
+
+				return t.newToken(CONCAT, "||"), nil
+			}
+
+			return Token{}, fmt.Errorf("%w: bit operator '|' at line %d, column %d is not implemented yet ", ErrInvalidSingleColon, t.line, t.column-1)
 		case '#':
 			// PostgreSQL JSON operators: #>, #>>
 			if t.peekChar() == '>' {

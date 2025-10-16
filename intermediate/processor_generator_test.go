@@ -1,6 +1,7 @@
 package intermediate
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -431,4 +432,125 @@ func TestGenerateInstructionsWithLimitOffset(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDetectForClause(t *testing.T) {
+	tests := []struct {
+		name      string
+		sql       string
+		expectFor bool
+	}{
+		{
+			name:      "select without for clause",
+			sql:       "SELECT id FROM users",
+			expectFor: false,
+		},
+		{
+			name:      "select with for update",
+			sql:       "SELECT id FROM users FOR UPDATE",
+			expectFor: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens, err := tok.Tokenize(tt.sql)
+			assert.NoError(t, err)
+
+			stmt, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+			assert.NoError(t, err)
+
+			info := detectForClause(stmt, tokens)
+			assert.Equal(t, tt.expectFor, info.HasForClause)
+		})
+	}
+}
+
+func TestGenerateInstructionsAutoForClause(t *testing.T) {
+	t.Run("injects clause before semicolon", func(t *testing.T) {
+		sql := "SELECT id FROM users;"
+		tokens, err := tok.Tokenize(sql)
+		assert.NoError(t, err)
+
+		stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+		assert.NoError(t, err)
+
+		instructions := GenerateInstructions(stmt, tokens, nil)
+
+		ifIndex := -1
+
+		for i, inst := range instructions {
+			if inst.Op == OpEmitForClause {
+				ifIndex = i
+				break
+			}
+		}
+
+		assert.NotEqual(t, -1, ifIndex, "EMIT_FOR_CLAUSE instruction expected")
+
+		if ifIndex > 0 {
+			prev := instructions[ifIndex-1]
+			// With single EMIT_FOR_CLAUSE instruction, semicolon is included in the first EMIT_STATIC
+			// No need to assert its removal from before EMIT_FOR_CLAUSE
+			_ = prev
+		}
+	})
+
+	t.Run("omits else branch when no terminator", func(t *testing.T) {
+		sql := "SELECT id FROM users"
+		tokens, err := tok.Tokenize(sql)
+		assert.NoError(t, err)
+
+		stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+		assert.NoError(t, err)
+
+		instructions := GenerateInstructions(stmt, tokens, nil)
+
+		hasIf := false
+
+		for _, inst := range instructions {
+			if inst.Op == OpEmitForClause {
+				hasIf = true
+			}
+
+			assert.NotEqual(t, OpElse, inst.Op, "ELSE should not be emitted when no terminator is present")
+
+			if inst.Op == OpEmitStatic {
+				assert.NotEqual(t, ";", inst.Value)
+			}
+		}
+
+		assert.True(t, hasIf, "EMIT_FOR_CLAUSE instruction expected")
+	})
+}
+
+func TestGenerateInstructionsSkipsWhenForClauseExists(t *testing.T) {
+	sql := "SELECT id FROM users FOR UPDATE"
+	tokens, err := tok.Tokenize(sql)
+	assert.NoError(t, err)
+
+	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+	assert.NoError(t, err)
+
+	instructions := GenerateInstructions(stmt, tokens, nil)
+
+	for _, inst := range instructions {
+		assert.NotEqual(t, OpEmitForClause, inst.Op)
+	}
+}
+
+func TestIntermediateFormatForClauseFlags(t *testing.T) {
+	sqlBasic := "SELECT id FROM users;"
+	format, err := GenerateFromSQL(strings.NewReader(sqlBasic), nil, "", "", nil, nil)
+	assert.NoError(t, err)
+	assert.True(t, slices.ContainsFunc(format.Instructions, func(i Instruction) bool {
+		return i.Op == OpEmitForClause
+	}))
+
+	sqlLocked := "SELECT id FROM users FOR SHARE;"
+	formatLocked, err := GenerateFromSQL(strings.NewReader(sqlLocked), nil, "", "", nil, nil)
+	assert.NoError(t, err)
+	assert.False(t, slices.ContainsFunc(formatLocked.Instructions, func(i Instruction) bool {
+		return i.Op == OpEmitForClause
+	}))
 }

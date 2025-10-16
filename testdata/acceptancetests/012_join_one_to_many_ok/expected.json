@@ -29,7 +29,8 @@
     {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
     {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"}
+    {"op": "END", "pos": "0:0"},
+    {"op": "EMIT_FOR_CLAUSE", "pos": "15:14"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"}

@@ -53,6 +53,8 @@ const (
 	DIVIDE // /
 	// MODULO represents '%'.
 	MODULO // %
+	// CONCAT represents '||'.
+	CONCAT // ||
 
 	// EQUAL represents '='.
 	EQUAL // =
@@ -312,6 +314,8 @@ func (t TokenType) String() string {
 		return "DIVIDE"
 	case MODULO:
 		return "MODULO"
+	case CONCAT:
+		return "CONCAT"
 	case OVER:
 		return "OVER"
 	case PARTITION:

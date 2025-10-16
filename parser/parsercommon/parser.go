@@ -45,7 +45,7 @@ var (
 	Not = PrimitiveType("not", tok.NOT)
 
 	// NumericOperator parses arithmetic operator tokens.
-	NumericOperator = PrimitiveType("numericOperator", tok.PLUS, tok.MINUS, tok.MULTIPLY, tok.DIVIDE)
+	NumericOperator = PrimitiveType("numericOperator", tok.PLUS, tok.MINUS, tok.MULTIPLY, tok.DIVIDE, tok.CONCAT, tok.MODULO)
 
 	// Select parses a SELECT keyword token.
 	Select = PrimitiveType("select", tok.SELECT)

@@ -1,0 +1,118 @@
+package codegenerator
+
+import (
+	"fmt"
+
+	"github.com/shibukawa/snapsql/parser"
+)
+
+// GenerateSelectInstructions は SELECT 文から命令列と CEL 式を生成する
+//
+// Parameters:
+//   - stmt: parser.StatementNode (内部で *parser.SelectStatement にキャスト)
+//   - ctx: GenerationContext（方言、テーブル情報等）
+//
+// Returns:
+//   - []Instruction: 生成された命令列
+//   - []CELExpression: CEL 式のリスト（Phase 1 では空）
+//   - []CELEnvironment: CEL 環境のリスト（Phase 1 では空）
+//   - error: エラー
+func GenerateSelectInstructions(stmt parser.StatementNode, ctx *GenerationContext) ([]Instruction, []CELExpression, []CELEnvironment, error) {
+	selectStmt, ok := stmt.(*parser.SelectStatement)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("%w: expected *parser.SelectStatement, got %T", ErrStatementTypeMismatch, stmt)
+	}
+
+	// Phase 1 制約: CTE（WITH句）は未対応
+	if selectStmt.CTE() != nil {
+		return nil, nil, nil, fmt.Errorf("%w", ErrCTENotSupported)
+	}
+
+	// Phase 1 制約: サブクエリは未対応（将来実装）
+	// TODO: Phase 4 でサブクエリ検出を実装
+
+	builder := NewInstructionBuilder(ctx)
+
+	// SELECT 句を処理（必須）
+	if err := generateSelectClause(selectStmt.Select, builder); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to generate SELECT clause: %w", err)
+	}
+
+	// FROM 句を処理（必須）
+	if err := generateFromClause(selectStmt.From, builder); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to generate FROM clause: %w", err)
+	}
+
+	// WHERE 句を処理（任意）
+	if selectStmt.Where != nil {
+		if err := generateWhereClause(selectStmt.Where, builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate WHERE clause: %w", err)
+		}
+	}
+
+	// GROUP BY 句を処理（任意）
+	if selectStmt.GroupBy != nil {
+		if err := generateGroupByClause(selectStmt.GroupBy, builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate GROUP BY clause: %w", err)
+		}
+	}
+
+	// HAVING 句を処理（任意）
+	if selectStmt.Having != nil {
+		if err := generateHavingClause(selectStmt.Having, builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate HAVING clause: %w", err)
+		}
+	}
+
+	// ORDER BY 句を処理（任意）
+	if selectStmt.OrderBy != nil {
+		if err := generateOrderByClause(selectStmt.OrderBy, builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate ORDER BY clause: %w", err)
+		}
+	}
+
+	// LIMIT 句を処理（任意）
+	if selectStmt.Limit != nil {
+		if err := generateLimitClause(selectStmt.Limit, builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate LIMIT clause: %w", err)
+		}
+	} else {
+		// LIMIT句がSQLに存在しない場合もシステムパラメータで指定可能にする
+		GenerateSystemLimitIfNotExists(builder)
+	}
+
+	// OFFSET 句を処理（任意）
+	if selectStmt.Offset != nil {
+		if err := generateOffsetClause(selectStmt.Offset, builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate OFFSET clause: %w", err)
+		}
+	} else {
+		// OFFSET句がSQLに存在しない場合もシステムパラメータで指定可能にする
+		GenerateSystemOffsetIfNotExists(builder)
+	}
+
+	// FOR 句を処理（任意）- 行ロック句
+	if selectStmt.For != nil {
+		if err := generateForClause(selectStmt.For, builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate FOR clause: %w", err)
+		}
+	} else {
+		// FOR句がSQLに存在しない場合もシステムパラメータで指定可能にする
+		GenerateSystemForIfNotExists(builder)
+	}
+
+	// システム命令の追加は各clause関数内で実施済み
+
+	// 最適化と結果の取得
+	instructions := builder.Finalize()
+	// Phase 1: ctx.Expressionsを使用してCEL式のリストを作成
+	// 将来的にはbuilder.GetCELExpressions()で型情報を含む完全なCELExpression型を返す
+	celExpressions := make([]CELExpression, len(ctx.Expressions))
+	for i, expr := range ctx.Expressions {
+		celExpressions[i] = CELExpression{Expression: expr}
+	}
+
+	celEnvironments := builder.GetCELEnvironments()
+
+	return instructions, celExpressions, celEnvironments, nil
+}

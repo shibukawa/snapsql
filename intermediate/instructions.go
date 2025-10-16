@@ -34,6 +34,12 @@ type LimitOffsetClauseInfo struct {
 	OffsetConditionEnd    int  // End index of OFFSET condition tokens
 }
 
+// ForClauseInfo holds information about FOR locking clause presence.
+type ForClauseInfo struct {
+	HasForClause  bool // Whether a FOR clause exists at the top level
+	ForTokenIndex int  // Index of the FOR token when present
+}
+
 // isSelectStatement checks if the tokens represent a SELECT statement
 func isSelectStatement(tokens []tokenizer.Token) bool {
 	for _, token := range tokens {
@@ -127,6 +133,72 @@ func detectLimitOffsetClause(tokens []tokenizer.Token) *LimitOffsetClauseInfo {
 	return info
 }
 
+func detectForClause(stmt cmn.StatementNode, tokens []tokenizer.Token) *ForClauseInfo {
+	info := &ForClauseInfo{}
+
+	if stmt != nil && stmt.Type() != cmn.SELECT_STATEMENT {
+		return info
+	}
+
+	if stmt == nil && !isSelectStatement(tokens) {
+		return info
+	}
+
+	nestLevel := 0
+	dummyDepth := 0
+
+	for i, token := range tokens {
+		switch token.Type {
+		case tokenizer.DUMMY_START:
+			dummyDepth++
+			continue
+		case tokenizer.DUMMY_END:
+			if dummyDepth > 0 {
+				dummyDepth--
+			}
+
+			continue
+		case tokenizer.OPENED_PARENS:
+			if dummyDepth == 0 {
+				nestLevel++
+			}
+
+			continue
+		case tokenizer.CLOSED_PARENS:
+			if dummyDepth == 0 && nestLevel > 0 {
+				nestLevel--
+			}
+
+			continue
+		}
+
+		if dummyDepth > 0 || nestLevel > 0 {
+			continue
+		}
+
+		if token.Type == tokenizer.FOR && token.Directive == nil {
+			info.HasForClause = true
+			info.ForTokenIndex = i
+
+			return info
+		}
+	}
+
+	return info
+}
+
+func shouldAutoInsertForClause(stmt cmn.StatementNode, tokens []tokenizer.Token, info *ForClauseInfo) bool {
+	if info == nil || info.HasForClause {
+		return false
+	}
+
+	if stmt != nil {
+		return stmt.Type() == cmn.SELECT_STATEMENT
+	}
+
+	return isSelectStatement(tokens)
+}
+
 // checkForCondition checks if a clause is wrapped in a condition
 func checkForCondition(tokens []tokenizer.Token, keywordIndex, valueIndex int, conditionStart, conditionEnd *int) bool {
 	// Look backwards for IF directive
@@ -152,12 +224,93 @@ func checkForCondition(tokens []tokenizer.Token, keywordIndex, valueIndex int, c
 	return false
 }
 
+func insertForClauseInstructions(instructions []Instruction, tokens []tokenizer.Token) []Instruction {
+	if len(instructions) == 0 {
+		return instructions
+	}
+
+	pos := "0:0"
+
+	for i := len(tokens) - 1; i >= 0; i-- {
+		if tokens[i].Type == tokenizer.WHITESPACE {
+			continue
+		}
+
+		pos = fmt.Sprintf("%d:%d", tokens[i].Position.Line, tokens[i].Position.Column)
+
+		break
+	}
+
+	// Remove trailing semicolon from the last EMIT_STATIC instruction if present
+	// The semicolon will be added after EMIT_FOR_CLAUSE outputs the FOR clause (if any)
+	trailingWhitespace := ""
+	terminatorRemoved := false
+
+	if len(instructions) > 0 {
+		lastIdx := len(instructions) - 1
+
+		if instructions[lastIdx].Op == OpEmitStatic {
+			original := instructions[lastIdx].Value
+			trimmedRight := strings.TrimRightFunc(original, unicode.IsSpace)
+			trailingWhitespace = original[len(trimmedRight):]
+
+			if strings.HasSuffix(trimmedRight, ";") {
+				withoutSemicolon := strings.TrimSuffix(trimmedRight, ";")
+
+				if withoutSemicolon == "" {
+					instructions = instructions[:lastIdx]
+				} else {
+					instructions[lastIdx].Value = withoutSemicolon
+				}
+
+				terminatorRemoved = true
+			} else {
+				if trimmedRight == "" {
+					instructions = instructions[:lastIdx]
+				} else {
+					instructions[lastIdx].Value = trimmedRight
+				}
+			}
+		}
+	}
+
+	// Insert single EMIT_FOR_CLAUSE instruction
+	// This instruction outputs nothing when no row lock is specified,
+	// or outputs " FOR UPDATE/SHARE/etc" when row lock is specified
+	instructions = append(instructions, Instruction{
+		Op:  OpEmitForClause,
+		Pos: pos,
+	})
+
+	// Restore semicolon after EMIT_FOR_CLAUSE if it was removed
+	if terminatorRemoved {
+		instructions = append(instructions, Instruction{
+			Op:    OpEmitStatic,
+			Pos:   pos,
+			Value: ";",
+		})
+	}
+
+	if trailingWhitespace != "" {
+		instructions = append(instructions, Instruction{
+			Op:    OpEmitStatic,
+			Pos:   pos,
+			Value: trailingWhitespace,
+		})
+	}
+
+	return instructions
+}
+
 // GenerateInstructions generates instructions from tokens with expression index references
 func GenerateInstructions(stmt cmn.StatementNode, tokens []tokenizer.Token, expressions []string) []Instruction {
 	instructions := []Instruction{}
 
 	// Detect LIMIT and OFFSET clause patterns
 	limitOffsetInfo := detectLimitOffsetClause(tokens)
+
+	// Detect FOR clause usage
+	forClauseInfo := detectForClause(stmt, tokens)
 
 	// Detect conditional boundaries
 	boundaries := findConditionalBoundaries(tokens)
@@ -671,6 +824,10 @@ func GenerateInstructions(stmt cmn.StatementNode, tokens []tokenizer.Token, expr
 			Op:  OpEnd,
 			Pos: "0:0",
 		})
+	}
+
+	if shouldAutoInsertForClause(stmt, tokens, forClauseInfo) {
+		instructions = insertForClauseInstructions(instructions, tokens)
 	}
 
 	return instructions

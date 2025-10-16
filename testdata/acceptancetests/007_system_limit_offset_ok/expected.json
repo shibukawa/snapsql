@@ -44,7 +44,8 @@
     {"op": "EMIT_SYSTEM_OFFSET", "pos": "17:1"},
     {"op": "ELSE", "pos": "17:1"},
     {"op": "EMIT_STATIC", "pos": "17:8", "value": "20"},
-    {"op": "END", "pos": "17:1"}
+    {"op": "END", "pos": "17:1"},
+    {"op": "EMIT_FOR_CLAUSE", "pos": "17:8"}
   ],
   "parameters": [
     {"name": "min_age", "type": "int"},

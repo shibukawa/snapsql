@@ -16,6 +16,8 @@ func (i *InstructionGenerator) Name() string {
 }
 
 func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
+	forClauseInfo := detectForClause(ctx.Statement, ctx.Tokens)
+
 	// Use existing GenerateInstructions function for all advanced features
 	// The TokenTransformer should have already added system field tokens
 	// Extract expressions from CEL expressions for backward compatibility
@@ -42,6 +44,18 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	}
 
 	ctx.Instructions = instructions
+
+	supportsDynamic := false
+
+	for _, inst := range instructions {
+		if inst.Op == OpEmitForClause {
+			supportsDynamic = true
+			break
+		}
+	}
+
+	ctx.SupportsDynamicForClause = supportsDynamic
+	ctx.HasStaticForClause = forClauseInfo.HasForClause
 
 	return nil
 }

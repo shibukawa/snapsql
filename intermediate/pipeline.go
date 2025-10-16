@@ -55,6 +55,10 @@ type ProcessingContext struct {
 	FunctionName     string
 	Parameters       []Parameter
 	ResponseAffinity string
+
+	// Row lock support flags
+	SupportsDynamicForClause bool
+	HasStaticForClause       bool
 }
 
 // NewTokenPipeline creates a new token processing pipeline

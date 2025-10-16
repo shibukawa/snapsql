@@ -1,0 +1,1468 @@
+package codegenerator
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/parser"
+	"github.com/shibukawa/snapsql/tokenizer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestMergeStaticInstructions は連続する EMIT_STATIC 命令のマージをテストする
+func TestMergeStaticInstructions(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []Instruction
+		expected []Instruction
+	}{
+		{
+			name:     "empty instructions",
+			input:    []Instruction{},
+			expected: []Instruction{},
+		},
+		{
+			name: "single instruction",
+			input: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+			},
+		},
+		{
+			name: "consecutive EMIT_STATIC instructions",
+			input: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:8"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:10"},
+				{Op: OpEmitStatic, Value: "FROM", Pos: "1:11"},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM", Pos: "1:1"},
+			},
+		},
+		{
+			name: "EMIT_STATIC with system instructions",
+			input: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:8"},
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id", Pos: "1:1"},
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+			},
+		},
+		{
+			name: "multiple groups of EMIT_STATIC",
+			input: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:7"},
+				{Op: OpIf, Pos: "1:8"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:9"},
+				{Op: OpEmitStatic, Value: ",", Pos: "1:11"},
+				{Op: OpEnd, Pos: "1:12"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:13"},
+				{Op: OpEmitStatic, Value: "FROM", Pos: "1:14"},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT ", Pos: "1:1"},
+				{Op: OpIf, Pos: "1:8"},
+				{Op: OpEmitStatic, Value: "id,", Pos: "1:9"},
+				{Op: OpEnd, Pos: "1:12"},
+				{Op: OpEmitStatic, Value: " FROM", Pos: "1:13"},
+			},
+		},
+		{
+			name: "no consecutive EMIT_STATIC",
+			input: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpIf, Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:8"},
+				{Op: OpEnd, Pos: "1:10"},
+				{Op: OpEmitStatic, Value: "FROM", Pos: "1:11"},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpIf, Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:8"},
+				{Op: OpEnd, Pos: "1:10"},
+				{Op: OpEmitStatic, Value: "FROM", Pos: "1:11"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &GenerationContext{Dialect: string(snapsql.DialectPostgres)}
+			builder := NewInstructionBuilder(ctx)
+			builder.instructions = tt.input
+
+			result := builder.mergeStaticInstructions()
+
+			assert.Equal(t, tt.expected, result, "merged instructions should match expected")
+		})
+	}
+}
+
+// TestProcessTokensWithWhitespaceAndComments はホワイトスペースとコメントのマージをテストする
+func TestProcessTokensWithWhitespaceAndComments(t *testing.T) {
+	tests := []struct {
+		name     string
+		tokens   []tokenizer.Token
+		expected []Instruction
+	}{
+		{
+			name: "consecutive whitespaces merged to single space",
+			tokens: []tokenizer.Token{
+				{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+				{Type: tokenizer.WHITESPACE, Value: " ", Position: tokenizer.Position{Line: 1, Column: 7}},
+				{Type: tokenizer.WHITESPACE, Value: "  ", Position: tokenizer.Position{Line: 1, Column: 8}},
+				{Type: tokenizer.WHITESPACE, Value: "\t", Position: tokenizer.Position{Line: 1, Column: 10}},
+				{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 1, Column: 11}},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:11"},
+			},
+		},
+		{
+			name: "block comment treated as single space",
+			tokens: []tokenizer.Token{
+				{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+				{Type: tokenizer.BLOCK_COMMENT, Value: "/* comment */", Position: tokenizer.Position{Line: 1, Column: 7}},
+				{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 1, Column: 20}},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:20"},
+			},
+		},
+		{
+			name: "line comment treated as single space",
+			tokens: []tokenizer.Token{
+				{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+				{Type: tokenizer.LINE_COMMENT, Value: "-- comment", Position: tokenizer.Position{Line: 1, Column: 7}},
+				{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 2, Column: 1}},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "2:1"},
+			},
+		},
+		{
+			name: "mixed whitespace and comments merged",
+			tokens: []tokenizer.Token{
+				{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+				{Type: tokenizer.WHITESPACE, Value: " ", Position: tokenizer.Position{Line: 1, Column: 7}},
+				{Type: tokenizer.BLOCK_COMMENT, Value: "/* comment */", Position: tokenizer.Position{Line: 1, Column: 8}},
+				{Type: tokenizer.WHITESPACE, Value: " ", Position: tokenizer.Position{Line: 1, Column: 21}},
+				{Type: tokenizer.LINE_COMMENT, Value: "-- comment", Position: tokenizer.Position{Line: 1, Column: 22}},
+				{Type: tokenizer.WHITESPACE, Value: "\n", Position: tokenizer.Position{Line: 1, Column: 32}},
+				{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 2, Column: 1}},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: " ", Pos: "1:7"},
+				{Op: OpEmitStatic, Value: "id", Pos: "2:1"},
+			},
+		},
+		{
+			name: "no whitespace or comments",
+			tokens: []tokenizer.Token{
+				{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+				{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 1, Column: 7}},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: "id", Pos: "1:7"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &GenerationContext{Dialect: string(snapsql.DialectPostgres)}
+			builder := NewInstructionBuilder(ctx)
+
+			err := builder.ProcessTokens(tt.tokens)
+			require.NoError(t, err)
+
+			// Finalize を呼ばずに生の命令列を取得（マージ前）
+			assert.Equal(t, tt.expected, builder.instructions, "processed instructions should match expected")
+		})
+	}
+}
+
+// TestFinalizeWithOptimization は Finalize による最適化の統合テスト
+func TestFinalizeWithOptimization(t *testing.T) {
+	tests := []struct {
+		name     string
+		tokens   []tokenizer.Token
+		expected []Instruction
+	}{
+		{
+			name: "whitespace merge + static instruction merge",
+			tokens: []tokenizer.Token{
+				{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+				{Type: tokenizer.WHITESPACE, Value: " ", Position: tokenizer.Position{Line: 1, Column: 7}},
+				{Type: tokenizer.WHITESPACE, Value: "  ", Position: tokenizer.Position{Line: 1, Column: 8}},
+				{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 1, Column: 10}},
+				{Type: tokenizer.BLOCK_COMMENT, Value: "/* comment */", Position: tokenizer.Position{Line: 1, Column: 12}},
+				{Type: tokenizer.FROM, Value: "FROM", Position: tokenizer.Position{Line: 1, Column: 25}},
+				{Type: tokenizer.WHITESPACE, Value: " ", Position: tokenizer.Position{Line: 1, Column: 29}},
+				{Type: tokenizer.IDENTIFIER, Value: "users", Position: tokenizer.Position{Line: 1, Column: 30}},
+			},
+			expected: []Instruction{
+				// ProcessTokens: SELECT, " ", id, " ", FROM, " ", users
+				// After merge: "SELECT id FROM users"
+				{Op: OpEmitStatic, Value: "SELECT id FROM users", Pos: "1:1"},
+			},
+		},
+		{
+			name: "optimized query with system instructions",
+			tokens: []tokenizer.Token{
+				{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+				{Type: tokenizer.WHITESPACE, Value: " ", Position: tokenizer.Position{Line: 1, Column: 7}},
+				{Type: tokenizer.WHITESPACE, Value: "\t", Position: tokenizer.Position{Line: 1, Column: 8}},
+				{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 1, Column: 9}},
+			},
+			expected: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id", Pos: "1:1"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &GenerationContext{Dialect: string(snapsql.DialectPostgres)}
+			builder := NewInstructionBuilder(ctx)
+
+			err := builder.ProcessTokens(tt.tokens)
+			require.NoError(t, err)
+
+			// Finalize を呼んで最適化を実行
+			result := builder.Finalize()
+
+			assert.Equal(t, tt.expected, result, "finalized instructions should match expected")
+		})
+	}
+}
+
+// TestConditionalDirective は条件分岐ディレクティブ (if/elseif/else/end) のテスト
+func TestConditionalDirective(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		dialect              string
+		expectedInstructions []Instruction
+		expectedExpressions  []CELExpression
+	}{
+		{
+			name: "simple if/end within WHERE clause",
+			sql: `/*# parameters: { include_age_filter: bool } */
+SELECT id, name FROM users
+WHERE active = true
+/*# if include_age_filter */
+    AND age >= 18
+/*# end */`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE active = true ", Pos: "2:1"},
+				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
+				{Op: OpEmitStatic, Value: " AND age >= 18 ", Pos: "5:0"},
+				{Op: OpEnd, Pos: "6:1"},
+				{Op: OpBoundary, Pos: "0:0"}, // WHERE 句が END で終わるので BOUNDARY を追加
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "include_age_filter"}},
+		},
+		{
+			name: "if/else/end within WHERE clause",
+			sql: `/*# parameters: { use_premium: bool } */
+SELECT id, name FROM users
+WHERE /*# if use_premium */premium = true/*# else */active = true/*# end */`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE ", Pos: "2:1"},
+				{Op: OpIf, ExprIndex: ptr(0), Pos: "3:7"},
+				{Op: OpEmitStatic, Value: "premium = true", Pos: "3:28"},
+				{Op: OpElse, Pos: "3:42"},
+				{Op: OpEmitStatic, Value: "active = true", Pos: "3:53"},
+				{Op: OpEnd, Pos: "3:66"},
+				{Op: OpBoundary, Pos: "0:0"}, // WHERE 句が END で終わるので BOUNDARY を追加
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "use_premium"}},
+		},
+		{
+			name: "if/elseif/else/end within WHERE clause",
+			sql: `/*# parameters: { priority: int } */
+SELECT id, name FROM tasks
+WHERE status = 'open'
+/*# if priority == 1 */
+    AND urgency = 'critical'
+/*# elseif priority == 2 */
+    AND urgency = 'high'
+/*# else */
+    AND urgency = 'normal'
+/*# end */`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, name FROM tasks WHERE status = 'open' ", Pos: "2:1"},
+				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
+				{Op: OpEmitStatic, Value: " AND urgency = 'critical' ", Pos: "5:0"},
+				{Op: OpElseIf, ExprIndex: ptr(1), Pos: "6:1"},
+				{Op: OpEmitStatic, Value: " AND urgency = 'high' ", Pos: "7:0"},
+				{Op: OpElse, Pos: "8:1"},
+				{Op: OpEmitStatic, Value: " AND urgency = 'normal' ", Pos: "9:0"},
+				{Op: OpEnd, Pos: "10:1"},
+				{Op: OpBoundary, Pos: "0:0"}, // WHERE 句が END で終わるので BOUNDARY を追加
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{
+				{Expression: "priority == 1"},
+				{Expression: "priority == 2"},
+			},
+		},
+		{
+			name: "entire WHERE clause wrapped in conditional - skipped (parser evaluates condition)",
+			sql: `/*# parameters: { apply_filter: bool } */
+SELECT id, name FROM users
+/*# if apply_filter */
+WHERE active = true
+/*# end */`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				// パーサーが条件を評価してWHERE句を含めるため、
+				// 実際の出力は WHERE句が常に含まれる
+				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE active = true ", Pos: "2:1"},
+				// WHERE 句はない（パーサーがすでに評価済み）ので BOUNDARY は不要
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{},
+		},
+		{
+			name: "nested conditionals within WHERE clause",
+			sql: `/*# parameters: { filter_active: bool, filter_verified: bool } */
+SELECT id, name FROM users
+WHERE 1=1
+/*# if filter_active */
+    AND active = true
+    /*# if filter_verified */
+        AND verified = true
+    /*# end */
+/*# end */`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE 1=1 ", Pos: "2:1"},
+				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
+				{Op: OpEmitStatic, Value: " AND active = true ", Pos: "5:0"},
+				{Op: OpIf, ExprIndex: ptr(1), Pos: "6:5"},
+				{Op: OpEmitStatic, Value: " AND verified = true ", Pos: "7:0"},
+				{Op: OpEnd, Pos: "8:5"},                    // 内側の end
+				{Op: OpEmitStatic, Value: " ", Pos: "9:0"}, // 余分な空白（最適化で削除される可能性あり）
+				{Op: OpEnd, Pos: "9:1"},                    // 外側の end
+				{Op: OpBoundary, Pos: "0:0"},               // WHERE 句が END で終わるので BOUNDARY を追加
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{
+				{Expression: "filter_active"},
+				{Expression: "filter_verified"},
+			},
+		},
+		{
+			name: "conditional with variable directive",
+			sql: `/*# parameters: { has_filter: bool, min_age: int } */
+SELECT id, name FROM users
+WHERE 1=1
+/*# if has_filter */
+    AND age >= /*= min_age */18
+/*# end */`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE 1=1 ", Pos: "2:1"},
+				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
+				{Op: OpEmitStatic, Value: " AND age >= ", Pos: "5:0"},
+				{Op: OpEmitEval, ExprIndex: ptr(1), Pos: "5:16"},
+				{Op: OpEmitStatic, Value: " ", Pos: "6:0"}, // 余分な空白
+				{Op: OpEnd, Pos: "6:1"},
+				{Op: OpBoundary, Pos: "0:0"}, // WHERE 句が END で終わるので BOUNDARY を追加
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{
+				{Expression: "has_filter"},
+				{Expression: "min_age"},
+			},
+		},
+		{
+			name: "conditional in SELECT clause",
+			sql: `/*# parameters: { include_email: bool } */
+SELECT 
+    id,
+    name/*# if include_email */,
+    email/*# end */
+FROM users`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, name", Pos: "2:1"},
+				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:9"},
+				{Op: OpEmitStatic, Value: ", email", Pos: "4:32"},
+				{Op: OpEnd, Pos: "5:10"},
+				{Op: OpEmitStatic, Value: " FROM users", Pos: "6:0"},
+				// WHERE 句がないので BOUNDARY は不要
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "include_email"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL - パーサーがディレクティブを処理するために定数を提供
+			constants := map[string]interface{}{
+				"include_age_filter": true,
+				"use_premium":        true,
+				"priority":           1,
+				"apply_filter":       true,
+				"filter_active":      true,
+				"filter_verified":    true,
+				"has_filter":         true,
+				"min_age":            18,
+				"include_email":      true,
+			}
+
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Create GenerationContext
+			ctx := &GenerationContext{
+				Dialect:      tt.dialect,
+				Expressions:  make([]string, 0),
+				Environments: make([]string, 0),
+			}
+
+			// Generate instructions
+			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err, "GenerateSelectInstructions should succeed")
+
+			// 命令の検証
+			if !assert.Equal(t, len(tt.expectedInstructions), len(instructions), "Instruction count mismatch") {
+				t.Logf("Expected %d instructions, got %d", len(tt.expectedInstructions), len(instructions))
+
+				for i, instr := range instructions {
+					t.Logf("  [%d] %+v", i, instr)
+				}
+			}
+
+			for i, expected := range tt.expectedInstructions {
+				if i >= len(instructions) {
+					break
+				}
+
+				actual := instructions[i]
+				assert.Equal(t, expected.Op, actual.Op, "Instruction[%d] Op mismatch", i)
+				assert.Equal(t, expected.Pos, actual.Pos, "Instruction[%d] Pos mismatch", i)
+
+				if expected.Value != "" {
+					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch", i)
+				}
+
+				if expected.ExprIndex != nil {
+					require.NotNil(t, actual.ExprIndex, "Instruction[%d] ExprIndex is nil", i)
+					assert.Equal(t, *expected.ExprIndex, *actual.ExprIndex, "Instruction[%d] ExprIndex mismatch", i)
+				}
+			}
+
+			// 式の検証
+			assert.Equal(t, len(tt.expectedExpressions), len(expressions), "Expression count mismatch")
+
+			for i, expected := range tt.expectedExpressions {
+				if i >= len(expressions) {
+					break
+				}
+
+				assert.Equal(t, expected.Expression, expressions[i].Expression, "Expression[%d] mismatch", i)
+			}
+		})
+	}
+}
+
+// TestVariableDirective は変数ディレクティブ (/*= expression */) のテスト
+func TestVariableDirective(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		dialect              string
+		expectedInstructions []Instruction
+		expectedExpressions  []CELExpression
+	}{
+		{
+			name: "simple variable in WHERE clause",
+			sql: `/*# parameters: { user_id: int} */
+			SELECT id FROM users WHERE user_id = /*= user_id */1`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE user_id = ", Pos: "2:4"},
+				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:41"}, // Variable directive position
+				// WHERE 句は EMIT_STATIC で終わるので BOUNDARY は追加されない
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "user_id"}},
+		},
+		{
+			name: "multiple variables in same query",
+			sql: `/*# parameters: { status: string, min_priority: int } */
+SELECT id FROM tasks WHERE status = /*= status */'active' AND priority >= /*= min_priority */1`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM tasks WHERE status = ", Pos: "2:1"},
+				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:37"},
+				{Op: OpEmitStatic, Value: " AND priority >= ", Pos: "2:58"},
+				{Op: OpEmitEval, ExprIndex: ptr(1), Pos: "2:75"},
+				// WHERE 句は EMIT_EVAL で終わるので BOUNDARY は追加されない
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "status"}, {Expression: "min_priority"}},
+		},
+		{
+			name: "variable in SELECT clause",
+			sql: `/*# parameters: { field_name: string } */
+SELECT /*= field_name */'id' FROM users`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT ", Pos: "2:1"},
+				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:8"},
+				{Op: OpEmitStatic, Value: " FROM users", Pos: "2:29"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "field_name"}},
+		},
+		{
+			name: "variable with object field access",
+			sql: `/*# parameters: { user: { department_id: int } } */
+SELECT id FROM users WHERE department_id = /*= user.department_id */1`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE department_id = ", Pos: "2:1"},
+				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:44"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "user.department_id"}},
+		},
+		{
+			name: "duplicate expressions reuse index",
+			sql: `/*# parameters: { status: string } */
+SELECT id FROM users WHERE status = /*= status */'active' OR priority_status = /*= status */'high'`,
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE status = ", Pos: "2:1"},
+				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:37"}, // First occurrence
+				{Op: OpEmitStatic, Value: " OR priority_status = ", Pos: "2:58"},
+				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:80"}, // Reuses same index
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+			expectedExpressions: []CELExpression{{Expression: "status"}}, // Only one expression
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL - パーサーがディレクティブを処理するために定数を提供
+			constants := map[string]interface{}{
+				"user_id":      1,
+				"status":       "active",
+				"min_priority": 1,
+				"field_name":   "id",
+				"start_date":   "2024-01-01",
+			}
+
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Debug: print tokens to see actual structure
+			t.Logf("Clauses count: %d", len(stmt.Clauses()))
+
+			for clauseIdx, clause := range stmt.Clauses() {
+				if clause.Type() == parser.WHERE_CLAUSE {
+					tokens := clause.RawTokens() // Use RawTokens instead of ContentTokens
+					t.Logf("Clause[%d] has %d RawTokens", clauseIdx, len(tokens))
+
+					for i, tok := range tokens {
+						if tok.Directive != nil {
+							t.Logf("  Token[%d]: Type=%s Value=%q Directive={Type:%s Condition:%q}",
+								i, tok.Type, tok.Value, tok.Directive.Type, tok.Directive.Condition)
+						}
+					}
+				}
+			}
+
+			// Create GenerationContext
+			ctx := &GenerationContext{
+				Dialect:      tt.dialect,
+				Expressions:  make([]string, 0),
+				Environments: make([]string, 0),
+			}
+
+			// Generate instructions
+			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err, "GenerateSelectInstructions should succeed")
+
+			// Verify instructions
+			assert.Equal(t, tt.expectedInstructions, instructions, "Instructions mismatch")
+
+			// Verify expressions
+			assert.Equal(t, tt.expectedExpressions, expressions, "Expressions mismatch")
+		})
+	}
+}
+
+// TestDialectTimeFunctionConversion は方言による時間関数の変換をテスト
+func TestDialectTimeFunctionConversion(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		dialect              string
+		expectedInstructions []Instruction
+	}{
+		{
+			name:    "CURRENT_TIMESTAMP to NOW() for PostgreSQL",
+			sql:     "SELECT id, CURRENT_TIMESTAMP FROM users",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CURRENT_TIMESTAMP to NOW() for MySQL",
+			sql:     "SELECT id, CURRENT_TIMESTAMP FROM users",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CURRENT_TIMESTAMP to NOW() for MariaDB",
+			sql:     "SELECT id, CURRENT_TIMESTAMP FROM users",
+			dialect: string(snapsql.DialectMariaDB),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CURRENT_TIMESTAMP stays for SQLite",
+			sql:     "SELECT id, CURRENT_TIMESTAMP FROM users",
+			dialect: string(snapsql.DialectSQLite),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, CURRENT_TIMESTAMP FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "NOW() to CURRENT_TIMESTAMP for SQLite",
+			sql:     "SELECT id, NOW() FROM users",
+			dialect: string(snapsql.DialectSQLite),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, CURRENT_TIMESTAMP FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "NOW() stays for PostgreSQL",
+			sql:     "SELECT id, NOW() FROM users",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "NOW() stays for MySQL",
+			sql:     "SELECT id, NOW() FROM users",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "time function in WHERE clause",
+			sql:     "SELECT id FROM orders WHERE created_at > NOW()",
+			dialect: string(snapsql.DialectSQLite),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM orders WHERE created_at > CURRENT_TIMESTAMP", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Create GenerationContext with specific dialect
+			ctx := &GenerationContext{
+				Dialect:      tt.dialect,
+				Expressions:  make([]string, 0),
+				Environments: make([]string, 0),
+			}
+
+			// Generate instructions
+			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err, "GenerateSelectInstructions should succeed")
+
+			// Verify instructions
+			if !assert.Equal(t, len(tt.expectedInstructions), len(instructions), "Instruction count mismatch for dialect %s", tt.dialect) {
+				t.Logf("Expected %d instructions, got %d", len(tt.expectedInstructions), len(instructions))
+
+				for i, instr := range instructions {
+					t.Logf("  [%d] %+v", i, instr)
+				}
+			}
+
+			for i, expected := range tt.expectedInstructions {
+				if i >= len(instructions) {
+					break
+				}
+
+				actual := instructions[i]
+				assert.Equal(t, expected.Op, actual.Op, "Instruction[%d] Op mismatch for dialect %s", i, tt.dialect)
+
+				if expected.Value != "" {
+					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch for dialect %s", i, tt.dialect)
+				}
+			}
+		})
+	}
+}
+
+// TestDialectCastConversion は方言によるCAST構文の変換をテスト
+func TestDialectCastConversion(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		dialect              string
+		expectedInstructions []Instruction
+	}{
+		{
+			name:    "CAST to PostgreSQL :: syntax",
+			sql:     "SELECT id, CAST(created_at AS TEXT) FROM users",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, (created_at)::TEXT FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CAST stays for MySQL",
+			sql:     "SELECT id, CAST(created_at AS CHAR) FROM users",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, CAST(created_at AS CHAR) FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CAST stays for SQLite",
+			sql:     "SELECT id, CAST(amount AS INTEGER) FROM orders",
+			dialect: string(snapsql.DialectSQLite),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, CAST(amount AS INTEGER) FROM orders", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CAST in WHERE clause to PostgreSQL",
+			sql:     "SELECT id FROM users WHERE CAST(age AS TEXT) = '25'",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE (age)::TEXT = '25'", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "multiple CASTs to PostgreSQL",
+			sql:     "SELECT CAST(id AS TEXT), CAST(price AS DECIMAL) FROM products",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT (id)::TEXT, (price)::DECIMAL FROM products", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Create GenerationContext with specific dialect
+			ctx := &GenerationContext{
+				Dialect:      tt.dialect,
+				Expressions:  make([]string, 0),
+				Environments: make([]string, 0),
+			}
+
+			// Generate instructions
+			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err, "GenerateSelectInstructions should succeed")
+
+			// Verify instructions
+			if !assert.Equal(t, len(tt.expectedInstructions), len(instructions), "Instruction count mismatch for dialect %s", tt.dialect) {
+				t.Logf("Expected %d instructions, got %d", len(tt.expectedInstructions), len(instructions))
+
+				for i, instr := range instructions {
+					t.Logf("  [%d] %+v", i, instr)
+				}
+			}
+
+			for i, expected := range tt.expectedInstructions {
+				if i >= len(instructions) {
+					break
+				}
+
+				actual := instructions[i]
+				assert.Equal(t, expected.Op, actual.Op, "Instruction[%d] Op mismatch for dialect %s", i, tt.dialect)
+
+				if expected.Value != "" {
+					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch for dialect %s\nExpected: %q\nActual: %q", i, tt.dialect, expected.Value, actual.Value)
+				}
+			}
+		})
+	}
+}
+
+// TestDialectDateTimeConversion は日時関数の方言変換をテスト
+func TestDialectDateTimeConversion(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		dialect              string
+		expectedInstructions []Instruction
+	}{
+		{
+			name:    "CURDATE to CURRENT_DATE for PostgreSQL",
+			sql:     "SELECT CURDATE() FROM users",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CURRENT_DATE FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CURTIME to CURRENT_TIME for MySQL",
+			sql:     "SELECT id, CURTIME() FROM orders",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id, CURTIME() FROM orders", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CURRENT_DATE stays for MySQL",
+			sql:     "SELECT id FROM logs WHERE date = CURRENT_DATE",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM logs WHERE date = CURRENT_DATE", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CURDATE to CURRENT_DATE for SQLite",
+			sql:     "SELECT CURDATE() FROM users WHERE active = 1",
+			dialect: string(snapsql.DialectSQLite),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CURRENT_DATE FROM users WHERE active = 1", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Create GenerationContext with specific dialect
+			ctx := &GenerationContext{
+				Dialect:      tt.dialect,
+				Expressions:  make([]string, 0),
+				Environments: make([]string, 0),
+			}
+
+			// Generate instructions
+			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err, "GenerateSelectInstructions should succeed")
+
+			// Verify instructions
+			if !assert.Equal(t, len(tt.expectedInstructions), len(instructions), "Instruction count mismatch for dialect %s", tt.dialect) {
+				t.Logf("Expected %d instructions, got %d", len(tt.expectedInstructions), len(instructions))
+
+				for i, instr := range instructions {
+					t.Logf("  [%d] %+v", i, instr)
+				}
+			}
+
+			for i, expected := range tt.expectedInstructions {
+				if i >= len(instructions) {
+					break
+				}
+
+				actual := instructions[i]
+				assert.Equal(t, expected.Op, actual.Op, "Instruction[%d] Op mismatch for dialect %s", i, tt.dialect)
+
+				if expected.Value != "" {
+					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch for dialect %s\nExpected: %q\nActual: %q", i, tt.dialect, expected.Value, actual.Value)
+				}
+			}
+		})
+	}
+}
+
+// TestDialectBooleanConversion は真偽値の方言変換をテスト
+func TestDialectBooleanConversion(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		dialect              string
+		expectedInstructions []Instruction
+	}{
+		{
+			name:    "PostgreSQL TRUE to 1 for MySQL",
+			sql:     "SELECT id FROM users WHERE active = TRUE",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE active = 1", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "PostgreSQL FALSE to 0 for SQLite",
+			sql:     "SELECT id FROM items WHERE deleted = FALSE",
+			dialect: string(snapsql.DialectSQLite),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM items WHERE deleted = 0", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "TRUE stays for PostgreSQL",
+			sql:     "SELECT id FROM records WHERE flag = TRUE",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM records WHERE flag = TRUE", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "Multiple TRUE/FALSE conversions",
+			sql:     "SELECT id FROM logs WHERE success = TRUE AND archived = FALSE",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT id FROM logs WHERE success = 1 AND archived = 0", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Create GenerationContext with specific dialect
+			ctx := &GenerationContext{
+				Dialect:      tt.dialect,
+				Expressions:  make([]string, 0),
+				Environments: make([]string, 0),
+			}
+
+			// Generate instructions
+			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err, "GenerateSelectInstructions should succeed")
+
+			// Verify instructions
+			if !assert.Equal(t, len(tt.expectedInstructions), len(instructions), "Instruction count mismatch for dialect %s", tt.dialect) {
+				t.Logf("Expected %d instructions, got %d", len(tt.expectedInstructions), len(instructions))
+
+				for i, instr := range instructions {
+					t.Logf("  [%d] %+v", i, instr)
+				}
+			}
+
+			for i, expected := range tt.expectedInstructions {
+				if i >= len(instructions) {
+					break
+				}
+
+				actual := instructions[i]
+				assert.Equal(t, expected.Op, actual.Op, "Instruction[%d] Op mismatch for dialect %s", i, tt.dialect)
+
+				if expected.Value != "" {
+					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch for dialect %s\nExpected: %q\nActual: %q", i, tt.dialect, expected.Value, actual.Value)
+				}
+			}
+		})
+	}
+}
+
+// ptr is a helper function to create an int pointer
+func ptr(i int) *int {
+	return &i
+}
+
+func TestDialectStringConcatenationConversion(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		dialect              string
+		expectedInstructions []Instruction
+	}{
+		{
+			name:    "CONCAT to || for PostgreSQL",
+			sql:     "SELECT CONCAT(first_name, ' ', last_name) FROM users",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT first_name || ' ' || last_name FROM users", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CONCAT stays for MySQL",
+			sql:     "SELECT CONCAT(city, ', ', state) FROM locations",
+			dialect: string(snapsql.DialectMySQL),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CONCAT(city, ', ', state) FROM locations", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "CONCAT with multiple arguments",
+			sql:     "SELECT CONCAT(a, b, c, d) FROM table1",
+			dialect: string(snapsql.DialectSQLite),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT a || b || c || d FROM table1", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+		{
+			name:    "Multiple CONCAT functions",
+			sql:     "SELECT CONCAT(a, b), CONCAT(c, d) FROM table1",
+			dialect: string(snapsql.DialectPostgres),
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT a || b, c || d FROM table1", Pos: "1:1"},
+				// システム命令
+				{Op: OpIfSystemLimit, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " LIMIT ", Pos: "0:0"},
+				{Op: OpEmitSystemLimit, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpIfSystemOffset, Pos: "0:0"},
+				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "0:0"},
+				{Op: OpEmitSystemOffset, Pos: "0:0"},
+				{Op: OpEnd, Pos: "0:0"},
+				{Op: OpEmitSystemFor, Pos: ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Create GenerationContext with specific dialect
+			ctx := &GenerationContext{
+				Dialect:      tt.dialect,
+				Expressions:  make([]string, 0),
+				Environments: make([]string, 0),
+			}
+
+			// Generate instructions
+			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err, "GenerateSelectInstructions should succeed")
+
+			// Verify instructions
+			if !assert.Equal(t, len(tt.expectedInstructions), len(instructions), "Instruction count mismatch for dialect %s", tt.dialect) {
+				t.Logf("Expected %d instructions, got %d", len(tt.expectedInstructions), len(instructions))
+
+				for i, instr := range instructions {
+					t.Logf("  [%d] %+v", i, instr)
+				}
+			}
+
+			for i, expected := range tt.expectedInstructions {
+				if i >= len(instructions) {
+					break
+				}
+
+				actual := instructions[i]
+				assert.Equal(t, expected.Op, actual.Op, "Instruction[%d] Op mismatch for dialect %s", i, tt.dialect)
+
+				if expected.Value != "" {
+					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch for dialect %s\nExpected: %q\nActual: %q", i, tt.dialect, expected.Value, actual.Value)
+				}
+			}
+		})
+	}
+}

@@ -69,6 +69,7 @@ FROM users`,
 				"EMIT_STATIC",
 				"EMIT_SYSTEM_OFFSET",
 				"END",
+				"EMIT_FOR_CLAUSE", // FOR句の動的挿入命令
 			},
 		},
 	}
@@ -259,6 +260,7 @@ FROM users`,
 				"END",                  // end LIMIT block
 				"EMIT_STATIC",          // " OFFSET "
 				"END",                  // end OFFSET block
+				"EMIT_FOR_CLAUSE",      // FOR句の動的挿入命令
 			},
 		},
 		{

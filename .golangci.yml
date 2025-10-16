@@ -69,5 +69,8 @@ linters:
       - path: examples/kanban/internal/handler
         linters:
           - dupl
+      - path: intermediate/codegenerator/clause_*
+        linters:
+          - dupl
 run:
   timeout: 5m
