@@ -229,8 +229,9 @@ func processForLoop(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.
 	// Try to evaluate the items expression with parameter namespace first
 	itemsValue, _, err := paramNs.Eval(itemsExpr)
 	if err != nil {
-		perr.Add(fmt.Errorf("%w at %s: invalid items expression in for directive '%s'", cmn.ErrInvalidForSnapSQL, token.Position.String(), itemsExpr))
-		return false
+		// If evaluation fails (e.g., expression not found), use empty array
+		// EnterLoop will create a dummy value for type inference
+		itemsValue = []any{}
 	}
 
 	// Enter the loop with the first item (if available)
@@ -240,12 +241,7 @@ func processForLoop(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.
 		return false
 	}
 
-	if len(items) == 0 {
-		perr.Add(fmt.Errorf("%w at %s: items expression '%s' evaluates to an empty list", cmn.ErrInvalidForSnapSQL, token.Position.String(), itemsExpr))
-		return false
-	}
-
-	// Enter the loop with the first item
+	// Enter the loop (even with empty array - EnterLoop will create dummy values for type inference)
 	if err := paramNs.EnterLoop(itemName, items); err != nil {
 		perr.Add(fmt.Errorf("error entering loop: %w at %s", err, token.Position.String()))
 		return false

@@ -186,7 +186,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			// GenerationContext を作成
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 

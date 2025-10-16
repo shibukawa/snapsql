@@ -1,14 +1,19 @@
 package codegenerator
 
 import (
+	"fmt"
+
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 )
 
 // GenerationContext は命令列生成時のコンテキスト情報を保持する
 type GenerationContext struct {
-	// CEL 式のリスト（式のインデックス順）
-	Expressions []string
+	// CEL式のリスト（式のインデックス順）
+	Expressions []CELExpression
+
+	// CEL環境のリスト（ループ変数などの環境情報）
+	CELEnvironments []CELEnvironment
 
 	// 環境変数（ループ変数など）
 	Environments []string
@@ -25,16 +30,25 @@ type GenerationContext struct {
 
 // AddExpression adds a CEL expression to the context and returns its index.
 // If the same expression already exists, returns the existing index.
-func (ctx *GenerationContext) AddExpression(expr string) int {
+func (ctx *GenerationContext) AddExpression(expr string, environmentIndex int) int {
 	// Check if expression already exists
 	for i, existingExpr := range ctx.Expressions {
-		if existingExpr == expr {
+		if existingExpr.Expression == expr && existingExpr.EnvironmentIndex == environmentIndex {
 			return i
 		}
 	}
 	// Add new expression
 	index := len(ctx.Expressions)
-	ctx.Expressions = append(ctx.Expressions, expr)
+	celExpr := CELExpression{
+		ID:               fmt.Sprintf("expr_%03d", index+1),
+		Expression:       expr,
+		EnvironmentIndex: environmentIndex,
+		Position: Position{
+			Line:   0,
+			Column: 0,
+		},
+	}
+	ctx.Expressions = append(ctx.Expressions, celExpr)
 
 	return index
 }
@@ -43,6 +57,15 @@ func (ctx *GenerationContext) AddExpression(expr string) int {
 func (ctx *GenerationContext) AddEnvironment(env string) int {
 	index := len(ctx.Environments)
 	ctx.Environments = append(ctx.Environments, env)
+
+	return index
+}
+
+// AddCELEnvironment adds a CEL environment with variable definitions and returns its index.
+func (ctx *GenerationContext) AddCELEnvironment(env CELEnvironment) int {
+	index := len(ctx.CELEnvironments)
+	env.Index = index
+	ctx.CELEnvironments = append(ctx.CELEnvironments, env)
 
 	return index
 }

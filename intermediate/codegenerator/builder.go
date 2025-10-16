@@ -15,11 +15,21 @@ type conditionalLevel struct {
 	hasElseIf bool
 }
 
+// loopLevel はネストされたループのレベルを追跡する
+type loopLevel struct {
+	startPos   string
+	expression string // CEL式
+	exprIndex  int
+	envIndex   int // このループが持つ CELEnvironment のインデックス
+}
+
 // InstructionBuilder は命令列を段階的に構築するビルダー
 type InstructionBuilder struct {
 	instructions     []Instruction
 	context          *GenerationContext
 	conditionalStack []conditionalLevel
+	loopStack        []loopLevel
+	envStack         []int // CELEnvironment のインデックススタック（root=0から始まる）
 }
 
 // NewInstructionBuilder は新しい InstructionBuilder を作成する
@@ -27,6 +37,29 @@ func NewInstructionBuilder(ctx *GenerationContext) *InstructionBuilder {
 	return &InstructionBuilder{
 		context:      ctx,
 		instructions: make([]Instruction, 0, 64),
+		envStack:     []int{0}, // root environment from start
+	}
+}
+
+// getCurrentEnvironmentIndex は現在アクティブな CEL 環境のインデックスを取得する
+// envStack の最後の要素が現在のアクティブ環境
+func (b *InstructionBuilder) getCurrentEnvironmentIndex() int {
+	if len(b.envStack) == 0 {
+		return 0 // fallback to root
+	}
+
+	return b.envStack[len(b.envStack)-1]
+}
+
+// pushEnvironment は新しい環境をスタックにプッシュ
+func (b *InstructionBuilder) pushEnvironment(envIndex int) {
+	b.envStack = append(b.envStack, envIndex)
+}
+
+// popEnvironment は現在の環境をスタックからポップ
+func (b *InstructionBuilder) popEnvironment() {
+	if len(b.envStack) > 1 {
+		b.envStack = b.envStack[:len(b.envStack)-1]
 	}
 }
 
@@ -50,7 +83,8 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				// 変数展開ディレクティブ: /*= expression */dummy_value
 				// CEL式をコンテキストに追加し、EMIT_EVAL命令を生成
 				// token.Directive.Condition に式が格納されている
-				exprIndex := b.context.AddExpression(token.Directive.Condition)
+				envIndex := b.getCurrentEnvironmentIndex()
+				exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
 				b.instructions = append(b.instructions, Instruction{
 					Op:        OpEmitEval,
 					Pos:       token.Position.String(),
@@ -75,7 +109,8 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 			case "if":
 				// 条件分岐の開始: /*# if condition */
 				// CEL式をコンテキストに追加し、IF命令を生成
-				exprIndex := b.context.AddExpression(token.Directive.Condition)
+				envIndex := b.getCurrentEnvironmentIndex()
+				exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
 				b.instructions = append(b.instructions, Instruction{
 					Op:        OpIf,
 					Pos:       token.Position.String(),
@@ -104,7 +139,8 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				currentLevel.hasElseIf = true
 
 				// CEL式を追加してELSE_IF命令を生成
-				exprIndex := b.context.AddExpression(token.Directive.Condition)
+				envIndex := b.getCurrentEnvironmentIndex()
+				exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
 				b.instructions = append(b.instructions, Instruction{
 					Op:        OpElseIf,
 					Pos:       token.Position.String(),
@@ -135,22 +171,87 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				continue
 
 			case "end":
-				// 条件分岐の終了: /*# end */
-				if len(b.conditionalStack) == 0 {
-					return fmt.Errorf("%w: end directive at %s without matching if", ErrDirectiveMismatch, token.Position.String())
+				// END命令：条件分岐またはループの終了を識別
+				// conditionalStack と loopStack の両方をチェック
+
+				// ループの終了の方が優先度が高い（ネストの場合）
+				if len(b.loopStack) > 0 {
+					// ループの終了
+					b.loopStack = b.loopStack[:len(b.loopStack)-1]
+					// 環境スタックからもポップ
+					b.popEnvironment()
+					b.instructions = append(b.instructions, Instruction{
+						Op:  OpLoopEnd,
+						Pos: token.Position.String(),
+					})
+				} else if len(b.conditionalStack) > 0 {
+					// 条件分岐の終了
+					b.conditionalStack = b.conditionalStack[:len(b.conditionalStack)-1]
+					b.instructions = append(b.instructions, Instruction{
+						Op:  OpEnd,
+						Pos: token.Position.String(),
+					})
+				} else {
+					return fmt.Errorf("%w: end directive at %s without matching if or for", ErrDirectiveMismatch, token.Position.String())
 				}
-				// スタックからポップ
-				b.conditionalStack = b.conditionalStack[:len(b.conditionalStack)-1] // END命令を生成
-				b.instructions = append(b.instructions, Instruction{
-					Op:  OpEnd,
-					Pos: token.Position.String(),
-				})
 
 				continue
 
 			case "for":
-				// Phase 2: ループディレクティブ（未実装）
-				// TODO: FOR ディレクティブを処理
+				// FOR ループディレクティブ: /*# for variable : expression */
+				if token.Directive.Condition == "" {
+					return fmt.Errorf("%w: for directive at %s without expression", ErrLoopMismatch, token.Position.String())
+				}
+
+				// ネストの深さをチェック（最大10レベル）
+				if len(b.loopStack) >= 10 {
+					return fmt.Errorf("%w: for loop at %s exceeds maximum nesting depth", ErrLoopNesting, token.Position.String())
+				}
+
+				// ディレクティブの値から変数と式を抽出
+				// 形式: "variable : expression"
+				parts := strings.Split(token.Directive.Condition, ":")
+				if len(parts) != 2 {
+					return fmt.Errorf("%w: for directive at %s has invalid format (expected 'variable : expression')", ErrLoopMismatch, token.Position.String())
+				}
+
+				variable := strings.TrimSpace(parts[0])
+				expression := strings.TrimSpace(parts[1])
+
+				// CEL式をコンテキストに追加 (root environment)
+				exprIndex := b.context.AddExpression(expression, 0)
+
+				// ループ変数の CEL 環境を作成
+				loopEnvIndex := b.context.AddCELEnvironment(CELEnvironment{
+					AdditionalVariables: []CELVariableInfo{
+						{
+							Name: variable,
+							Type: "any", // ループ変数は初期段階では any 型
+						},
+					},
+					Container: fmt.Sprintf("for %s : %s", variable, expression),
+				})
+
+				// ループスタックにプッシュ
+				b.loopStack = append(b.loopStack, loopLevel{
+					startPos:   token.Position.String(),
+					expression: expression,
+					exprIndex:  exprIndex,
+					envIndex:   loopEnvIndex,
+				})
+
+				// 環境スタックに新しい環境をプッシュ
+				b.pushEnvironment(loopEnvIndex)
+
+				// LOOP_START命令を生成（EnvIndex はループ環境のインデックス）
+				b.instructions = append(b.instructions, Instruction{
+					Op:                  OpLoopStart,
+					Variable:            variable,
+					CollectionExprIndex: &exprIndex,
+					EnvIndex:            &loopEnvIndex,
+					Pos:                 token.Position.String(),
+				})
+
 				continue
 
 			default:

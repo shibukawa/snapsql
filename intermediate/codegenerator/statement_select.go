@@ -105,12 +105,8 @@ func GenerateSelectInstructions(stmt parser.StatementNode, ctx *GenerationContex
 
 	// 最適化と結果の取得
 	instructions := builder.Finalize()
-	// Phase 1: ctx.Expressionsを使用してCEL式のリストを作成
-	// 将来的にはbuilder.GetCELExpressions()で型情報を含む完全なCELExpression型を返す
-	celExpressions := make([]CELExpression, len(ctx.Expressions))
-	for i, expr := range ctx.Expressions {
-		celExpressions[i] = CELExpression{Expression: expr}
-	}
+	// ctx.Expressions は既に CELExpression 型の配列
+	celExpressions := ctx.Expressions
 
 	celEnvironments := builder.GetCELEnvironments()
 

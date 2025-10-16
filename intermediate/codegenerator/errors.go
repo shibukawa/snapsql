@@ -16,3 +16,9 @@ var ErrStatementTypeMismatch = errors.New("statement type mismatch")
 
 // ErrCTENotSupported is returned when CTE is encountered in unsupported phase.
 var ErrCTENotSupported = errors.New("CTE not supported in Phase 1")
+
+// ErrLoopMismatch is returned when loop directive matching fails (loop/endloop).
+var ErrLoopMismatch = errors.New("loop directive mismatch")
+
+// ErrLoopNesting is returned when loop nesting exceeds maximum depth.
+var ErrLoopNesting = errors.New("loop nesting too deep")

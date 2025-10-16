@@ -517,7 +517,7 @@ FROM users`,
 			// Create GenerationContext
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
@@ -726,7 +726,7 @@ SELECT id FROM users WHERE status = /*= status */'active' OR priority_status = /
 			// Create GenerationContext
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
@@ -737,8 +737,17 @@ SELECT id FROM users WHERE status = /*= status */'active' OR priority_status = /
 			// Verify instructions
 			assert.Equal(t, tt.expectedInstructions, instructions, "Instructions mismatch")
 
-			// Verify expressions
-			assert.Equal(t, tt.expectedExpressions, expressions, "Expressions mismatch")
+			// Verify expressions (Expression field only, ID is auto-generated)
+			require.Equal(t, len(tt.expectedExpressions), len(expressions), "Expression count mismatch")
+			for i, expected := range tt.expectedExpressions {
+				if i >= len(expressions) {
+					break
+				}
+				assert.Equal(t, expected.Expression, expressions[i].Expression, "Expression[%d] mismatch", i)
+				assert.Equal(t, expected.EnvironmentIndex, expressions[i].EnvironmentIndex, "Expression[%d] EnvironmentIndex mismatch", i)
+				// ID is auto-generated, so we don't check it in the expected value
+				assert.NotEmpty(t, expressions[i].ID, "Expression[%d] ID should not be empty", i)
+			}
 		})
 	}
 }
@@ -908,7 +917,7 @@ func TestDialectTimeFunctionConversion(t *testing.T) {
 			// Create GenerationContext with specific dialect
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
@@ -1052,7 +1061,7 @@ func TestDialectCastConversion(t *testing.T) {
 			// Create GenerationContext with specific dialect
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
@@ -1178,7 +1187,7 @@ func TestDialectDateTimeConversion(t *testing.T) {
 			// Create GenerationContext with specific dialect
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
@@ -1304,7 +1313,7 @@ func TestDialectBooleanConversion(t *testing.T) {
 			// Create GenerationContext with specific dialect
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
@@ -1434,7 +1443,7 @@ func TestDialectStringConcatenationConversion(t *testing.T) {
 			// Create GenerationContext with specific dialect
 			ctx := &GenerationContext{
 				Dialect:      tt.dialect,
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
@@ -1461,6 +1470,237 @@ func TestDialectStringConcatenationConversion(t *testing.T) {
 
 				if expected.Value != "" {
 					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch for dialect %s\nExpected: %q\nActual: %q", i, tt.dialect, expected.Value, actual.Value)
+				}
+			}
+		})
+	}
+}
+
+// TestForDirectiveTableDriven tests for loop directive (/*# for variable : expression */) using table-driven approach
+// This test parses complete SQL files and validates the instruction generation, expressions, and environments
+// Constants are intentionally left empty to test type inference with dummy values
+func TestForDirectiveTableDriven(t *testing.T) {
+	tests := []struct {
+		name                    string
+		sql                     string
+		dialect                 string
+		expectedHasLoopStart    bool
+		expectedHasLoopEnd      bool
+		expectedExpressions     []CELExpression
+		expectedCELEnvironments []CELEnvironment
+	}{
+		{
+			name: "simple for loop with variable reference",
+			sql: `/*#
+parameters:
+  users:
+    - id: int
+      tags:
+        - string
+*/
+INSERT INTO user_tags (user_id, tag) 
+VALUES /*# for user : users */(/*= user.id */, /*= user.tags */) /*# end */`,
+			dialect:              string(snapsql.DialectPostgres),
+			expectedHasLoopStart: true,
+			expectedHasLoopEnd:   true,
+			expectedExpressions: []CELExpression{
+				{Expression: "user.id"},
+				{Expression: "user.tags"},
+			},
+			expectedCELEnvironments: []CELEnvironment{
+				{
+					AdditionalVariables: []CELVariableInfo{
+						{Name: "user", Type: "any"},
+					},
+					Container: "for user : users",
+				},
+			},
+		},
+		{
+			name: "nested for loops",
+			sql: `/*#
+parameters:
+  users:
+    - id: int
+      tags:
+        - string
+*/
+INSERT INTO user_details (user_id, tag) 
+VALUES 
+  /*# for user : users */
+    /*# for tag : user.tags */
+      (/*= user.id */, /*= tag */)
+    /*# end */
+  /*# end */`,
+			dialect:              string(snapsql.DialectPostgres),
+			expectedHasLoopStart: true,
+			expectedHasLoopEnd:   true,
+			expectedExpressions: []CELExpression{
+				{Expression: "user.id"},
+				{Expression: "tag"},
+			},
+			expectedCELEnvironments: []CELEnvironment{
+				{
+					AdditionalVariables: []CELVariableInfo{
+						{Name: "user", Type: "any"},
+					},
+					Container: "for user : users",
+				},
+				{
+					AdditionalVariables: []CELVariableInfo{
+						{Name: "tag", Type: "any"},
+					},
+					Container: "for tag : user.tags",
+				},
+			},
+		},
+		{
+			name: "for loop with conditional inside",
+			sql: `/*#
+parameters:
+  users:
+    - id: int
+      tags:
+        - string
+*/
+INSERT INTO user_summary (user_id, summary) 
+VALUES 
+  /*# for user : users */
+    (
+      /*= user.id */,
+      /*# if user.id > 0 */
+        'active'
+      /*# else */
+        'inactive'
+      /*# end */
+    )
+  /*# end */`,
+			dialect:              string(snapsql.DialectPostgres),
+			expectedHasLoopStart: true,
+			expectedHasLoopEnd:   true,
+			expectedExpressions: []CELExpression{
+				{Expression: "user.id"},
+				{Expression: "user.id > 0"},
+			},
+			expectedCELEnvironments: []CELEnvironment{
+				{
+					AdditionalVariables: []CELVariableInfo{
+						{Name: "user", Type: "any"},
+					},
+					Container: "for user : users",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Parse SQL with parameter definitions from SQL comment
+			// Provide dummy data in constants for type inference
+			constants := map[string]any{
+				"users": []any{
+					map[string]any{
+						"id":   int64(1),
+						"tags": []any{"tag1", "tag2"},
+					},
+				},
+			}
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt, "statement should not be nil")
+
+			// Create GenerationContext
+			ctx := &GenerationContext{
+				Dialect:         tt.dialect,
+				Expressions:     make([]CELExpression, 0),
+				Environments:    make([]string, 0),
+				CELEnvironments: make([]CELEnvironment, 0),
+			}
+
+			// Generate instructions from the parsed statement
+			builder := NewInstructionBuilder(ctx)
+
+			// Process all clauses in the statement
+			for _, clause := range stmt.Clauses() {
+				tokens := clause.RawTokens()
+				err := builder.ProcessTokens(tokens)
+				require.NoError(t, err, "ProcessTokens should succeed for clause type %s", clause.Type())
+			}
+
+			// Merge static instructions and get final result
+			instructions := builder.mergeStaticInstructions()
+
+			// Verify loop start and end instructions exist
+			hasLoopStart := false
+			hasLoopEnd := false
+
+			for _, instr := range instructions {
+				if instr.Op == OpLoopStart {
+					hasLoopStart = true
+				}
+
+				if instr.Op == OpLoopEnd {
+					hasLoopEnd = true
+				}
+			}
+
+			if tt.expectedHasLoopStart && !hasLoopStart {
+				t.Errorf("Expected LOOP_START instruction but not found. Instructions: %v", instructions)
+			}
+
+			if tt.expectedHasLoopEnd && !hasLoopEnd {
+				t.Errorf("Expected LOOP_END instruction but not found. Instructions: %v", instructions)
+			}
+
+			// Verify expected expressions exist
+			expressions := ctx.Expressions
+
+			for _, expectedExpr := range tt.expectedExpressions {
+				found := false
+
+				for _, expr := range expressions {
+					if expr.Expression == expectedExpr.Expression {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					t.Errorf("Expected expression '%s' not found. Got expressions: %v", expectedExpr.Expression, expressions)
+				}
+			}
+
+			// Verify expected CEL environments
+			for i, expectedEnv := range tt.expectedCELEnvironments {
+				if i >= len(ctx.CELEnvironments) {
+					t.Errorf("Expected CEL environment at index %d but not found", i)
+					continue
+				}
+
+				actualEnv := ctx.CELEnvironments[i]
+
+				// Check container
+				if expectedEnv.Container != actualEnv.Container {
+					t.Errorf("CEL environment[%d] container mismatch. Expected: %q, Got: %q", i, expectedEnv.Container, actualEnv.Container)
+				}
+
+				// Check additional variables
+				if len(expectedEnv.AdditionalVariables) != len(actualEnv.AdditionalVariables) {
+					t.Errorf("CEL environment[%d] variable count mismatch. Expected: %d, Got: %d", i, len(expectedEnv.AdditionalVariables), len(actualEnv.AdditionalVariables))
+					continue
+				}
+
+				for j, expectedVar := range expectedEnv.AdditionalVariables {
+					actualVar := actualEnv.AdditionalVariables[j]
+
+					if expectedVar.Name != actualVar.Name {
+						t.Errorf("CEL environment[%d] variable[%d] name mismatch. Expected: %q, Got: %q", i, j, expectedVar.Name, actualVar.Name)
+					}
+
+					if expectedVar.Type != actualVar.Type {
+						t.Errorf("CEL environment[%d] variable[%d] type mismatch. Expected: %q, Got: %q", i, j, expectedVar.Type, actualVar.Type)
+					}
 				}
 			}
 		})

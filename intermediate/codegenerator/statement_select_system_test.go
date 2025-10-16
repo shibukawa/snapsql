@@ -65,7 +65,7 @@ func TestSystemLimitOffsetInstructions(t *testing.T) {
 			// 命令生成
 			ctx := &GenerationContext{
 				Dialect:      "postgres",
-				Expressions:  make([]string, 0),
+				Expressions:  make([]CELExpression, 0),
 				Environments: make([]string, 0),
 			}
 
