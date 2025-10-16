@@ -1706,3 +1706,433 @@ VALUES
 		})
 	}
 }
+
+// TestSubqueryInFromClause は FROM 句内のサブクエリーをテストする
+func TestSubqueryInFromClause(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		validateInstructions func(t *testing.T, instructions []Instruction) // 命令列の検証
+	}{
+		{
+			name: "simple subquery in FROM",
+			sql:  "SELECT u.id FROM (SELECT id FROM users) AS u",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// Instructions に "(SELECT id FROM users)" と ") AS u" が含まれることを確認
+				found_open_paren := false
+				found_close_paren_as_u := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, "(SELECT") {
+							found_open_paren = true
+						}
+
+						if strings.Contains(instr.Value, ") AS u") {
+							found_close_paren_as_u = true
+						}
+					}
+				}
+
+				assert.True(t, found_open_paren, "Should contain '(SELECT' in instructions")
+				assert.True(t, found_close_paren_as_u, "Should contain ') AS u' in instructions")
+			},
+		},
+		{
+			name: "nested subqueries in FROM",
+			sql:  "SELECT id FROM (SELECT id FROM (SELECT id FROM users) AS t1) AS t2",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// ") AS t2" と ") AS t1" が両方含まれることを確認
+				found_t2 := false
+				found_t1 := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, ") AS t2") {
+							found_t2 = true
+						}
+
+						if strings.Contains(instr.Value, ") AS t1") {
+							found_t1 = true
+						}
+					}
+				}
+
+				assert.True(t, found_t2, "Should contain ') AS t2' in instructions")
+				assert.True(t, found_t1, "Should contain ') AS t1' in instructions")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// parser.ParseSQLFile でパース
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err)
+			require.NotNil(t, stmt)
+
+			_, ok := stmt.(*parser.SelectStatement)
+			require.True(t, ok, "Expected SELECT statement")
+
+			// GenerateSelectInstructions で命令と環境を生成
+			ctx := &GenerationContext{
+				Dialect:      string(snapsql.DialectPostgres),
+				Expressions:  make([]CELExpression, 0),
+				Environments: make([]string, 0),
+			}
+
+			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err)
+
+			// 基本的なチェック
+			assert.NotNil(t, instructions)
+
+			// 命令列の検証
+			if tt.validateInstructions != nil {
+				tt.validateInstructions(t, instructions)
+			}
+
+			// Expressions が存在することを確認
+			assert.NotNil(t, expressions)
+		})
+	}
+}
+
+// TestWhereSubqueryInClause は WHERE 句内の IN サブクエリーをテストする
+func TestWhereSubqueryInClause(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		validateInstructions func(t *testing.T, instructions []Instruction)
+	}{
+		{
+			name: "IN with subquery",
+			sql:  "SELECT id FROM users WHERE id IN (SELECT user_id FROM orders)",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// IN (SELECT ...) が含まれることを確認
+				found_in := false
+				found_select := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, "IN") {
+							found_in = true
+						}
+
+						if strings.Contains(instr.Value, "SELECT") {
+							found_select = true
+						}
+					}
+				}
+
+				assert.True(t, found_in, "Should contain 'IN' in instructions")
+				assert.True(t, found_select, "Should contain 'SELECT' in instructions")
+			},
+		},
+		{
+			name: "NOT IN with subquery",
+			sql:  "SELECT id FROM users WHERE id NOT IN (SELECT user_id FROM orders)",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// NOT IN (SELECT ...) が含まれることを確認
+				found_not_in := false
+				found_select := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, "NOT IN") {
+							found_not_in = true
+						}
+
+						if strings.Contains(instr.Value, "SELECT") {
+							found_select = true
+						}
+					}
+				}
+
+				assert.True(t, found_not_in, "Should contain 'NOT IN' in instructions")
+				assert.True(t, found_select, "Should contain 'SELECT' in instructions")
+			},
+		},
+		{
+			name: "EXISTS with subquery",
+			sql:  "SELECT id FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// EXISTS (SELECT ...) が含まれることを確認
+				found_exists := false
+				found_select := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, "EXISTS") {
+							found_exists = true
+						}
+
+						if strings.Contains(instr.Value, "SELECT") {
+							found_select = true
+						}
+					}
+				}
+
+				assert.True(t, found_exists, "Should contain 'EXISTS' in instructions")
+				assert.True(t, found_select, "Should contain 'SELECT' in instructions")
+			},
+		},
+		{
+			name: "scalar subquery in WHERE",
+			sql:  "SELECT id FROM users WHERE status = (SELECT default_status FROM configs LIMIT 1)",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// status = (SELECT ...) が含まれることを確認
+				found_equals := false
+				found_select := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, "=") {
+							found_equals = true
+						}
+
+						if strings.Contains(instr.Value, "SELECT") {
+							found_select = true
+						}
+					}
+				}
+
+				assert.True(t, found_equals, "Should contain '=' in instructions")
+				assert.True(t, found_select, "Should contain 'SELECT' in instructions")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// parser.ParseSQLFile でパース
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err)
+			require.NotNil(t, stmt)
+
+			_, ok := stmt.(*parser.SelectStatement)
+			require.True(t, ok, "Expected SELECT statement")
+
+			// GenerateSelectInstructions で命令を生成
+			ctx := &GenerationContext{
+				Dialect:      string(snapsql.DialectPostgres),
+				Expressions:  make([]CELExpression, 0),
+				Environments: make([]string, 0),
+			}
+
+			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err)
+
+			// 基本的なチェック
+			assert.NotNil(t, instructions)
+
+			// 命令列の検証
+			if tt.validateInstructions != nil {
+				tt.validateInstructions(t, instructions)
+			}
+		})
+	}
+}
+
+// TestSelectScalarSubquery は SELECT 句内のスカラーサブクエリーをテストする
+func TestSelectScalarSubquery(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		validateInstructions func(t *testing.T, instructions []Instruction)
+	}{
+		{
+			name: "scalar subquery in SELECT clause",
+			sql:  "SELECT id, (SELECT count(*) FROM orders WHERE user_id = users.id) as order_count FROM users",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// (SELECT count(*) ...) と order_count が含まれることを確認
+				found_select := false
+				found_count := false
+				found_alias := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, "SELECT") {
+							found_select = true
+						}
+
+						if strings.Contains(instr.Value, "count") {
+							found_count = true
+						}
+
+						if strings.Contains(instr.Value, "order_count") {
+							found_alias = true
+						}
+					}
+				}
+
+				assert.True(t, found_select, "Should contain 'SELECT' in instructions")
+				assert.True(t, found_count, "Should contain 'count' in instructions")
+				assert.True(t, found_alias, "Should contain 'order_count' in instructions")
+			},
+		},
+		{
+			name: "correlated subquery in SELECT",
+			sql:  "SELECT u.id, (SELECT max(order_date) FROM orders WHERE user_id = u.id) as latest FROM users u",
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// (SELECT max ...), latest, user_id, u.id が含まれることを確認
+				found_select := false
+				found_max := false
+				found_alias := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitStatic {
+						if strings.Contains(instr.Value, "SELECT") {
+							found_select = true
+						}
+
+						if strings.Contains(instr.Value, "max") {
+							found_max = true
+						}
+
+						if strings.Contains(instr.Value, "latest") {
+							found_alias = true
+						}
+					}
+				}
+
+				assert.True(t, found_select, "Should contain 'SELECT' in instructions")
+				assert.True(t, found_max, "Should contain 'max' in instructions")
+				assert.True(t, found_alias, "Should contain 'latest' in instructions")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// parser.ParseSQLFile でパース
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err)
+			require.NotNil(t, stmt)
+
+			_, ok := stmt.(*parser.SelectStatement)
+			require.True(t, ok, "Expected SELECT statement")
+
+			// GenerateSelectInstructions で命令を生成
+			ctx := &GenerationContext{
+				Dialect:      string(snapsql.DialectPostgres),
+				Expressions:  make([]CELExpression, 0),
+				Environments: make([]string, 0),
+			}
+
+			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err)
+
+			// 基本的なチェック
+			assert.NotNil(t, instructions)
+
+			// 命令列の検証
+			if tt.validateInstructions != nil {
+				tt.validateInstructions(t, instructions)
+			}
+		})
+	}
+}
+
+// TestDirectiveInSubquery はサブクエリー内でディレクティブ（パラメータ参照）が使えることをテストする
+func TestDirectiveInSubquery(t *testing.T) {
+	tests := []struct {
+		name                 string
+		sql                  string
+		expectedExpressions  int
+		validateInstructions func(t *testing.T, instructions []Instruction)
+	}{
+		{
+			name:                "parameter in subquery WHERE",
+			sql:                 `/*# parameters: { status_val: int } */SELECT id FROM users WHERE id IN (SELECT user_id FROM orders WHERE status = /*= status_val */1)`,
+			expectedExpressions: 1,
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// サブクエリー内の /*= status_val */ が変数ディレクティブとして認識されることを確認
+				// Instructions に OpEmitEval が含まれることを確認
+				found_emit_eval := false
+				found_select := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitEval {
+						found_emit_eval = true
+					}
+
+					if instr.Op == OpEmitStatic && strings.Contains(instr.Value, "SELECT") {
+						found_select = true
+					}
+				}
+
+				assert.True(t, found_select, "Should contain SELECT in instructions")
+				assert.True(t, found_emit_eval, "Should contain OpEmitEval for /*= status_val */ directive")
+			},
+		},
+		{
+			name:                "parameter in scalar subquery",
+			sql:                 `/*# parameters: { status_val: int } */SELECT id, (SELECT count(*) FROM orders WHERE user_id = users.id AND status = /*= status_val */1) as completed_count FROM users`,
+			expectedExpressions: 1,
+			validateInstructions: func(t *testing.T, instructions []Instruction) {
+				t.Helper()
+				// スカラーサブクエリー内の /*= status_val */ が変数ディレクティブとして認識されることを確認
+				found_emit_eval := false
+				found_select := false
+
+				for _, instr := range instructions {
+					if instr.Op == OpEmitEval {
+						found_emit_eval = true
+					}
+
+					if instr.Op == OpEmitStatic && strings.Contains(instr.Value, "SELECT") {
+						found_select = true
+					}
+				}
+
+				assert.True(t, found_select, "Should contain SELECT in instructions")
+				assert.True(t, found_emit_eval, "Should contain OpEmitEval for /*= status_val */ directive")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// parser.ParseSQLFile でパース
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err)
+			require.NotNil(t, stmt)
+
+			_, ok := stmt.(*parser.SelectStatement)
+			require.True(t, ok, "Expected SELECT statement")
+
+			// GenerateSelectInstructions で命令を生成
+			ctx := &GenerationContext{
+				Dialect:      string(snapsql.DialectPostgres),
+				Expressions:  make([]CELExpression, 0),
+				Environments: make([]string, 0),
+			}
+
+			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
+			require.NoError(t, err)
+
+			// 基本的なチェック
+			assert.NotNil(t, instructions)
+			assert.GreaterOrEqual(t, len(expressions), tt.expectedExpressions, "Should have at least %d expressions", tt.expectedExpressions)
+
+			// 命令列の検証
+			if tt.validateInstructions != nil {
+				tt.validateInstructions(t, instructions)
+			}
+		})
+	}
+}

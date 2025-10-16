@@ -23,13 +23,18 @@ func GenerateSelectInstructions(stmt parser.StatementNode, ctx *GenerationContex
 		return nil, nil, nil, fmt.Errorf("%w: expected *parser.SelectStatement, got %T", ErrStatementTypeMismatch, stmt)
 	}
 
+	// Root 環境がなければ作成（最初の呼び出しのみ）
+	if len(ctx.CELEnvironments) == 0 {
+		ctx.AddCELEnvironment(CELEnvironment{
+			Container:   "root",
+			ParentIndex: nil,
+		})
+	}
+
 	// Phase 1 制約: CTE（WITH句）は未対応
 	if selectStmt.CTE() != nil {
 		return nil, nil, nil, fmt.Errorf("%w", ErrCTENotSupported)
 	}
-
-	// Phase 1 制約: サブクエリは未対応（将来実装）
-	// TODO: Phase 4 でサブクエリ検出を実装
 
 	builder := NewInstructionBuilder(ctx)
 
