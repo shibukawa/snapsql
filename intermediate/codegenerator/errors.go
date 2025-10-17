@@ -14,8 +14,8 @@ var ErrDirectiveMismatch = errors.New("directive mismatch")
 // ErrStatementTypeMismatch is returned when statement type is unexpected.
 var ErrStatementTypeMismatch = errors.New("statement type mismatch")
 
-// ErrCTENotSupported is returned when CTE is encountered in unsupported phase.
-var ErrCTENotSupported = errors.New("CTE not supported in Phase 1")
+// ErrCTENotSupported is returned when CTE is encountered (not yet implemented).
+var ErrCTENotSupported = errors.New("CTE not supported (Phase 4 implementation in progress)")
 
 // ErrLoopMismatch is returned when loop directive matching fails (loop/endloop).
 var ErrLoopMismatch = errors.New("loop directive mismatch")

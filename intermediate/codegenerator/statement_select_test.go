@@ -69,13 +69,6 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			},
 		},
 		{
-			name:          "CTE not supported in Phase 1",
-			sql:           "WITH tmp AS (SELECT id FROM users) SELECT id FROM tmp",
-			dialect:       "postgres",
-			expectError:   true,
-			errorContains: "CTE not supported",
-		},
-		{
 			name:             "select with limit and offset",
 			sql:              "SELECT id FROM users LIMIT 10 OFFSET 5",
 			dialect:          "postgres",

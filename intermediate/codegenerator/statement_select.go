@@ -31,12 +31,14 @@ func GenerateSelectInstructions(stmt parser.StatementNode, ctx *GenerationContex
 		})
 	}
 
-	// Phase 1 制約: CTE（WITH句）は未対応
-	if selectStmt.CTE() != nil {
-		return nil, nil, nil, fmt.Errorf("%w", ErrCTENotSupported)
-	}
-
 	builder := NewInstructionBuilder(ctx)
+
+	// Phase 4: CTE（WITH句）を処理
+	if selectStmt.CTE() != nil {
+		if err := generateCTEClause(selectStmt.CTE(), builder); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to generate CTE clause: %w", err)
+		}
+	}
 
 	// SELECT 句を処理（必須）
 	if err := generateSelectClause(selectStmt.Select, builder); err != nil {
