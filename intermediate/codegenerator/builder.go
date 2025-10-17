@@ -449,6 +449,7 @@ func (b *InstructionBuilder) mergeStaticInstructions() []Instruction {
 						Value: delimiter,
 						Pos:   firstPos,
 					})
+
 					continue
 				}
 			}

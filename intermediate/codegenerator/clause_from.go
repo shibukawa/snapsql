@@ -19,7 +19,7 @@ func generateFromClause(clause *parser.FromClause, builder *InstructionBuilder) 
 	// サブクエリーの特殊処理は ProcessTokens 内で実現される
 	tokens := clause.RawTokens()
 	if err := builder.ProcessTokens(tokens); err != nil {
-		return fmt.Errorf("%w: %v", ErrCodeGeneration, err)
+		return fmt.Errorf("code generation: %w", err)
 	}
 
 	return nil
