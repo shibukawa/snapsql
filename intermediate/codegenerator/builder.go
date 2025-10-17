@@ -180,9 +180,15 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 					b.loopStack = b.loopStack[:len(b.loopStack)-1]
 					// 環境スタックからもポップ
 					b.popEnvironment()
+
+					// 親環境のインデックス：ポップ後の現在の環境
+					parentEnvIndex := b.getCurrentEnvironmentIndex()
+					parentEnvIndexPtr := &parentEnvIndex
+
 					b.instructions = append(b.instructions, Instruction{
-						Op:  OpLoopEnd,
-						Pos: token.Position.String(),
+						Op:       OpLoopEnd,
+						EnvIndex: parentEnvIndexPtr,
+						Pos:      token.Position.String(),
 					})
 				} else if len(b.conditionalStack) > 0 {
 					// 条件分岐の終了
@@ -351,8 +357,14 @@ func (b *InstructionBuilder) GetCELEnvironments() []CELEnvironment {
 
 // Finalize は最適化を実行して最終的な命令列を返す
 func (b *InstructionBuilder) Finalize() []Instruction {
+	// Phase 0: ループ/条件分岐の END 直前のカンマ/AND/OR を EMIT_UNLESS_BOUNDARY に変換
+	b.convertLoopAndConditionalEndDelimiters()
+
 	// Phase 1: 連続する EMIT_STATIC 命令をマージ
 	optimized := b.mergeStaticInstructions()
+
+	// Phase 2: ループ/条件分岐終了後に BOUNDARY を挿入
+	optimized = b.insertBoundariesAfterLoopsAndConditions(optimized)
 
 	// 将来的に以下を実装予定：
 	// - b.optimizeBoundaries()
@@ -360,8 +372,35 @@ func (b *InstructionBuilder) Finalize() []Instruction {
 	return optimized
 }
 
+// convertLoopAndConditionalEndDelimiters は、ループと条件分岐の END 直前の
+// カンマ/AND/OR を EMIT_UNLESS_BOUNDARY に変換する
+func (b *InstructionBuilder) convertLoopAndConditionalEndDelimiters() {
+	for i := 0; i < len(b.instructions); i++ {
+		instr := b.instructions[i]
+
+		// LOOP_END または END の直前の命令をチェック
+		if (instr.Op == OpLoopEnd || instr.Op == OpEnd) && i > 0 {
+			prevIdx := i - 1
+			prevInstr := b.instructions[prevIdx]
+
+			// 直前の命令が EMIT_STATIC でカンマ/AND/OR の場合、変換
+			if prevInstr.Op == OpEmitStatic {
+				value := strings.TrimSpace(prevInstr.Value)
+				if value == "," || value == "AND" || value == "OR" {
+					b.instructions[prevIdx] = Instruction{
+						Op:    OpEmitUnlessBoundary,
+						Value: prevInstr.Value,
+						Pos:   prevInstr.Pos,
+					}
+				}
+			}
+		}
+	}
+}
+
 // mergeStaticInstructions は連続する EMIT_STATIC 命令をマージする
 // 最初の命令の位置情報を保持する
+// END/LOOP_END 直前のカンマ/AND/OR は EMIT_UNLESS_BOUNDARY に変換
 func (b *InstructionBuilder) mergeStaticInstructions() []Instruction {
 	if len(b.instructions) == 0 {
 		return b.instructions
@@ -388,12 +427,110 @@ func (b *InstructionBuilder) mergeStaticInstructions() []Instruction {
 			mergedValue += b.instructions[i].Value
 		}
 
+		// マージされた命令の直後が LOOP_END の場合、末尾のカンマ/AND/OR を分割
+		// （IF/END の場合は分割しない）
+		if i+1 < len(b.instructions) {
+			nextInstr := b.instructions[i+1]
+			if nextInstr.Op == OpLoopEnd {
+				// 末尾のカンマ/AND/OR を分割してチェック
+				delimiter, remaining := b.extractTrailingDelimiter(mergedValue)
+				if delimiter != "" {
+					// remaining が空でない場合のみ追加
+					if remaining != "" {
+						result = append(result, Instruction{
+							Op:    OpEmitStatic,
+							Value: remaining,
+							Pos:   firstPos,
+						})
+					}
+					// delimiter を EMIT_UNLESS_BOUNDARY で追加
+					result = append(result, Instruction{
+						Op:    OpEmitUnlessBoundary,
+						Value: delimiter,
+						Pos:   firstPos,
+					})
+					continue
+				}
+			}
+		}
+
 		// マージされた命令を追加（最初の位置を保持）
 		result = append(result, Instruction{
 			Op:    OpEmitStatic,
 			Value: mergedValue,
 			Pos:   firstPos,
 		})
+	}
+
+	return result
+}
+
+// extractTrailingDelimiter は、文字列の末尾からカンマ/AND/OR を抽出する
+// delimiter: 抽出されたカンマ/AND/OR（前後のスペース含む）
+// remaining: カンマ/AND/OR を除いた残りの文字列
+func (b *InstructionBuilder) extractTrailingDelimiter(value string) (string, string) {
+	// 末尾のホワイトスペースを除去
+	trimmed := strings.TrimRight(value, " \t\n\r")
+	trailingSpace := value[len(trimmed):]
+
+	// 末尾から delimiter を検索
+	delimiters := []string{",", "AND", "OR"}
+	for _, delim := range delimiters {
+		if strings.HasSuffix(trimmed, delim) {
+			// delimiter 前のスペースを除去
+			before := trimmed[:len(trimmed)-len(delim)]
+			beforeTrimmed := strings.TrimRight(before, " \t\n\r")
+			spaceBefore := before[len(beforeTrimmed):]
+
+			// remaining = beforeTrimmed + spaceBefore（delimiter 前は元のフォーマット保持）
+			// delimiter 出力 = spaceBefore + delim + trailingSpace
+			return spaceBefore + delim + trailingSpace, beforeTrimmed
+		}
+	}
+
+	return "", ""
+}
+
+// insertBoundariesAfterLoopsAndConditions は LOOP_END/END の直後に BOUNDARY を挿入する
+// ループや条件分岐が句の終わりにある場合、その終了後に BOUNDARY を挿入して境界を明確にする
+// ただし、システム命令（IF_SYSTEM_LIMIT など）内の END は対象外
+func (b *InstructionBuilder) insertBoundariesAfterLoopsAndConditions(instructions []Instruction) []Instruction {
+	if len(instructions) == 0 {
+		return instructions
+	}
+
+	result := make([]Instruction, 0, len(instructions)+10) // 余裕を持たせる
+
+	for i := 0; i < len(instructions); i++ {
+		instr := instructions[i]
+		result = append(result, instr)
+
+		// LOOP_END のみが対象（END はシステム命令内のものが多いため対象外）
+		if instr.Op == OpLoopEnd {
+			// 次の命令を確認
+			hasNextInstruction := i+1 < len(instructions)
+
+			if hasNextInstruction {
+				nextInstr := instructions[i+1]
+
+				// 次の命令が EMIT_STATIC の場合、BOUNDARY は不要（静的テキストが続く）
+				// それ以外の場合（他の指令/システム命令）、または末尾の場合に BOUNDARY を挿入
+				if nextInstr.Op != OpEmitStatic {
+					// システム命令など他の指令が続く場合、BOUNDARY を挿入
+					result = append(result, Instruction{
+						Op:  OpBoundary,
+						Pos: instr.Pos,
+					})
+				}
+			} else {
+				// 末尾の場合も BOUNDARY を挿入
+				// （システム命令が後に付加される可能性があるため）
+				result = append(result, Instruction{
+					Op:  OpBoundary,
+					Pos: instr.Pos,
+				})
+			}
+		}
 	}
 
 	return result
@@ -519,13 +656,13 @@ func (b *InstructionBuilder) shouldConvertCast(token tokenizer.Token) bool {
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// PostgreSQLの場合: CAST() → ()::
-	if b.context.Dialect == string(snapsql.DialectPostgres) && upper == "CAST" {
+	if b.context.Dialect == snapsql.DialectPostgres && upper == "CAST" {
 		return true
 	}
 
 	// MySQL/SQLite/MariaDBの場合: ():: → CAST()
 	// "::"トークンを検出
-	if (b.context.Dialect == string(snapsql.DialectMySQL) || b.context.Dialect == string(snapsql.DialectSQLite) || b.context.Dialect == string(snapsql.DialectMariaDB)) &&
+	if (b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectSQLite || b.context.Dialect == snapsql.DialectMariaDB) &&
 		token.Value == "::" {
 		return true
 	}
@@ -538,13 +675,13 @@ func (b *InstructionBuilder) shouldConvertTimeFunction(token tokenizer.Token) bo
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// PostgreSQL/MySQL/MariaDB: CURRENT_TIMESTAMP → NOW()
-	if (b.context.Dialect == string(snapsql.DialectPostgres) || b.context.Dialect == string(snapsql.DialectMySQL) || b.context.Dialect == string(snapsql.DialectMariaDB)) &&
+	if (b.context.Dialect == snapsql.DialectPostgres || b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectMariaDB) &&
 		upper == "CURRENT_TIMESTAMP" {
 		return true
 	}
 
 	// SQLite: NOW() → CURRENT_TIMESTAMP
-	if b.context.Dialect == string(snapsql.DialectSQLite) && upper == "NOW" {
+	if b.context.Dialect == snapsql.DialectSQLite && upper == "NOW" {
 		return true
 	}
 
@@ -557,7 +694,7 @@ func (b *InstructionBuilder) shouldConvertDateTime(token tokenizer.Token) bool {
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// MySQL: CURDATE() → CURRENT_DATE (PostgreSQL/SQLite)
-	if b.context.Dialect == string(snapsql.DialectPostgres) || b.context.Dialect == string(snapsql.DialectSQLite) {
+	if b.context.Dialect == snapsql.DialectPostgres || b.context.Dialect == snapsql.DialectSQLite {
 		if upper == "CURDATE" || upper == "CURTIME" {
 			return true
 		}
@@ -572,7 +709,7 @@ func (b *InstructionBuilder) shouldConvertBoolean(token tokenizer.Token) bool {
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// MySQL/SQLite: PostgreSQL の TRUE/FALSE → 1/0 に変換
-	if (b.context.Dialect == string(snapsql.DialectMySQL) || b.context.Dialect == string(snapsql.DialectSQLite) || b.context.Dialect == string(snapsql.DialectMariaDB)) &&
+	if (b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectSQLite || b.context.Dialect == snapsql.DialectMariaDB) &&
 		(upper == "TRUE" || upper == "FALSE") {
 		return true
 	}
@@ -586,12 +723,12 @@ func (b *InstructionBuilder) shouldConvertStringConcatenation(token tokenizer.To
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// PostgreSQL/SQLite: CONCAT() → || 演算子に変換
-	if (b.context.Dialect == string(snapsql.DialectPostgres) || b.context.Dialect == string(snapsql.DialectSQLite)) && upper == "CONCAT" {
+	if (b.context.Dialect == snapsql.DialectPostgres || b.context.Dialect == snapsql.DialectSQLite) && upper == "CONCAT" {
 		return true
 	}
 
 	// MySQL/MariaDB: || (tokenizer.CONCAT) → CONCAT() に変換
-	if (b.context.Dialect == string(snapsql.DialectMySQL) || b.context.Dialect == string(snapsql.DialectMariaDB)) && token.Type == tokenizer.CONCAT {
+	if (b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectMariaDB) && token.Type == tokenizer.CONCAT {
 		return true
 	}
 

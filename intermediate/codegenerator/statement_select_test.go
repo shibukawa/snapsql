@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 	tests := []struct {
 		name                 string
 		sql                  string
-		dialect              string
+		dialect              snapsql.Dialect
 		expectError          bool
 		errorContains        string
 		expectedInstructions []Instruction
@@ -23,7 +24,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 		{
 			name:             "minimal select from",
 			sql:              "SELECT id FROM users",
-			dialect:          "postgres",
+			dialect:          snapsql.DialectPostgres,
 			expectError:      false,
 			expectedCELCount: 0,
 			expectedEnvCount: 0,
@@ -184,11 +185,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			require.NotNil(t, stmt, "statement should not be nil")
 
 			// GenerationContext を作成
-			ctx := &GenerationContext{
-				Dialect:      tt.dialect,
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(tt.dialect)
 
 			// 命令列を生成
 			instructions, celExpressions, celEnvironments, err := GenerateSelectInstructions(stmt, ctx)

@@ -1,6 +1,7 @@
 package codegenerator
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -105,7 +106,7 @@ func TestMergeStaticInstructions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &GenerationContext{Dialect: string(snapsql.DialectPostgres)}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 			builder := NewInstructionBuilder(ctx)
 			builder.instructions = tt.input
 
@@ -196,7 +197,7 @@ func TestProcessTokensWithWhitespaceAndComments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &GenerationContext{Dialect: string(snapsql.DialectPostgres)}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 			builder := NewInstructionBuilder(ctx)
 
 			err := builder.ProcessTokens(tt.tokens)
@@ -249,7 +250,7 @@ func TestFinalizeWithOptimization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &GenerationContext{Dialect: string(snapsql.DialectPostgres)}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 			builder := NewInstructionBuilder(ctx)
 
 			err := builder.ProcessTokens(tt.tokens)
@@ -268,7 +269,7 @@ func TestConditionalDirective(t *testing.T) {
 	tests := []struct {
 		name                 string
 		sql                  string
-		dialect              string
+		dialect              snapsql.Dialect
 		expectedInstructions []Instruction
 		expectedExpressions  []CELExpression
 	}{
@@ -280,7 +281,7 @@ WHERE active = true
 /*# if include_age_filter */
     AND age >= 18
 /*# end */`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE active = true ", Pos: "2:1"},
 				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
@@ -295,7 +296,7 @@ WHERE active = true
 			sql: `/*# parameters: { use_premium: bool } */
 SELECT id, name FROM users
 WHERE /*# if use_premium */premium = true/*# else */active = true/*# end */`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE ", Pos: "2:1"},
 				{Op: OpIf, ExprIndex: ptr(0), Pos: "3:7"},
@@ -319,7 +320,7 @@ WHERE status = 'open'
 /*# else */
     AND urgency = 'normal'
 /*# end */`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, name FROM tasks WHERE status = 'open' ", Pos: "2:1"},
 				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
@@ -343,7 +344,7 @@ SELECT id, name FROM users
 /*# if apply_filter */
 WHERE active = true
 /*# end */`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				// パーサーが条件を評価してWHERE句を含めるため、
 				// 実際の出力は WHERE句が常に含まれる
@@ -363,7 +364,7 @@ WHERE 1=1
         AND verified = true
     /*# end */
 /*# end */`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE 1=1 ", Pos: "2:1"},
 				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
@@ -388,7 +389,7 @@ WHERE 1=1
 /*# if has_filter */
     AND age >= /*= min_age */18
 /*# end */`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE 1=1 ", Pos: "2:1"},
 				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
@@ -411,7 +412,7 @@ SELECT
     name/*# if include_email */,
     email/*# end */
 FROM users`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, name", Pos: "2:1"},
 				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:9"},
@@ -445,11 +446,7 @@ FROM users`,
 			require.NotNil(t, stmt, "statement should not be nil")
 
 			// Create GenerationContext
-			ctx := &GenerationContext{
-				Dialect:      tt.dialect,
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(tt.dialect)
 
 			// Generate instructions
 			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
@@ -502,7 +499,9 @@ FROM users`,
 					break
 				}
 
-				assert.Equal(t, expected.Expression, expressions[i].Expression, "Expression[%d] mismatch", i)
+				assert.Equal(t, expected.Expression, expressions[i].Expression, "Expression[%d] Expression mismatch", i)
+				assert.Equal(t, expected.EnvironmentIndex, expressions[i].EnvironmentIndex, "Expression[%d] EnvironmentIndex mismatch", i)
+				assert.NotEmpty(t, expressions[i].ID, "Expression[%d] ID should not be empty", i)
 			}
 		})
 	}
@@ -513,7 +512,7 @@ func TestVariableDirective(t *testing.T) {
 	tests := []struct {
 		name                 string
 		sql                  string
-		dialect              string
+		dialect              snapsql.Dialect
 		expectedInstructions []Instruction
 		expectedExpressions  []CELExpression
 	}{
@@ -521,7 +520,7 @@ func TestVariableDirective(t *testing.T) {
 			name: "simple variable in WHERE clause",
 			sql: `/*# parameters: { user_id: int} */
 			SELECT id FROM users WHERE user_id = /*= user_id */1`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE user_id = ", Pos: "2:4"},
 				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:41"}, // Variable directive position
@@ -532,7 +531,7 @@ func TestVariableDirective(t *testing.T) {
 			name: "multiple variables in same query",
 			sql: `/*# parameters: { status: string, min_priority: int } */
 SELECT id FROM tasks WHERE status = /*= status */'active' AND priority >= /*= min_priority */1`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM tasks WHERE status = ", Pos: "2:1"},
 				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:37"},
@@ -545,7 +544,7 @@ SELECT id FROM tasks WHERE status = /*= status */'active' AND priority >= /*= mi
 			name: "variable in SELECT clause",
 			sql: `/*# parameters: { field_name: string } */
 SELECT /*= field_name */'id' FROM users`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT ", Pos: "2:1"},
 				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:8"},
@@ -557,7 +556,7 @@ SELECT /*= field_name */'id' FROM users`,
 			name: "variable with object field access",
 			sql: `/*# parameters: { user: { department_id: int } } */
 SELECT id FROM users WHERE department_id = /*= user.department_id */1`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE department_id = ", Pos: "2:1"},
 				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:44"},
@@ -568,7 +567,7 @@ SELECT id FROM users WHERE department_id = /*= user.department_id */1`,
 			name: "duplicate expressions reuse index",
 			sql: `/*# parameters: { status: string } */
 SELECT id FROM users WHERE status = /*= status */'active' OR priority_status = /*= status */'high'`,
-			dialect: string(snapsql.DialectPostgres),
+			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE status = ", Pos: "2:1"},
 				{Op: OpEmitEval, ExprIndex: ptr(0), Pos: "2:37"}, // First occurrence
@@ -613,11 +612,7 @@ SELECT id FROM users WHERE status = /*= status */'active' OR priority_status = /
 			}
 
 			// Create GenerationContext
-			ctx := &GenerationContext{
-				Dialect:      tt.dialect,
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(tt.dialect)
 
 			// Generate instructions
 			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
@@ -684,7 +679,7 @@ func TestDialectConversions(t *testing.T) {
 		category             string
 		name                 string
 		sql                  string
-		dialect              string
+		dialect              snapsql.Dialect
 		expectedInstructions []Instruction
 	}{
 		// === Time Function Conversion ===
@@ -692,7 +687,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "CURRENT_TIMESTAMP to NOW() for PostgreSQL",
 			sql:      "SELECT id, CURRENT_TIMESTAMP FROM users",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
 			},
@@ -701,7 +696,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "CURRENT_TIMESTAMP to NOW() for MySQL",
 			sql:      "SELECT id, CURRENT_TIMESTAMP FROM users",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
 			},
@@ -710,7 +705,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "CURRENT_TIMESTAMP to NOW() for MariaDB",
 			sql:      "SELECT id, CURRENT_TIMESTAMP FROM users",
-			dialect:  string(snapsql.DialectMariaDB),
+			dialect:  snapsql.DialectMariaDB,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
 			},
@@ -719,7 +714,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "CURRENT_TIMESTAMP stays for SQLite",
 			sql:      "SELECT id, CURRENT_TIMESTAMP FROM users",
-			dialect:  string(snapsql.DialectSQLite),
+			dialect:  snapsql.DialectSQLite,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, CURRENT_TIMESTAMP FROM users", Pos: "1:1"},
 			},
@@ -728,7 +723,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "NOW() to CURRENT_TIMESTAMP for SQLite",
 			sql:      "SELECT id, NOW() FROM users",
-			dialect:  string(snapsql.DialectSQLite),
+			dialect:  snapsql.DialectSQLite,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, CURRENT_TIMESTAMP FROM users", Pos: "1:1"},
 			},
@@ -737,7 +732,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "NOW() stays for PostgreSQL",
 			sql:      "SELECT id, NOW() FROM users",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
 			},
@@ -746,7 +741,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "NOW() stays for MySQL",
 			sql:      "SELECT id, NOW() FROM users",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, NOW() FROM users", Pos: "1:1"},
 			},
@@ -755,9 +750,9 @@ func TestDialectConversions(t *testing.T) {
 			category: "timefunc",
 			name:     "time function in WHERE clause",
 			sql:      "SELECT id FROM orders WHERE created_at > NOW()",
-			dialect:  string(snapsql.DialectSQLite),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
-				{Op: OpEmitStatic, Value: "SELECT id FROM orders WHERE created_at > CURRENT_TIMESTAMP", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: "SELECT id FROM orders WHERE created_at > NOW()", Pos: "1:1"},
 			},
 		},
 		// === CAST Conversion ===
@@ -765,7 +760,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "cast",
 			name:     "CAST to PostgreSQL :: syntax",
 			sql:      "SELECT id, CAST(created_at AS TEXT) FROM users",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, (created_at)::TEXT FROM users", Pos: "1:1"},
 			},
@@ -774,7 +769,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "cast",
 			name:     "CAST stays for MySQL",
 			sql:      "SELECT id, CAST(created_at AS CHAR) FROM users",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, CAST(created_at AS CHAR) FROM users", Pos: "1:1"},
 			},
@@ -783,7 +778,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "cast",
 			name:     "CAST stays for SQLite",
 			sql:      "SELECT id, CAST(amount AS INTEGER) FROM orders",
-			dialect:  string(snapsql.DialectSQLite),
+			dialect:  snapsql.DialectSQLite,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, CAST(amount AS INTEGER) FROM orders", Pos: "1:1"},
 			},
@@ -792,7 +787,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "cast",
 			name:     "CAST in WHERE clause to PostgreSQL",
 			sql:      "SELECT id FROM users WHERE CAST(age AS TEXT) = '25'",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE (age)::TEXT = '25'", Pos: "1:1"},
 			},
@@ -801,7 +796,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "cast",
 			name:     "multiple CASTs to PostgreSQL",
 			sql:      "SELECT CAST(id AS TEXT), CAST(price AS DECIMAL) FROM products",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT (id)::TEXT, (price)::DECIMAL FROM products", Pos: "1:1"},
 			},
@@ -811,7 +806,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "datetime",
 			name:     "CURDATE to CURRENT_DATE for PostgreSQL",
 			sql:      "SELECT CURDATE() FROM users",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT CURRENT_DATE FROM users", Pos: "1:1"},
 			},
@@ -820,7 +815,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "datetime",
 			name:     "CURTIME to CURRENT_TIME for MySQL",
 			sql:      "SELECT id, CURTIME() FROM orders",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id, CURTIME() FROM orders", Pos: "1:1"},
 			},
@@ -829,7 +824,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "datetime",
 			name:     "CURRENT_DATE stays for MySQL",
 			sql:      "SELECT id FROM logs WHERE date = CURRENT_DATE",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM logs WHERE date = CURRENT_DATE", Pos: "1:1"},
 			},
@@ -838,7 +833,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "datetime",
 			name:     "CURDATE to CURRENT_DATE for SQLite",
 			sql:      "SELECT CURDATE() FROM users WHERE active = 1",
-			dialect:  string(snapsql.DialectSQLite),
+			dialect:  snapsql.DialectSQLite,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT CURRENT_DATE FROM users WHERE active = 1", Pos: "1:1"},
 			},
@@ -848,7 +843,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "boolean",
 			name:     "PostgreSQL TRUE to 1 for MySQL",
 			sql:      "SELECT id FROM users WHERE active = TRUE",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM users WHERE active = 1", Pos: "1:1"},
 			},
@@ -857,7 +852,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "boolean",
 			name:     "PostgreSQL FALSE to 0 for SQLite",
 			sql:      "SELECT id FROM items WHERE deleted = FALSE",
-			dialect:  string(snapsql.DialectSQLite),
+			dialect:  snapsql.DialectSQLite,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM items WHERE deleted = 0", Pos: "1:1"},
 			},
@@ -866,7 +861,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "boolean",
 			name:     "TRUE stays for PostgreSQL",
 			sql:      "SELECT id FROM records WHERE flag = TRUE",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM records WHERE flag = TRUE", Pos: "1:1"},
 			},
@@ -875,7 +870,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "boolean",
 			name:     "Multiple TRUE/FALSE conversions",
 			sql:      "SELECT id FROM logs WHERE success = TRUE AND archived = FALSE",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT id FROM logs WHERE success = 1 AND archived = 0", Pos: "1:1"},
 			},
@@ -885,7 +880,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "concat",
 			name:     "CONCAT to || for PostgreSQL",
 			sql:      "SELECT CONCAT(first_name, ' ', last_name) FROM users",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT first_name || ' ' || last_name FROM users", Pos: "1:1"},
 			},
@@ -894,7 +889,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "concat",
 			name:     "CONCAT stays for MySQL",
 			sql:      "SELECT CONCAT(city, ', ', state) FROM locations",
-			dialect:  string(snapsql.DialectMySQL),
+			dialect:  snapsql.DialectMySQL,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT CONCAT(city, ', ', state) FROM locations", Pos: "1:1"},
 			},
@@ -903,7 +898,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "concat",
 			name:     "CONCAT with multiple arguments",
 			sql:      "SELECT CONCAT(a, b, c, d) FROM table1",
-			dialect:  string(snapsql.DialectSQLite),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT a || b || c || d FROM table1", Pos: "1:1"},
 			},
@@ -912,7 +907,7 @@ func TestDialectConversions(t *testing.T) {
 			category: "concat",
 			name:     "Multiple CONCAT functions",
 			sql:      "SELECT CONCAT(a, b), CONCAT(c, d) FROM table1",
-			dialect:  string(snapsql.DialectPostgres),
+			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT a || b, c || d FROM table1", Pos: "1:1"},
 			},
@@ -928,11 +923,7 @@ func TestDialectConversions(t *testing.T) {
 			require.NotNil(t, stmt, "statement should not be nil")
 
 			// Create GenerationContext with specific dialect
-			ctx := &GenerationContext{
-				Dialect:      tt.dialect,
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(tt.dialect)
 
 			// Generate instructions
 			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
@@ -982,15 +973,14 @@ func ptr(i int) *int {
 // TestForDirectiveTableDriven tests for loop directive (/*# for variable : expression */) using table-driven approach
 // This test parses complete SQL files and validates the instruction generation, expressions, and environments
 // Constants are intentionally left empty to test type inference with dummy values
+// TestForDirectiveTableDriven は for ループディレクティブの命令生成をテスト
 func TestForDirectiveTableDriven(t *testing.T) {
 	tests := []struct {
-		name                    string
-		sql                     string
-		dialect                 string
-		expectedHasLoopStart    bool
-		expectedHasLoopEnd      bool
-		expectedExpressions     []CELExpression
-		expectedCELEnvironments []CELEnvironment
+		name                 string
+		sql                  string
+		dialect              snapsql.Dialect
+		expectedInstructions []Instruction
+		expectedExpressions  []CELExpression
 	}{
 		{
 			name: "simple for loop with variable reference",
@@ -1003,20 +993,21 @@ parameters:
 */
 INSERT INTO user_tags (user_id, tag) 
 VALUES /*# for user : users */(/*= user.id */, /*= user.tags */) /*# end */`,
-			dialect:              string(snapsql.DialectPostgres),
-			expectedHasLoopStart: true,
-			expectedHasLoopEnd:   true,
-			expectedExpressions: []CELExpression{
-				{Expression: "user.id"},
-				{Expression: "user.tags"},
+			dialect: snapsql.DialectPostgres,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "INSERT INTO user_tags (user_id, tag) VALUES "},
+				{Op: OpLoopStart, ExprIndex: ptr(0), EnvIndex: ptr(1), CollectionExprIndex: ptr(0)},
+				{Op: OpEmitStatic, Value: "("},
+				{Op: OpEmitEval, ExprIndex: ptr(1)},
+				{Op: OpEmitStatic, Value: ", "},
+				{Op: OpEmitEval, ExprIndex: ptr(2)},
+				{Op: OpEmitStatic, Value: ") "},
+				{Op: OpLoopEnd, EnvIndex: ptr(0)},
 			},
-			expectedCELEnvironments: []CELEnvironment{
-				{
-					AdditionalVariables: []CELVariableInfo{
-						{Name: "user", Type: "any"},
-					},
-					Container: "for user : users",
-				},
+			expectedExpressions: []CELExpression{
+				{Expression: "users", EnvironmentIndex: 0},
+				{Expression: "user.id", EnvironmentIndex: 1},
+				{Expression: "user.tags", EnvironmentIndex: 1},
 			},
 		},
 		{
@@ -1035,26 +1026,26 @@ VALUES
       (/*= user.id */, /*= tag */)
     /*# end */
   /*# end */`,
-			dialect:              string(snapsql.DialectPostgres),
-			expectedHasLoopStart: true,
-			expectedHasLoopEnd:   true,
-			expectedExpressions: []CELExpression{
-				{Expression: "user.id"},
-				{Expression: "tag"},
+			dialect: snapsql.DialectPostgres,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "INSERT INTO user_details (user_id, tag) VALUES "},
+				{Op: OpLoopStart, ExprIndex: ptr(0), EnvIndex: ptr(1), CollectionExprIndex: ptr(0)},
+				{Op: OpEmitStatic, Value: " "},
+				{Op: OpLoopStart, ExprIndex: ptr(1), EnvIndex: ptr(2), CollectionExprIndex: ptr(1)},
+				{Op: OpEmitStatic, Value: " ("},
+				{Op: OpEmitEval, ExprIndex: ptr(2)},
+				{Op: OpEmitStatic, Value: ", "},
+				{Op: OpEmitEval, ExprIndex: ptr(3)},
+				{Op: OpEmitStatic, Value: ") "},
+				{Op: OpLoopEnd, EnvIndex: ptr(1)},
+				{Op: OpEmitStatic, Value: " "},
+				{Op: OpLoopEnd, EnvIndex: ptr(0)},
 			},
-			expectedCELEnvironments: []CELEnvironment{
-				{
-					AdditionalVariables: []CELVariableInfo{
-						{Name: "user", Type: "any"},
-					},
-					Container: "for user : users",
-				},
-				{
-					AdditionalVariables: []CELVariableInfo{
-						{Name: "tag", Type: "any"},
-					},
-					Container: "for tag : user.tags",
-				},
+			expectedExpressions: []CELExpression{
+				{Expression: "users", EnvironmentIndex: 0},
+				{Expression: "user.tags", EnvironmentIndex: 0},
+				{Expression: "user.id", EnvironmentIndex: 2},
+				{Expression: "tag", EnvironmentIndex: 2},
 			},
 		},
 		{
@@ -1078,20 +1069,25 @@ VALUES
       /*# end */
     )
   /*# end */`,
-			dialect:              string(snapsql.DialectPostgres),
-			expectedHasLoopStart: true,
-			expectedHasLoopEnd:   true,
-			expectedExpressions: []CELExpression{
-				{Expression: "user.id"},
-				{Expression: "user.id > 0"},
+			dialect: snapsql.DialectPostgres,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "INSERT INTO user_summary (user_id, summary) VALUES "},
+				{Op: OpLoopStart, ExprIndex: ptr(0), EnvIndex: ptr(1), CollectionExprIndex: ptr(0)},
+				{Op: OpEmitStatic, Value: " ( "},
+				{Op: OpEmitEval, ExprIndex: ptr(1)},
+				{Op: OpEmitStatic, Value: ", "},
+				{Op: OpIf, ExprIndex: ptr(2)},
+				{Op: OpEmitStatic, Value: " 'active' "},
+				{Op: OpElse},
+				{Op: OpEmitStatic, Value: " 'inactive' "},
+				{Op: OpLoopEnd, EnvIndex: ptr(0)},
+				{Op: OpEmitStatic, Value: " ) "},
+				{Op: OpEnd},
 			},
-			expectedCELEnvironments: []CELEnvironment{
-				{
-					AdditionalVariables: []CELVariableInfo{
-						{Name: "user", Type: "any"},
-					},
-					Container: "for user : users",
-				},
+			expectedExpressions: []CELExpression{
+				{Expression: "users", EnvironmentIndex: 0},
+				{Expression: "user.id", EnvironmentIndex: 1},
+				{Expression: "user.id > 0", EnvironmentIndex: 1},
 			},
 		},
 	}
@@ -1113,13 +1109,8 @@ VALUES
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt, "statement should not be nil")
 
-			// Create GenerationContext
-			ctx := &GenerationContext{
-				Dialect:         tt.dialect,
-				Expressions:     make([]CELExpression, 0),
-				Environments:    make([]string, 0),
-				CELEnvironments: make([]CELEnvironment, 0),
-			}
+			// Create GenerationContext (root environment is automatically initialized)
+			ctx := NewGenerationContext(tt.dialect)
 
 			// Generate instructions from the parsed statement
 			builder := NewInstructionBuilder(ctx)
@@ -1134,77 +1125,89 @@ VALUES
 			// Merge static instructions and get final result
 			instructions := builder.mergeStaticInstructions()
 
-			// Verify loop start and end instructions exist
-			hasLoopStart := false
-			hasLoopEnd := false
-
-			for _, instr := range instructions {
-				if instr.Op == OpLoopStart {
-					hasLoopStart = true
-				}
-
-				if instr.Op == OpLoopEnd {
-					hasLoopEnd = true
+			// 命令の検証
+			// OpIfSystemLimit 以降をカットして比較
+			cutIndex := len(instructions)
+			for i, instr := range instructions {
+				if instr.Op == OpIfSystemLimit {
+					cutIndex = i
+					break
 				}
 			}
 
-			if tt.expectedHasLoopStart && !hasLoopStart {
-				t.Errorf("Expected LOOP_START instruction but not found. Instructions: %v", instructions)
+			actualBeforeSystemOps := instructions[:cutIndex]
+
+			if !assert.Equal(t, len(tt.expectedInstructions), len(actualBeforeSystemOps), "Instruction count mismatch") {
+				t.Logf("Expected %d instructions, got %d", len(tt.expectedInstructions), len(actualBeforeSystemOps))
+
+				for i, instr := range actualBeforeSystemOps {
+					t.Logf("  [%d] Op=%s Value=%q ExprIndex=%v EnvIndex=%v", i, instr.Op, instr.Value, instr.ExprIndex, instr.EnvIndex)
+				}
+			} else {
+				// Log actual instructions for debugging
+				for i, instr := range actualBeforeSystemOps {
+					var collExprIdx, exprIdx, envIdx string
+					if instr.CollectionExprIndex != nil {
+						collExprIdx = fmt.Sprintf("%d", *instr.CollectionExprIndex)
+					} else {
+						collExprIdx = "<nil>"
+					}
+					if instr.ExprIndex != nil {
+						exprIdx = fmt.Sprintf("%d", *instr.ExprIndex)
+					} else {
+						exprIdx = "<nil>"
+					}
+					if instr.EnvIndex != nil {
+						envIdx = fmt.Sprintf("%d", *instr.EnvIndex)
+					} else {
+						envIdx = "<nil>"
+					}
+					t.Logf("  [%d] Op=%s Value=%q CollectionExprIndex=%s ExprIndex=%s EnvIndex=%s", i, instr.Op, instr.Value, collExprIdx, exprIdx, envIdx)
+				}
 			}
 
-			if tt.expectedHasLoopEnd && !hasLoopEnd {
-				t.Errorf("Expected LOOP_END instruction but not found. Instructions: %v", instructions)
-			}
+			for i, expected := range tt.expectedInstructions {
+				if i >= len(actualBeforeSystemOps) {
+					break
+				}
 
-			// Verify expected expressions exist
-			expressions := ctx.Expressions
+				actual := actualBeforeSystemOps[i]
+				assert.Equal(t, expected.Op, actual.Op, "Instruction[%d] Op mismatch", i)
 
-			for _, expectedExpr := range tt.expectedExpressions {
-				found := false
+				if expected.Value != "" {
+					assert.Equal(t, expected.Value, actual.Value, "Instruction[%d] Value mismatch\nExpected: %q\nActual: %q", i, expected.Value, actual.Value)
+				}
 
-				for _, expr := range expressions {
-					if expr.Expression == expectedExpr.Expression {
-						found = true
-						break
+				// Check ExprIndex if specified (for OpLoopStart, this maps to CollectionExprIndex)
+				if expected.ExprIndex != nil {
+					if actual.Op == OpLoopStart {
+						require.NotNil(t, actual.CollectionExprIndex, "Instruction[%d] CollectionExprIndex (for LOOP_START) should not be nil", i)
+						assert.Equal(t, *expected.ExprIndex, *actual.CollectionExprIndex, "Instruction[%d] CollectionExprIndex mismatch", i)
+					} else {
+						require.NotNil(t, actual.ExprIndex, "Instruction[%d] ExprIndex should not be nil", i)
+						assert.Equal(t, *expected.ExprIndex, *actual.ExprIndex, "Instruction[%d] ExprIndex mismatch", i)
 					}
 				}
 
-				if !found {
-					t.Errorf("Expected expression '%s' not found. Got expressions: %v", expectedExpr.Expression, expressions)
+				// Check EnvIndex if specified
+				if expected.EnvIndex != nil {
+					require.NotNil(t, actual.EnvIndex, "Instruction[%d] EnvIndex should not be nil", i)
+					assert.Equal(t, *expected.EnvIndex, *actual.EnvIndex, "Instruction[%d] EnvIndex mismatch", i)
 				}
 			}
 
-			// Verify expected CEL environments
-			for i, expectedEnv := range tt.expectedCELEnvironments {
-				if i >= len(ctx.CELEnvironments) {
-					t.Errorf("Expected CEL environment at index %d but not found", i)
-					continue
+			// 式の検証
+			assert.Equal(t, len(tt.expectedExpressions), len(ctx.Expressions), "Expression count mismatch")
+
+			for i, expected := range tt.expectedExpressions {
+				if i >= len(ctx.Expressions) {
+					break
 				}
 
-				actualEnv := ctx.CELEnvironments[i]
-
-				// Check container
-				if expectedEnv.Container != actualEnv.Container {
-					t.Errorf("CEL environment[%d] container mismatch. Expected: %q, Got: %q", i, expectedEnv.Container, actualEnv.Container)
-				}
-
-				// Check additional variables
-				if len(expectedEnv.AdditionalVariables) != len(actualEnv.AdditionalVariables) {
-					t.Errorf("CEL environment[%d] variable count mismatch. Expected: %d, Got: %d", i, len(expectedEnv.AdditionalVariables), len(actualEnv.AdditionalVariables))
-					continue
-				}
-
-				for j, expectedVar := range expectedEnv.AdditionalVariables {
-					actualVar := actualEnv.AdditionalVariables[j]
-
-					if expectedVar.Name != actualVar.Name {
-						t.Errorf("CEL environment[%d] variable[%d] name mismatch. Expected: %q, Got: %q", i, j, expectedVar.Name, actualVar.Name)
-					}
-
-					if expectedVar.Type != actualVar.Type {
-						t.Errorf("CEL environment[%d] variable[%d] type mismatch. Expected: %q, Got: %q", i, j, expectedVar.Type, actualVar.Type)
-					}
-				}
+				actual := ctx.Expressions[i]
+				assert.Equal(t, expected.Expression, actual.Expression, "Expression[%d] Expression mismatch", i)
+				assert.Equal(t, expected.EnvironmentIndex, actual.EnvironmentIndex, "Expression[%d] EnvironmentIndex mismatch", i)
+				assert.NotEmpty(t, actual.ID, "Expression[%d] ID should not be empty", i)
 			}
 		})
 	}
@@ -1279,13 +1282,8 @@ func TestSubqueryInFromClause(t *testing.T) {
 
 			_, ok := stmt.(*parser.SelectStatement)
 			require.True(t, ok, "Expected SELECT statement")
-
 			// GenerateSelectInstructions で命令と環境を生成
-			ctx := &GenerationContext{
-				Dialect:      string(snapsql.DialectPostgres),
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 
 			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
 			require.NoError(t, err)
@@ -1425,11 +1423,7 @@ func TestWhereSubqueryInClause(t *testing.T) {
 			require.True(t, ok, "Expected SELECT statement")
 
 			// GenerateSelectInstructions で命令を生成
-			ctx := &GenerationContext{
-				Dialect:      string(snapsql.DialectPostgres),
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 
 			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
 			require.NoError(t, err)
@@ -1528,11 +1522,7 @@ func TestSelectScalarSubquery(t *testing.T) {
 			require.True(t, ok, "Expected SELECT statement")
 
 			// GenerateSelectInstructions で命令を生成
-			ctx := &GenerationContext{
-				Dialect:      string(snapsql.DialectPostgres),
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 
 			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
 			require.NoError(t, err)
@@ -1619,11 +1609,7 @@ func TestDirectiveInSubquery(t *testing.T) {
 			require.True(t, ok, "Expected SELECT statement")
 
 			// GenerateSelectInstructions で命令を生成
-			ctx := &GenerationContext{
-				Dialect:      string(snapsql.DialectPostgres),
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 
 			instructions, expressions, _, err := GenerateSelectInstructions(stmt, ctx)
 			require.NoError(t, err)

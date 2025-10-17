@@ -19,13 +19,37 @@ type GenerationContext struct {
 	Environments []string
 
 	// 方言設定（postgres, mysql, sqlite 等）
-	Dialect string
+	Dialect snapsql.Dialect
 
 	// テーブル情報（スキーマ情報）
 	TableInfo map[string]*snapsql.TableInfo
 
 	// パース済み AST（参照用、現在は未使用だが将来的に拡張可能）
 	Statement parser.StatementNode
+}
+
+// NewGenerationContext creates a new GenerationContext with the root environment initialized.
+// The root environment (index 0) is always created as the default environment for the query.
+func NewGenerationContext(dialect snapsql.Dialect) *GenerationContext {
+	ctx := &GenerationContext{
+		Expressions:     make([]CELExpression, 0),
+		CELEnvironments: make([]CELEnvironment, 0),
+		Environments:    make([]string, 0),
+		Dialect:         dialect,
+		TableInfo:       nil,
+		Statement:       nil,
+	}
+
+	// Initialize with root environment (index 0)
+	rootEnv := CELEnvironment{
+		Index:               0,
+		AdditionalVariables: make([]CELVariableInfo, 0),
+		Container:           "root",
+		ParentIndex:         nil,
+	}
+	ctx.AddCELEnvironment(rootEnv)
+
+	return ctx
 }
 
 // AddExpression adds a CEL expression to the context and returns its index.

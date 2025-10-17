@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 )
 
@@ -63,11 +64,7 @@ func TestSystemLimitOffsetInstructions(t *testing.T) {
 			}
 
 			// 命令生成
-			ctx := &GenerationContext{
-				Dialect:      "postgres",
-				Expressions:  make([]CELExpression, 0),
-				Environments: make([]string, 0),
-			}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 
 			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
 			if err != nil {

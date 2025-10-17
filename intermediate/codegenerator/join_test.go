@@ -16,44 +16,44 @@ func TestDialectJoinConversion(t *testing.T) {
 	tests := []struct {
 		name             string
 		sql              string
-		dialect          string
+		dialect          snapsql.Dialect
 		expectJoinString bool
 	}{
 		{
 			name:             "INNER JOIN",
 			sql:              `SELECT u.user_id, o.order_id FROM users u INNER JOIN orders o ON u.user_id = o.user_id`,
-			dialect:          string(snapsql.DialectPostgres),
+			dialect:          snapsql.DialectPostgres,
 			expectJoinString: true,
 		},
 		{
 			name:             "LEFT JOIN",
 			sql:              `SELECT u.user_id, o.order_id FROM users u LEFT JOIN orders o ON u.user_id = o.user_id`,
-			dialect:          string(snapsql.DialectPostgres),
+			dialect:          snapsql.DialectPostgres,
 			expectJoinString: true,
 		},
 		{
 			name:             "RIGHT JOIN",
 			sql:              `SELECT u.user_id, o.order_id FROM users u RIGHT JOIN orders o ON u.user_id = o.user_id`,
-			dialect:          string(snapsql.DialectPostgres),
+			dialect:          snapsql.DialectPostgres,
 			expectJoinString: true,
 		},
 		{
 			name:             "CROSS JOIN",
 			sql:              `SELECT u.user_id, r.role_id FROM users u CROSS JOIN roles r`,
-			dialect:          string(snapsql.DialectPostgres),
+			dialect:          snapsql.DialectPostgres,
 			expectJoinString: true,
 		},
 		{
 			name:             "Multiple JOINs",
 			sql:              `SELECT u.user_id, o.order_id, p.product_id FROM users u LEFT JOIN orders o ON u.user_id = o.user_id INNER JOIN products p ON o.order_id = p.product_id`,
-			dialect:          string(snapsql.DialectPostgres),
+			dialect:          snapsql.DialectPostgres,
 			expectJoinString: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &GenerationContext{Dialect: tt.dialect}
+			ctx := NewGenerationContext(tt.dialect)
 
 			// パーサーでSQLをパース
 			sqlWithSemicolon := tt.sql
@@ -121,7 +121,7 @@ func TestJoinTypeNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &GenerationContext{Dialect: string(snapsql.DialectPostgres)}
+			ctx := NewGenerationContext(snapsql.DialectPostgres)
 
 			sqlWithSemicolon := tt.sql
 			if !strings.HasSuffix(sqlWithSemicolon, ";") {
@@ -163,8 +163,8 @@ func TestJoinConditionDialectConversion(t *testing.T) {
 	tests := []struct {
 		name        string
 		sql         string
-		fromDialect string
-		toDialect   string
+		fromDialect snapsql.Dialect
+		toDialect   snapsql.Dialect
 		expectsNot  string // 変換前のキーワードを含まないことを確認
 		expects     string // 変換後のキーワードを含むことを確認
 	}{
@@ -174,8 +174,8 @@ func TestJoinConditionDialectConversion(t *testing.T) {
 		{
 			name:        "TRUE/FALSE in ON condition (PostgreSQL to MySQL)",
 			sql:         `SELECT u.user_id FROM users u INNER JOIN orders o ON u.is_active = TRUE AND o.is_pending = FALSE`,
-			fromDialect: string(snapsql.DialectPostgres),
-			toDialect:   string(snapsql.DialectMySQL),
+			fromDialect: snapsql.DialectPostgres,
+			toDialect:   snapsql.DialectMySQL,
 			expects:     "1",
 			expectsNot:  "TRUE",
 		},
@@ -183,7 +183,7 @@ func TestJoinConditionDialectConversion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &GenerationContext{Dialect: tt.toDialect}
+			ctx := NewGenerationContext(tt.toDialect)
 
 			sqlWithSemicolon := tt.sql
 			if !strings.HasSuffix(sqlWithSemicolon, ";") {
