@@ -350,9 +350,8 @@ func (b *InstructionBuilder) GetCELExpressions() []CELExpression {
 }
 
 // GetCELEnvironments は収集された CEL 環境のリストを返す
-// Phase 1 では常に空配列を返す
 func (b *InstructionBuilder) GetCELEnvironments() []CELEnvironment {
-	return []CELEnvironment{}
+	return b.context.CELEnvironments
 }
 
 // Finalize は最適化を実行して最終的な命令列を返す

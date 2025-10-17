@@ -27,7 +27,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			dialect:          snapsql.DialectPostgres,
 			expectError:      false,
 			expectedCELCount: 0,
-			expectedEnvCount: 0,
+			expectedEnvCount: 1,
 			expectedInstructions: []Instruction{
 				// 最適化後: 連続する EMIT_STATIC はマージされる
 				{Op: OpEmitStatic, Value: "SELECT id FROM users", Pos: "1:1"},
@@ -51,7 +51,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			dialect:          "postgres",
 			expectError:      false,
 			expectedCELCount: 0,
-			expectedEnvCount: 0,
+			expectedEnvCount: 1,
 			expectedInstructions: []Instruction{
 				// 最適化後: 連続する EMIT_STATIC はマージされる
 				{Op: OpEmitStatic, Value: "SELECT id, name FROM users", Pos: "1:1"},
@@ -74,7 +74,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			dialect:          "postgres",
 			expectError:      false,
 			expectedCELCount: 0,
-			expectedEnvCount: 0,
+			expectedEnvCount: 1,
 			expectedInstructions: []Instruction{
 				// 最適化後: 連続する EMIT_STATIC はマージされる
 				// LIMIT句の前まで（スペースを含む） + LIMIT句の' LIMIT 'までマージ
@@ -101,7 +101,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			dialect:          "postgres",
 			expectError:      false,
 			expectedCELCount: 0,
-			expectedEnvCount: 0,
+			expectedEnvCount: 1,
 			expectedInstructions: []Instruction{
 				// 最適化後: 連続する EMIT_STATIC はマージされる
 				{Op: OpEmitStatic, Value: "SELECT id FROM users ", Pos: "1:1"},
@@ -125,7 +125,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			dialect:          "postgres",
 			expectError:      false,
 			expectedCELCount: 0,
-			expectedEnvCount: 0,
+			expectedEnvCount: 1,
 			expectedInstructions: []Instruction{
 				// 最適化後: 連続する EMIT_STATIC はマージされる
 				{Op: OpEmitStatic, Value: "SELECT id FROM users ", Pos: "1:1"},
@@ -149,7 +149,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 			dialect:          "postgres",
 			expectError:      false,
 			expectedCELCount: 0,
-			expectedEnvCount: 0,
+			expectedEnvCount: 1,
 			expectedInstructions: []Instruction{
 				// 最適化後: 連続する EMIT_STATIC はマージされる
 				{Op: OpEmitStatic, Value: "SELECT id FROM users ", Pos: "1:1"},

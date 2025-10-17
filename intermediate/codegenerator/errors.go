@@ -22,3 +22,9 @@ var ErrLoopMismatch = errors.New("loop directive mismatch")
 
 // ErrLoopNesting is returned when loop nesting exceeds maximum depth.
 var ErrLoopNesting = errors.New("loop nesting too deep")
+
+// ErrMissingClause is returned when a required clause is missing.
+var ErrMissingClause = errors.New("missing required clause")
+
+// ErrConflictingClauses is returned when conflicting clauses exist together.
+var ErrConflictingClauses = errors.New("conflicting clauses")
