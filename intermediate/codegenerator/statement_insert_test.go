@@ -33,7 +33,6 @@ func TestGenerateInsertInstructions(t *testing.T) {
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name, email) VALUES (1, 'John', 'john@example.com')", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -45,7 +44,6 @@ func TestGenerateInsertInstructions(t *testing.T) {
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO products (id, name, price, category) VALUES (1, 'Widget', 9.99, 'Tools')", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -57,7 +55,6 @@ func TestGenerateInsertInstructions(t *testing.T) {
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -69,7 +66,6 @@ func TestGenerateInsertInstructions(t *testing.T) {
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES (1, 'John') RETURNING id, name, created_at", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -81,7 +77,6 @@ func TestGenerateInsertInstructions(t *testing.T) {
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -93,7 +88,6 @@ func TestGenerateInsertInstructions(t *testing.T) {
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO user_archive (id, name) SELECT id, name FROM users WHERE active = true", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -111,7 +105,6 @@ VALUES (/*= user_id */ 1, /*= user_name */ 'John')`,
 				{Op: OpEmitStatic, Value: " 1, ", Pos: "3:23"},
 				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:27"},
 				{Op: OpEmitStatic, Value: " 'John')", Pos: "3:43"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 2,
 			expectedEnvCount: 1,
@@ -125,7 +118,6 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name, email) VALUES (1, 'John', 'john@example.com') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -137,7 +129,6 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES (1, 'John') RETURNING id, name", Pos: "1:1"},
-				{Op: OpEmitSystemFor, Pos: ""},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,

@@ -24,6 +24,7 @@ import (
 // 備考:
 //   - INTO節のRawTokensをそのまま処理することで、テーブル名やエイリアスを自動処理
 //   - ディレクティブが含まれる可能性に対応（理論上、テーブル名の動的生成は可能だが稀）
+//   - システムフィールドはこの関数呼び出し後に別途追加される
 func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.FieldName, builder *InstructionBuilder) error {
 	if into == nil {
 		return fmt.Errorf("%w: INSERT INTO clause is required", ErrMissingClause)
@@ -31,8 +32,45 @@ func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.Fi
 
 	// RawTokens をそのまま処理
 	tokens := into.RawTokens()
-	if err := builder.ProcessTokens(tokens); err != nil {
-		return fmt.Errorf("code generation: %w", err)
+
+	// 既存のカラムリストからマップを作成（重複排除用）
+	existingColumns := make(map[string]bool)
+	for _, col := range columns {
+		existingColumns[col.Name] = true
+	}
+
+	// システムフィールドをカラムリストに追加する場合
+	fields := getInsertSystemFieldsFiltered(builder.context, existingColumns)
+
+	if len(fields) > 0 {
+		// 括弧の位置を見つける
+		closingParenIdx := findClosingParenIndex(tokens)
+		if closingParenIdx >= 0 {
+			// 括弧の直前までのトークンを処理
+			tokensBeforeParen := tokens[:closingParenIdx]
+			if err := builder.ProcessTokens(tokensBeforeParen); err != nil {
+				return fmt.Errorf("code generation: %w", err)
+			}
+
+			// システムフィールド名を追加
+			insertSystemFieldNames(builder, fields)
+
+			// 括弧を含むトークンを処理
+			tokensFromParen := tokens[closingParenIdx:]
+			if err := builder.ProcessTokens(tokensFromParen); err != nil {
+				return fmt.Errorf("code generation: %w", err)
+			}
+		} else {
+			// 括弧が見つからない場合は通常処理
+			if err := builder.ProcessTokens(tokens); err != nil {
+				return fmt.Errorf("code generation: %w", err)
+			}
+		}
+	} else {
+		// システムフィールドがない場合は通常処理
+		if err := builder.ProcessTokens(tokens); err != nil {
+			return fmt.Errorf("code generation: %w", err)
+		}
 	}
 
 	return nil

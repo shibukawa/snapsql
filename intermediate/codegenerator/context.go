@@ -26,6 +26,9 @@ type GenerationContext struct {
 
 	// パース済み AST（参照用、現在は未使用だが将来的に拡張可能）
 	Statement parser.StatementNode
+
+	// SnapSQL設定（システムフィールドなど）
+	Config *snapsql.Config
 }
 
 // NewGenerationContext creates a new GenerationContext with the root environment initialized.
@@ -38,6 +41,7 @@ func NewGenerationContext(dialect snapsql.Dialect) *GenerationContext {
 		Dialect:         dialect,
 		TableInfo:       nil,
 		Statement:       nil,
+		Config:          nil,
 	}
 
 	// Initialize with root environment (index 0)
@@ -92,4 +96,10 @@ func (ctx *GenerationContext) AddCELEnvironment(env CELEnvironment) int {
 	ctx.CELEnvironments = append(ctx.CELEnvironments, env)
 
 	return index
+}
+
+// SetConfig sets the SnapSQL configuration for this generation context.
+// This is used to access system field definitions and other settings.
+func (ctx *GenerationContext) SetConfig(config *snapsql.Config) {
+	ctx.Config = config
 }

@@ -48,7 +48,7 @@ func GenerateInsertInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	// VALUES句とSELECT句の分岐処理
 	if insertStmt.ValuesList != nil {
 		// VALUES形式のINSERT
-		if err := generateValuesClause(insertStmt.ValuesList, builder); err != nil {
+		if err := generateValuesClause(insertStmt.ValuesList, builder, insertStmt.Columns); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to generate VALUES clause: %w", err)
 		}
 	} else if insertStmt.Select != nil {
@@ -117,9 +117,6 @@ func GenerateInsertInstructions(stmt parser.StatementNode, ctx *GenerationContex
 			return nil, nil, nil, fmt.Errorf("failed to generate RETURNING clause: %w", err)
 		}
 	}
-
-	// システムFOR命令（SELECT文と同様にシステムパラメータで行ロック指定可能にする）
-	GenerateSystemForIfNotExists(builder)
 
 	// 最適化と結果の取得
 	instructions := builder.Finalize()
