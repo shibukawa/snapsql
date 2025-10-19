@@ -1,6 +1,7 @@
 package codegenerator
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/shibukawa/snapsql/parser"
@@ -20,7 +21,7 @@ import (
 //   - error: エラー
 func generateDeleteFromClause(clause *parser.DeleteFromClause, builder *InstructionBuilder) error {
 	if clause == nil {
-		return fmt.Errorf("DELETE FROM clause is required")
+		return errors.New("DELETE FROM clause is required")
 	}
 
 	// DELETE FROM トークンを処理

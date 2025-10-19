@@ -16,8 +16,9 @@ import (
 //   - error: エラー
 //
 // 生成例:
-//   INPUT:  ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-//   OUTPUT: EMIT_STATIC " ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name"
+//
+//	INPUT:  ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+//	OUTPUT: EMIT_STATIC " ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name"
 //
 // 備考:
 //   - PostgreSQL固有の機能（Phase 3実装）

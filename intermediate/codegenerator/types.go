@@ -1,5 +1,37 @@
 package codegenerator
 
+// EvalResultType represents the type of value that a CEL expression evaluates to
+type EvalResultType int
+
+const (
+	// EvalResultTypeUnknown indicates the type could not be determined
+	EvalResultTypeUnknown EvalResultType = iota
+	// EvalResultTypeScalar indicates a scalar value (string, number, boolean, etc.)
+	EvalResultTypeScalar
+	// EvalResultTypeArray indicates an array of scalar values
+	EvalResultTypeArray
+	// EvalResultTypeObject indicates a single object with fields
+	EvalResultTypeObject
+	// EvalResultTypeArrayOfObject indicates an array of objects
+	EvalResultTypeArrayOfObject
+)
+
+// String returns a human-readable representation of the EvalResultType
+func (e EvalResultType) String() string {
+	switch e {
+	case EvalResultTypeScalar:
+		return "Scalar"
+	case EvalResultTypeArray:
+		return "Array"
+	case EvalResultTypeObject:
+		return "Object"
+	case EvalResultTypeArrayOfObject:
+		return "ArrayOfObject"
+	default:
+		return "Unknown"
+	}
+}
+
 // OpEmitStatic and related constants define the instruction operation types for the intermediate query format.
 const (
 	// OpEmitStatic is a basic output instruction that outputs static text.
@@ -83,8 +115,9 @@ type CELEnvironment struct {
 
 // CELVariableInfo represents information about a CEL variable
 type CELVariableInfo struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name  string      `json:"name"`
+	Type  string      `json:"type"`
+	Value interface{} `json:"value,omitempty"` // Dummy value for type evaluation
 }
 
 // Position represents the position of an expression in the source

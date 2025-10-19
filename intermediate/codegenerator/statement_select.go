@@ -79,33 +79,21 @@ func GenerateSelectInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	}
 
 	// LIMIT 句を処理（任意）
-	if selectStmt.Limit != nil {
-		if err := generateLimitClause(selectStmt.Limit, builder); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to generate LIMIT clause: %w", err)
-		}
-	} else {
-		// LIMIT句がSQLに存在しない場合もシステムパラメータで指定可能にする
-		GenerateSystemLimitIfNotExists(builder)
+	// GenerateLimitClauseOrSystem が nil と非 nil の両方のケースを処理
+	if err := GenerateLimitClauseOrSystem(selectStmt.Limit, builder); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to generate LIMIT clause: %w", err)
 	}
 
 	// OFFSET 句を処理（任意）
-	if selectStmt.Offset != nil {
-		if err := generateOffsetClause(selectStmt.Offset, builder); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to generate OFFSET clause: %w", err)
-		}
-	} else {
-		// OFFSET句がSQLに存在しない場合もシステムパラメータで指定可能にする
-		GenerateSystemOffsetIfNotExists(builder)
+	// GenerateOffsetClauseOrSystem が nil と非 nil の両方のケースを処理
+	if err := GenerateOffsetClauseOrSystem(selectStmt.Offset, builder); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to generate OFFSET clause: %w", err)
 	}
 
 	// FOR 句を処理（任意）- 行ロック句
-	if selectStmt.For != nil {
-		if err := generateForClause(selectStmt.For, builder); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to generate FOR clause: %w", err)
-		}
-	} else {
-		// FOR句がSQLに存在しない場合もシステムパラメータで指定可能にする
-		GenerateSystemForIfNotExists(builder)
+	// GenerateForClauseOrSystem が nil と非 nil の両方のケースを処理
+	if err := GenerateForClauseOrSystem(selectStmt.For, builder); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to generate FOR clause: %w", err)
 	}
 
 	// システム命令の追加は各clause関数内で実施済み

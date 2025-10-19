@@ -1,6 +1,7 @@
 package codegenerator
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/shibukawa/snapsql/parser"
@@ -23,7 +24,7 @@ import (
 //   - システムフィールド（updated_at等）はこの関数呼び出し後に別途追加される
 func generateSetClause(clause *parser.SetClause, builder *InstructionBuilder) error {
 	if clause == nil {
-		return fmt.Errorf("SET clause is required")
+		return errors.New("SET clause is required")
 	}
 
 	// SET トークンを処理

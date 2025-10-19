@@ -1,6 +1,7 @@
 package codegenerator
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/shibukawa/snapsql/parser"
@@ -20,7 +21,7 @@ import (
 //   - error: エラー
 func generateUpdateClause(clause *parser.UpdateClause, builder *InstructionBuilder) error {
 	if clause == nil {
-		return fmt.Errorf("UPDATE clause is required")
+		return errors.New("UPDATE clause is required")
 	}
 
 	// UPDATE トークンを処理

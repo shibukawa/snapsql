@@ -29,19 +29,23 @@ type GenerationContext struct {
 
 	// SnapSQL設定（システムフィールドなど）
 	Config *snapsql.Config
+
+	// 関数定義（ダミー値生成用）
+	FunctionDefinition *parser.FunctionDefinition
 }
 
 // NewGenerationContext creates a new GenerationContext with the root environment initialized.
 // The root environment (index 0) is always created as the default environment for the query.
 func NewGenerationContext(dialect snapsql.Dialect) *GenerationContext {
 	ctx := &GenerationContext{
-		Expressions:     make([]CELExpression, 0),
-		CELEnvironments: make([]CELEnvironment, 0),
-		Environments:    make([]string, 0),
-		Dialect:         dialect,
-		TableInfo:       nil,
-		Statement:       nil,
-		Config:          nil,
+		Expressions:        make([]CELExpression, 0),
+		CELEnvironments:    make([]CELEnvironment, 0),
+		Environments:       make([]string, 0),
+		Dialect:            dialect,
+		TableInfo:          nil,
+		Statement:          nil,
+		Config:             nil,
+		FunctionDefinition: nil,
 	}
 
 	// Initialize with root environment (index 0)
@@ -102,4 +106,10 @@ func (ctx *GenerationContext) AddCELEnvironment(env CELEnvironment) int {
 // This is used to access system field definitions and other settings.
 func (ctx *GenerationContext) SetConfig(config *snapsql.Config) {
 	ctx.Config = config
+}
+
+// SetFunctionDefinition sets the function definition for this generation context.
+// This is used to generate dummy values for CEL environment initialization.
+func (ctx *GenerationContext) SetFunctionDefinition(funcDef *parser.FunctionDefinition) {
+	ctx.FunctionDefinition = funcDef
 }

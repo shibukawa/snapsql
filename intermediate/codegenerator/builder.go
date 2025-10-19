@@ -25,19 +25,21 @@ type loopLevel struct {
 
 // InstructionBuilder は命令列を段階的に構築するビルダー
 type InstructionBuilder struct {
-	instructions     []Instruction
-	context          *GenerationContext
-	conditionalStack []conditionalLevel
-	loopStack        []loopLevel
-	envStack         []int // CELEnvironment のインデックススタック（root=0から始まる）
+	instructions           []Instruction
+	context                *GenerationContext
+	conditionalStack       []conditionalLevel
+	loopStack              []loopLevel
+	envStack               []int // CELEnvironment のインデックススタック（root=0から始まる）
+	dummyValuesInitialized bool  // FunctionDefinition からのダミー値初期化済みフラグ
 }
 
 // NewInstructionBuilder は新しい InstructionBuilder を作成する
 func NewInstructionBuilder(ctx *GenerationContext) *InstructionBuilder {
 	return &InstructionBuilder{
-		context:      ctx,
-		instructions: make([]Instruction, 0, 64),
-		envStack:     []int{0}, // root environment from start
+		context:                ctx,
+		instructions:           make([]Instruction, 0, 64),
+		envStack:               []int{0}, // root environment from start
+		dummyValuesInitialized: false,
 	}
 }
 
@@ -72,6 +74,11 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 	// Step 1: 方言変換（トークン列全体を事前処理）
 	convertedTokens := b.applyDialectConversions(tokens)
 
+	// Step 1.5: FunctionDefinitionが設定されている場合、ダミー値を生成してCEL環境に登録
+	if b.context.FunctionDefinition != nil {
+		b.initializeDummyValuesFromFunctionDefinition()
+	}
+
 	// Step 2: 通常のトークン処理
 	for i := 0; i < len(convertedTokens); i++ {
 		token := convertedTokens[i]
@@ -84,23 +91,39 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				// CEL式をコンテキストに追加し、EMIT_EVAL命令を生成
 				// token.Directive.Condition に式が格納されている
 				envIndex := b.getCurrentEnvironmentIndex()
+
+				// 単一の EMIT_EVAL を生成
 				exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
 				b.instructions = append(b.instructions, Instruction{
 					Op:        OpEmitEval,
 					Pos:       token.Position.String(),
 					ExprIndex: &exprIndex,
 				})
+
 				// 次のトークンがDUMMY_STARTの場合、DUMMY_ENDまでスキップ
 				// パーサーがディレクティブの後にDUMMY_START, <dummy_value>, DUMMY_ENDを挿入する
-				if i+1 < len(tokens) && tokens[i+1].Type == tokenizer.DUMMY_START {
+				dummyStartIdx := -1
+				if i+1 < len(convertedTokens) && convertedTokens[i+1].Type == tokenizer.DUMMY_START {
+					dummyStartIdx = i + 1
 					i++ // Skip DUMMY_START
 					// Skip all tokens until DUMMY_END
-					for i+1 < len(tokens) && tokens[i+1].Type != tokenizer.DUMMY_END {
+					for i+1 < len(convertedTokens) && convertedTokens[i+1].Type != tokenizer.DUMMY_END {
 						i++
 					}
 					// Skip DUMMY_END
-					if i+1 < len(tokens) && tokens[i+1].Type == tokenizer.DUMMY_END {
+					if i+1 < len(convertedTokens) && convertedTokens[i+1].Type == tokenizer.DUMMY_END {
 						i++
+					}
+				}
+
+				// ディレクティブ処理後、IN句のリテラル値パターン（カンマ区切り）を自動ループ化
+				// パターン: OPENED_PARENS, NUMBER/STRING, COMMA, NUMBER/STRING, COMMA, ... CLOSED_PARENS
+				if dummyStartIdx >= 0 && i+1 < len(convertedTokens) && convertedTokens[i+1].Type == tokenizer.OPENED_PARENS {
+					// 括弧内の値がカンマで区切られたリテラル値かチェック
+					if b.isCommaDelimitedLiteralList(convertedTokens, i+1) {
+						// リテラル値リストを自動的にループ化
+						i = b.emitInClauseLoop(convertedTokens, i+1, token.Directive.Condition)
+						continue
 					}
 				}
 
@@ -501,7 +524,7 @@ func (b *InstructionBuilder) insertBoundariesAfterLoopsAndConditions(instruction
 
 	result := make([]Instruction, 0, len(instructions)+10) // 余裕を持たせる
 
-	for i := 0; i < len(instructions); i++ {
+	for i := range instructions {
 		instr := instructions[i]
 		result = append(result, instr)
 
@@ -1178,4 +1201,596 @@ func formatPosition(pos tokenizer.Position) string {
 	}
 
 	return fmt.Sprintf("%d:%d", pos.Line, pos.Column)
+}
+
+// AddForLoopStart adds a LOOP_START instruction for array iteration.
+// This is used by syntax sugar handlers to directly generate loop instructions.
+// This method handles the registration of the collection expression and loop environment internally.
+//
+// Parameters:
+//   - elementVar: string - The loop variable name (e.g., "r" for "for r in rows")
+//   - collectionVarName: string - The collection variable name (e.g., "rows")
+//   - pos: string - The source position for debugging
+//
+// Returns: (none, modifies builder state)
+func (b *InstructionBuilder) AddForLoopStart(elementVar, collectionVarName, pos string) {
+	// Get current environment for expression registration
+	currentEnvIndex := b.getCurrentEnvironmentIndex()
+
+	// Register collection expression in the current environment
+	collectionExprIndex := b.context.AddExpression(collectionVarName, currentEnvIndex)
+
+	// Create loop environment with the element variable
+	loopEnvIndex := len(b.context.CELEnvironments)
+	loopEnv := CELEnvironment{
+		Container:           fmt.Sprintf("loop_%d", loopEnvIndex),
+		ParentIndex:         &currentEnvIndex,
+		AdditionalVariables: []CELVariableInfo{{Name: elementVar, Type: "any"}},
+	}
+	b.context.AddCELEnvironment(loopEnv)
+
+	// Add loop to loop stack
+	b.loopStack = append(b.loopStack, loopLevel{
+		startPos:   pos,
+		expression: collectionVarName,
+		exprIndex:  collectionExprIndex,
+		envIndex:   loopEnvIndex,
+	})
+
+	// Push new environment
+	b.pushEnvironment(loopEnvIndex)
+
+	// Generate LOOP_START instruction
+	b.instructions = append(b.instructions, Instruction{
+		Op:                  OpLoopStart,
+		Variable:            elementVar,
+		CollectionExprIndex: &collectionExprIndex,
+		EnvIndex:            &loopEnvIndex,
+		Pos:                 pos,
+	})
+}
+
+// AddForLoopEnd adds a LOOP_END instruction to close an array iteration loop.
+// This is used by syntax sugar handlers to directly generate loop instructions.
+//
+// Parameters:
+//   - pos: string - The source position for debugging
+//
+// Returns: (none, modifies builder state)
+func (b *InstructionBuilder) AddForLoopEnd(pos string) {
+	// Pop environment from stack
+	b.popEnvironment()
+
+	// Pop loop from loop stack
+	if len(b.loopStack) > 0 {
+		b.loopStack = b.loopStack[:len(b.loopStack)-1]
+	}
+
+	// Get the environment index to restore (parent environment)
+	currentEnvIndex := b.getCurrentEnvironmentIndex()
+
+	// Generate LOOP_END instruction
+	b.instructions = append(b.instructions, Instruction{
+		Op:       OpLoopEnd,
+		EnvIndex: &currentEnvIndex,
+		Pos:      pos,
+	})
+}
+
+// RegisterEmitStatic registers an EMIT_STATIC instruction that outputs static text.
+//
+// Parameters:
+//   - text: string - The static text to output
+//   - pos: string - The source position for debugging
+//
+// Returns: error if operation fails
+func (b *InstructionBuilder) RegisterEmitStatic(text string, pos string) error {
+	b.instructions = append(b.instructions, Instruction{
+		Op:    OpEmitStatic,
+		Value: text,
+		Pos:   pos,
+	})
+
+	return nil
+}
+
+// RegisterEmitEval registers an EMIT_EVAL instruction that evaluates and outputs a CEL expression.
+// The caller provides the expression string; the builder manages environment and expression indexing.
+//
+// Parameters:
+//   - expr: string - The CEL expression to evaluate
+//   - pos: string - The source position for debugging
+//
+// Returns: (exprIndex int, error)
+func (b *InstructionBuilder) RegisterEmitEval(expr string, pos string) (int, error) {
+	envIndex := b.getCurrentEnvironmentIndex()
+	exprIndex := b.context.AddExpression(expr, envIndex)
+
+	b.instructions = append(b.instructions, Instruction{
+		Op:        OpEmitEval,
+		Pos:       pos,
+		ExprIndex: &exprIndex,
+	})
+
+	return exprIndex, nil
+}
+
+// RegisterEmitSystemValue registers an EMIT_SYSTEM_VALUE instruction that outputs
+// a system field value (created_at, updated_at, etc.).
+//
+// Parameters:
+//   - systemField: string - The system field name (e.g., "created_at", "updated_at")
+//   - pos: string - The source position for debugging
+//
+// Returns: error if operation fails
+func (b *InstructionBuilder) RegisterEmitSystemValue(systemField string, pos string) error {
+	b.instructions = append(b.instructions, Instruction{
+		Op:          OpEmitSystemValue,
+		SystemField: systemField,
+		Pos:         pos,
+	})
+
+	return nil
+}
+
+// RegisterEmitUnlessBoundary registers an EMIT_UNLESS_BOUNDARY instruction that outputs
+// text unless followed by a boundary delimiter.
+//
+// Parameters:
+//   - text: string - The text to conditionally output
+func (b *InstructionBuilder) RegisterEmitUnlessBoundary(text string) {
+	b.instructions = append(b.instructions, Instruction{
+		Op:    OpEmitUnlessBoundary,
+		Value: text,
+	})
+}
+
+// RegisterBoundary registers a BOUNDARY instruction that marks a boundary for delimiter removal.
+func (b *InstructionBuilder) RegisterBoundary() {
+	b.instructions = append(b.instructions, Instruction{
+		Op: OpBoundary,
+	})
+}
+
+// RegisterIfSystemLimit registers an IF_SYSTEM_LIMIT instruction with optional expression override.
+// If expressionOverride is empty, uses the default value; otherwise evaluates the expression.
+//
+// Parameters:
+//   - defaultValue: string - The default limit value (as string for flexibility)
+//   - expressionOverride: string - Optional CEL expression to evaluate (empty if using defaultValue)
+//
+// Returns: *int - pointer to exprIndex if expression was used, nil otherwise
+func (b *InstructionBuilder) RegisterIfSystemLimit(defaultValue string, expressionOverride string) *int {
+	instruction := Instruction{
+		Op:           OpIfSystemLimit,
+		DefaultValue: defaultValue,
+	}
+
+	var exprIndex *int
+
+	if expressionOverride != "" {
+		envIndex := b.getCurrentEnvironmentIndex()
+		idx := b.context.AddExpression(expressionOverride, envIndex)
+		instruction.ExprIndex = &idx
+		exprIndex = &idx
+	}
+
+	b.instructions = append(b.instructions, instruction)
+
+	return exprIndex
+}
+
+// RegisterIfSystemOffset registers an IF_SYSTEM_OFFSET instruction with optional expression override.
+// If expressionOverride is empty, uses the default value; otherwise evaluates the expression.
+//
+// Parameters:
+//   - defaultValue: string - The default offset value (as string for flexibility)
+//   - expressionOverride: string - Optional CEL expression to evaluate (empty if using defaultValue)
+//
+// Returns: *int - pointer to exprIndex if expression was used, nil otherwise
+func (b *InstructionBuilder) RegisterIfSystemOffset(defaultValue string, expressionOverride string) *int {
+	instruction := Instruction{
+		Op:           OpIfSystemOffset,
+		DefaultValue: defaultValue,
+	}
+
+	var exprIndex *int
+
+	if expressionOverride != "" {
+		envIndex := b.getCurrentEnvironmentIndex()
+		idx := b.context.AddExpression(expressionOverride, envIndex)
+		instruction.ExprIndex = &idx
+		exprIndex = &idx
+	}
+
+	b.instructions = append(b.instructions, instruction)
+
+	return exprIndex
+}
+
+// RegisterEmitSystemLimit registers an EMIT_SYSTEM_LIMIT instruction that outputs the system limit value.
+func (b *InstructionBuilder) RegisterEmitSystemLimit() {
+	b.instructions = append(b.instructions, Instruction{
+		Op: OpEmitSystemLimit,
+	})
+}
+
+// RegisterEmitSystemOffset registers an EMIT_SYSTEM_OFFSET instruction that outputs the system offset value.
+func (b *InstructionBuilder) RegisterEmitSystemOffset() {
+	b.instructions = append(b.instructions, Instruction{
+		Op: OpEmitSystemOffset,
+	})
+}
+
+// RegisterEmitSystemFor registers an EMIT_SYSTEM_FOR instruction that outputs the system FOR clause value.
+func (b *InstructionBuilder) RegisterEmitSystemFor() {
+	b.instructions = append(b.instructions, Instruction{
+		Op: OpEmitSystemFor,
+	})
+}
+
+// RegisterEmitForClause registers an EMIT_FOR_CLAUSE instruction (deprecated, use RegisterEmitSystemFor).
+func (b *InstructionBuilder) RegisterEmitForClause() {
+	b.instructions = append(b.instructions, Instruction{
+		Op: OpEmitForClause,
+	})
+}
+
+// CheckEvalResultType determines the type of value that a CEL expression evaluates to.
+// This method inspects the CEL environment and variable information to determine whether
+// the expression represents a scalar value, an array, an object, or an array of objects.
+//
+// Parameters:
+//   - expr: string - The CEL expression to evaluate
+//
+// Returns: EvalResultType - The determined type of the expression result
+func (b *InstructionBuilder) CheckEvalResultType(expr string) EvalResultType {
+	// Get current environment
+	envIndex := b.getCurrentEnvironmentIndex()
+	if envIndex >= len(b.context.CELEnvironments) {
+		return EvalResultTypeUnknown
+	}
+
+	env := b.context.CELEnvironments[envIndex]
+
+	// Find the variable definition that matches the expression
+	var varInfo *CELVariableInfo
+
+	for i := range env.AdditionalVariables {
+		if env.AdditionalVariables[i].Name == expr {
+			varInfo = &env.AdditionalVariables[i]
+			break
+		}
+	}
+
+	// Variable not found in this environment
+	if varInfo == nil {
+		return EvalResultTypeUnknown
+	}
+
+	// Parse the type string to determine the result type
+	varType := varInfo.Type
+
+	// Check for array types (ends with "[]")
+	if strings.HasSuffix(varType, "[]") {
+		baseType := strings.TrimSuffix(varType, "[]")
+
+		// Check if it's an array of objects
+		if isObjectType(baseType) {
+			return EvalResultTypeArrayOfObject
+		}
+
+		// It's an array of scalars
+		return EvalResultTypeArray
+	}
+
+	// Check for pointer types (starts with "*")
+	if strings.HasPrefix(varType, "*") {
+		baseType := strings.TrimPrefix(varType, "*")
+
+		// Check if it's a pointer to an object
+		if isObjectType(baseType) {
+			return EvalResultTypeObject
+		}
+
+		// Otherwise treat as scalar (pointer to primitive)
+		return EvalResultTypeScalar
+	}
+
+	// Check if the type itself is an object type
+	if isObjectType(varType) {
+		return EvalResultTypeObject
+	}
+
+	// Default to scalar for known types (any, string, int, bool, etc.)
+	return EvalResultTypeScalar
+}
+
+// isObjectType determines if a type name represents an object type.
+// Object types include custom structs and "any" when used in an object context.
+// Scalar types include: any, string, int, int32, int64, uint, uint32, uint64, float, float32, float64, bool, bytes.
+func isObjectType(typeName string) bool {
+	// Normalize type name (remove pointers and array suffixes)
+	normalized := strings.TrimPrefix(typeName, "*")
+	normalized = strings.TrimSuffix(normalized, "[]")
+
+	// Known scalar types
+	scalarTypes := map[string]bool{
+		"any":     true,
+		"string":  true,
+		"int":     true,
+		"int32":   true,
+		"int64":   true,
+		"uint":    true,
+		"uint32":  true,
+		"uint64":  true,
+		"float":   true,
+		"float32": true,
+		"float64": true,
+		"double":  true,
+		"bool":    true,
+		"bytes":   true,
+		"null":    true,
+	}
+
+	// If it's not a known scalar type, treat it as an object type
+	return !scalarTypes[normalized]
+}
+
+// isCommaDelimitedLiteralList は括弧内の値がカンマ区切りのリテラル値かチェック
+// パターン: '(', (NUMBER|STRING), ',', (NUMBER|STRING), ... ')'
+func (b *InstructionBuilder) isCommaDelimitedLiteralList(tokens []tokenizer.Token, startIdx int) bool {
+	if startIdx >= len(tokens) || tokens[startIdx].Type != tokenizer.OPENED_PARENS {
+		return false
+	}
+
+	i := startIdx + 1
+	hasValue := false
+
+	for i < len(tokens) {
+		token := tokens[i]
+
+		// ホワイトスペース・コメントはスキップ
+		if b.isWhitespaceOrComment(token.Type) {
+			i++
+			continue
+		}
+
+		// 閉じ括弧で終了
+		if token.Type == tokenizer.CLOSED_PARENS {
+			// リテラル値が存在したか確認
+			return hasValue
+		}
+
+		// カンマの場合、その後に値が続くかチェック
+		if token.Type == tokenizer.COMMA {
+			i++
+			hasValue = false // カンマの次は値を期待
+
+			continue
+		}
+
+		// NUMBER または STRING の場合、リテラル値として認識
+		if token.Type == tokenizer.NUMBER || token.Type == tokenizer.STRING {
+			hasValue = true
+			i++
+
+			continue
+		}
+
+		// その他のトークン型は リテラル値リストではない
+		return false
+	}
+
+	return false
+}
+
+// emitInClauseLoop は IN 句のリテラル値リストをループ化した命令列を生成
+// 括弧内の値（1, 2, 3）を検出して、自動的に FOR ループに変換
+// 戻り値: 処理後のトークンインデックス
+func (b *InstructionBuilder) emitInClauseLoop(tokens []tokenizer.Token, startIdx int, varName string) int {
+	if startIdx >= len(tokens) || tokens[startIdx].Type != tokenizer.OPENED_PARENS {
+		return startIdx
+	}
+
+	// Type validation: varName must be a list type
+	evalType := b.CheckEvalResultType(varName)
+	isListType := evalType == EvalResultTypeArray || evalType == EvalResultTypeArrayOfObject
+
+	if !isListType {
+		// If not a list type, emit as static - shouldn't reach here but guard against it
+		b.addStatic("(", tokens[startIdx].Position)
+		// Still process tokens to advance index correctly
+		i := startIdx + 1
+		for i < len(tokens) && tokens[i].Type != tokenizer.CLOSED_PARENS {
+			i++
+		}
+
+		if i < len(tokens) {
+			b.addStatic(")", tokens[i].Position)
+			return i
+		}
+
+		return i
+	}
+
+	// リスト型の場合、FOR ループ命令を生成
+	// ループ変数名を生成
+	loopVar := "__item"
+
+	// LOOP_START命令を生成（引数: elementVar, collectionVarName, pos）
+	b.AddForLoopStart(loopVar, varName, tokens[startIdx].Position.String())
+
+	// 括弧を出力
+	b.addStatic("(", tokens[startIdx].Position)
+
+	i := startIdx + 1
+	valueTokens := []tokenizer.Token{} // リテラル値トークンを収集
+	commaPositions := []int{}          // カンマのインデックスを記録
+
+	// 括弧内のトークンを走査して、リテラル値とカンマを抽出
+	for i < len(tokens) {
+		token := tokens[i]
+
+		// ホワイトスペース・コメントはスキップ
+		if b.isWhitespaceOrComment(token.Type) {
+			i++
+			continue
+		}
+
+		// 閉じ括弧で終了
+		if token.Type == tokenizer.CLOSED_PARENS {
+			break
+		}
+
+		// カンマの位置を記録
+		if token.Type == tokenizer.COMMA {
+			commaPositions = append(commaPositions, len(valueTokens))
+			i++
+
+			continue
+		}
+
+		// NUMBER または STRING の場合、リテラル値として収集
+		if token.Type == tokenizer.NUMBER || token.Type == tokenizer.STRING {
+			valueTokens = append(valueTokens, token)
+			i++
+
+			continue
+		}
+
+		// その他のトークンもスキップ
+		i++
+	}
+
+	// リテラル値を出力（ループ内で各値を処理）
+	for idx, token := range valueTokens {
+		b.addStatic(token.Value, token.Position)
+
+		// 最後の値以外の後にはカンマを出力
+		if idx < len(valueTokens)-1 {
+			b.addStatic(", ", token.Position)
+		}
+	}
+
+	// 括弧を閉じる
+	if i < len(tokens) && tokens[i].Type == tokenizer.CLOSED_PARENS {
+		b.addStatic(")", tokens[i].Position)
+	}
+
+	// LOOP_END命令を生成
+	b.AddForLoopEnd(tokens[i].Position.String())
+
+	return i
+}
+
+// initializeDummyValuesFromFunctionDefinition は FunctionDefinition からダミー値を生成
+// して、ルート CEL 環境に登録する。重複登録を防ぐため、フラグをチェックしてから実行。
+func (b *InstructionBuilder) initializeDummyValuesFromFunctionDefinition() {
+	if b.dummyValuesInitialized {
+		return
+	}
+
+	if b.context.FunctionDefinition == nil {
+		return
+	}
+
+	funcDef := b.context.FunctionDefinition
+
+	// ルート CEL 環境（インデックス 0）を取得
+	if len(b.context.CELEnvironments) == 0 {
+		return
+	}
+
+	rootEnv := &b.context.CELEnvironments[0]
+
+	// FunctionDefinition の各パラメータについてダミー値を生成
+	for _, paramName := range funcDef.ParameterOrder {
+		paramValue, exists := funcDef.OriginalParameters[paramName]
+		if !exists {
+			continue
+		}
+
+		// パラメータの型文字列を取得
+		var typeStr string
+		switch v := paramValue.(type) {
+		case string:
+			typeStr = v
+		case map[string]interface{}:
+			// 型情報を含むオブジェクト
+			if t, ok := v["type"]; ok {
+				if typeVal, ok := t.(string); ok {
+					typeStr = typeVal
+				}
+			}
+		}
+
+		if typeStr == "" {
+			continue
+		}
+
+		// ダミー値を生成
+		dummyValue := b.generateDummyValueFromType(typeStr)
+
+		// CEL 環境に変数を追加
+		varInfo := CELVariableInfo{
+			Name:  paramName,
+			Type:  typeStr,
+			Value: dummyValue,
+		}
+		rootEnv.AdditionalVariables = append(rootEnv.AdditionalVariables, varInfo)
+	}
+
+	// 初期化完了フラグを設定
+	b.dummyValuesInitialized = true
+}
+
+// generateDummyValueFromType は型文字列からダミー値を生成する
+func (b *InstructionBuilder) generateDummyValueFromType(typeStr string) interface{} {
+	t := strings.ToLower(strings.TrimSpace(typeStr))
+
+	switch t {
+	case "string", "text", "varchar", "str":
+		return "dummy"
+	case "int":
+		return int64(1)
+	case "int32":
+		return int32(2)
+	case "int16":
+		return int16(3)
+	case "int8":
+		return int8(4)
+	case "float":
+		return 1.1
+	case "float32":
+		return float32(2.2)
+	case "decimal":
+		return "1.0"
+	case "bool":
+		return true
+	case "date":
+		return "2024-01-01"
+	case "datetime":
+		return "2024-01-01 00:00:00"
+	case "timestamp":
+		return "2024-01-02 00:00:00"
+	case "email":
+		return "user@example.com"
+	case "uuid":
+		return "00000000-0000-0000-0000-000000000000"
+	case "json":
+		return map[string]interface{}{"#": "json"}
+	case "any":
+		return map[string]interface{}{"#": "any"}
+	case "object":
+		return map[string]interface{}{"#": "object"}
+	}
+
+	// リスト型: int[], string[] 等
+	if len(t) > 2 && t[len(t)-2:] == "[]" {
+		baseType := t[:len(t)-2]
+		return []interface{}{b.generateDummyValueFromType(baseType)}
+	}
+
+	return ""
 }

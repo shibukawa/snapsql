@@ -150,9 +150,11 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 
 			if tt.expectError {
 				require.Error(t, err, "Expected error")
+
 				if tt.errorContains != "" {
 					assert.Contains(t, err.Error(), tt.errorContains)
 				}
+
 				return
 			}
 

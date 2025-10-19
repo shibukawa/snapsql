@@ -2,10 +2,8 @@ package codegenerator
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/shibukawa/snapsql/parser"
-	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // generateCTEClause processes WITH clause and generates instruction for CTE output.
@@ -38,13 +36,4 @@ func generateCTEClause(
 	}
 
 	return nil
-}
-
-// RawTokens を文字列に変換するヘルパー関数
-func tokensToString(tokens []tokenizer.Token) string {
-	var sb strings.Builder
-	for _, token := range tokens {
-		sb.WriteString(token.Value)
-	}
-	return sb.String()
 }

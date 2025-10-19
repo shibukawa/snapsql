@@ -12,11 +12,13 @@ import (
 // Handles nested parentheses by counting depth.
 func findClosingParenIndex(tokens []tokenizer.Token) int {
 	parenDepth := 0
+
 	for i, token := range tokens {
 		for _, ch := range token.Value {
-			if ch == '(' {
+			switch ch {
+			case '(':
 				parenDepth++
-			} else if ch == ')' {
+			case ')':
 				parenDepth--
 				if parenDepth == 0 {
 					return i
@@ -24,6 +26,7 @@ func findClosingParenIndex(tokens []tokenizer.Token) int {
 			}
 		}
 	}
+
 	return -1
 }
 
@@ -35,11 +38,13 @@ func getInsertSystemFields(ctx *GenerationContext) []snapsql.SystemField {
 	}
 
 	var fields []snapsql.SystemField
+
 	for _, field := range ctx.Config.System.Fields {
 		if field.OnInsert.Default != nil || field.OnInsert.Parameter != "" {
 			fields = append(fields, field)
 		}
 	}
+
 	return fields
 }
 
@@ -53,12 +58,14 @@ func getInsertSystemFieldsFiltered(ctx *GenerationContext, existingColumns map[s
 	}
 
 	var filtered []snapsql.SystemField
+
 	for _, field := range fields {
 		// Only include if not already in the column list
 		if !existingColumns[field.Name] {
 			filtered = append(filtered, field)
 		}
 	}
+
 	return filtered
 }
 
@@ -70,11 +77,13 @@ func getUpdateSystemFields(ctx *GenerationContext) []snapsql.SystemField {
 	}
 
 	var fields []snapsql.SystemField
+
 	for _, field := range ctx.Config.System.Fields {
 		if field.OnUpdate.Default != nil || field.OnUpdate.Parameter != "" {
 			fields = append(fields, field)
 		}
 	}
+
 	return fields
 }
 
@@ -88,12 +97,14 @@ func getUpdateSystemFieldsFiltered(ctx *GenerationContext, existingFields map[st
 	}
 
 	var filtered []snapsql.SystemField
+
 	for _, field := range fields {
 		// Only include if not already in the SET clause
 		if !existingFields[field.Name] {
 			filtered = append(filtered, field)
 		}
 	}
+
 	return filtered
 }
 

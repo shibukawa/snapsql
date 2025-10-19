@@ -116,9 +116,11 @@ func TestGenerateDeleteInstructions(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err, "Expected error")
+
 				if tt.errorContains != "" {
 					assert.Contains(t, err.Error(), tt.errorContains)
 				}
+
 				return
 			}
 

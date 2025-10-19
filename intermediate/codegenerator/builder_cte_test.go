@@ -192,8 +192,10 @@ func TestTokenDumpInCTE(t *testing.T) {
 			require.True(t, ok, "Expected SELECT statement")
 
 			// CTE の RawTokens を確認
-			var targetTokens []tokenizer.Token
-			var sourceDescription string
+			var (
+				targetTokens      []tokenizer.Token
+				sourceDescription string
+			)
 
 			if selectStmt.CTE() != nil {
 				// CTE が存在する場合、CTE の RawTokens を確認
@@ -206,6 +208,7 @@ func TestTokenDumpInCTE(t *testing.T) {
 
 			// トークン情報のダンプ
 			t.Logf("\n%s (%d tokens):", sourceDescription, len(targetTokens))
+
 			if len(targetTokens) == 0 {
 				t.Logf("  (no tokens found)")
 			} else {
@@ -228,15 +231,18 @@ func TestTokenDumpInCTE(t *testing.T) {
 
 			// 生成された命令を表示
 			t.Logf("\nGenerated Instructions:")
+
 			systemOpsStartIdx := len(instructions)
 			for idx, instr := range instructions {
 				if instr.Op == OpIfSystemLimit || instr.Op == OpIfSystemOffset || instr.Op == OpEmitSystemFor {
 					systemOpsStartIdx = idx
 					break
 				}
+
 				t.Logf("  [%d] Op=%-20s Value=%-40q Pos=%s",
 					idx, instr.Op, instr.Value, instr.Pos)
 			}
+
 			t.Logf("  (system ops start at index %d)", systemOpsStartIdx)
 		})
 	}
@@ -310,7 +316,6 @@ func TestCTEWithSubqueries(t *testing.T) {
 	}
 }
 
-
 // TestCTETokenDump は CTE・サブクエリー内部のトークンをダンプして確認するテスト
 // ディレクティブコメントが CTE 内でどのように処理されるか、またはプレーンコメントになるか検証
 func TestCTETokenDump(t *testing.T) {
@@ -347,34 +352,37 @@ SELECT id FROM filtered_users WHERE salary >= /*= min_salary */50000
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-// Parse SQL with constants
-constants := map[string]interface{}{
-"status_filter": "active",
-"min_age":       18,
-"dept_id":       1,
-"min_salary":    50000,
-}
+			// Parse SQL with constants
+			constants := map[string]interface{}{
+				"status_filter": "active",
+				"min_age":       18,
+				"dept_id":       1,
+				"min_salary":    50000,
+			}
 
-reader := strings.NewReader(tt.sql)
-stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
-require.NoError(t, err, "ParseSQLFile should succeed")
-require.NotNil(t, stmt)
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt)
 
-selectStmt, ok := stmt.(*parser.SelectStatement)
-require.True(t, ok, "Expected SELECT statement")
+			selectStmt, ok := stmt.(*parser.SelectStatement)
+			require.True(t, ok, "Expected SELECT statement")
 
-// Dump CTE tokens if present
-if selectStmt.CTE() != nil {
+			// Dump CTE tokens if present
+			if selectStmt.CTE() != nil {
 				t.Logf("\n=== WITH Clause Tokens ===")
+
 				withClause := selectStmt.CTE()
 				for i, cte := range withClause.CTEs {
 					t.Logf("  CTE[%d]: %s", i, cte.Name)
+
 					tokens := cte.RawTokens // RawTokens is a field, not a method
 					for j, token := range tokens {
 						directive := ""
 						if token.Directive != nil {
 							directive = fmt.Sprintf(" [DIRECTIVE: Type=%s]", token.Directive.Type)
 						}
+
 						t.Logf("    Token[%d]: %q%s", j, token.Value, directive)
 					}
 				}
@@ -382,6 +390,7 @@ if selectStmt.CTE() != nil {
 
 			// Generate instructions to validate parsing
 			ctx := NewGenerationContext(snapsql.DialectPostgres)
+
 			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
 			if err != nil {
 				t.Logf("GenerateSelectInstructions error: %v", err)
@@ -390,10 +399,12 @@ if selectStmt.CTE() != nil {
 
 			// Display generated instructions
 			t.Logf("\n=== Generated Instructions ===")
+
 			for i, instr := range instructions {
 				if instr.Op == OpIfSystemLimit || instr.Op == OpIfSystemOffset || instr.Op == OpEmitSystemFor {
 					break
 				}
+
 				switch instr.Op {
 				case OpEmitStatic:
 					t.Logf("  [%d] OpEmitStatic: %q", i, instr.Value)
@@ -407,6 +418,7 @@ if selectStmt.CTE() != nil {
 			// Display CEL expressions if any
 			if len(ctx.Expressions) > 0 {
 				t.Logf("\n=== CEL Expressions ===")
+
 				for i, expr := range ctx.Expressions {
 					t.Logf("  [%d] %s", i, expr.Expression)
 				}
@@ -447,25 +459,27 @@ SELECT id FROM high_earners`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-constants := map[string]interface{}{
-"dept_id":    1,
-"min_salary": 50000,
-}
+			constants := map[string]interface{}{
+				"dept_id":    1,
+				"min_salary": 50000,
+			}
 
-reader := strings.NewReader(tt.sql)
-stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
-require.NoError(t, err, "ParseSQLFile should succeed")
-require.NotNil(t, stmt)
+			reader := strings.NewReader(tt.sql)
+			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt)
 
-selectStmt, ok := stmt.(*parser.SelectStatement)
-require.True(t, ok, "Expected SELECT statement")
+			selectStmt, ok := stmt.(*parser.SelectStatement)
+			require.True(t, ok, "Expected SELECT statement")
 
-// Dump CTE tokens
-if selectStmt.CTE() != nil {
+			// Dump CTE tokens
+			if selectStmt.CTE() != nil {
 				t.Logf("\n=== CTE RawTokens ===")
+
 				withClause := selectStmt.CTE()
 				for i, cte := range withClause.CTEs {
 					t.Logf("CTE[%d]: %s", i, cte.Name)
+
 					tokens := cte.RawTokens
 					for j, token := range tokens {
 						directive := ""
@@ -483,6 +497,7 @@ if selectStmt.CTE() != nil {
 
 			// Generate instructions
 			ctx := NewGenerationContext(snapsql.DialectPostgres)
+
 			instructions, _, _, err := GenerateSelectInstructions(stmt, ctx)
 			if err != nil {
 				t.Logf("ERROR: %v", err)
@@ -490,20 +505,24 @@ if selectStmt.CTE() != nil {
 			}
 
 			t.Logf("\n=== Instructions ===")
+
 			for i, instr := range instructions {
 				if instr.Op == OpIfSystemLimit || instr.Op == OpIfSystemOffset || instr.Op == OpEmitSystemFor {
 					break
 				}
-				if instr.Op == OpEmitStatic {
+
+				switch instr.Op {
+				case OpEmitStatic:
 					// Show first 100 chars of static text
 					val := instr.Value
 					if len(val) > 100 {
 						val = val[:100] + "..."
 					}
+
 					t.Logf("  [%d] OpEmitStatic: %q", i, val)
-				} else if instr.Op == OpEmitEval {
+				case OpEmitEval:
 					t.Logf("  [%d] OpEmitEval (ExprIndex: %v)", i, instr.ExprIndex)
-				} else {
+				default:
 					t.Logf("  [%d] %s", i, instr.Op)
 				}
 			}
@@ -511,6 +530,7 @@ if selectStmt.CTE() != nil {
 			// Show CEL expressions
 			if len(ctx.Expressions) > 0 {
 				t.Logf("\n=== CEL Expressions ===")
+
 				for i, expr := range ctx.Expressions {
 					t.Logf("  [%d] %s", i, expr.Expression)
 				}
