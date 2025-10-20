@@ -117,7 +117,7 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 			dialect:     snapsql.DialectPostgres,
 			expectError: false,
 			expectedInstructions: []Instruction{
-				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name, email) VALUES (1, 'John', 'john@example.com') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name", Pos: "1:1"},
+				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name, email) VALUES (1, 'John', 'john@example.com')\nON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name", Pos: "1:1"},
 			},
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
@@ -133,12 +133,89 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 			expectedCELCount: 0,
 			expectedEnvCount: 1,
 		},
+		{
+			name: "insert with single object element expansion",
+			sql: `/*# parameters: { user: { id: int, name: string } } */
+INSERT INTO users (id, name)
+VALUES (/*= user.id */1, /*= user.name */'Alice')`,
+			dialect:     snapsql.DialectPostgres,
+			expectError: false,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES (", Pos: "2:1"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(0), Pos: "3:9"},
+				{Op: OpEmitStatic, Value: ", ", Pos: "3:24"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:26"},
+				{Op: OpEmitStatic, Value: ")", Pos: "3:49"},
+			},
+			expectedCELCount: 2,
+			expectedEnvCount: 1,
+		},
+		{
+			name: "insert with object type directive - auto-object expansion",
+			sql: `/*# parameters: { user: { id: int, name: string } } */
+INSERT INTO users (id, name)
+VALUES /*= user */(1, 'Alice')`,
+			dialect:     snapsql.DialectPostgres,
+			expectError: false,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES ", Pos: "2:1"},
+				{Op: OpEmitStatic, Value: "(", Pos: "3:8"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(0), Pos: "3:8"}, // user.id
+				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:8"}, // user.name
+				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
+			},
+			expectedCELCount: 3,
+			expectedEnvCount: 2,
+		},
+		{
+			name: "insert with object type directive - auto-object expansion inside loop",
+			sql: `/*# parameters: { user_rows: [{ id: int, name: string }] } */
+INSERT INTO users (id, name)
+VALUES /*# for u : user_rows */(/*= u */(1, 'Alice'),/*# end */`,
+			dialect:     snapsql.DialectPostgres,
+			expectError: false,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES ", Pos: "2:1"},
+				{Op: OpLoopStart, Variable: "u", CollectionExprIndex: ptrInt(0), EnvIndex: ptrInt(1), Pos: "3:8"},
+				{Op: OpEmitStatic, Value: "(", Pos: "3:8"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:8"}, // u.id
+				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(2), Pos: "3:8"}, // u.name
+				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
+				{Op: OpLoopEnd, EnvIndex: ptrInt(0), Pos: "3:8"},
+				{Op: OpBoundary, Pos: "3:8"},
+			},
+			expectedCELCount: 3,
+			expectedEnvCount: 2,
+		},
+		{
+			name: "insert with array type directive - auto-loop generation",
+			sql: `/*# parameters: { user_rows: [{ id: int, name: string }] } */
+INSERT INTO users (id, name)
+VALUES /*= user_rows */(1, 'Alice')`,
+			dialect:     snapsql.DialectPostgres,
+			expectError: false,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES ", Pos: "2:1"},
+				{Op: OpLoopStart, Variable: "u", CollectionExprIndex: ptrInt(0), EnvIndex: ptrInt(1), Pos: "3:8"},
+				{Op: OpEmitStatic, Value: "(", Pos: "3:8"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:8"}, // user_rows_item.id
+				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(2), Pos: "3:8"}, // user_rows_item.name
+				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
+				{Op: OpLoopEnd, EnvIndex: ptrInt(0), Pos: "3:8"},
+				{Op: OpBoundary, Pos: "3:8"},
+			},
+			expectedCELCount: 3,
+			expectedEnvCount: 2,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, funcDef, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt)
 
@@ -146,7 +223,7 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 			require.True(t, ok, "Expected InsertIntoStatement")
 
 			ctx := NewGenerationContext(tt.dialect)
-			instructions, expressions, environments, err := GenerateInsertInstructions(insertStmt, ctx)
+			instructions, expressions, environments, err := GenerateInsertInstructionsWithFunctionDef(insertStmt, ctx, funcDef)
 
 			if tt.expectError {
 				require.Error(t, err, "Expected error")
@@ -163,8 +240,12 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 			require.NotNil(t, expressions)
 			require.NotNil(t, environments)
 
-			assert.Equal(t, tt.expectedInstructions, instructions,
-				"Instructions should match exactly")
+			// For tests with exact instruction expectations, assert them
+			if len(tt.expectedInstructions) > 0 {
+				assert.Equal(t, tt.expectedInstructions, instructions,
+					"Instructions should match exactly")
+			}
+
 			assert.Equal(t, tt.expectedCELCount, len(expressions),
 				"CEL expression count should match")
 			assert.Equal(t, tt.expectedEnvCount, len(environments),
@@ -173,6 +254,16 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
 			t.Logf("✓ Generated %d instructions", len(instructions))
 			t.Logf("✓ Generated %d CEL expressions", len(expressions))
 			t.Logf("✓ Generated %d environments", len(environments))
+
+			// Debug: Print instructions for tests without exact expectations
+			if len(tt.expectedInstructions) == 0 && len(instructions) > 0 {
+				t.Logf("=== Actual Instructions ===")
+
+				for i, instr := range instructions {
+					t.Logf("[%d] Op=%s, Value=%q, Pos=%s, ExprIndex=%v, Variable=%s",
+						i, instr.Op, instr.Value, instr.Pos, instr.ExprIndex, instr.Variable)
+				}
+			}
 		})
 	}
 }

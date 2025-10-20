@@ -89,20 +89,14 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 
 			if varInfo != nil && isArrayType(varInfo.Type) {
 				// 配列型：ループを生成
-				fmt.Printf("DEBUG: generateValuesClause: variable='%s', type='%s' is array, generating loop\n", varName, varInfo.Type)
-
 				// ループ要素名を生成 ("rows" -> "r")
 				elementVar := strings.ToLower(string(varName[0]))
 
 				// FOR ループ開始
 				builder.AddForLoopStart(elementVar, varName, token.Position.String())
 
-				// 変数ディレクティブトークンを処理して EMIT_EVAL を生成
-				if token.Directive != nil {
-					if _, err := builder.RegisterEmitEval(token.Directive.Condition, token.Position.String()); err != nil {
-						return err
-					}
-				}
+				// 配列型の場合、ディレクティブ自体の EMIT_EVAL は生成しない
+				// （オブジェクトフィールド展開で各フィールドを個別に処理）
 
 				// 次のトークンを処理：括弧内の値
 				i++
@@ -134,10 +128,30 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 						builder.AddInstruction(Instruction{
 							Op:    OpEmitStatic,
 							Value: "(",
-							Pos:   tokens[i].Position.String(),
+							Pos:   token.Position.String(),
 						})
 
-						if len(fields) > 0 {
+						// INTO句のカラムリストを取得
+						insertStmt, ok := builder.context.Statement.(*parser.InsertIntoStatement)
+						if ok && insertStmt != nil && insertStmt.Into != nil && len(insertStmt.Columns) > 0 {
+							// オブジェクトフィールド展開：各カラムに対して loop_var.column を生成
+							for colIdx, col := range insertStmt.Columns {
+								if colIdx > 0 {
+									// カンマを追加
+									builder.AddInstruction(Instruction{
+										Op:    OpEmitStatic,
+										Value: ", ",
+										Pos:   token.Position.String(),
+									})
+								}
+
+								// loop_var.column_name の形式で EMIT_EVAL を生成
+								fieldExpr := elementVar + "." + col.Name
+								if _, err := builder.RegisterEmitEval(fieldExpr, token.Position.String()); err != nil {
+									return err
+								}
+							}
+						} else if len(fields) > 0 {
 							// システムフィールド挿入位置を探す
 							lastParenIdx := findLastClosingParenInGroup(innerTokens)
 							if lastParenIdx >= 0 {
@@ -169,7 +183,7 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 						builder.AddInstruction(Instruction{
 							Op:    OpEmitStatic,
 							Value: ")",
-							Pos:   tokens[parenEnd-1].Position.String(),
+							Pos:   token.Position.String(),
 						})
 					}
 
@@ -180,8 +194,6 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 				builder.AddForLoopEnd(token.Position.String())
 			} else {
 				// スカラー型：通常処理
-				fmt.Printf("DEBUG: generateValuesClause: variable='%s' is scalar, no loop\n", varName)
-
 				// 変数ディレクティブトークンを処理して EMIT_EVAL を生成
 				if token.Directive != nil {
 					if _, err := builder.RegisterEmitEval(token.Directive.Condition, token.Position.String()); err != nil {
