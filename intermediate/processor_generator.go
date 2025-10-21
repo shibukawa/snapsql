@@ -5,6 +5,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
+	"github.com/shibukawa/snapsql/parser"
 	tok "github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -16,6 +19,40 @@ func (i *InstructionGenerator) Name() string {
 }
 
 func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
+	if insertStmt, ok := ctx.Statement.(*parser.InsertIntoStatement); ok {
+		dialect := resolveGenerationDialect(ctx.Dialect)
+		genCtx := codegenerator.NewGenerationContext(dialect)
+		genCtx.SetConfig(ctx.Config)
+		genCtx.TableInfo = ctx.TableInfo
+		genCtx.Statement = ctx.Statement
+		genCtx.SetTypeInfoMap(ctx.TypeInfoMap)
+		if ctx.FunctionDef != nil {
+			genCtx.SetFunctionDefinition(ctx.FunctionDef)
+		}
+
+		inss, expressions, environments, err := codegenerator.GenerateInsertInstructionsWithFunctionDef(insertStmt, genCtx, ctx.FunctionDef)
+		if err != nil {
+			return fmt.Errorf("code generation failed: %w", err)
+		}
+
+		ctx.Instructions = inss
+		ctx.CELExpressions = expressions
+		ctx.CELEnvironments = environments
+		ctx.Environments = genCtx.Environments
+
+		supportsDynamic := false
+		for _, inst := range inss {
+			if inst.Op == codegenerator.OpEmitForClause {
+				supportsDynamic = true
+				break
+			}
+		}
+		ctx.SupportsDynamicForClause = supportsDynamic
+		ctx.HasStaticForClause = detectForClause(ctx.Statement, ctx.Tokens).HasForClause
+
+		return nil
+	}
+
 	forClauseInfo := detectForClause(ctx.Statement, ctx.Tokens)
 
 	// Use existing GenerateInstructions function for all advanced features
@@ -58,6 +95,21 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	ctx.HasStaticForClause = forClauseInfo.HasForClause
 
 	return nil
+}
+
+func resolveGenerationDialect(dialect string) snapsql.Dialect {
+	switch strings.ToLower(dialect) {
+	case "postgres", "postgresql", "pg":
+		return snapsql.DialectPostgres
+	case "mysql":
+		return snapsql.DialectMySQL
+	case "sqlite", "sqlite3":
+		return snapsql.DialectSQLite
+	case "mariadb":
+		return snapsql.DialectMariaDB
+	default:
+		return snapsql.DialectPostgres
+	}
 }
 
 // DialectVariant represents a SQL variant for different database dialects

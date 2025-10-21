@@ -83,7 +83,7 @@ func TestDetermineResponseType(t *testing.T) {
 		// Use markdownparser + parser.ParseMarkdownFile similar to generation pipeline
 		doc, err := markdownparser.Parse(strings.NewReader(md))
 		assert.NoError(t, err)
-		stmt, _, err := parser.ParseMarkdownFile(doc, "memory.md", ".", nil, parser.DefaultOptions)
+		stmt, _, _, err := parser.ParseMarkdownFile(doc, "memory.md", ".", nil, parser.DefaultOptions)
 		assert.NoError(t, err)
 
 		// Call determineResponseType with empty schema to trigger fallback any responses
@@ -103,7 +103,7 @@ func TestNormalizeColumnNameSubquery(t *testing.T) {
 
 func TestFallbackFieldNamingFromSQL(t *testing.T) {
 	sql := "SELECT sq.id, sq.name FROM (SELECT id, name FROM users) AS sq"
-	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "inline.sql", "", parser.DefaultOptions)
+	stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "inline.sql", "", parser.DefaultOptions)
 	assert.NoError(t, err)
 
 	selectStmt, ok := stmt.(*parser.SelectStatement)

@@ -1,5 +1,7 @@
 package codegenerator
 
+import "strings"
+
 // EvalResultType represents the type of value that a CEL expression evaluates to
 type EvalResultType int
 
@@ -30,6 +32,118 @@ func (e EvalResultType) String() string {
 	default:
 		return "Unknown"
 	}
+}
+
+// DetermineEvalResultType inspects a descriptor generated from parserstep6 and
+// maps it to EvalResultType for downstream processing.
+func DetermineEvalResultType(descriptor any) EvalResultType {
+	switch v := descriptor.(type) {
+	case nil:
+		return EvalResultTypeUnknown
+	case string:
+		if strings.HasSuffix(v, "[]") {
+			return EvalResultTypeArray
+		}
+
+		switch strings.ToLower(v) {
+		case "object", "map":
+			return EvalResultTypeObject
+		case "json":
+			return EvalResultTypeScalar
+		default:
+			return EvalResultTypeScalar
+		}
+	case []any:
+		if len(v) == 0 {
+			return EvalResultTypeArray
+		}
+
+		childType := DetermineEvalResultType(v[0])
+		if childType == EvalResultTypeObject || childType == EvalResultTypeArrayOfObject {
+			return EvalResultTypeArrayOfObject
+		}
+
+		return EvalResultTypeArray
+	case map[string]any:
+		if tag, ok := v["#"]; ok {
+			if tagStr, ok2 := tag.(string); ok2 {
+				switch strings.ToLower(tagStr) {
+				case "json":
+					return EvalResultTypeScalar
+				case "any":
+					return EvalResultTypeUnknown
+				case "object":
+					return EvalResultTypeObject
+				}
+			}
+		}
+
+		return EvalResultTypeObject
+	default:
+		return EvalResultTypeUnknown
+	}
+}
+
+// DescriptorToTypeString converts a descriptor into a human-readable type string used by CEL environments.
+func DescriptorToTypeString(descriptor any) string {
+	switch v := descriptor.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case []any:
+		if len(v) == 0 {
+			return "any[]"
+		}
+
+		element := DescriptorToTypeString(v[0])
+		if element == "" {
+			element = "any"
+		}
+
+		if strings.HasSuffix(element, "[]") {
+			return element
+		}
+
+		return element + "[]"
+	case map[string]any:
+		return "object"
+	default:
+		return "any"
+	}
+}
+
+// ExtractElementDescriptor returns the descriptor representing an element in an array descriptor.
+func ExtractElementDescriptor(descriptor any) any {
+	switch v := descriptor.(type) {
+	case []any:
+		if len(v) > 0 {
+			return v[0]
+		}
+
+		return nil
+	case string:
+		if strings.HasSuffix(v, "[]") {
+			return strings.TrimSuffix(v, "[]")
+		}
+
+		return nil
+	default:
+		return nil
+	}
+}
+
+// ExtractObjectDescriptor converts a descriptor into a map representing object fields when possible.
+func ExtractObjectDescriptor(descriptor any) (map[string]any, bool) {
+	if descriptor == nil {
+		return nil, false
+	}
+
+	if m, ok := descriptor.(map[string]any); ok {
+		return m, true
+	}
+
+	return nil, false
 }
 
 // OpEmitStatic and related constants define the instruction operation types for the intermediate query format.
@@ -99,10 +213,12 @@ type Instruction struct {
 
 // CELExpression represents a CEL expression with its metadata
 type CELExpression struct {
-	ID               string   `json:"id"`
-	Expression       string   `json:"expression"`
-	EnvironmentIndex int      `json:"environment_index"`
-	Position         Position `json:"position,omitempty"`
+	ID               string         `json:"id"`
+	Expression       string         `json:"expression"`
+	EnvironmentIndex int            `json:"environment_index"`
+	Position         Position       `json:"position,omitempty"`
+	TypeDescriptor   any            `json:"type_descriptor,omitempty"`
+	ResultType       EvalResultType `json:"result_type,omitempty"`
 }
 
 // CELEnvironment represents a CEL environment with variable definitions

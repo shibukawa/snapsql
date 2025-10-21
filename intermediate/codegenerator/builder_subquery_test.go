@@ -37,7 +37,7 @@ func TestSubqueryInFromClause(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// parser.ParseSQLFile でパース
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err)
 			require.NotNil(t, stmt)
 
@@ -115,7 +115,7 @@ func TestWhereSubqueryInClause(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// parser.ParseSQLFile でパース
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err)
 			require.NotNil(t, stmt)
 
@@ -177,7 +177,7 @@ func TestSelectScalarSubquery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// parser.ParseSQLFile でパース
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err)
 			require.NotNil(t, stmt)
 
@@ -235,7 +235,7 @@ func TestDirectiveInSubquery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// parser.ParseSQLFile でパース
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err)
 			require.NotNil(t, stmt)
 

@@ -17,6 +17,7 @@ type TokenPipeline struct {
 	funcDef    *parser.FunctionDefinition
 	config     *snapsql.Config
 	tableInfo  map[string]*snapsql.TableInfo
+	typeInfo   map[string]any
 	processors []TokenProcessor
 }
 
@@ -33,6 +34,7 @@ type ProcessingContext struct {
 	FunctionDef *parser.FunctionDefinition
 	Config      *snapsql.Config
 	TableInfo   map[string]*snapsql.TableInfo
+	TypeInfoMap map[string]any
 
 	// Selected dialect (normalized lowercase) from config; empty means default postgres
 	Dialect string
@@ -62,13 +64,14 @@ type ProcessingContext struct {
 }
 
 // NewTokenPipeline creates a new token processing pipeline
-func NewTokenPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *snapsql.Config, tableInfo map[string]*snapsql.TableInfo) *TokenPipeline {
+func NewTokenPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *snapsql.Config, tableInfo map[string]*snapsql.TableInfo, typeInfo map[string]any) *TokenPipeline {
 	return &TokenPipeline{
 		tokens:    extractTokensFromStatement(stmt),
 		stmt:      stmt,
 		funcDef:   funcDef,
 		config:    config,
 		tableInfo: tableInfo,
+		typeInfo:  typeInfo,
 	}
 }
 
@@ -86,6 +89,7 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		Config:      p.config,
 		TableInfo:   p.tableInfo,
 		Dialect:     normalizeDialect(p.config),
+		TypeInfoMap: p.typeInfo,
 	}
 
 	// Execute each processor in order
@@ -361,8 +365,8 @@ func lookupColumnInfo(table *snapsql.TableInfo, column string) *snapsql.ColumnIn
 }
 
 // CreateDefaultPipeline creates a pipeline with default processors
-func CreateDefaultPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *snapsql.Config, tableInfo map[string]*snapsql.TableInfo) *TokenPipeline {
-	pipeline := NewTokenPipeline(stmt, funcDef, config, tableInfo)
+func CreateDefaultPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDefinition, config *snapsql.Config, tableInfo map[string]*snapsql.TableInfo, typeInfoMap map[string]any) *TokenPipeline {
+	pipeline := NewTokenPipeline(stmt, funcDef, config, tableInfo, typeInfoMap)
 
 	// Add processors in order
 	pipeline.AddProcessor(&MetadataExtractor{})

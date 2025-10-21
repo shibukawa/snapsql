@@ -441,7 +441,7 @@ FROM users`,
 			}
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt, "statement should not be nil")
 
@@ -590,7 +590,7 @@ SELECT id FROM users WHERE status = /*= status */'active' OR priority_status = /
 			}
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt, "statement should not be nil")
 
@@ -918,7 +918,7 @@ func TestDialectConversions(t *testing.T) {
 		t.Run(tt.category+"/"+tt.name, func(t *testing.T) {
 			// Parse SQL
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt, "statement should not be nil")
 
@@ -1105,7 +1105,7 @@ VALUES
 				},
 			}
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt, "statement should not be nil")
 

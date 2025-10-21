@@ -32,6 +32,9 @@ type GenerationContext struct {
 
 	// 関数定義（ダミー値生成用）
 	FunctionDefinition *parser.FunctionDefinition
+
+	// parserstep6 から受け取った型情報マップ（"line:col" -> descriptor）
+	TypeInfoMap map[string]any
 }
 
 // NewGenerationContext creates a new GenerationContext with the root environment initialized.
@@ -46,6 +49,7 @@ func NewGenerationContext(dialect snapsql.Dialect) *GenerationContext {
 		Statement:          nil,
 		Config:             nil,
 		FunctionDefinition: nil,
+		TypeInfoMap:        nil,
 	}
 
 	// Initialize with root environment (index 0)
@@ -83,6 +87,61 @@ func (ctx *GenerationContext) AddExpression(expr string, environmentIndex int) i
 	ctx.Expressions = append(ctx.Expressions, celExpr)
 
 	return index
+}
+
+// SetExpressionMetadata updates position and type descriptor for the expression at index.
+func (ctx *GenerationContext) SetExpressionMetadata(index int, pos Position, typeDescriptor any) {
+	if index < 0 || index >= len(ctx.Expressions) {
+		return
+	}
+
+	expr := &ctx.Expressions[index]
+
+	extraPos := pos
+	if extraPos.Line != 0 || extraPos.Column != 0 {
+		expr.Position = extraPos
+	}
+
+	if typeDescriptor != nil {
+		expr.TypeDescriptor = typeDescriptor
+		expr.ResultType = DetermineEvalResultType(typeDescriptor)
+	}
+}
+
+// GetExpressionType returns the classified result type of the expression.
+func (ctx *GenerationContext) GetExpressionType(index int) EvalResultType {
+	if index < 0 || index >= len(ctx.Expressions) {
+		return EvalResultTypeUnknown
+	}
+
+	return ctx.Expressions[index].ResultType
+}
+
+// GetExpressionDescriptor returns the raw descriptor registered for the expression.
+func (ctx *GenerationContext) GetExpressionDescriptor(index int) any {
+	if index < 0 || index >= len(ctx.Expressions) {
+		return nil
+	}
+
+	return ctx.Expressions[index].TypeDescriptor
+}
+
+// SetTypeInfoMap stores the parser-provided type information map for later lookups.
+func (ctx *GenerationContext) SetTypeInfoMap(typeInfo map[string]any) {
+	ctx.TypeInfoMap = typeInfo
+}
+
+// LookupTypeDescriptor returns the descriptor registered for a token位置 ("line:col").
+func (ctx *GenerationContext) LookupTypeDescriptor(pos string) any {
+	if ctx.TypeInfoMap == nil {
+		return nil
+	}
+
+	if desc, ok := ctx.TypeInfoMap[pos]; ok {
+		return desc
+	}
+
+	return nil
 }
 
 // AddEnvironment adds an environment variable (loop variable) to the context and returns its index.

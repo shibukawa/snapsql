@@ -104,7 +104,7 @@ func TestGenerateDeleteInstructions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt)
 

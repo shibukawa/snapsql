@@ -24,7 +24,7 @@ func TestAddSystemFieldsToUpdateTokens_WithCTE(t *testing.T) {
 	SET list_id = 10
 	WHERE list_id IN (1, 2)`
 
-	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "", "", parser.DefaultOptions)
+	stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "", "", parser.DefaultOptions)
 	require.NoError(t, err)
 
 	tokens := extractTokensFromStatement(stmt)
@@ -95,7 +95,7 @@ findWhere:
 func TestAddSystemFieldsToUpdateTokens_ReplacesExistingAssignment(t *testing.T) {
 	sql := `UPDATE cards SET updated_at = CURRENT_TIMESTAMP, list_id = 1 WHERE id = 10`
 
-	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "", "", parser.DefaultOptions)
+	stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "", "", parser.DefaultOptions)
 	require.NoError(t, err)
 
 	tokens := extractTokensFromStatement(stmt)

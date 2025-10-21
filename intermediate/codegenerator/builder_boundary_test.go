@@ -54,7 +54,7 @@ VALUES /*# for user : users */(/*= user.id */, /*= user.tags */) /*# end */`,
 			}
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt, "statement should not be nil")
@@ -162,7 +162,7 @@ WHERE status = 'pending' OR /*# for status : statuses */status = '/*= status */'
 			}
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 
 			ctx := NewGenerationContext(tt.dialect)
@@ -265,7 +265,7 @@ VALUES /*# for tag : tags */(/*= tag */), /*# end */ ON CONFLICT DO NOTHING`,
 			}
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 
 			ctx := NewGenerationContext(tt.dialect)

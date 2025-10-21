@@ -2,7 +2,6 @@ package codegenerator
 
 import (
 	"github.com/shibukawa/snapsql/parser"
-	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // GenerateOffsetClauseOrSystem generates instructions for the OFFSET clause or system OFFSET if not present.
@@ -24,9 +23,10 @@ func GenerateOffsetClauseOrSystem(offsetClause *parser.OffsetClause, builder *In
 	if offsetClause == nil {
 		// OFFSET clause is not present in SQL
 		// Conditionally emit OFFSET keyword and system value if provided at runtime
-		builder.RegisterIfSystemOffset("", "")
-		builder.RegisterEmitStatic(" OFFSET ", "")
-		builder.RegisterEmitSystemOffset()
+		builder.addIfSystemOffset()
+		builder.addStatic(" OFFSET ", nil)
+		builder.addEmitSystemOffset()
+		builder.addEndCondition(nil)
 
 		return nil
 	}
@@ -34,23 +34,16 @@ func GenerateOffsetClauseOrSystem(offsetClause *parser.OffsetClause, builder *In
 	// OFFSET clause is present in SQL
 	tokens := offsetClause.RawTokens()
 
-	// Extract OFFSET literal value for default
-	var defaultValue string
-
-	for _, token := range tokens {
-		if token.Type == tokenizer.NUMBER {
-			defaultValue = token.Value
-			break
-		}
-	}
-
 	// Output "OFFSET" keyword with space
-	builder.RegisterEmitStatic(" OFFSET ", "")
+	builder.addStatic(" OFFSET ", &tokens[0].Position)
 
 	// Register system OFFSET block with default value
 	// This creates: IF_SYSTEM_OFFSET { emit system offset } with default fallback
-	builder.RegisterIfSystemOffset(defaultValue, "")
-	builder.RegisterEmitSystemOffset()
+	builder.addIfSystemOffset()
+	builder.addEmitSystemOffset()
+	builder.addRawElseCondition(nil)
+	err := builder.ProcessTokens(tokens[2:])
+	builder.addEndCondition(nil)
 
-	return nil
+	return err
 }

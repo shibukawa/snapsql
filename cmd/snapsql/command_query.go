@@ -664,7 +664,7 @@ func (q *QueryCmd) extractSlowQueryThreshold(defaultThreshold time.Duration) tim
 		}
 		defer file.Close()
 
-		_, def, err := parser.ParseSQLFile(file, nil, q.TemplateFile, filepath.Dir(q.TemplateFile), parser.DefaultOptions)
+		_, _, def, err := parser.ParseSQLFile(file, nil, q.TemplateFile, filepath.Dir(q.TemplateFile), parser.DefaultOptions)
 		if err != nil || def == nil {
 			return defaultThreshold
 		}

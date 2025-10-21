@@ -2,8 +2,10 @@ package codegenerator
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
@@ -43,6 +45,50 @@ func NewInstructionBuilder(ctx *GenerationContext) *InstructionBuilder {
 	}
 }
 
+// lookupTypeDescriptor returns the parser-provided descriptor for the given token.
+func (b *InstructionBuilder) lookupTypeDescriptor(token tokenizer.Token) any {
+	if b.context == nil {
+		return nil
+	}
+
+	return b.context.LookupTypeDescriptor(token.Position.String())
+}
+
+// annotateExpression registers position and type metadata for a CEL expression.
+func (b *InstructionBuilder) annotateExpression(exprIndex int, token tokenizer.Token, explicitType any) {
+	pos := Position{Line: token.Position.Line, Column: token.Position.Column}
+
+	typeDesc := explicitType
+	if typeDesc == nil {
+		typeDesc = b.lookupTypeDescriptor(token)
+	}
+
+	if b.context != nil {
+		b.context.SetExpressionMetadata(exprIndex, pos, typeDesc)
+	}
+}
+
+// parsePosition converts "line:column" into Position.
+func parsePosition(pos string) (Position, bool) {
+	if pos == "" {
+		return Position{}, false
+	}
+
+	parts := strings.Split(pos, ":")
+	if len(parts) != 2 {
+		return Position{}, false
+	}
+
+	line, err1 := strconv.Atoi(parts[0])
+
+	col, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		return Position{}, false
+	}
+
+	return Position{Line: line, Column: col}, true
+}
+
 // getCurrentEnvironmentIndex は現在アクティブな CEL 環境のインデックスを取得する
 // envStack の最後の要素が現在のアクティブ環境
 func (b *InstructionBuilder) getCurrentEnvironmentIndex() int {
@@ -63,6 +109,97 @@ func (b *InstructionBuilder) popEnvironment() {
 	if len(b.envStack) > 1 {
 		b.envStack = b.envStack[:len(b.envStack)-1]
 	}
+}
+
+// EvaluateExpression は CEL 式を評価して現在の環境でのダミー値を返す
+// github.com/google/cel-go/cel パッケージを使用して式をコンパイルし、
+// ダミー値の環境でEvalして実際の値を取得する
+//
+// Parameters:
+//   - expr: string - The CEL expression to evaluate
+//
+// Returns:
+//   - result: interface{} - The evaluated result (can be []any, map[string]any, scalar, etc.)
+//   - error: error if evaluation fails
+func (b *InstructionBuilder) EvaluateExpression(expr string) (interface{}, error) {
+	// Get current environment index
+	envIndex := b.getCurrentEnvironmentIndex()
+
+	// Check bounds
+	if envIndex < 0 || envIndex >= len(b.context.CELEnvironments) {
+		return nil, fmt.Errorf("invalid environment index: %d", envIndex)
+	}
+
+	// Get environment
+	env := b.context.CELEnvironments[envIndex]
+
+	// Build parameter map from environment variables (dummy values)
+	params := make(map[string]interface{})
+
+	var celVars []cel.EnvOption
+
+	for _, varInfo := range env.AdditionalVariables {
+		params[varInfo.Name] = varInfo.Value
+
+		// Create CEL variable option for each variable
+		// We need to determine the CEL type from the Go value
+		var celType *cel.Type
+
+		if varInfo.Value != nil {
+			switch varInfo.Value.(type) {
+			case string:
+				celType = cel.StringType
+			case int, int32, int64:
+				celType = cel.IntType
+			case float32, float64:
+				celType = cel.DoubleType
+			case bool:
+				celType = cel.BoolType
+			case []interface{}:
+				celType = cel.ListType(cel.DynType)
+			case map[string]interface{}:
+				celType = cel.MapType(cel.StringType, cel.DynType)
+			default:
+				celType = cel.DynType
+			}
+		} else {
+			celType = cel.DynType
+		}
+
+		celVars = append(celVars, cel.Variable(varInfo.Name, celType))
+	}
+
+	// Create CEL environment with variables
+	celEnvOpts := []cel.EnvOption{
+		cel.Container(env.Container),
+	}
+	celEnvOpts = append(celEnvOpts, celVars...)
+
+	celEnv, err := cel.NewEnv(celEnvOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
+	}
+
+	// Compile the expression
+	ast, issues := celEnv.Compile(expr)
+	if issues != nil && issues.Err() != nil {
+		return nil, fmt.Errorf("failed to compile CEL expression '%s': %w", expr, issues.Err())
+	}
+
+	// Create program from AST
+	program, err := celEnv.Program(ast)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CEL program for '%s': %w", expr, err)
+	}
+
+	// Evaluate the program with dummy values
+	result, _, err := program.Eval(params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate CEL expression '%s': %w", expr, err)
+	}
+
+	// Convert CEL value to Go value
+	return result.Value(), nil
 }
 
 // ProcessTokens はトークン列を処理して命令列に追加する
@@ -94,6 +231,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 
 				// 単一の EMIT_EVAL を生成
 				exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
+				b.annotateExpression(exprIndex, token, nil)
 				b.instructions = append(b.instructions, Instruction{
 					Op:        OpEmitEval,
 					Pos:       token.Position.String(),
@@ -132,19 +270,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 			case "if":
 				// 条件分岐の開始: /*# if condition */
 				// CEL式をコンテキストに追加し、IF命令を生成
-				envIndex := b.getCurrentEnvironmentIndex()
-				exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
-				b.instructions = append(b.instructions, Instruction{
-					Op:        OpIf,
-					Pos:       token.Position.String(),
-					ExprIndex: &exprIndex,
-				})
-				// スタックに新しい条件レベルをプッシュ
-				b.conditionalStack = append(b.conditionalStack, conditionalLevel{
-					startPos:  token.Position.String(),
-					hasElse:   false,
-					hasElseIf: false,
-				})
+				b.addIfCondition(token)
 
 				continue
 
@@ -164,6 +290,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				// CEL式を追加してELSE_IF命令を生成
 				envIndex := b.getCurrentEnvironmentIndex()
 				exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
+				b.annotateExpression(exprIndex, token, nil)
 				b.instructions = append(b.instructions, Instruction{
 					Op:        OpElseIf,
 					Pos:       token.Position.String(),
@@ -174,22 +301,10 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 
 			case "else":
 				// else 分岐: /*# else */
-				if len(b.conditionalStack) == 0 {
-					return fmt.Errorf("%w: else directive at %s without matching if", ErrDirectiveMismatch, token.Position.String())
+				err := b.addElseCondition(&token.Position)
+				if err != nil {
+					return err
 				}
-
-				currentLevel := &b.conditionalStack[len(b.conditionalStack)-1]
-				if currentLevel.hasElse {
-					return fmt.Errorf("%w: duplicate else directive at %s", ErrDirectiveMismatch, token.Position.String())
-				}
-
-				currentLevel.hasElse = true
-
-				// ELSE命令を生成
-				b.instructions = append(b.instructions, Instruction{
-					Op:  OpElse,
-					Pos: token.Position.String(),
-				})
 
 				continue
 
@@ -216,10 +331,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				} else if len(b.conditionalStack) > 0 {
 					// 条件分岐の終了
 					b.conditionalStack = b.conditionalStack[:len(b.conditionalStack)-1]
-					b.instructions = append(b.instructions, Instruction{
-						Op:  OpEnd,
-						Pos: token.Position.String(),
-					})
+					b.addEndCondition(&token.Position)
 				} else {
 					return fmt.Errorf("%w: end directive at %s without matching if or for", ErrDirectiveMismatch, token.Position.String())
 				}
@@ -249,6 +361,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 
 				// CEL式をコンテキストに追加 (root environment)
 				exprIndex := b.context.AddExpression(expression, 0)
+				b.annotateExpression(exprIndex, token, nil)
 
 				// ループ変数の CEL 環境を作成
 				loopEnvIndex := b.context.AddCELEnvironment(CELEnvironment{
@@ -318,7 +431,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				i++
 			}
 			// 1スペースを追加（最初のトークンの位置を保持）
-			b.addStatic(" ", token.Position)
+			b.addStatic(" ", &token.Position)
 
 			continue
 		}
@@ -352,11 +465,60 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 				Pos:   token.Position.String(),
 			})
 		} else {
-			b.addStatic(token.Value, token.Position)
+			b.addStatic(token.Value, &token.Position)
 		}
 	}
 
 	return nil
+}
+
+func (b *InstructionBuilder) addElseCondition(pos *tokenizer.Position) error {
+	if len(b.conditionalStack) == 0 {
+		return fmt.Errorf("%w: else directive at %s without matching if", ErrDirectiveMismatch, pos.String())
+	}
+
+	currentLevel := &b.conditionalStack[len(b.conditionalStack)-1]
+	if currentLevel.hasElse {
+		return fmt.Errorf("%w: duplicate else directive at %s", ErrDirectiveMismatch, pos.String())
+	}
+
+	currentLevel.hasElse = true
+
+	// ELSE命令を生成
+	b.addRawElseCondition(pos)
+
+	return nil
+}
+
+func (b *InstructionBuilder) addRawElseCondition(pos *tokenizer.Position) {
+	b.instructions = append(b.instructions, Instruction{
+		Op:  OpElse,
+		Pos: pos.String(),
+	})
+}
+
+func (b *InstructionBuilder) addIfCondition(token tokenizer.Token) {
+	envIndex := b.getCurrentEnvironmentIndex()
+	exprIndex := b.context.AddExpression(token.Directive.Condition, envIndex)
+	b.annotateExpression(exprIndex, token, nil)
+	b.instructions = append(b.instructions, Instruction{
+		Op:        OpIf,
+		Pos:       token.Position.String(),
+		ExprIndex: &exprIndex,
+	})
+	// スタックに新しい条件レベルをプッシュ
+	b.conditionalStack = append(b.conditionalStack, conditionalLevel{
+		startPos:  token.Position.String(),
+		hasElse:   false,
+		hasElseIf: false,
+	})
+}
+
+func (b *InstructionBuilder) addEndCondition(pos *tokenizer.Position) {
+	b.instructions = append(b.instructions, Instruction{
+		Op:  OpEnd,
+		Pos: pos.String(),
+	})
 }
 
 // isWhitespaceOrComment はトークンがホワイトスペースまたはコメントかを判定する
@@ -1180,11 +1342,11 @@ func (b *InstructionBuilder) convertCastToPostgres(tokens []tokenizer.Token, cas
 }
 
 // addStatic は静的な SQL トークンを命令列に追加する
-func (b *InstructionBuilder) addStatic(value string, position tokenizer.Position) {
+func (b *InstructionBuilder) addStatic(value string, position *tokenizer.Position) {
 	instr := Instruction{
 		Op:    OpEmitStatic,
 		Value: value,
-		Pos:   formatPosition(position),
+		Pos:   position.String(),
 	}
 	b.instructions = append(b.instructions, instr)
 }
@@ -1192,15 +1354,6 @@ func (b *InstructionBuilder) addStatic(value string, position tokenizer.Position
 // AddInstruction は命令を直接追加する（clause関数用のヘルパー）
 func (b *InstructionBuilder) AddInstruction(instr Instruction) {
 	b.instructions = append(b.instructions, instr)
-}
-
-// formatPosition は Position を文字列形式に変換する
-func formatPosition(pos tokenizer.Position) string {
-	if pos.Line == 0 && pos.Column == 0 {
-		return ""
-	}
-
-	return fmt.Sprintf("%d:%d", pos.Line, pos.Column)
 }
 
 // AddForLoopStart adds a LOOP_START instruction for array iteration.
@@ -1219,15 +1372,48 @@ func (b *InstructionBuilder) AddForLoopStart(elementVar, collectionVarName, pos 
 
 	// Register collection expression in the current environment
 	collectionExprIndex := b.context.AddExpression(collectionVarName, currentEnvIndex)
+	if position, ok := parsePosition(pos); ok {
+		descriptor := b.context.LookupTypeDescriptor(pos)
+		b.context.SetExpressionMetadata(collectionExprIndex, position, descriptor)
+	}
+
+	// Evaluate the collection to extract the first element
+	// This allows us to determine the loop variable's type at build time
+	collectionValue, err := b.EvaluateExpression(collectionVarName)
+
+	var firstElement interface{} = nil
+
+	if err == nil && collectionValue != nil {
+		// Try to extract first element from array
+		if arr, ok := collectionValue.([]interface{}); ok && len(arr) > 0 {
+			firstElement = arr[0]
+		}
+	}
 
 	// Create loop environment with the element variable
+	// The element variable's value is set to the first element of the collection
 	loopEnvIndex := len(b.context.CELEnvironments)
+	collectionDescriptor := b.context.LookupTypeDescriptor(pos)
+	elementDescriptor := ExtractElementDescriptor(collectionDescriptor)
+
+	loopVarType := DescriptorToTypeString(elementDescriptor)
+	if loopVarType == "" {
+		loopVarType = "any"
+	}
+
 	loopEnv := CELEnvironment{
-		Container:           fmt.Sprintf("loop_%d", loopEnvIndex),
-		ParentIndex:         &currentEnvIndex,
-		AdditionalVariables: []CELVariableInfo{{Name: elementVar, Type: "any"}},
+		Container:   fmt.Sprintf("loop_%d", loopEnvIndex),
+		ParentIndex: &currentEnvIndex,
+		AdditionalVariables: []CELVariableInfo{
+			{
+				Name:  elementVar,
+				Type:  loopVarType,
+				Value: firstElement, // Set to first element from collection
+			},
+		},
 	}
 	b.context.AddCELEnvironment(loopEnv)
+	b.context.AddEnvironment(elementVar)
 
 	// Add loop to loop stack
 	b.loopStack = append(b.loopStack, loopLevel{
@@ -1237,7 +1423,7 @@ func (b *InstructionBuilder) AddForLoopStart(elementVar, collectionVarName, pos 
 		envIndex:   loopEnvIndex,
 	})
 
-	// Push new environment
+	// Push new environment - automatic environment management
 	b.pushEnvironment(loopEnvIndex)
 
 	// Generate LOOP_START instruction
@@ -1277,23 +1463,6 @@ func (b *InstructionBuilder) AddForLoopEnd(pos string) {
 	})
 }
 
-// RegisterEmitStatic registers an EMIT_STATIC instruction that outputs static text.
-//
-// Parameters:
-//   - text: string - The static text to output
-//   - pos: string - The source position for debugging
-//
-// Returns: error if operation fails
-func (b *InstructionBuilder) RegisterEmitStatic(text string, pos string) error {
-	b.instructions = append(b.instructions, Instruction{
-		Op:    OpEmitStatic,
-		Value: text,
-		Pos:   pos,
-	})
-
-	return nil
-}
-
 // RegisterEmitEval registers an EMIT_EVAL instruction that evaluates and outputs a CEL expression.
 // The caller provides the expression string; the builder manages environment and expression indexing.
 //
@@ -1306,6 +1475,27 @@ func (b *InstructionBuilder) RegisterEmitEval(expr string, pos string) (int, err
 	envIndex := b.getCurrentEnvironmentIndex()
 	exprIndex := b.context.AddExpression(expr, envIndex)
 
+	if position, ok := parsePosition(pos); ok {
+		b.context.SetExpressionMetadata(exprIndex, position, nil)
+	}
+
+	b.instructions = append(b.instructions, Instruction{
+		Op:        OpEmitEval,
+		Pos:       pos,
+		ExprIndex: &exprIndex,
+	})
+
+	return exprIndex, nil
+}
+
+// RegisterEmitEvalWithDescriptor registers an EMIT_EVAL instruction using the given token for
+// position metadata and attaches the provided type descriptor.
+func (b *InstructionBuilder) RegisterEmitEvalWithDescriptor(token tokenizer.Token, expr string, descriptor any) (int, error) {
+	envIndex := b.getCurrentEnvironmentIndex()
+	exprIndex := b.context.AddExpression(expr, envIndex)
+	b.annotateExpression(exprIndex, token, descriptor)
+
+	pos := token.Position.String()
 	b.instructions = append(b.instructions, Instruction{
 		Op:        OpEmitEval,
 		Pos:       pos,
@@ -1352,7 +1542,7 @@ func (b *InstructionBuilder) RegisterBoundary() {
 	})
 }
 
-// RegisterIfSystemLimit registers an IF_SYSTEM_LIMIT instruction with optional expression override.
+// addIfSystemLimit registers an IF_SYSTEM_LIMIT instruction with optional expression override.
 // If expressionOverride is empty, uses the default value; otherwise evaluates the expression.
 //
 // Parameters:
@@ -1360,27 +1550,13 @@ func (b *InstructionBuilder) RegisterBoundary() {
 //   - expressionOverride: string - Optional CEL expression to evaluate (empty if using defaultValue)
 //
 // Returns: *int - pointer to exprIndex if expression was used, nil otherwise
-func (b *InstructionBuilder) RegisterIfSystemLimit(defaultValue string, expressionOverride string) *int {
-	instruction := Instruction{
-		Op:           OpIfSystemLimit,
-		DefaultValue: defaultValue,
-	}
-
-	var exprIndex *int
-
-	if expressionOverride != "" {
-		envIndex := b.getCurrentEnvironmentIndex()
-		idx := b.context.AddExpression(expressionOverride, envIndex)
-		instruction.ExprIndex = &idx
-		exprIndex = &idx
-	}
-
-	b.instructions = append(b.instructions, instruction)
-
-	return exprIndex
+func (b *InstructionBuilder) addIfSystemLimit() {
+	b.instructions = append(b.instructions, Instruction{
+		Op: OpIfSystemLimit,
+	})
 }
 
-// RegisterIfSystemOffset registers an IF_SYSTEM_OFFSET instruction with optional expression override.
+// addIfSystemOffset registers an IF_SYSTEM_OFFSET instruction with optional expression override.
 // If expressionOverride is empty, uses the default value; otherwise evaluates the expression.
 //
 // Parameters:
@@ -1388,35 +1564,21 @@ func (b *InstructionBuilder) RegisterIfSystemLimit(defaultValue string, expressi
 //   - expressionOverride: string - Optional CEL expression to evaluate (empty if using defaultValue)
 //
 // Returns: *int - pointer to exprIndex if expression was used, nil otherwise
-func (b *InstructionBuilder) RegisterIfSystemOffset(defaultValue string, expressionOverride string) *int {
-	instruction := Instruction{
-		Op:           OpIfSystemOffset,
-		DefaultValue: defaultValue,
-	}
-
-	var exprIndex *int
-
-	if expressionOverride != "" {
-		envIndex := b.getCurrentEnvironmentIndex()
-		idx := b.context.AddExpression(expressionOverride, envIndex)
-		instruction.ExprIndex = &idx
-		exprIndex = &idx
-	}
-
-	b.instructions = append(b.instructions, instruction)
-
-	return exprIndex
+func (b *InstructionBuilder) addIfSystemOffset() {
+	b.instructions = append(b.instructions, Instruction{
+		Op: OpIfSystemOffset,
+	})
 }
 
-// RegisterEmitSystemLimit registers an EMIT_SYSTEM_LIMIT instruction that outputs the system limit value.
-func (b *InstructionBuilder) RegisterEmitSystemLimit() {
+// addEmitSystemLimit registers an EMIT_SYSTEM_LIMIT instruction that outputs the system limit value.
+func (b *InstructionBuilder) addEmitSystemLimit() {
 	b.instructions = append(b.instructions, Instruction{
 		Op: OpEmitSystemLimit,
 	})
 }
 
-// RegisterEmitSystemOffset registers an EMIT_SYSTEM_OFFSET instruction that outputs the system offset value.
-func (b *InstructionBuilder) RegisterEmitSystemOffset() {
+// addEmitSystemOffset registers an EMIT_SYSTEM_OFFSET instruction that outputs the system offset value.
+func (b *InstructionBuilder) addEmitSystemOffset() {
 	b.instructions = append(b.instructions, Instruction{
 		Op: OpEmitSystemOffset,
 	})
@@ -1449,6 +1611,17 @@ func (b *InstructionBuilder) CheckEvalResultType(expr string) EvalResultType {
 	envIndex := b.getCurrentEnvironmentIndex()
 	if envIndex >= len(b.context.CELEnvironments) {
 		return EvalResultTypeUnknown
+	}
+
+	// Prefer type information already recorded for the expression
+	for _, celExpr := range b.context.Expressions {
+		if celExpr.Expression == expr && celExpr.EnvironmentIndex == envIndex {
+			if celExpr.ResultType != EvalResultTypeUnknown {
+				return celExpr.ResultType
+			}
+
+			break
+		}
 	}
 
 	env := b.context.CELEnvironments[envIndex]
@@ -1599,7 +1772,7 @@ func (b *InstructionBuilder) emitInClauseLoop(tokens []tokenizer.Token, startIdx
 
 	if !isListType {
 		// If not a list type, emit as static - shouldn't reach here but guard against it
-		b.addStatic("(", tokens[startIdx].Position)
+		b.addStatic("(", &tokens[startIdx].Position)
 		// Still process tokens to advance index correctly
 		i := startIdx + 1
 		for i < len(tokens) && tokens[i].Type != tokenizer.CLOSED_PARENS {
@@ -1607,7 +1780,7 @@ func (b *InstructionBuilder) emitInClauseLoop(tokens []tokenizer.Token, startIdx
 		}
 
 		if i < len(tokens) {
-			b.addStatic(")", tokens[i].Position)
+			b.addStatic(")", &tokens[i].Position)
 			return i
 		}
 
@@ -1622,7 +1795,7 @@ func (b *InstructionBuilder) emitInClauseLoop(tokens []tokenizer.Token, startIdx
 	b.AddForLoopStart(loopVar, varName, tokens[startIdx].Position.String())
 
 	// 括弧を出力
-	b.addStatic("(", tokens[startIdx].Position)
+	b.addStatic("(", &tokens[startIdx].Position)
 
 	i := startIdx + 1
 	valueTokens := []tokenizer.Token{} // リテラル値トークンを収集
@@ -1665,17 +1838,17 @@ func (b *InstructionBuilder) emitInClauseLoop(tokens []tokenizer.Token, startIdx
 
 	// リテラル値を出力（ループ内で各値を処理）
 	for idx, token := range valueTokens {
-		b.addStatic(token.Value, token.Position)
+		b.addStatic(token.Value, &token.Position)
 
 		// 最後の値以外の後にはカンマを出力
 		if idx < len(valueTokens)-1 {
-			b.addStatic(", ", token.Position)
+			b.addStatic(", ", &token.Position)
 		}
 	}
 
 	// 括弧を閉じる
 	if i < len(tokens) && tokens[i].Type == tokenizer.CLOSED_PARENS {
-		b.addStatic(")", tokens[i].Position)
+		b.addStatic(")", &tokens[i].Position)
 	}
 
 	// LOOP_END命令を生成

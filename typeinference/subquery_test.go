@@ -104,7 +104,7 @@ func parseSQLSimple(sql string) (parser.StatementNode, error) {
 		Parameters: make(map[string]any),
 	}
 
-	stmt, err := parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
+	stmt, _, err := parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func parseWithSubqueryAnalysis(sqlText string) (stmt parser.StatementNode, err e
 		Parameters: make(map[string]any),
 	}
 
-	stmt, err = parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
+	stmt, _, err = parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
 
 	return stmt, err
 }
@@ -384,7 +384,7 @@ func createMockStatementWithSubqueryAnalysis(sqlText string) parser.StatementNod
 		Parameters: make(map[string]any),
 	}
 
-	stmt, err := parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
+	stmt, _, err := parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
 	if err != nil {
 		// If parsing fails, return minimal statement
 		return &parser.SelectStatement{}

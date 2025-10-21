@@ -62,7 +62,7 @@ func TestDialectJoinConversion(t *testing.T) {
 			}
 
 			reader := bytes.NewBufferString(sqlWithSemicolon)
-			parsedStmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			parsedStmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "Failed to parse SQL: %s", tt.sql)
 
 			instructions, _, _, err := GenerateSelectInstructions(parsedStmt, ctx)
@@ -129,7 +129,7 @@ func TestJoinTypeNormalization(t *testing.T) {
 			}
 
 			reader := bytes.NewBufferString(sqlWithSemicolon)
-			parsedStmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			parsedStmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "Failed to parse SQL: %s", tt.sql)
 
 			instructions, _, _, err := GenerateSelectInstructions(parsedStmt, ctx)
@@ -191,7 +191,7 @@ func TestJoinConditionDialectConversion(t *testing.T) {
 			}
 
 			reader := bytes.NewBufferString(sqlWithSemicolon)
-			parsedStmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			parsedStmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "Failed to parse SQL: %s", tt.sql)
 
 			instructions, _, _, err := GenerateSelectInstructions(parsedStmt, ctx)

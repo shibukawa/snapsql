@@ -29,6 +29,7 @@ func GenerateForClauseOrSystem(forClause *parser.ForClause, builder *Instruction
 	// FOR clause is present in SQL
 	// Process tokens (may contain directives and static text)
 	allTokens := forClause.RawTokens()
+	builder.addStatic(" ", &allTokens[0].Position)
 
 	return builder.ProcessTokens(allTokens)
 }

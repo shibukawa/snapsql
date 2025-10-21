@@ -34,7 +34,7 @@ func parseSQL(sql string) (parser.StatementNode, error) {
 		Parameters: make(map[string]any),
 	}
 
-	stmt, err := parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
+	stmt, _, err := parser.RawParse(tokens, emptyFuncDef, nil, parser.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}

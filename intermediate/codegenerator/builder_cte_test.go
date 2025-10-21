@@ -57,7 +57,7 @@ func TestCTE(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "Parser should accept the SQL")
 			require.NotNil(t, stmt)
 
@@ -120,7 +120,7 @@ func TestCTEWithDirectives(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "Parser should accept the SQL")
 			require.NotNil(t, stmt)
 
@@ -178,7 +178,7 @@ func TestTokenDumpInCTE(t *testing.T) {
 			t.Logf("Input SQL: %s", tt.sql)
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 
 			// パーサーエラーの場合は診断情報を表示
 			if err != nil {
@@ -289,7 +289,7 @@ func TestCTEWithSubqueries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "Parser should accept the SQL")
 			require.NotNil(t, stmt)
 
@@ -361,7 +361,7 @@ SELECT id FROM filtered_users WHERE salary >= /*= min_salary */50000
 			}
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt)
 
@@ -465,7 +465,7 @@ SELECT id FROM high_earners`,
 			}
 
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, constants, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt)
 

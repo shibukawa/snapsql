@@ -76,7 +76,7 @@ func parseSQL(sql string, constants map[string]any) (cmn.StatementNode, *cmn.Fun
 		}
 	}
 
-	if err := Execute(stmt, paramNamespace, constNamespace); err != nil {
+	if _, err := Execute(stmt, paramNamespace, constNamespace); err != nil {
 		return nil, nil, err
 	}
 

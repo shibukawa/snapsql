@@ -496,7 +496,10 @@ type Position struct {
 	Offset int
 }
 
-func (p Position) String() string {
+func (p *Position) String() string {
+	if p == nil {
+		return ""
+	}
 	return strconv.Itoa(p.Line) + ":" + strconv.Itoa(p.Column)
 }
 

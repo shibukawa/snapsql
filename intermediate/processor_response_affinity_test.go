@@ -141,7 +141,7 @@ DELETE FROM users WHERE id = 1 RETURNING id, name`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL using the new ParseSQLFile API
-			stmt, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, ".", ".", parser.DefaultOptions)
+			stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, ".", ".", parser.DefaultOptions)
 			require.NoError(t, err, "Failed to parse SQL: %s", tt.sql)
 
 			// Determine response affinity

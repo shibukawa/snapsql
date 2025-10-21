@@ -203,19 +203,19 @@ func (g *MockDataGenerator) writeMockDataFile(sourceFile string, testCases []Tes
 // GenerateFromSQL generates the intermediate format for a SQL template
 func GenerateFromSQL(reader io.Reader, constants map[string]any, basePath string, projectRootPath string, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
 	// Parse the SQL
-	stmt, funcDef, err := parser.ParseSQLFile(reader, constants, basePath, projectRootPath, parser.DefaultOptions)
+	stmt, typeInfoMap, funcDef, err := parser.ParseSQLFile(reader, constants, basePath, projectRootPath, parser.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}
 
 	// Generate intermediate format
-	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo, config)
+	return generateIntermediateFormat(stmt, typeInfoMap, funcDef, basePath, tableInfo, config)
 }
 
 // GenerateFromMarkdown generates the intermediate format for a Markdown file containing SQL
 func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, projectRootPath string, constants map[string]any, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
 	// Parse the Markdown
-	stmt, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants, parser.DefaultOptions)
+	stmt, typeInfoMap, funcDef, err := parser.ParseMarkdownFile(doc, basePath, projectRootPath, constants, parser.DefaultOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -237,14 +237,14 @@ func GenerateFromMarkdown(doc *markdownparser.SnapSQLDocument, basePath string, 
 	}
 
 	// Generate intermediate format
-	return generateIntermediateFormat(stmt, funcDef, basePath, tableInfo, config)
+	return generateIntermediateFormat(stmt, typeInfoMap, funcDef, basePath, tableInfo, config)
 }
 
 // generateIntermediateFormat is the common implementation using the new pipeline approach
-func generateIntermediateFormat(stmt parsercommon.StatementNode, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
+func generateIntermediateFormat(stmt parsercommon.StatementNode, typeInfoMap map[string]any, funcDef *parsercommon.FunctionDefinition, filePath string, tableInfo map[string]*snapsql.TableInfo, config *snapsql.Config) (*IntermediateFormat, error) {
 	_ = filePath // File path not currently used in pipeline processing
 	// Create and execute the token processing pipeline
-	pipeline := CreateDefaultPipeline(stmt, funcDef, config, tableInfo)
+	pipeline := CreateDefaultPipeline(stmt, funcDef, config, tableInfo, typeInfoMap)
 
 	result, err := pipeline.Execute()
 	if err != nil {

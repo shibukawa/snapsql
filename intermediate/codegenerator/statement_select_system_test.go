@@ -58,7 +58,7 @@ func TestSystemLimitOffsetInstructions(t *testing.T) {
 			// パース
 			reader := strings.NewReader(tt.sql)
 
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			if err != nil {
 				t.Fatalf("ParseSQLFile failed: %v", err)
 			}

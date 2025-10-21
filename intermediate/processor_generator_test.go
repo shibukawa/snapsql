@@ -93,7 +93,7 @@ SELECT id, TRUE as is_active FROM users`,
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL
 			reader := strings.NewReader(tt.sql)
-			stmt, funcDef, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
+			stmt, _, funcDef, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
 			assert.NoError(t, err)
 
 			// Generate intermediate format (create new reader since the previous one was consumed)
@@ -240,7 +240,7 @@ func TestDetectDialectPatterns(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL to get tokens
 			reader := strings.NewReader(tt.sql)
-			stmt, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.DefaultOptions)
 			assert.NoError(t, err)
 
 			// Extract tokens
@@ -406,7 +406,7 @@ func TestGenerateInstructionsWithLimitOffset(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
 
-			stmt, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+			stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, "test.snap.sql", "", parser.DefaultOptions)
 			assert.NoError(t, err)
 
 			instructions := GenerateInstructions(stmt, tokens, []string{})
@@ -457,7 +457,7 @@ func TestDetectForClause(t *testing.T) {
 			tokens, err := tok.Tokenize(tt.sql)
 			assert.NoError(t, err)
 
-			stmt, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+			stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(tt.sql), nil, "test.snap.sql", "", parser.DefaultOptions)
 			assert.NoError(t, err)
 
 			info := detectForClause(stmt, tokens)
@@ -472,7 +472,7 @@ func TestGenerateInstructionsAutoForClause(t *testing.T) {
 		tokens, err := tok.Tokenize(sql)
 		assert.NoError(t, err)
 
-		stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+		stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
 		assert.NoError(t, err)
 
 		instructions := GenerateInstructions(stmt, tokens, nil)
@@ -501,7 +501,7 @@ func TestGenerateInstructionsAutoForClause(t *testing.T) {
 		tokens, err := tok.Tokenize(sql)
 		assert.NoError(t, err)
 
-		stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+		stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
 		assert.NoError(t, err)
 
 		instructions := GenerateInstructions(stmt, tokens, nil)
@@ -529,7 +529,7 @@ func TestGenerateInstructionsSkipsWhenForClauseExists(t *testing.T) {
 	tokens, err := tok.Tokenize(sql)
 	assert.NoError(t, err)
 
-	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
+	stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "test.snap.sql", "", parser.DefaultOptions)
 	assert.NoError(t, err)
 
 	instructions := GenerateInstructions(stmt, tokens, nil)

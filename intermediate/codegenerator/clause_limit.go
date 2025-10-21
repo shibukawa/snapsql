@@ -2,7 +2,6 @@ package codegenerator
 
 import (
 	"github.com/shibukawa/snapsql/parser"
-	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // GenerateLimitClauseOrSystem generates instructions for the LIMIT clause or system LIMIT if not present.
@@ -24,9 +23,10 @@ func GenerateLimitClauseOrSystem(limitClause *parser.LimitClause, builder *Instr
 	if limitClause == nil {
 		// LIMIT clause is not present in SQL
 		// Conditionally emit LIMIT keyword and system value if provided at runtime
-		builder.RegisterIfSystemLimit("", "")
-		builder.RegisterEmitStatic(" LIMIT ", "")
-		builder.RegisterEmitSystemLimit()
+		builder.addIfSystemLimit()
+		builder.addStatic(" LIMIT ", nil)
+		builder.addEmitSystemLimit()
+		builder.addEndCondition(nil)
 
 		return nil
 	}
@@ -34,23 +34,16 @@ func GenerateLimitClauseOrSystem(limitClause *parser.LimitClause, builder *Instr
 	// LIMIT clause is present in SQL
 	tokens := limitClause.RawTokens()
 
-	// Extract LIMIT literal value for default
-	var defaultValue string
-
-	for _, token := range tokens {
-		if token.Type == tokenizer.NUMBER {
-			defaultValue = token.Value
-			break
-		}
-	}
-
 	// Output "LIMIT" keyword with space
-	builder.RegisterEmitStatic(" LIMIT ", "")
+	builder.addStatic(" LIMIT ", &tokens[0].Position)
 
 	// Register system LIMIT block with default value
 	// This creates: IF_SYSTEM_LIMIT { emit system limit } with default fallback
-	builder.RegisterIfSystemLimit(defaultValue, "")
-	builder.RegisterEmitSystemLimit()
+	builder.addIfSystemLimit()
+	builder.addEmitSystemLimit()
+	builder.addRawElseCondition(nil)
+	err := builder.ProcessTokens(tokens[2:])
+	builder.addEndCondition(nil)
 
-	return nil
+	return err
 }

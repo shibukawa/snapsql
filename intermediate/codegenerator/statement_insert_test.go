@@ -158,21 +158,20 @@ VALUES /*= user */(1, 'Alice')`,
 			dialect:     snapsql.DialectPostgres,
 			expectError: false,
 			expectedInstructions: []Instruction{
-				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES ", Pos: "2:1"},
-				{Op: OpEmitStatic, Value: "(", Pos: "3:8"},
+				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES (", Pos: "2:1"},
 				{Op: OpEmitEval, ExprIndex: ptrInt(0), Pos: "3:8"}, // user.id
 				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
 				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:8"}, // user.name
 				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
 			},
-			expectedCELCount: 3,
-			expectedEnvCount: 2,
+			expectedCELCount: 2,
+			expectedEnvCount: 1,
 		},
 		{
 			name: "insert with object type directive - auto-object expansion inside loop",
 			sql: `/*# parameters: { user_rows: [{ id: int, name: string }] } */
 INSERT INTO users (id, name)
-VALUES /*# for u : user_rows */(/*= u */(1, 'Alice'),/*# end */`,
+VALUES /*# for u : user_rows */(/*= u */(1, 'Alice'),/*# end */)`,
 			dialect:     snapsql.DialectPostgres,
 			expectError: false,
 			expectedInstructions: []Instruction{
@@ -183,6 +182,7 @@ VALUES /*# for u : user_rows */(/*= u */(1, 'Alice'),/*# end */`,
 				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
 				{Op: OpEmitEval, ExprIndex: ptrInt(2), Pos: "3:8"}, // u.name
 				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
+				{Op: OpEmitUnlessBoundary, Value: ", ", Pos: "3:8"},
 				{Op: OpLoopEnd, EnvIndex: ptrInt(0), Pos: "3:8"},
 				{Op: OpBoundary, Pos: "3:8"},
 			},
@@ -204,6 +204,7 @@ VALUES /*= user_rows */(1, 'Alice')`,
 				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
 				{Op: OpEmitEval, ExprIndex: ptrInt(2), Pos: "3:8"}, // user_rows_item.name
 				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
+				{Op: OpEmitUnlessBoundary, Value: ", ", Pos: "3:8"},
 				{Op: OpLoopEnd, EnvIndex: ptrInt(0), Pos: "3:8"},
 				{Op: OpBoundary, Pos: "3:8"},
 			},
@@ -215,7 +216,7 @@ VALUES /*= user_rows */(1, 'Alice')`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := strings.NewReader(tt.sql)
-			stmt, funcDef, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			stmt, typeInfoMap, funcDef, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
 			require.NoError(t, err, "ParseSQLFile should succeed")
 			require.NotNil(t, stmt)
 
@@ -223,6 +224,7 @@ VALUES /*= user_rows */(1, 'Alice')`,
 			require.True(t, ok, "Expected InsertIntoStatement")
 
 			ctx := NewGenerationContext(tt.dialect)
+			ctx.SetTypeInfoMap(typeInfoMap)
 			instructions, expressions, environments, err := GenerateInsertInstructionsWithFunctionDef(insertStmt, ctx, funcDef)
 
 			if tt.expectError {
