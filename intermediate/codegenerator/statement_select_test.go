@@ -233,8 +233,6 @@ SELECT id FROM users LIMIT /*= limit */10 OFFSET /*= offset */5`,
 			// 命令列全体をdeep equalで検証
 			e, _ := json.MarshalIndent(tt.expectedInstructions, "", "  ")
 			a, _ := json.MarshalIndent(instructions, "", "  ")
-
-			//assert.Equal(t, tt.expectedInstructions, instructions, "Instructions mismatch")
 			assert.Equal(t, string(e), string(a), "Instructions mismatch")
 		})
 	}

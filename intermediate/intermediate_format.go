@@ -38,6 +38,12 @@ type ImplicitParameter struct {
 	Default any    `json:"default,omitempty"`
 }
 
+// EnvVar represents a variable available within a CEL environment level.
+type EnvVar struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
 // TableReferenceInfo represents a table reference in the query (including CTEs, subqueries, and joins)
 type TableReferenceInfo struct {
 	// Canonical identifier for the referenced object (physical table, CTE, or subquery)

@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 )
 
 // TestIsDangerousQuery tests the dangerous query detection
@@ -89,7 +90,7 @@ func TestOpenDatabase(t *testing.T) {
 
 func TestBuildSQLAddsSpacingAfterBoundaryTokens(t *testing.T) {
 	idx0, idx1 := 0, 1
-	instructions := []intermediate.OptimizedInstruction{
+	instructions := []codegenerator.OptimizedInstruction{
 		{Op: "EMIT_STATIC", Value: "SELECT id FROM t WHERE a ="},
 		{Op: "EMIT_STATIC", Value: "?"},
 		{Op: "ADD_PARAM", ExprIndex: &idx0},

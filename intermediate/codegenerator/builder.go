@@ -311,7 +311,6 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 			case "end":
 				// END命令：条件分岐またはループの終了を識別
 				// conditionalStack と loopStack の両方をチェック
-
 				// ループの終了の方が優先度が高い（ネストの場合）
 				if len(b.loopStack) > 0 {
 					// ループの終了

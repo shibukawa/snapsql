@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -196,7 +197,7 @@ func TestOptimizedInstructionsWithSystemColumns(t *testing.T) {
 		{Op: intermediate.OpEmitStatic, Value: ")"},
 	}
 
-	optimized, err := intermediate.OptimizeInstructions(instructions, "postgres")
+	optimized, err := codegenerator.OptimizeInstructions(instructions, "postgres")
 	require.NoError(t, err)
 
 	// Verify optimization results based on actual output

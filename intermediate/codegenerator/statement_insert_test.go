@@ -1,6 +1,7 @@
 package codegenerator
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -171,20 +172,22 @@ VALUES /*= user */(1, 'Alice')`,
 			name: "insert with object type directive - auto-object expansion inside loop",
 			sql: `/*# parameters: { user_rows: [{ id: int, name: string }] } */
 INSERT INTO users (id, name)
-VALUES /*# for u : user_rows */(/*= u */(1, 'Alice'),/*# end */)`,
+VALUES /*# for u : user_rows */
+	/*= u */(1, 'Alice'),
+/*# end */`,
 			dialect:     snapsql.DialectPostgres,
 			expectError: false,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES ", Pos: "2:1"},
 				{Op: OpLoopStart, Variable: "u", CollectionExprIndex: ptrInt(0), EnvIndex: ptrInt(1), Pos: "3:8"},
-				{Op: OpEmitStatic, Value: "(", Pos: "3:8"},
-				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:8"}, // u.id
-				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
-				{Op: OpEmitEval, ExprIndex: ptrInt(2), Pos: "3:8"}, // u.name
-				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
-				{Op: OpEmitUnlessBoundary, Value: ", ", Pos: "3:8"},
-				{Op: OpLoopEnd, EnvIndex: ptrInt(0), Pos: "3:8"},
-				{Op: OpBoundary, Pos: "3:8"},
+				{Op: OpEmitStatic, Value: " (", Pos: "4:0"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "4:2"}, // u.id
+				{Op: OpEmitStatic, Value: ", ", Pos: "4:2"},
+				{Op: OpEmitEval, ExprIndex: ptrInt(2), Pos: "4:2"}, // u.name
+				{Op: OpEmitStatic, Value: ")", Pos: "4:2"},
+				{Op: OpEmitUnlessBoundary, Value: ", ", Pos: "4:2"},
+				{Op: OpLoopEnd, EnvIndex: ptrInt(0), Pos: "4:2"},
+				{Op: OpBoundary, Pos: "4:2"},
 			},
 			expectedCELCount: 3,
 			expectedEnvCount: 2,
@@ -242,12 +245,6 @@ VALUES /*= user_rows */(1, 'Alice')`,
 			require.NotNil(t, expressions)
 			require.NotNil(t, environments)
 
-			// For tests with exact instruction expectations, assert them
-			if len(tt.expectedInstructions) > 0 {
-				assert.Equal(t, tt.expectedInstructions, instructions,
-					"Instructions should match exactly")
-			}
-
 			assert.Equal(t, tt.expectedCELCount, len(expressions),
 				"CEL expression count should match")
 			assert.Equal(t, tt.expectedEnvCount, len(environments),
@@ -257,15 +254,10 @@ VALUES /*= user_rows */(1, 'Alice')`,
 			t.Logf("✓ Generated %d CEL expressions", len(expressions))
 			t.Logf("✓ Generated %d environments", len(environments))
 
-			// Debug: Print instructions for tests without exact expectations
-			if len(tt.expectedInstructions) == 0 && len(instructions) > 0 {
-				t.Logf("=== Actual Instructions ===")
-
-				for i, instr := range instructions {
-					t.Logf("[%d] Op=%s, Value=%q, Pos=%s, ExprIndex=%v, Variable=%s",
-						i, instr.Op, instr.Value, instr.Pos, instr.ExprIndex, instr.Variable)
-				}
-			}
+			// 命令列全体をdeep equalで検証
+			e, _ := json.MarshalIndent(tt.expectedInstructions, "", "  ")
+			a, _ := json.MarshalIndent(instructions, "", "  ")
+			assert.Equal(t, string(e), string(a), "Instructions mismatch")
 		})
 	}
 }

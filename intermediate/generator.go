@@ -322,41 +322,6 @@ func extractTokensFromStatement(stmt parsercommon.StatementNode) []tokenizer.Tok
 	return tokens
 }
 
-// extractSystemFieldsInfo extracts system fields information from config
-func extractSystemFieldsInfo(config *snapsql.Config, stmt parsercommon.StatementNode) []SystemFieldInfo {
-	_ = stmt // Statement not currently used for system field extraction
-
-	var systemFields []SystemFieldInfo
-
-	// Get all system fields from config
-	for _, field := range config.System.Fields {
-		systemFieldInfo := SystemFieldInfo{
-			Name:              field.Name,
-			ExcludeFromSelect: field.ExcludeFromSelect,
-		}
-
-		// Convert OnInsert configuration
-		if field.OnInsert.Default != nil || field.OnInsert.Parameter != "" {
-			systemFieldInfo.OnInsert = &SystemFieldOperationInfo{
-				Default:   field.OnInsert.Default,
-				Parameter: string(field.OnInsert.Parameter),
-			}
-		}
-
-		// Convert OnUpdate configuration
-		if field.OnUpdate.Default != nil || field.OnUpdate.Parameter != "" {
-			systemFieldInfo.OnUpdate = &SystemFieldOperationInfo{
-				Default:   field.OnUpdate.Default,
-				Parameter: string(field.OnUpdate.Parameter),
-			}
-		}
-
-		systemFields = append(systemFields, systemFieldInfo)
-	}
-
-	return systemFields
-}
-
 // extractParameterTypeFromOriginal extracts type string from original parameter value (for common types)
 func extractParameterTypeFromOriginal(value any) string {
 	switch v := value.(type) {
@@ -366,76 +331,4 @@ func extractParameterTypeFromOriginal(value any) string {
 		// Fallback to regular extraction
 		return extractParameterType(value)
 	}
-}
-
-// setEnvIndexInInstructions sets env_index in loop instructions based on envs data
-func setEnvIndexInInstructions(envs [][]EnvVar, instructions []Instruction) {
-	// Stack to track environment indices for nested loops
-	var loopStack []int
-
-	for i := range instructions {
-		instruction := &instructions[i]
-
-		switch instruction.Op {
-		case OpLoopStart:
-			if instruction.Variable != "" {
-				// Find the environment index where this variable is introduced
-				envIndex := findVariableEnvironmentIndex(envs, instruction.Variable)
-				if envIndex > 0 {
-					instruction.EnvIndex = &envIndex
-					loopStack = append(loopStack, envIndex)
-				}
-			}
-
-		case OpLoopEnd:
-			if len(loopStack) > 0 {
-				// Pop the current loop environment
-				loopStack = loopStack[:len(loopStack)-1]
-
-				// Set env_index to the environment we return to after this loop ends
-				var envIndex int
-				if len(loopStack) > 0 {
-					// Still inside nested loops, use the parent loop's environment
-					envIndex = loopStack[len(loopStack)-1]
-				} else {
-					// Exiting the outermost loop, return to base environment (index 0)
-					envIndex = 0
-				}
-
-				instruction.EnvIndex = &envIndex
-			}
-		}
-	}
-}
-
-// findVariableEnvironmentIndex finds the environment index where the variable is first introduced
-func findVariableEnvironmentIndex(envs [][]EnvVar, variable string) int {
-	for i := range envs {
-		// Check if this variable is in this environment level
-		for _, envVar := range envs[i] {
-			if envVar.Name == variable {
-				// Check if it was also in the previous environment level
-				if i > 0 {
-					found := false
-
-					for _, prevEnvVar := range envs[i-1] {
-						if prevEnvVar.Name == variable {
-							found = true
-							break
-						}
-					}
-
-					if !found {
-						// This is where the variable was introduced
-						return i + 1 // Convert to 1-based index
-					}
-				} else {
-					// First environment level, this is where it was introduced
-					return i + 1 // Convert to 1-based index
-				}
-			}
-		}
-	}
-
-	return 0 // Default to base environment
 }

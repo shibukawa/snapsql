@@ -13,6 +13,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 	"github.com/shibukawa/snapsql/markdownparser"
 )
 
@@ -108,8 +109,8 @@ func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string,
 	// that are not yet reconstructed by the instruction pipeline.
 	dialect := getDialectFromDriver(options.Driver)
 
-	optimized, _ := intermediate.OptimizeInstructions(format.Instructions, dialect)
-	if !intermediate.HasDynamicInstructions(optimized) && len(format.CELExpressions) == 0 {
+	optimized, _ := codegenerator.OptimizeInstructions(format.Instructions, dialect)
+	if !codegenerator.HasDynamicInstructions(optimized) && len(format.CELExpressions) == 0 {
 		sqlText, readErr := readOriginalSQL(templateFile)
 		if readErr == nil && sqlText != "" {
 			// Dangerous query check
@@ -172,7 +173,7 @@ func isWriteWithoutReturning(sql string) bool {
 }
 
 // buildSQLFromOptimized builds SQL from optimized instructions
-func (e *Executor) buildSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]interface{}) (string, []interface{}, error) {
+func (e *Executor) buildSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]interface{}) (string, []interface{}, error) {
 	var (
 		builder strings.Builder
 		args    []interface{}
@@ -407,7 +408,7 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 	// Generate SQL from intermediate format using optimized instructions
 	dialect := getDialectFromDriver(options.Driver)
 
-	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
+	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {
 		return nil, fmt.Errorf("failed to optimize instructions: %w", err)
 	}
