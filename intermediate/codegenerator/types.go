@@ -184,8 +184,6 @@ const (
 	OpEmitSystemFor = "EMIT_SYSTEM_FOR" // Output system FOR clause value
 	// OpEmitSystemValue outputs a specific system field value.
 	OpEmitSystemValue = "EMIT_SYSTEM_VALUE" // Output system value for specific field
-	// OpEmitForClause outputs the generated row-lock clause string (deprecated, use OpEmitSystemFor).
-	OpEmitForClause = "EMIT_FOR_CLAUSE"
 
 	// OpEmitIfDialect outputs a SQL fragment if current dialect matches one of the given dialects.
 	OpEmitIfDialect = "EMIT_IF_DIALECT" // Output SQL fragment if current dialect matches

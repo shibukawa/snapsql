@@ -11,15 +11,15 @@
   "function_name": "input",
   "instructions": [
     {"op": "EMIT_STATIC", "pos": "4:1", "value": "WITH active_users AS ( SELECT u.id, u.name, u.email FROM users u JOIN user_status us ON u.id = us.user_id WHERE us.status = 'active' ) SELECT au.id, au.name, au.email, o.total FROM active_users au LEFT JOIN orders o ON au.id = o.user_id"},
-    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
-    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
-    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "EMIT_FOR_CLAUSE", "pos": "12:33"}
+    {"op": "IF_SYSTEM_LIMIT"},
+    {"op": "EMIT_STATIC", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT"},
+    {"op": "END"},
+    {"op": "IF_SYSTEM_OFFSET"},
+    {"op": "EMIT_STATIC", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET"},
+    {"op": "END"},
+    {"op": "EMIT_SYSTEM_FOR", "pos": "12:33"}
   ],
   "response_affinity": "many",
   "responses": [

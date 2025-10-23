@@ -84,14 +84,3 @@ func resolveGenerationDialect(dialect string) snapsql.Dialect {
 		return snapsql.DialectPostgres
 	}
 }
-
-func hasDynamicForSupport(instructions []codegenerator.Instruction) bool {
-	for _, inst := range instructions {
-		switch inst.Op {
-		case codegenerator.OpLoopStart, codegenerator.OpEmitForClause, codegenerator.OpEmitSystemFor:
-			return true
-		}
-	}
-
-	return false
-}

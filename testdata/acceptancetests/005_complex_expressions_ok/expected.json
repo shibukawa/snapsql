@@ -99,7 +99,7 @@
     {"op": "ELSE", "pos": "28:1"},
     {"op": "EMIT_EVAL", "pos": "28:8", "expr_index": 6},
     {"op": "END", "pos": "28:1"},
-    {"op": "EMIT_FOR_CLAUSE", "pos": "28:8"}
+    {"op": "EMIT_SYSTEM_FOR", "pos": "28:8"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"},

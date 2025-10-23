@@ -38,6 +38,6 @@ const (
 	OpEmitSystemLimit    = codegenerator.OpEmitSystemLimit
 	OpEmitSystemOffset   = codegenerator.OpEmitSystemOffset
 	OpEmitSystemValue    = codegenerator.OpEmitSystemValue
-	OpEmitForClause      = codegenerator.OpEmitForClause
+	OpEmitSystemFor      = codegenerator.OpEmitSystemFor
 	OpEmitIfDialect      = codegenerator.OpEmitIfDialect
 )

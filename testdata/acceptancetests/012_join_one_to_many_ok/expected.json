@@ -22,15 +22,15 @@
   "instructions": [
     {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT u.id, u.name, u.email, j.id AS jobs__id, j.title AS jobs__title, j.company AS jobs__company FROM users u LEFT JOIN jobs j ON u.id = j.user_id WHERE u.id ="},
     {"op": "EMIT_EVAL", "pos": "15:14", "expr_index": 0},
-    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
-    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
-    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "EMIT_FOR_CLAUSE", "pos": "15:14"}
+    {"op": "IF_SYSTEM_LIMIT"},
+    {"op": "EMIT_STATIC", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT"},
+    {"op": "END"},
+    {"op": "IF_SYSTEM_OFFSET"},
+    {"op": "EMIT_STATIC", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET"},
+    {"op": "END"},
+    {"op": "EMIT_SYSTEM_FOR", "pos": "15:14"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"}

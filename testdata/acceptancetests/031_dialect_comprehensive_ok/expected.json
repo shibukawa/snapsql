@@ -23,15 +23,15 @@
     {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name, (age)::INTEGER as age_cast_standard, price::DECIMAL(10,2) as price_cast_postgresql, (salary + bonus)::NUMERIC(12,2) as total_cast_complex, first_name || ' ' || last_name as full_name_mysql, first_name || ' ' || last_name as full_name_postgresql, CURRENT_TIMESTAMP as time_mysql, CURRENT_TIMESTAMP as time_standard, TRUE as bool_true, FALSE as bool_false, RANDOM() as random_mysql, RANDOM() as random_postgresql, (CURRENT_TIMESTAMP)::TEXT as nested_cast_time, 'ID: ' || CAST(id AS TEXT) as nested_concat_cast FROM users WHERE id ="},
     {"op": "EMIT_EVAL", "pos": "35:12", "expr_index": 0},
     {"op": "EMIT_STATIC", "pos": "36:3", "value": "AND active = TRUE AND created_at \u003e CURRENT_TIMESTAMP"},
-    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
-    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
-    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "EMIT_FOR_CLAUSE", "pos": "37:24"}
+    {"op": "IF_SYSTEM_LIMIT"},
+    {"op": "EMIT_STATIC", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT"},
+    {"op": "END"},
+    {"op": "IF_SYSTEM_OFFSET"},
+    {"op": "EMIT_STATIC", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET"},
+    {"op": "END"},
+    {"op": "EMIT_SYSTEM_FOR", "pos": "37:24"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"}

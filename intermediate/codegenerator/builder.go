@@ -1606,13 +1606,6 @@ func (b *InstructionBuilder) RegisterEmitSystemFor() {
 	})
 }
 
-// RegisterEmitForClause registers an EMIT_FOR_CLAUSE instruction (deprecated, use RegisterEmitSystemFor).
-func (b *InstructionBuilder) RegisterEmitForClause() {
-	b.instructions = append(b.instructions, Instruction{
-		Op: OpEmitForClause,
-	})
-}
-
 // CheckEvalResultType determines the type of value that a CEL expression evaluates to.
 // This method inspects the CEL environment and variable information to determine whether
 // the expression represents a scalar value, an array, an object, or an array of objects.

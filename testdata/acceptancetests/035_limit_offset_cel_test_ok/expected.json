@@ -52,7 +52,7 @@
     {"op": "ELSE", "pos": "17:1"},
     {"op": "EMIT_EVAL", "pos": "17:8", "expr_index": 2},
     {"op": "END", "pos": "17:1"},
-    {"op": "EMIT_FOR_CLAUSE", "pos": "17:8"}
+    {"op": "EMIT_SYSTEM_FOR", "pos": "17:8"}
   ],
   "parameters": [
     {"name": "min_age", "type": "int"},
