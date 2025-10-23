@@ -84,7 +84,7 @@ func TestGenerateSelectInstructions(t *testing.T) {
 				{Op: OpIfSystemLimit},
 				{Op: OpEmitSystemLimit},
 				{Op: OpElse},
-				{Op: OpEmitStatic, Value: "10 ", Pos: "1:28"},
+				{Op: OpEmitStatic, Value: "10", Pos: "1:28"},
 				{Op: OpEnd},
 				// OFFSET
 				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "1:31"},
@@ -113,7 +113,6 @@ SELECT id FROM users LIMIT /*= limit */10 OFFSET /*= offset */5`,
 				{Op: OpEmitSystemLimit},
 				{Op: OpElse},
 				{Op: OpEmitEval, ExprIndex: ptrInt(0), Pos: "2:28"},
-				{Op: OpEmitStatic, Value: " ", Pos: "2:42"},
 				{Op: OpEnd},
 				// OFFSET句
 				{Op: OpEmitStatic, Value: " OFFSET ", Pos: "2:43"},

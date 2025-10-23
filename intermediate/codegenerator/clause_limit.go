@@ -2,6 +2,7 @@ package codegenerator
 
 import (
 	"github.com/shibukawa/snapsql/parser"
+	"github.com/shibukawa/snapsql/tokenizer"
 )
 
 // GenerateLimitClauseOrSystem generates instructions for the LIMIT clause or system LIMIT if not present.
@@ -42,8 +43,24 @@ func GenerateLimitClauseOrSystem(limitClause *parser.LimitClause, builder *Instr
 	builder.addIfSystemLimit()
 	builder.addEmitSystemLimit()
 	builder.addRawElseCondition(nil)
-	err := builder.ProcessTokens(tokens[2:])
+	trimmedTokens := trimTrailingWhitespaceTokens(tokens[2:])
+	err := builder.ProcessTokens(trimmedTokens)
 	builder.addEndCondition(nil)
 
 	return err
+}
+
+func trimTrailingWhitespaceTokens(tokens []tokenizer.Token) []tokenizer.Token {
+	end := len(tokens)
+	for end > 0 {
+		tok := tokens[end-1]
+		if tok.Type == tokenizer.WHITESPACE {
+			end--
+			continue
+		}
+
+		break
+	}
+
+	return tokens[:end]
 }

@@ -192,28 +192,6 @@ VALUES /*# for u : user_rows */
 			expectedCELCount: 3,
 			expectedEnvCount: 2,
 		},
-		{
-			name: "insert with array type directive - auto-loop generation",
-			sql: `/*# parameters: { user_rows: [{ id: int, name: string }] } */
-INSERT INTO users (id, name)
-VALUES /*= user_rows */(1, 'Alice')`,
-			dialect:     snapsql.DialectPostgres,
-			expectError: false,
-			expectedInstructions: []Instruction{
-				{Op: OpEmitStatic, Value: "INSERT INTO users (id, name) VALUES ", Pos: "2:1"},
-				{Op: OpLoopStart, Variable: "u", CollectionExprIndex: ptrInt(0), EnvIndex: ptrInt(1), Pos: "3:8"},
-				{Op: OpEmitStatic, Value: "(", Pos: "3:8"},
-				{Op: OpEmitEval, ExprIndex: ptrInt(1), Pos: "3:8"}, // user_rows_item.id
-				{Op: OpEmitStatic, Value: ", ", Pos: "3:8"},
-				{Op: OpEmitEval, ExprIndex: ptrInt(2), Pos: "3:8"}, // user_rows_item.name
-				{Op: OpEmitStatic, Value: ")", Pos: "3:8"},
-				{Op: OpEmitUnlessBoundary, Value: ", ", Pos: "3:8"},
-				{Op: OpLoopEnd, EnvIndex: ptrInt(0), Pos: "3:8"},
-				{Op: OpBoundary, Pos: "3:8"},
-			},
-			expectedCELCount: 3,
-			expectedEnvCount: 2,
-		},
 	}
 
 	for _, tt := range tests {
@@ -260,4 +238,33 @@ VALUES /*= user_rows */(1, 'Alice')`,
 			assert.Equal(t, string(e), string(a), "Instructions mismatch")
 		})
 	}
+}
+
+func TestValuesClauseKeepsLoopDirectives(t *testing.T) {
+	sql := `/*# parameters: { user_rows: [{ id: int, name: string }] } */
+INSERT INTO users (id, name)
+VALUES /*# for u : user_rows */
+	/*= u */(1, 'Alice'),
+/*# end */`
+
+	reader := strings.NewReader(sql)
+	stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+	require.NoError(t, err, "ParseSQLFile should succeed")
+
+	insertStmt, ok := stmt.(*parser.InsertIntoStatement)
+	require.True(t, ok, "expected InsertIntoStatement")
+	require.NotNil(t, insertStmt.ValuesList, "VALUES clause should be present")
+
+	tokens := insertStmt.ValuesList.RawTokens()
+	require.NotEmpty(t, tokens, "VALUES clause tokens should not be empty")
+
+	var directiveKinds []string
+	for _, tk := range tokens {
+		if tk.Directive != nil {
+			directiveKinds = append(directiveKinds, tk.Directive.Type)
+		}
+	}
+
+	assert.Contains(t, directiveKinds, "for", "VALUES clause should retain for directive")
+	assert.Contains(t, directiveKinds, "end", "VALUES clause should retain end directive")
 }

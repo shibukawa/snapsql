@@ -572,12 +572,28 @@ func (b *InstructionBuilder) convertLoopAndConditionalEndDelimiters() {
 				if value == "," || value == "AND" || value == "OR" {
 					b.instructions[prevIdx] = Instruction{
 						Op:    OpEmitUnlessBoundary,
-						Value: prevInstr.Value,
+						Value: normalizeDelimiter(prevInstr.Value),
 						Pos:   prevInstr.Pos,
 					}
 				}
 			}
 		}
+	}
+}
+
+func normalizeDelimiter(value string) string {
+	trimmed := strings.TrimSpace(value)
+	return normalizeDelimiterValue(trimmed)
+}
+
+func normalizeDelimiterValue(trimmed string) string {
+	switch trimmed {
+	case ",":
+		return ", "
+	case "AND", "OR":
+		return " " + trimmed + " "
+	default:
+		return trimmed
 	}
 }
 
@@ -629,7 +645,7 @@ func (b *InstructionBuilder) mergeStaticInstructions() []Instruction {
 					// delimiter を EMIT_UNLESS_BOUNDARY で追加
 					result = append(result, Instruction{
 						Op:    OpEmitUnlessBoundary,
-						Value: delimiter,
+						Value: normalizeDelimiter(delimiter),
 						Pos:   firstPos,
 					})
 

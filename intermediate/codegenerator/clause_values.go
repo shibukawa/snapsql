@@ -74,6 +74,50 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 	for i < len(tokens) {
 		token := tokens[i]
 
+		if token.Directive != nil {
+			switch token.Directive.Type {
+			case "for":
+				loopVar, collection, err := parseForDirectiveCondition(token.Directive.Condition)
+				if err != nil {
+					return fmt.Errorf("failed to parse for directive at %s: %w", token.Position.String(), err)
+				}
+
+				builder.AddForLoopStart(loopVar, collection, token.Position.String())
+				i++
+				continue
+
+			case "end":
+				if len(builder.loopStack) > 0 {
+					loopEndPos := token.Position.String()
+					for j := len(builder.instructions) - 1; j >= 0; j-- {
+						instr := builder.instructions[j]
+						if instr.Op == OpEmitUnlessBoundary {
+							continue
+						}
+
+						if instr.Op == OpEmitStatic {
+							trimmedVal := strings.TrimSpace(instr.Value)
+							if trimmedVal == "" {
+								continue
+							}
+							if trimmedVal == "," || trimmedVal == "AND" || trimmedVal == "OR" {
+								continue
+							}
+						}
+
+						if instr.Pos != "" {
+							loopEndPos = instr.Pos
+							break
+						}
+					}
+
+					builder.AddForLoopEnd(loopEndPos)
+					i++
+					continue
+				}
+			}
+		}
+
 		// 変数展開ディレクティブ (/*= varname */) をチェック
 		if token.Directive != nil && token.Directive.Type == "variable" {
 			varName := token.Directive.Condition
@@ -771,4 +815,20 @@ func findLastClosingParenInGroup(tokens []tokenizer.Token) int {
 	}
 
 	return -1
+}
+
+func parseForDirectiveCondition(condition string) (string, string, error) {
+	parts := strings.SplitN(condition, ":", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("%w: invalid format (expected 'variable : expression')", ErrLoopMismatch)
+	}
+
+	loopVar := strings.TrimSpace(parts[0])
+	collection := strings.TrimSpace(parts[1])
+
+	if loopVar == "" || collection == "" {
+		return "", "", fmt.Errorf("%w: empty variable or expression", ErrLoopMismatch)
+	}
+
+	return loopVar, collection, nil
 }
