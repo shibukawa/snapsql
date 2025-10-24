@@ -10,7 +10,7 @@
   "format_version": "1",
   "function_name": "input",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "4:1", "value": "WITH active_users AS ( SELECT u.id, u.name, u.email FROM users u JOIN user_status us ON u.id = us.user_id WHERE us.status = 'active' ) SELECT au.id, au.name, au.email, o.total FROM active_users au LEFT JOIN orders o ON au.id = o.user_id"},
+    {"op": "EMIT_STATIC", "pos": "4:1", "value": "WITH active_users AS ( SELECT u.id, u.name, u.email FROM users u JOIN user_status us ON u.id = us.user_id WHERE us.status = 'active' )SELECT au.id, au.name, au.email, o.total FROM active_users au LEFT JOIN orders o ON au.id = o.user_id "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -19,7 +19,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "12:33"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "response_affinity": "many",
   "responses": [

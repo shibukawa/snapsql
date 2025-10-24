@@ -2,7 +2,14 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user", "type": "../testdata/acceptancetests/028_insert_system_fields_explicit_ok/User"},
+    {"name": "created_at", "type": "timestamp"},
+    {"name": "updated_at", "type": "timestamp"},
+    {"name": "user", "type": "../testdata/acceptancetests/028_insert_system_fields_explicit_ok/User", "value": ""},
+    {"name": "created_at", "type": "timestamp", "value": "2024-01-02 00:00:00"},
+    {"name": "updated_at", "type": "timestamp", "value": "2024-01-02 00:00:00"}
+      ],
       "container": "root"
     }
   ],
@@ -12,36 +19,44 @@
       "expression": "user.id",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 62
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "user.name",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 79
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_003",
       "expression": "created_at",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 103
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_004",
       "expression": "updated_at",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 127
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     }
   ],
   "format_version": "1",
@@ -49,11 +64,11 @@
   "instructions": [
     {"op": "EMIT_STATIC", "pos": "8:1", "value": "INSERT INTO users (id, name, created_at, updated_at) VALUES ("},
     {"op": "EMIT_EVAL", "pos": "8:62", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "8:77", "value": ","},
+    {"op": "EMIT_STATIC", "pos": "8:77", "value": ", "},
     {"op": "EMIT_EVAL", "pos": "8:79", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "8:101", "value": ","},
+    {"op": "EMIT_STATIC", "pos": "8:101", "value": ", "},
     {"op": "EMIT_EVAL", "pos": "8:103", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "8:123", "value": "(),"},
+    {"op": "EMIT_STATIC", "pos": "8:123", "value": "(), "},
     {"op": "EMIT_EVAL", "pos": "8:127", "expr_index": 3},
     {"op": "EMIT_STATIC", "pos": "8:147", "value": "())"}
   ],
@@ -63,20 +78,6 @@
     {"name": "updated_at", "type": "timestamp"}
   ],
   "response_affinity": "none",
-  "system_fields": [
-    {
-      "name": "created_at",
-      "on_insert": {
-        "parameter": "explicit"
-      }
-    },
-    {
-      "name": "updated_at",
-      "on_insert": {
-        "parameter": "explicit"
-      }
-    }
-  ],
   "table_references": [
     {"name": "users", "context": "main"}
   ],

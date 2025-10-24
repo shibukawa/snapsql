@@ -2,7 +2,11 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "name", "type": "string", "value": "dummy"},
+    {"name": "email", "type": "string", "value": "dummy"},
+    {"name": "lock_no", "type": "int", "value": 1}
+      ],
       "container": "root"
     }
   ],
@@ -12,46 +16,52 @@
       "expression": "name",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 25
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "email",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 56
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_003",
       "expression": "lock_no",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 98
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "updateUser",
-  "implicit_parameters": [
-    {"name": "updated_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
-    {"name": "updated_by", "type": "string"}
-  ],
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "8:1", "value": "UPDATE users SET name ="},
+    {"op": "EMIT_STATIC", "pos": "8:1", "value": "UPDATE users SET name = "},
     {"op": "EMIT_EVAL", "pos": "8:25", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "8:46", "value": ", email ="},
+    {"op": "EMIT_STATIC", "pos": "8:46", "value": ", email = "},
     {"op": "EMIT_EVAL", "pos": "8:56", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "8:86", "value": ", lock_no ="},
+    {"op": "EMIT_STATIC", "pos": "8:86", "value": ", lock_no = "},
     {"op": "EMIT_EVAL", "pos": "8:98", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "8:114", "value": ", updated_at = "},
-    {"op": "EMIT_SYSTEM_VALUE", "pos": "8:114", "system_field": "updated_at"},
-    {"op": "EMIT_STATIC", "pos": "8:114", "value": ", updated_by = "},
-    {"op": "EMIT_SYSTEM_VALUE", "pos": "8:114", "system_field": "updated_by"},
+    {"op": "EMIT_STATIC", "pos": "8:113", "value": ", created_at = "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "\u003cnil\u003e", "system_field": "created_at"},
+    {"op": "EMIT_STATIC", "value": ", updated_at = "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "NOW()", "system_field": "updated_at"},
+    {"op": "EMIT_STATIC", "value": ", created_by = "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "\u003cnil\u003e", "system_field": "created_by"},
+    {"op": "EMIT_STATIC", "value": ", updated_by = "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "\u003cnil\u003e", "system_field": "updated_by"},
     {"op": "EMIT_STATIC", "pos": "8:114", "value": "WHERE id = 1"}
   ],
   "parameters": [
@@ -60,53 +70,6 @@
     {"name": "lock_no", "type": "int"}
   ],
   "response_affinity": "none",
-  "system_fields": [
-    {
-      "name": "created_at",
-      "on_insert": {
-        "default": "CURRENT_TIMESTAMP"
-      },
-      "on_update": {
-        "parameter": "error"
-      }
-    },
-    {
-      "name": "updated_at",
-      "on_insert": {
-        "default": "CURRENT_TIMESTAMP"
-      },
-      "on_update": {
-        "default": "CURRENT_TIMESTAMP"
-      }
-    },
-    {
-      "name": "created_by",
-      "on_insert": {
-        "parameter": "implicit"
-      },
-      "on_update": {
-        "parameter": "error"
-      }
-    },
-    {
-      "name": "updated_by",
-      "on_insert": {
-        "parameter": "implicit"
-      },
-      "on_update": {
-        "parameter": "implicit"
-      }
-    },
-    {
-      "name": "lock_no",
-      "on_insert": {
-        "default": 1
-      },
-      "on_update": {
-        "parameter": "explicit"
-      }
-    }
-  ],
   "table_references": [
     {"name": "users", "context": "main"}
   ],

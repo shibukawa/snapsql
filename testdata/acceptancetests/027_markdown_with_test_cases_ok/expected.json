@@ -2,7 +2,9 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user_id", "type": "int", "value": 1}
+      ],
       "container": "root"
     }
   ],
@@ -12,17 +14,20 @@
       "expression": "user_id",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 33,
+        "column": 10
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     }
   ],
   "description": "This query finds a user by their ID.",
   "format_version": "1",
   "function_name": "find_user",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "19:1", "value": "SELECT id, name, age FROM users WHERE id ="},
+    {"op": "EMIT_STATIC", "pos": "19:1", "value": "SELECT id, name, age FROM users WHERE id = "},
     {"op": "EMIT_EVAL", "pos": "33:10", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "34:0", "value": " "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -31,7 +36,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "33:10"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"}

@@ -2,7 +2,17 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user_id", "type": "int", "value": 1},
+    {"name": "username", "type": "string", "value": "dummy"},
+    {"name": "display_name", "type": "bool", "value": true},
+    {"name": "start_date", "type": "string", "value": "dummy"},
+    {"name": "end_date", "type": "string", "value": "dummy"},
+    {"name": "sort_field", "type": "string", "value": "dummy"},
+    {"name": "sort_direction", "type": "string", "value": "dummy"},
+    {"name": "page_size", "type": "int", "value": 1},
+    {"name": "page", "type": "int", "value": 1}
+      ],
       "container": "root"
     }
   ],
@@ -12,94 +22,109 @@
       "expression": "display_name ? username : \"Anonymous\"",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 18,
+        "column": 3
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "start_date != \"\" \u0026\u0026 end_date != \"\"",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 21,
+        "column": 3
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
     },
     {
       "id": "expr_003",
       "expression": "start_date",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 22,
+        "column": 22
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_004",
       "expression": "end_date",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 22,
+        "column": 56
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_005",
       "expression": "sort_field + \" \" + (sort_direction != \"\" ? sort_direction : \"ASC\")",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 25,
+        "column": 10
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_006",
       "expression": "page_size != 0 ? page_size : 10",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 27,
+        "column": 7
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_007",
       "expression": "page \u003e 0 ? (page - 1) * page_size : 0",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 28,
+        "column": 8
+      },
+      "type_descriptor": "any",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "getComplexData",
   "has_ordered_result": true,
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "15:1", "value": "SELECT id, name,"},
+    {"op": "EMIT_STATIC", "pos": "15:1", "value": "SELECT id, name, "},
     {"op": "EMIT_EVAL", "pos": "18:3", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "19:1", "value": "FROM users WHERE"},
+    {"op": "EMIT_STATIC", "pos": "19:0", "value": " FROM users WHERE "},
     {"op": "IF", "pos": "21:3", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "22:3", "value": "created_at BETWEEN"},
+    {"op": "EMIT_STATIC", "pos": "22:0", "value": " created_at BETWEEN "},
     {"op": "EMIT_EVAL", "pos": "22:22", "expr_index": 2},
-    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "22:52", "value": "AND"},
+    {"op": "EMIT_STATIC", "pos": "22:51", "value": " AND "},
     {"op": "EMIT_EVAL", "pos": "22:56", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "23:0", "value": " "},
     {"op": "END", "pos": "23:3"},
-    {"op": "EMIT_STATIC", "pos": "25:1", "value": "ORDER BY"},
+    {"op": "EMIT_STATIC", "pos": "24:0", "value": " ORDER BY "},
     {"op": "EMIT_EVAL", "pos": "25:10", "expr_index": 4},
-    {"op": "BOUNDARY", "pos": "27:1"},
-    {"op": "EMIT_STATIC", "pos": "27:1", "value": " LIMIT "},
-    {"op": "IF_SYSTEM_LIMIT", "pos": "27:1"},
-    {"op": "EMIT_SYSTEM_LIMIT", "pos": "27:1"},
-    {"op": "ELSE", "pos": "27:1"},
+    {"op": "EMIT_STATIC", "pos": "26:0", "value": "  LIMIT "},
+    {"op": "IF_SYSTEM_LIMIT"},
+    {"op": "EMIT_SYSTEM_LIMIT"},
+    {"op": "ELSE"},
     {"op": "EMIT_EVAL", "pos": "27:7", "expr_index": 5},
-    {"op": "END", "pos": "27:1"},
+    {"op": "END"},
     {"op": "EMIT_STATIC", "pos": "28:1", "value": " OFFSET "},
-    {"op": "IF_SYSTEM_OFFSET", "pos": "28:1"},
-    {"op": "EMIT_SYSTEM_OFFSET", "pos": "28:1"},
-    {"op": "ELSE", "pos": "28:1"},
+    {"op": "IF_SYSTEM_OFFSET"},
+    {"op": "EMIT_SYSTEM_OFFSET"},
+    {"op": "ELSE"},
     {"op": "EMIT_EVAL", "pos": "28:8", "expr_index": 6},
-    {"op": "END", "pos": "28:1"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "28:8"}
+    {"op": "EMIT_STATIC", "pos": "29:0", "value": " "},
+    {"op": "END"},
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"},

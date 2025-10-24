@@ -2,7 +2,10 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user_id", "type": "int", "value": 1},
+    {"name": "user", "type": "../testdata/acceptancetests/017_common_type_ok/User", "value": ""}
+      ],
       "container": "root"
     }
   ],
@@ -12,16 +15,19 @@
       "expression": "user_id",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 9,
+        "column": 14
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "getUser",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT u.id, u.name, u.email FROM users u WHERE u.id ="},
+    {"op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT u.id, u.name, u.email FROM users u WHERE u.id = "},
     {"op": "EMIT_EVAL", "pos": "9:14", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "10:0", "value": " "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -30,7 +36,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "9:14"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"},

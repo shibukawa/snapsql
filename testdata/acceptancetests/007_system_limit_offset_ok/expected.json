@@ -2,7 +2,10 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "min_age", "type": "int", "value": 1},
+    {"name": "max_age", "type": "int", "value": 1}
+      ],
       "container": "root"
     }
   ],
@@ -12,40 +15,44 @@
       "expression": "min_age",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 14,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "max_age",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 15,
+        "column": 16
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "get_users_with_limit_offset",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT id, name, age FROM users WHERE age \u003e="},
+    {"op": "EMIT_STATIC", "pos": "7:1", "value": "SELECT id, name, age FROM users WHERE age \u003e= "},
     {"op": "EMIT_EVAL", "pos": "14:12", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "15:5", "value": "AND age \u003c="},
+    {"op": "EMIT_STATIC", "pos": "15:0", "value": " AND age \u003c= "},
     {"op": "EMIT_EVAL", "pos": "15:16", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "16:1", "value": " LIMIT "},
-    {"op": "IF_SYSTEM_LIMIT", "pos": "16:1"},
-    {"op": "EMIT_SYSTEM_LIMIT", "pos": "16:1"},
-    {"op": "ELSE", "pos": "16:1"},
+    {"op": "EMIT_STATIC", "pos": "16:0", "value": "  LIMIT "},
+    {"op": "IF_SYSTEM_LIMIT"},
+    {"op": "EMIT_SYSTEM_LIMIT"},
+    {"op": "ELSE"},
     {"op": "EMIT_STATIC", "pos": "16:7", "value": "10"},
-    {"op": "END", "pos": "16:1"},
+    {"op": "END"},
     {"op": "EMIT_STATIC", "pos": "17:1", "value": " OFFSET "},
-    {"op": "IF_SYSTEM_OFFSET", "pos": "17:1"},
-    {"op": "EMIT_SYSTEM_OFFSET", "pos": "17:1"},
-    {"op": "ELSE", "pos": "17:1"},
-    {"op": "EMIT_STATIC", "pos": "17:8", "value": "20"},
-    {"op": "END", "pos": "17:1"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "17:8"}
+    {"op": "IF_SYSTEM_OFFSET"},
+    {"op": "EMIT_SYSTEM_OFFSET"},
+    {"op": "ELSE"},
+    {"op": "EMIT_STATIC", "pos": "17:8", "value": "20 "},
+    {"op": "END"},
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "min_age", "type": "int"},

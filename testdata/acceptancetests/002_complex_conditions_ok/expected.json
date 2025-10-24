@@ -2,8 +2,31 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "min_age", "type": "int", "value": 1},
+    {"name": "max_age", "type": "int", "value": 1},
+        {
+          "name": "departments",
+          "type": "string[]",
+          "value": [
+            "dummy"
+          ]
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "value": true
+        }
+      ],
       "container": "root"
+    },
+    {
+      "index": 1,
+      "additional_variables": [
+        {"name": "__item", "type": "any", "value": "dummy"}
+      ],
+      "container": "loop_1",
+      "parent_index": 0
     }
   ],
   "cel_expressions": [
@@ -12,93 +35,125 @@
       "expression": "min_age \u003e 0",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 13,
+        "column": 1
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "min_age",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 14,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_003",
       "expression": "max_age \u003e 0",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 16,
+        "column": 1
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
     },
     {
       "id": "expr_004",
       "expression": "max_age",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 17,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_005",
       "expression": "departments.size() \u003e 0",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 19,
+        "column": 1
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
     },
     {
       "id": "expr_006",
       "expression": "departments",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 20,
+        "column": 38
+      },
+      "type_descriptor": [
+        "string"
+      ],
+      "result_type": 2
     },
     {
       "id": "expr_007",
       "expression": "active",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 22,
+        "column": 1
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
     }
+  ],
+  "envs": [
+    [],
+    [
+      {
+        "name": "__item",
+        "type": "any"
+      }
+    ]
   ],
   "format_version": "1",
   "function_name": "getFilteredData",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "10:1", "value": "SELECT id, name, age, department FROM users WHERE 1=1"},
+    {"op": "EMIT_STATIC", "pos": "10:1", "value": "SELECT id, name, age, department FROM users WHERE 1=1 "},
     {"op": "IF", "pos": "13:1", "expr_index": 0},
-    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "14:1", "value": "AND"},
-    {"op": "EMIT_STATIC", "pos": "14:1", "value": "age \u003e="},
+    {"op": "EMIT_STATIC", "pos": "14:0", "value": " AND age \u003e= "},
     {"op": "EMIT_EVAL", "pos": "14:12", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "15:0", "value": " "},
     {"op": "END", "pos": "15:1"},
+    {"op": "EMIT_STATIC", "pos": "16:0", "value": " "},
     {"op": "IF", "pos": "16:1", "expr_index": 2},
-    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "17:1", "value": "AND"},
-    {"op": "EMIT_STATIC", "pos": "17:1", "value": "age \u003c="},
+    {"op": "EMIT_STATIC", "pos": "17:0", "value": " AND age \u003c= "},
     {"op": "EMIT_EVAL", "pos": "17:12", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "18:0", "value": " "},
     {"op": "END", "pos": "18:1"},
+    {"op": "EMIT_STATIC", "pos": "19:0", "value": " "},
     {"op": "IF", "pos": "19:1", "expr_index": 4},
-    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "20:1", "value": "AND"},
-    {"op": "EMIT_STATIC", "pos": "20:1", "value": "department IN ("},
+    {"op": "EMIT_STATIC", "pos": "20:0", "value": " AND department IN ("},
     {"op": "EMIT_EVAL", "pos": "20:20", "expr_index": 5},
-    {"op": "EMIT_STATIC", "pos": "20:38", "value": "('HR'"},
-    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "20:43", "value": ","},
-    {"op": "EMIT_STATIC", "pos": "20:45", "value": "'Engineering'"},
-    {"op": "BOUNDARY", "pos": "20:58"},
-    {"op": "EMIT_STATIC", "pos": "20:59", "value": "))"},
+    {
+      "op": "LOOP_START",
+      "pos": "20:38",
+      "variable": "__item",
+      "collection_expr_index": 5,
+      "env_index": 1
+    },
+    {"op": "EMIT_STATIC", "pos": "20:38", "value": "('HR', 'Engineering')"},
+    {"op": "LOOP_END", "pos": "20:58", "env_index": 0},
+    {"op": "EMIT_STATIC", "pos": "20:59", "value": ") "},
     {"op": "END", "pos": "21:1"},
+    {"op": "EMIT_STATIC", "pos": "22:0", "value": " "},
     {"op": "IF", "pos": "22:1", "expr_index": 6},
-    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "23:1", "value": "AND"},
-    {"op": "EMIT_STATIC", "pos": "23:1", "value": "status = 'active'"},
+    {"op": "EMIT_STATIC", "pos": "23:0", "value": " AND status = 'active' "},
     {"op": "END", "pos": "24:1"},
+    {"op": "EMIT_STATIC", "pos": "25:0", "value": " "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -107,7 +162,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "24:1"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "min_age", "type": "int"},

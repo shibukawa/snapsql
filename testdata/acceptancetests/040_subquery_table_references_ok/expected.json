@@ -10,7 +10,7 @@
   "format_version": "1",
   "function_name": "input",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "1:1", "value": "SELECT sq.id, sq.name FROM ( SELECT id, name FROM users ) AS sq"},
+    {"op": "EMIT_STATIC", "pos": "1:1", "value": "SELECT sq.id, sq.name FROM ( SELECT id, name FROM users ) AS sq "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -19,7 +19,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "9:6"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "response_affinity": "many",
   "responses": [

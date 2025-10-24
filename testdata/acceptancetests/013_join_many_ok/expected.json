@@ -2,7 +2,9 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "department", "type": "string", "value": "dummy"}
+      ],
       "container": "root"
     }
   ],
@@ -12,16 +14,19 @@
       "expression": "department",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 15,
+        "column": 22
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "get_users_with_jobs",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT u.id, u.name, u.email, j.id AS jobs__id, j.title AS jobs__title, j.company AS jobs__company FROM users u LEFT JOIN jobs j ON u.id = j.user_id WHERE u.department ="},
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT u.id, u.name, u.email, j.id AS jobs__id, j.title AS jobs__title, j.company AS jobs__company FROM users u LEFT JOIN jobs j ON u.id = j.user_id WHERE u.department = "},
     {"op": "EMIT_EVAL", "pos": "15:22", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "16:0", "value": " "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -30,7 +35,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "15:22"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "department", "type": "string"}

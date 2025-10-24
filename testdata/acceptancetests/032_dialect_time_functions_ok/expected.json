@@ -10,7 +10,7 @@
   "format_version": "1",
   "function_name": "get_current_time",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "4:1", "value": "SELECT id, name, CURRENT_TIMESTAMP as current_time_now, CURRENT_TIMESTAMP as current_time_standard FROM users"},
+    {"op": "EMIT_STATIC", "pos": "4:1", "value": "SELECT id, name, NOW() as current_time_now, NOW() as current_time_standard FROM users "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -19,7 +19,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "9:6"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "response_affinity": "many",
   "responses": [

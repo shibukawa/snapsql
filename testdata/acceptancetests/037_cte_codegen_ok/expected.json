@@ -10,7 +10,7 @@
   "format_version": "1",
   "function_name": "postpone_cards",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "4:1", "value": "WITH pending AS (SELECT id FROM cards WHERE status = 'pending') SELECT id FROM pending"},
+    {"op": "EMIT_STATIC", "pos": "4:1", "value": "WITH pending AS (SELECT id FROM cards WHERE status = 'pending')SELECT id FROM pending "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -19,7 +19,7 @@
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
     {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR", "pos": "5:16"}
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "response_affinity": "many",
   "responses": [
