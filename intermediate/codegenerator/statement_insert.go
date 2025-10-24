@@ -97,7 +97,8 @@ func GenerateInsertInstructionsWithFunctionDef(stmt parser.StatementNode, ctx *G
 	}
 
 	// INSERT INTO 句を処理（必須）
-	if err := generateInsertIntoClause(insertStmt.Into, insertStmt.Columns, builder); err != nil {
+	skipLeadingInto := insertStmt.CTE() == nil
+	if err := generateInsertIntoClause(insertStmt.Into, insertStmt.Columns, builder, skipLeadingInto); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to generate INSERT INTO clause: %w", err)
 	}
 
@@ -109,7 +110,8 @@ func GenerateInsertInstructionsWithFunctionDef(stmt parser.StatementNode, ctx *G
 		}
 	} else if insertStmt.Select != nil {
 		// INSERT ... SELECT形式
-		if err := generateSelectClause(insertStmt.Select, builder); err != nil {
+		skipLeading := insertStmt.CTE() == nil
+		if err := generateSelectClause(insertStmt.Select, builder, skipLeading); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to generate SELECT clause: %w", err)
 		}
 

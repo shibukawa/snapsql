@@ -31,7 +31,7 @@ func generateCTEClause(
 	}
 
 	// Process all tokens (includes directives if present)
-	if err := builder.ProcessTokens(rawTokens); err != nil {
+	if err := builder.ProcessTokens(rawTokens, WithSkipLeadingTrivia()); err != nil {
 		return fmt.Errorf("failed to process CTE tokens: %w", err)
 	}
 

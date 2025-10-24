@@ -207,7 +207,30 @@ func (b *InstructionBuilder) EvaluateExpression(expr string) (interface{}, error
 // CEL式の管理とディレクティブ処理、命令生成を行う
 //
 // 最適化：連続するホワイトスペース、ブロックコメント、ラインコメントは1スペースにマージ
-func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
+type processTokensConfig struct {
+	skipLeadingTrivia bool
+}
+
+// ProcessTokensOption allows configuring ProcessTokens behavior.
+type ProcessTokensOption func(*processTokensConfig)
+
+// WithSkipLeadingTrivia removes leading whitespace and non-directive comments before processing.
+func WithSkipLeadingTrivia() ProcessTokensOption {
+	return func(cfg *processTokensConfig) {
+		cfg.skipLeadingTrivia = true
+	}
+}
+
+func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token, opts ...ProcessTokensOption) error {
+	cfg := processTokensConfig{}
+
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	if cfg.skipLeadingTrivia {
+		tokens = skipLeadingTrivia(tokens)
+	}
 	// Step 1: 方言変換（トークン列全体を事前処理）
 	convertedTokens := b.applyDialectConversions(tokens)
 
@@ -471,6 +494,42 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token) error {
 	return nil
 }
 
+func skipLeadingTrivia(tokens []tokenizer.Token) []tokenizer.Token {
+	index := 0
+	for index < len(tokens) {
+		tok := tokens[index]
+
+		switch tok.Type {
+		case tokenizer.WHITESPACE:
+			index++
+			continue
+		case tokenizer.BLOCK_COMMENT, tokenizer.LINE_COMMENT:
+			if tok.Directive == nil {
+				index++
+				continue
+			}
+		}
+
+		break
+	}
+
+	return tokens[index:]
+}
+
+func trimTrailingStaticWhitespace(instructions []Instruction) []Instruction {
+	if len(instructions) == 0 {
+		return instructions
+	}
+
+	last := instructions[len(instructions)-1]
+	if last.Op == OpEmitStatic {
+		last.Value = strings.TrimRight(last.Value, " \t\n\r")
+		instructions[len(instructions)-1] = last
+	}
+
+	return instructions
+}
+
 func (b *InstructionBuilder) addElseCondition(pos *tokenizer.Position) error {
 	if len(b.conditionalStack) == 0 {
 		return fmt.Errorf("%w: else directive at %s without matching if", ErrDirectiveMismatch, pos.String())
@@ -548,6 +607,8 @@ func (b *InstructionBuilder) Finalize() []Instruction {
 
 	// Phase 2: ループ/条件分岐終了後に BOUNDARY を挿入
 	optimized = b.insertBoundariesAfterLoopsAndConditions(optimized)
+
+	optimized = trimTrailingStaticWhitespace(optimized)
 
 	// 将来的に以下を実装予定：
 	// - b.optimizeBoundaries()

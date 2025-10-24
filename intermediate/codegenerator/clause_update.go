@@ -19,14 +19,18 @@ import (
 //
 // Returns:
 //   - error: エラー
-func generateUpdateClause(clause *parser.UpdateClause, builder *InstructionBuilder) error {
+func generateUpdateClause(clause *parser.UpdateClause, builder *InstructionBuilder, skipLeadingTrivia bool) error {
 	if clause == nil {
 		return errors.New("UPDATE clause is required")
 	}
 
 	// UPDATE トークンを処理
 	tokens := clause.RawTokens()
-	if err := builder.ProcessTokens(tokens); err != nil {
+	options := []ProcessTokensOption{}
+	if skipLeadingTrivia {
+		options = append(options, WithSkipLeadingTrivia())
+	}
+	if err := builder.ProcessTokens(tokens, options...); err != nil {
 		return fmt.Errorf("code generation: %w", err)
 	}
 

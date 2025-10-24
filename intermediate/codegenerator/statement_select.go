@@ -41,7 +41,8 @@ func GenerateSelectInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	}
 
 	// SELECT 句を処理（必須）
-	if err := generateSelectClause(selectStmt.Select, builder); err != nil {
+	skipLeading := selectStmt.CTE() == nil
+	if err := generateSelectClause(selectStmt.Select, builder, skipLeading); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to generate SELECT clause: %w", err)
 	}
 

@@ -41,7 +41,8 @@ func GenerateUpdateInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	}
 
 	// Phase 2: UPDATE 句を処理（必須）
-	if err := generateUpdateClause(updateStmt.Update, builder); err != nil {
+	skipLeading := updateStmt.CTE() == nil
+	if err := generateUpdateClause(updateStmt.Update, builder, skipLeading); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to generate UPDATE clause: %w", err)
 	}
 

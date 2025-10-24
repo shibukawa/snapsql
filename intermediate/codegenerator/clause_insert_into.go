@@ -25,7 +25,7 @@ import (
 //   - INTO節のRawTokensをそのまま処理することで、テーブル名やエイリアスを自動処理
 //   - ディレクティブが含まれる可能性に対応（理論上、テーブル名の動的生成は可能だが稀）
 //   - システムフィールドはこの関数呼び出し後に別途追加される
-func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.FieldName, builder *InstructionBuilder) error {
+func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.FieldName, builder *InstructionBuilder, skipLeadingTrivia bool) error {
 	if into == nil {
 		return fmt.Errorf("%w: INSERT INTO clause is required", ErrMissingClause)
 	}
@@ -48,7 +48,11 @@ func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.Fi
 		if closingParenIdx >= 0 {
 			// 括弧の直前までのトークンを処理
 			tokensBeforeParen := tokens[:closingParenIdx]
-			if err := builder.ProcessTokens(tokensBeforeParen); err != nil {
+			options := []ProcessTokensOption{}
+			if skipLeadingTrivia {
+				options = append(options, WithSkipLeadingTrivia())
+			}
+			if err := builder.ProcessTokens(tokensBeforeParen, options...); err != nil {
 				return fmt.Errorf("code generation: %w", err)
 			}
 
@@ -62,13 +66,21 @@ func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.Fi
 			}
 		} else {
 			// 括弧が見つからない場合は通常処理
-			if err := builder.ProcessTokens(tokens); err != nil {
+			options := []ProcessTokensOption{}
+			if skipLeadingTrivia {
+				options = append(options, WithSkipLeadingTrivia())
+			}
+			if err := builder.ProcessTokens(tokens, options...); err != nil {
 				return fmt.Errorf("code generation: %w", err)
 			}
 		}
 	} else {
 		// システムフィールドがない場合は通常処理
-		if err := builder.ProcessTokens(tokens); err != nil {
+		options := []ProcessTokensOption{}
+		if skipLeadingTrivia {
+			options = append(options, WithSkipLeadingTrivia())
+		}
+		if err := builder.ProcessTokens(tokens, options...); err != nil {
 			return fmt.Errorf("code generation: %w", err)
 		}
 	}

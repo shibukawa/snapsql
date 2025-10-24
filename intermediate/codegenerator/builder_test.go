@@ -209,6 +209,36 @@ func TestProcessTokensWithWhitespaceAndComments(t *testing.T) {
 	}
 }
 
+func TestProcessTokensSkipLeadingTrivia(t *testing.T) {
+	tokens := []tokenizer.Token{
+		{Type: tokenizer.WHITESPACE, Value: "\n\n", Position: tokenizer.Position{Line: 1, Column: 1}},
+		{Type: tokenizer.LINE_COMMENT, Value: "-- comment", Position: tokenizer.Position{Line: 3, Column: 1}},
+		{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 4, Column: 1}},
+		{Type: tokenizer.WHITESPACE, Value: " ", Position: tokenizer.Position{Line: 4, Column: 7}},
+		{Type: tokenizer.IDENTIFIER, Value: "id", Position: tokenizer.Position{Line: 4, Column: 8}},
+	}
+
+	ctx := NewGenerationContext(snapsql.DialectPostgres)
+	builder := NewInstructionBuilder(ctx)
+
+	err := builder.ProcessTokens(tokens, WithSkipLeadingTrivia())
+	require.NoError(t, err)
+
+	require.NotEmpty(t, builder.instructions)
+	assert.Equal(t, "SELECT", builder.instructions[0].Value)
+}
+
+func TestSkipLeadingTriviaKeepsDirectiveComments(t *testing.T) {
+	directive := &tokenizer.Directive{Type: "if", Condition: "cond"}
+	tokens := []tokenizer.Token{
+		{Type: tokenizer.LINE_COMMENT, Value: "/*# if cond */", Directive: directive},
+		{Type: tokenizer.SELECT, Value: "SELECT", Position: tokenizer.Position{Line: 1, Column: 1}},
+	}
+
+	trimmed := skipLeadingTrivia(tokens)
+	assert.Equal(t, tokens, trimmed)
+}
+
 // TestFinalizeWithOptimization は Finalize による最適化の統合テスト
 func TestFinalizeWithOptimization(t *testing.T) {
 	tests := []struct {

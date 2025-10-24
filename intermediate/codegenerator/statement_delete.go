@@ -41,7 +41,8 @@ func GenerateDeleteInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	}
 
 	// Phase 2: DELETE FROM 句を処理（必須）
-	if err := generateDeleteFromClause(deleteStmt.From, builder); err != nil {
+	skipLeading := deleteStmt.CTE() == nil
+	if err := generateDeleteFromClause(deleteStmt.From, builder, skipLeading); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to generate DELETE FROM clause: %w", err)
 	}
 

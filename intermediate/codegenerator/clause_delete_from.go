@@ -19,14 +19,18 @@ import (
 //
 // Returns:
 //   - error: エラー
-func generateDeleteFromClause(clause *parser.DeleteFromClause, builder *InstructionBuilder) error {
+func generateDeleteFromClause(clause *parser.DeleteFromClause, builder *InstructionBuilder, skipLeadingTrivia bool) error {
 	if clause == nil {
 		return errors.New("DELETE FROM clause is required")
 	}
 
 	// DELETE FROM トークンを処理
 	tokens := clause.RawTokens()
-	if err := builder.ProcessTokens(tokens); err != nil {
+	options := []ProcessTokensOption{}
+	if skipLeadingTrivia {
+		options = append(options, WithSkipLeadingTrivia())
+	}
+	if err := builder.ProcessTokens(tokens, options...); err != nil {
 		return fmt.Errorf("code generation: %w", err)
 	}
 
