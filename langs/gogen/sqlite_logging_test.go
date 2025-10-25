@@ -62,7 +62,7 @@ func TestGeneratedKanbanQueryLogging(t *testing.T) {
 	setupKanbanBoardTable(t, db)
 
 	sink := &captureSink{}
-	ctx := snapsqlgo.WithLogger(context.Background(), snapsqlgo.LoggingConfig{
+	ctx := snapsqlgo.WithLogger(t.Context(), snapsqlgo.LoggingConfig{
 		Enabled:       true,
 		Sink:          sink.asFunc(),
 		CaptureParams: true,

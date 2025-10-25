@@ -1,7 +1,6 @@
 package explain
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -19,7 +18,7 @@ func TestAnalyzeFullScanWarning(t *testing.T) {
 
 	doc := &PlanDocument{Root: []*PlanNode{node}}
 
-	eval, err := Analyze(context.Background(), doc, AnalyzerOptions{
+	eval, err := Analyze(t.Context(), doc, AnalyzerOptions{
 		Threshold: 1 * time.Second,
 		Tables: map[string]TableMetadata{
 			"public.users": {ExpectedRows: 1000, AllowFullScan: false},
@@ -47,7 +46,7 @@ func TestAnalyzeSlowQueryWarning(t *testing.T) {
 
 	doc := &PlanDocument{Root: []*PlanNode{node}}
 
-	eval, err := Analyze(context.Background(), doc, AnalyzerOptions{
+	eval, err := Analyze(t.Context(), doc, AnalyzerOptions{
 		Threshold: 2 * time.Second,
 		Tables: map[string]TableMetadata{
 			"public.orders": {ExpectedRows: 10000, AllowFullScan: true},
@@ -80,7 +79,7 @@ func TestAnalyzeSQLiteFullScanWarning(t *testing.T) {
 		RawText: "SCAN TABLE tasks\nSEARCH TABLE users USING INDEX",
 	}
 
-	eval, err := Analyze(context.Background(), doc, AnalyzerOptions{
+	eval, err := Analyze(t.Context(), doc, AnalyzerOptions{
 		Tables: map[string]TableMetadata{
 			"tasks": {ExpectedRows: 1000, AllowFullScan: false},
 		},
@@ -100,7 +99,7 @@ func TestAnalyzeSQLiteFullScanAllowed(t *testing.T) {
 		RawText: "SCAN TABLE tasks",
 	}
 
-	eval, err := Analyze(context.Background(), doc, AnalyzerOptions{
+	eval, err := Analyze(t.Context(), doc, AnalyzerOptions{
 		Tables: map[string]TableMetadata{
 			"tasks": {ExpectedRows: 1000, AllowFullScan: true},
 		},

@@ -72,7 +72,7 @@ func TestMarkdownAcceptance(t *testing.T) {
 		d := dialect
 		t.Run("dialect="+d, func(t *testing.T) {
 			// Run dialect groups in parallel to overlap container start times
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 			defer cancel()
 
 			db, cleanup := startDialectDB(ctx, t, d)
@@ -157,7 +157,7 @@ func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB,
 	switch strings.ToLower(dialect) {
 	case "postgres", "postgresql":
 		cont, err := postgres.Run(ctx,
-			"postgres:17-alpine",
+			"postgres:18-alpine",
 			postgres.WithDatabase("testdb"),
 			postgres.WithUsername("testuser"),
 			postgres.WithPassword("testpass"),
@@ -180,7 +180,7 @@ func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB,
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(10)
 
-		return db, func() { db.Close(); cont.Terminate(context.Background()) }
+		return db, func() { db.Close(); cont.Terminate(t.Context()) }
 	case "mysql":
 		cont, err := mysql.Run(ctx,
 			"mysql:8.4",
@@ -205,7 +205,7 @@ func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB,
 		db.SetMaxOpenConns(10)
 		db.SetMaxIdleConns(10)
 
-		return db, func() { db.Close(); cont.Terminate(context.Background()) }
+		return db, func() { db.Close(); cont.Terminate(t.Context()) }
 	case "sqlite":
 		db, err := sql.Open("sqlite3", ":memory:")
 		if err != nil {

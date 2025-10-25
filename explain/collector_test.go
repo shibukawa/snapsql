@@ -17,7 +17,7 @@ func TestCollectPostgresJSON(t *testing.T) {
 	})
 	defer db.Close()
 
-	doc, err := Collect(context.Background(), CollectorOptions{
+	doc, err := Collect(t.Context(), CollectorOptions{
 		DB:      db,
 		Dialect: "postgres",
 		SQL:     "SELECT 1",
@@ -38,7 +38,7 @@ func TestCollectMySQLJSON(t *testing.T) {
 	})
 	defer db.Close()
 
-	doc, err := Collect(context.Background(), CollectorOptions{
+	doc, err := Collect(t.Context(), CollectorOptions{
 		DB:      db,
 		Dialect: "mysql",
 		SQL:     "SELECT 1",
@@ -59,7 +59,7 @@ func TestCollectSQLitePlan(t *testing.T) {
 	})
 	defer db.Close()
 
-	doc, err := Collect(context.Background(), CollectorOptions{
+	doc, err := Collect(t.Context(), CollectorOptions{
 		DB:      db,
 		Dialect: "sqlite",
 		SQL:     "SELECT 1",
@@ -81,7 +81,7 @@ func TestCollectUnsupportedDialect(t *testing.T) {
 	db := newStubDB(t, "", nil, nil)
 	defer db.Close()
 
-	_, err := Collect(context.Background(), CollectorOptions{
+	_, err := Collect(t.Context(), CollectorOptions{
 		DB:      db,
 		Dialect: "oracle",
 		SQL:     "SELECT 1",
@@ -92,7 +92,7 @@ func TestCollectUnsupportedDialect(t *testing.T) {
 }
 
 func TestCollectMissingDB(t *testing.T) {
-	_, err := Collect(context.Background(), CollectorOptions{Dialect: "postgres"})
+	_, err := Collect(t.Context(), CollectorOptions{Dialect: "postgres"})
 	if !errors.Is(err, ErrNoDatabase) {
 		t.Fatalf("expected ErrNoDatabase, got %v", err)
 	}
@@ -104,7 +104,7 @@ func TestCollectWithTimeout(t *testing.T) {
 	})
 	defer db.Close()
 
-	doc, err := Collect(context.Background(), CollectorOptions{
+	doc, err := Collect(t.Context(), CollectorOptions{
 		DB:      db,
 		Dialect: "mysql",
 		SQL:     "SELECT 1",

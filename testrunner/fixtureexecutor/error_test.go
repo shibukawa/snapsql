@@ -1,7 +1,6 @@
 package fixtureexecutor
 
 import (
-	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -125,9 +124,7 @@ func TestErrorTestExecution(t *testing.T) {
 				ExpectedError: &tt.expectedError,
 			}
 
-			ctx := context.Background()
-
-			result, err := runner.RunSingleTest(ctx, testCase)
+			result, err := runner.RunSingleTest(t.Context(), testCase)
 			if err != nil {
 				t.Fatalf("RunSingleTest failed: %v", err)
 			}

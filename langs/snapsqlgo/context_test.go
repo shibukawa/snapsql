@@ -1,7 +1,6 @@
 package snapsqlgo
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -10,10 +9,8 @@ import (
 )
 
 func TestWithSystemValue(t *testing.T) {
-	ctx := context.Background()
-
 	// Test adding a single system value
-	ctx = WithSystemValue(ctx, "created_by", 123)
+	ctx := WithSystemValue(t.Context(), "created_by", 123)
 
 	values := getSystemValuesFromContext(ctx)
 	require.NotNil(t, values)
@@ -21,11 +18,10 @@ func TestWithSystemValue(t *testing.T) {
 }
 
 func TestWithSystemValue_Multiple(t *testing.T) {
-	ctx := context.Background()
 	now := time.Now()
 
 	// Test adding multiple system values
-	ctx = WithSystemValue(ctx, "created_by", 123)
+	ctx := WithSystemValue(t.Context(), "created_by", 123)
 	ctx = WithSystemValue(ctx, "created_at", now)
 	ctx = WithSystemValue(ctx, "version", 1)
 
@@ -37,10 +33,8 @@ func TestWithSystemValue_Multiple(t *testing.T) {
 }
 
 func TestWithSystemValue_Overwrite(t *testing.T) {
-	ctx := context.Background()
-
 	// Test overwriting a system value
-	ctx = WithSystemValue(ctx, "created_by", 123)
+	ctx := WithSystemValue(t.Context(), "created_by", 123)
 	ctx = WithSystemValue(ctx, "created_by", 456)
 
 	values := getSystemValuesFromContext(ctx)
@@ -49,11 +43,10 @@ func TestWithSystemValue_Overwrite(t *testing.T) {
 }
 
 func TestExtractImplicitParams_WithContext(t *testing.T) {
-	ctx := context.Background()
 	now := time.Now()
 
 	// Set up context with system values
-	ctx = WithSystemValue(ctx, "created_by", 123)
+	ctx := WithSystemValue(t.Context(), "created_by", 123)
 	ctx = WithSystemValue(ctx, "created_at", now)
 	ctx = WithSystemValue(ctx, "updated_at", now)
 	ctx = WithSystemValue(ctx, "version", 1)
@@ -74,21 +67,17 @@ func TestExtractImplicitParams_WithContext(t *testing.T) {
 }
 
 func TestExtractImplicitParams_MissingRequired(t *testing.T) {
-	ctx := context.Background()
-
 	specs := []ImplicitParamSpec{
 		{Name: "created_by", Type: "int", Required: true},
 	}
 
 	// Should panic when required parameter is missing
 	assert.Panics(t, func() {
-		ExtractImplicitParams(ctx, specs)
+		ExtractImplicitParams(t.Context(), specs)
 	})
 }
 
 func TestExtractImplicitParams_OptionalDefaults(t *testing.T) {
-	ctx := context.Background()
-
 	specs := []ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
 		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},
@@ -96,7 +85,7 @@ func TestExtractImplicitParams_OptionalDefaults(t *testing.T) {
 		{Name: "other_field", Type: "string", Required: false},
 	}
 
-	result := ExtractImplicitParams(ctx, specs)
+	result := ExtractImplicitParams(t.Context(), specs)
 
 	// created_at and updated_at should have default values from spec
 	assert.NotNil(t, result["created_at"])
@@ -110,11 +99,10 @@ func TestExtractImplicitParams_OptionalDefaults(t *testing.T) {
 }
 
 func TestExtractImplicitParams_PartialContext(t *testing.T) {
-	ctx := context.Background()
 	now := time.Now()
 
 	// Only set some values in context
-	ctx = WithSystemValue(ctx, "created_by", 123)
+	ctx := WithSystemValue(t.Context(), "created_by", 123)
 	ctx = WithSystemValue(ctx, "created_at", now)
 
 	specs := []ImplicitParamSpec{
@@ -147,20 +135,16 @@ func TestValidateImplicitParamTypeTemporalAliases(t *testing.T) {
 }
 
 func TestGetSystemValuesFromContext_EmptyContext(t *testing.T) {
-	ctx := context.Background()
-
-	values := getSystemValuesFromContext(ctx)
+	values := getSystemValuesFromContext(t.Context())
 	assert.Nil(t, values)
 }
 
 func TestWithSystemValue_ImmutableContext(t *testing.T) {
-	ctx := context.Background()
-
 	// Add value to first context
-	ctx1 := WithSystemValue(ctx, "created_by", 123)
+	ctx1 := WithSystemValue(t.Context(), "created_by", 123)
 
 	// Add different value to second context
-	ctx2 := WithSystemValue(ctx, "created_by", 456)
+	ctx2 := WithSystemValue(t.Context(), "created_by", 456)
 
 	// Original contexts should be unchanged
 	values1 := getSystemValuesFromContext(ctx1)

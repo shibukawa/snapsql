@@ -1,7 +1,6 @@
 package query
 
 import (
-	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -50,10 +49,8 @@ func ensurePostgres(t *testing.T) {
 	}
 
 	pgOnce.Do(func() {
-		ctx := context.Background()
-
-		cont, err := postgres.Run(ctx,
-			"postgres:17-alpine",
+		cont, err := postgres.Run(t.Context(),
+			"postgres:18-alpine",
 			postgres.WithDatabase("testdb"),
 			postgres.WithUsername("testuser"),
 			postgres.WithPassword("testpass"),
@@ -63,7 +60,7 @@ func ensurePostgres(t *testing.T) {
 			t.Fatalf("start postgres: %v", err)
 		}
 
-		connStr, err := cont.ConnectionString(ctx, "sslmode=disable")
+		connStr, err := cont.ConnectionString(t.Context(), "sslmode=disable")
 		if err != nil {
 			t.Fatalf("postgres conn string: %v", err)
 		}
@@ -91,7 +88,7 @@ func ensurePostgres(t *testing.T) {
 
 		shutdowns = append(shutdowns, func() {
 			_ = pgDB.Close()
-			_ = pgCont.Terminate(context.Background())
+			_ = pgCont.Terminate(t.Context())
 		})
 	})
 }
@@ -104,9 +101,7 @@ func ensureMySQL(t *testing.T) {
 	}
 
 	myOnce.Do(func() {
-		ctx := context.Background()
-
-		cont, err := mysql.Run(ctx,
+		cont, err := mysql.Run(t.Context(),
 			"mysql:8.4",
 			mysql.WithDatabase("testdb"),
 			mysql.WithUsername("testuser"),
@@ -116,7 +111,7 @@ func ensureMySQL(t *testing.T) {
 			t.Fatalf("start mysql: %v", err)
 		}
 
-		connStr, err := cont.ConnectionString(ctx)
+		connStr, err := cont.ConnectionString(t.Context())
 		if err != nil {
 			t.Fatalf("mysql conn string: %v", err)
 		}
@@ -144,7 +139,7 @@ func ensureMySQL(t *testing.T) {
 
 		shutdowns = append(shutdowns, func() {
 			_ = myDB.Close()
-			_ = myCont.Terminate(context.Background())
+			_ = myCont.Terminate(t.Context())
 		})
 	})
 }
@@ -283,7 +278,7 @@ func TestQueryAcceptance_SQLite(t *testing.T) {
 			qopt.Explain = optf.Explain || optf.ExplainAnalyze
 			qopt.ExplainAnalyze = optf.ExplainAnalyze
 
-			res, err := exec.ExecuteWithTemplate(context.Background(), input, params, qopt)
+			res, err := exec.ExecuteWithTemplate(t.Context(), input, params, qopt)
 			assert.NoError(t, err)
 
 			// when explain is on, only check that plan is returned

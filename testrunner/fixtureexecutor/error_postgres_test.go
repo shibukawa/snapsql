@@ -1,7 +1,6 @@
 package fixtureexecutor
 
 import (
-	"context"
 	"database/sql"
 	"strings"
 	"testing"
@@ -9,9 +8,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/shibukawa/snapsql/markdownparser"
-	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func TestPostgreSQLErrorClassification(t *testing.T) {
@@ -19,31 +16,26 @@ func TestPostgreSQLErrorClassification(t *testing.T) {
 		t.Skip("Skipping PostgreSQL integration test in short mode")
 	}
 
-	ctx := context.Background()
-
 	// Start PostgreSQL container
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:17-alpine",
+	pgContainer, err := postgres.Run(t.Context(),
+		"postgres:18-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second)),
+		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
 		t.Fatalf("failed to start container: %v", err)
 	}
 
 	defer func() {
-		if err := pgContainer.Terminate(ctx); err != nil {
+		if err := pgContainer.Terminate(t.Context()); err != nil {
 			t.Fatalf("failed to terminate container: %v", err)
 		}
 	}()
 
 	// Get connection string
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	connStr, err := pgContainer.ConnectionString(t.Context(), "sslmode=disable")
 	if err != nil {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
@@ -149,9 +141,7 @@ func TestPostgreSQLErrorClassification(t *testing.T) {
 				ExpectedError: &tt.expectedError,
 			}
 
-			ctx := context.Background()
-
-			result, err := runner.RunSingleTest(ctx, testCase)
+			result, err := runner.RunSingleTest(t.Context(), testCase)
 			if err != nil {
 				t.Fatalf("RunSingleTest failed: %v", err)
 			}

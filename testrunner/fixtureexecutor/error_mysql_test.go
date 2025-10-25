@@ -1,7 +1,6 @@
 package fixtureexecutor
 
 import (
-	"context"
 	"database/sql"
 	"strings"
 	"testing"
@@ -19,10 +18,8 @@ func TestMySQLErrorClassification(t *testing.T) {
 		t.Skip("Skipping MySQL integration test in short mode")
 	}
 
-	ctx := context.Background()
-
 	// Start MySQL container
-	mysqlContainer, err := mysql.Run(ctx,
+	mysqlContainer, err := mysql.Run(t.Context(),
 		"mysql:8.4",
 		mysql.WithDatabase("testdb"),
 		mysql.WithUsername("testuser"),
@@ -36,13 +33,13 @@ func TestMySQLErrorClassification(t *testing.T) {
 	}
 
 	defer func() {
-		if err := mysqlContainer.Terminate(ctx); err != nil {
+		if err := mysqlContainer.Terminate(t.Context()); err != nil {
 			t.Fatalf("failed to terminate container: %v", err)
 		}
 	}()
 
 	// Get connection string
-	connStr, err := mysqlContainer.ConnectionString(ctx)
+	connStr, err := mysqlContainer.ConnectionString(t.Context())
 	if err != nil {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
@@ -153,9 +150,7 @@ func TestMySQLErrorClassification(t *testing.T) {
 				ExpectedError: &tt.expectedError,
 			}
 
-			ctx := context.Background()
-
-			result, err := runner.RunSingleTest(ctx, testCase)
+			result, err := runner.RunSingleTest(t.Context(), testCase)
 			if err != nil {
 				t.Fatalf("RunSingleTest failed: %v", err)
 			}

@@ -1,7 +1,6 @@
 package gogen
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -104,11 +103,10 @@ func TestSystemColumnsIntegration(t *testing.T) {
 
 func TestSystemColumnsCodeExecution(t *testing.T) {
 	// Test that the generated code logic works correctly
-	ctx := context.Background()
 	now := time.Now()
 
 	// Set up context with system values
-	ctx = snapsqlgo.WithSystemValue(ctx, "created_by", 123)
+	ctx := snapsqlgo.WithSystemValue(t.Context(), "created_by", 123)
 	ctx = snapsqlgo.WithSystemValue(ctx, "created_at", now)
 	ctx = snapsqlgo.WithSystemValue(ctx, "updated_at", now)
 	ctx = snapsqlgo.WithSystemValue(ctx, "version", 1)
@@ -149,10 +147,8 @@ func TestSystemColumnsCodeExecution(t *testing.T) {
 }
 
 func TestSystemColumnsWithMissingRequiredValue(t *testing.T) {
-	ctx := context.Background()
-
 	// Don't set required created_by value
-	ctx = snapsqlgo.WithSystemValue(ctx, "version", 1)
+	ctx := snapsqlgo.WithSystemValue(t.Context(), "version", 1)
 
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_by", Type: "int", Required: true},
@@ -166,10 +162,8 @@ func TestSystemColumnsWithMissingRequiredValue(t *testing.T) {
 }
 
 func TestSystemColumnsWithDefaults(t *testing.T) {
-	ctx := context.Background()
-
 	// Only set some values, let others use defaults
-	ctx = snapsqlgo.WithSystemValue(ctx, "created_by", 123)
+	ctx := snapsqlgo.WithSystemValue(t.Context(), "created_by", 123)
 
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: time.Now()},

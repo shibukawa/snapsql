@@ -1,7 +1,6 @@
 package testrunner
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,7 +25,7 @@ func TestRunAllFixtureTestsAggregatesPreparationErrors(t *testing.T) {
 	runner := NewFixtureTestRunner(projectRoot, nil, "sqlite")
 	runner.SetVerbose(false)
 
-	summary, err := runner.RunAllFixtureTests(context.Background())
+	summary, err := runner.RunAllFixtureTests(t.Context())
 	require.NoError(t, err)
 
 	require.Equal(t, len(fileNames), summary.TotalTests)
@@ -55,7 +54,7 @@ func TestRunAllFixtureTestsVerboseLists(t *testing.T) {
 	runner.SetVerbose(true)
 
 	output := captureStdout(t, func() {
-		summary, err := runner.RunAllFixtureTests(context.Background())
+		summary, err := runner.RunAllFixtureTests(t.Context())
 		require.NoError(t, err)
 		require.NotNil(t, summary)
 	})
@@ -78,7 +77,7 @@ func TestRunAllFixtureTestsReportsParseErrors(t *testing.T) {
 	runner := NewFixtureTestRunner(projectRoot, nil, "sqlite")
 	runner.SetVerbose(false)
 
-	summary, err := runner.RunAllFixtureTests(context.Background())
+	summary, err := runner.RunAllFixtureTests(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, summary)
 
