@@ -74,20 +74,11 @@ func init() {
 func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*BoardArchiveResult, error] {
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardArchive", "[]boardarchiveresult")
-	// Extract implicit parameters
-	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-	}
-	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
-	_ = systemValues // avoid unused if not referenced in args
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "UPDATE boards SET status = 'archived', archived_at = CURRENT_TIMESTAMP, updated_at =$1  WHERE status = 'active'  RETURNING id, name, status, archived_at, created_at, updated_at"
+		query := "UPDATE boards SET status = 'archived', archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP  WHERE status = 'active'  RETURNING id, name, status, archived_at, created_at, updated_at"
 		args := make([]any, 0)
-
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
-
 		return query, args, nil
 	}
 	return func(yield func(*BoardArchiveResult, error) bool) {
@@ -117,6 +108,20 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 			}
 
 			return
+		}
+
+		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+			FuncName:   "BoardArchive",
+			SourceFile: "query/BoardArchive",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		})
+		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+			Executor:  executor,
+		}
+		if queryLogger != nil {
+			queryLogger.SetQuery(query, args)
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
@@ -153,6 +158,9 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 		if err := rows.Err(); err != nil {
 			_ = yield(nil, fmt.Errorf("BoardArchive: error iterating rows: %w", err))
 			return
+		}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, nil)
 		}
 	}
 }

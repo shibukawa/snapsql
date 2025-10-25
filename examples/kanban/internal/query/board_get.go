@@ -54,6 +54,7 @@ func init() {
 			cel.Container("root"),
 		}
 		opts = append(opts, cel.Variable("board_id", cel.IntType))
+		opts = append(opts, cel.Variable("board_id", cel.IntType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -104,10 +105,20 @@ func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, o
 
 		return result, nil
 	}
+	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+		FuncName:   "BoardGet",
+		SourceFile: "query/BoardGet",
+		Dialect:    "sqlite",
+		QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+	})
+	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+		QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+		Executor:  executor,
+	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT id, name, status, archived_at, created_at, updated_at FROM boards  WHERE id =$1"
+		query := "SELECT id, name, status, archived_at, created_at, updated_at FROM boards  WHERE id = $1 "
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"board_id": boardID,
@@ -122,12 +133,22 @@ func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, o
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, err)
+		}
 		return result, err
+	}
+	if queryLogger != nil {
+		queryLogger.SetQuery(query, args)
 	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("BoardGet: failed to prepare statement: %w (query: %s)", err, query)
+		prepErr := fmt.Errorf("BoardGet: failed to prepare statement: %w (query: %s)", err, query)
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, prepErr)
+		}
+		return result, prepErr
 	}
 	defer stmt.Close()
 	// Execute query and scan single row
@@ -142,6 +163,9 @@ func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, o
 	)
 	if err != nil {
 		return result, fmt.Errorf("failed to scan row: %w", err)
+	}
+	if queryLogger != nil {
+		queryLogger.Finish(queryLogInfo, nil)
 	}
 
 	return result, nil

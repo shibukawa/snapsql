@@ -58,6 +58,8 @@ func init() {
 		}
 		opts = append(opts, cel.Variable("list_id", cel.IntType))
 		opts = append(opts, cel.Variable("name", cel.StringType))
+		opts = append(opts, cel.Variable("list_id", cel.IntType))
+		opts = append(opts, cel.Variable("name", cel.StringType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -102,16 +104,10 @@ func init() {
 func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, name string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListRenameResult, error] {
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listRename", "[]listrenameresult")
-	// Extract implicit parameters
-	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-	}
-	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
-	_ = systemValues // avoid unused if not referenced in args
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "UPDATE lists SET name =$1, updated_at =$2  WHERE id =$3  RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
+		query := "UPDATE lists SET name = $1, updated_at = CURRENT_TIMESTAMP  WHERE id = $2   RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"list_id": listID,
@@ -123,13 +119,12 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
 		}
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
 
-		evalRes2, _, err := listRenamePrograms[1].Eval(paramMap)
+		evalRes1, _, err := listRenamePrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
 		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
 		return query, args, nil
 	}
 	return func(yield func(*ListRenameResult, error) bool) {
@@ -159,6 +154,20 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 			}
 
 			return
+		}
+
+		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+			FuncName:   "ListRename",
+			SourceFile: "query/ListRename",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		})
+		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+			Executor:  executor,
+		}
+		if queryLogger != nil {
+			queryLogger.SetQuery(query, args)
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
@@ -197,6 +206,9 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 		if err := rows.Err(); err != nil {
 			_ = yield(nil, fmt.Errorf("ListRename: error iterating rows: %w", err))
 			return
+		}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, nil)
 		}
 	}
 }

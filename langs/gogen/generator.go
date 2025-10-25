@@ -199,9 +199,12 @@ func (g *Generator) Generate(w io.Writer) error {
 		errorZeroValue = "nil"
 	}
 
+	isSelectQuery := !strings.EqualFold(g.Format.ResponseAffinity, string(intermediate.ResponseAffinityNone))
+
 	data := struct {
 		Timestamp          time.Time
 		PackageName        string
+		Dialect            string
 		FunctionName       string
 		LowerFuncName      string
 		Description        string
@@ -227,9 +230,11 @@ func (g *Generator) Generate(w io.Writer) error {
 		IteratorYieldType  string
 		DeclareResult      bool
 		ErrorZeroValue     string
+		IsSelectQuery      bool
 	}{
 		Timestamp:          time.Now(),
 		PackageName:        g.PackageName,
+		Dialect:            g.Dialect,
 		FunctionName:       funcName,
 		LowerFuncName:      toLowerCamel(g.Format.FunctionName),
 		Description:        g.Format.Description,
@@ -253,6 +258,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		IteratorYieldType:  iteratorYieldType,
 		DeclareResult:      declareResult,
 		ErrorZeroValue:     errorZeroValue,
+		IsSelectQuery:      isSelectQuery,
 	}
 
 	if queryExecution.IsIterator && responseStruct != nil {
@@ -1309,12 +1315,12 @@ func init() {
 // {{ .FunctionName }} - {{ .ResponseType }} Affinity
 {{- end }}
 func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- range .Parameters }}, {{ .Name }} {{ .Type }}{{- end }}, opts ...snapsqlgo.FuncOpt) {{ .FunctionReturnType }} {
-	{{- if .DeclareResult }}
-	var result {{ .ResponseType }}
+{{- if .DeclareResult }}
+var result {{ .ResponseType }}
 
-	// Hierarchical metas (for nested aggregation code generation - placeholder)
-	// Count: {{ if .HierarchicalMetas }}{{ len .HierarchicalMetas }}{{ else }}0{{ end }}
-	{{- end }}
+// Hierarchical metas (for nested aggregation code generation - placeholder)
+// Count: {{ if .HierarchicalMetas }}{{ len .HierarchicalMetas }}{{ else }}0{{ end }}
+{{- end }}
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "{{ .LowerFuncName }}", "{{ .ResponseType | toLower }}")
 
@@ -1344,6 +1350,19 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 	_ = systemValues // avoid unused if not referenced in args
+	{{- end }}
+
+	{{- if not .QueryExecution.IsIterator }}
+	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+		FuncName:   "{{ .FunctionName }}",
+		SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
+		Dialect:    "{{ .Dialect }}",
+		QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
+	})
+	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+		QueryType: snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
+		Executor:  executor,
+	}
 	{{- end }}
 
 	// Build SQL
@@ -1416,25 +1435,64 @@ func {{ .FunctionName }}(ctx context.Context, executor snapsqlgo.DBExecutor{{- r
 			return
 		}
 
+		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+			FuncName:   "{{ .FunctionName }}",
+			SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
+			Dialect:    "{{ .Dialect }}",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		})
+		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+			Executor:  executor,
+		}
+		if queryLogger != nil {
+			queryLogger.SetQuery(query, args)
+		}
+
 		{{- range .QueryExecution.IteratorBody }}
 		{{ . }}
 		{{- end }}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, nil)
+		}
 	}
 		{{- else }}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
+		{{- if not .QueryExecution.IsIterator }}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, err)
+		}
+		{{- end }}
 		return {{ .ErrorZeroValue }}, err
 	}
+	{{- if not .QueryExecution.IsIterator }}
+	if queryLogger != nil {
+		queryLogger.SetQuery(query, args)
+	}
+	{{- end }}
 		// Execute query
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w (query: %s)", err, query)
+			prepErr := fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w (query: %s)", err, query)
+			{{- if not .QueryExecution.IsIterator }}
+			if queryLogger != nil {
+				queryLogger.Finish(queryLogInfo, prepErr)
+			}
+			{{- end }}
+			return {{ .ErrorZeroValue }}, prepErr
 		}
 		defer stmt.Close()
 
 		{{- range .QueryExecution.Code }}
 		{{ . }}
 		{{- end }}
+
+		{{- if not .QueryExecution.IsIterator }}
+	if queryLogger != nil {
+		queryLogger.Finish(queryLogInfo, nil)
+	}
+	{{- end }}
 
 		return result, nil
 		{{- end }}

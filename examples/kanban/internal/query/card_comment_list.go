@@ -53,6 +53,7 @@ func init() {
 			cel.Container("root"),
 		}
 		opts = append(opts, cel.Variable("card_id", cel.IntType))
+		opts = append(opts, cel.Variable("card_id", cel.IntType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -88,7 +89,7 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id =$1 OR DER BY created_at ASC, id ASC"
+		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id = $1  OR DER BY created_at ASC, id ASC "
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"card_id": cardID,
@@ -129,6 +130,20 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 
 			return
 		}
+
+		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+			FuncName:   "CardCommentList",
+			SourceFile: "query/CardCommentList",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		})
+		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+			Executor:  executor,
+		}
+		if queryLogger != nil {
+			queryLogger.SetQuery(query, args)
+		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
 			_ = yield(nil, fmt.Errorf("CardCommentList: failed to prepare statement: %w (query: %s)", err, query))
@@ -162,6 +177,9 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 		if err := rows.Err(); err != nil {
 			_ = yield(nil, fmt.Errorf("CardCommentList: error iterating rows: %w", err))
 			return
+		}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, nil)
 		}
 	}
 }

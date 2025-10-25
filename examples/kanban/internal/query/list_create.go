@@ -56,6 +56,8 @@ func init() {
 			cel.Container("root"),
 		}
 		opts = append(opts, cel.Variable("board_id", cel.IntType))
+		opts = append(opts, cel.Variable("board_id", cel.IntType))
+		opts = append(opts, cel.Variable("board_id", cel.IntType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -106,17 +108,20 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 
 		return result, nil
 	}
-	// Extract implicit parameters
-	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
+	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+		FuncName:   "ListCreate",
+		SourceFile: "query/ListCreate",
+		Dialect:    "sqlite",
+		QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+	})
+	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+		QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+		Executor:  executor,
 	}
-	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
-	_ = systemValues // avoid unused if not referenced in args
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "INSERT INTO lists ( board_id, name, stage_order, position , created_at, updated_at) SELECT $1 AS board_id, lt.name, lt.stage_order AS stage_order, CAST(lt.stage_order AS REAL) AS position , $2, $3 FROM list_templates AS lt  WHERE lt.is_active = 1 ORDER BY lt.stage_order  RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
+		query := "INSERT INTO lists ( board_id, name, stage_order, position , created_at, updated_at) SELECT $1  AS board_id, lt.name, lt.stage_order AS stage_order, CAST(lt.stage_order AS REAL) AS position FROM list_templates AS lt  WHERE lt.is_active = 1 ORDER BY lt.stage_order  RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"board_id": boardID,
@@ -127,20 +132,26 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 			return "", nil, fmt.Errorf("ListCreate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
-
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
-
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, err)
+		}
 		return result, err
+	}
+	if queryLogger != nil {
+		queryLogger.SetQuery(query, args)
 	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("ListCreate: failed to prepare statement: %w (query: %s)", err, query)
+		prepErr := fmt.Errorf("ListCreate: failed to prepare statement: %w (query: %s)", err, query)
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, prepErr)
+		}
+		return result, prepErr
 	}
 	defer stmt.Close()
 	// Execute query and scan single row
@@ -157,6 +168,9 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 	)
 	if err != nil {
 		return result, fmt.Errorf("failed to scan row: %w", err)
+	}
+	if queryLogger != nil {
+		queryLogger.Finish(queryLogInfo, nil)
 	}
 
 	return result, nil

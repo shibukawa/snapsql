@@ -77,7 +77,7 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT id, name, status, archived_at, created_at, updated_at FROM boards ORDER BY created_at DESC"
+		query := "SELECT id, name, status, archived_at, created_at, updated_at FROM boards ORDER BY created_at DESC "
 		args := make([]any, 0)
 		return query, args, nil
 	}
@@ -108,6 +108,20 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 			}
 
 			return
+		}
+
+		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+			FuncName:   "BoardList",
+			SourceFile: "query/BoardList",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		})
+		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+			Executor:  executor,
+		}
+		if queryLogger != nil {
+			queryLogger.SetQuery(query, args)
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
@@ -144,6 +158,9 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 		if err := rows.Err(); err != nil {
 			_ = yield(nil, fmt.Errorf("BoardList: error iterating rows: %w", err))
 			return
+		}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, nil)
 		}
 	}
 }

@@ -57,6 +57,8 @@ func init() {
 		}
 		opts = append(opts, cel.Variable("card_id", cel.IntType))
 		opts = append(opts, cel.Variable("position", cel.DoubleType))
+		opts = append(opts, cel.Variable("card_id", cel.IntType))
+		opts = append(opts, cel.Variable("position", cel.DoubleType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -101,16 +103,10 @@ func init() {
 func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, position float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardReorderResult, error] {
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardReorder", "[]cardreorderresult")
-	// Extract implicit parameters
-	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-	}
-	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
-	_ = systemValues // avoid unused if not referenced in args
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "UPDATE cards SET position =$1, updated_at =$2  WHERE id =$3  RETURNING id, list_id, title, description, position, created_at, updated_at"
+		query := "UPDATE cards SET position = $1, updated_at = CURRENT_TIMESTAMP  WHERE id = $2   RETURNING id, list_id, title, description, position, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"card_id":  cardID,
@@ -122,13 +118,12 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 			return "", nil, fmt.Errorf("CardReorder: failed to evaluate expression: %w", err)
 		}
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
 
-		evalRes2, _, err := cardReorderPrograms[1].Eval(paramMap)
+		evalRes1, _, err := cardReorderPrograms[1].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardReorder: failed to evaluate expression: %w", err)
 		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
 		return query, args, nil
 	}
 	return func(yield func(*CardReorderResult, error) bool) {
@@ -158,6 +153,20 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 			}
 
 			return
+		}
+
+		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+			FuncName:   "CardReorder",
+			SourceFile: "query/CardReorder",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		})
+		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+			Executor:  executor,
+		}
+		if queryLogger != nil {
+			queryLogger.SetQuery(query, args)
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
@@ -195,6 +204,9 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 		if err := rows.Err(); err != nil {
 			_ = yield(nil, fmt.Errorf("CardReorder: error iterating rows: %w", err))
 			return
+		}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, nil)
 		}
 	}
 }

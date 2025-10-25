@@ -241,6 +241,7 @@ func init() {
 			cel.Container("root"),
 		}
 		opts = append(opts, cel.Variable("board_id", cel.IntType))
+		opts = append(opts, cel.Variable("board_id", cel.IntType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -292,10 +293,20 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 
 		return result, nil
 	}
+	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+		FuncName:   "BoardTree",
+		SourceFile: "query/BoardTree",
+		Dialect:    "sqlite",
+		QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+	})
+	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+		QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+		Executor:  executor,
+	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT b.id, b.name, b.status, b.archived_at, b.created_at, b.updated_at, l.id AS lists__id, l.board_id AS lists__board_id, l.name AS lists__name, l.stage_order AS lists__stage_order, l.position AS lists__position, l.is_archived AS lists__is_archived, l.created_at AS lists__created_at, l.updated_at AS lists__updated_at, c.id AS lists__cards__id, c.list_id AS lists__cards__list_id, c.title AS lists__cards__title, c.description AS lists__cards__description, c.position AS lists__cards__position, c.created_at AS lists__cards__created_at, c.updated_at AS lists__cards__updated_at FROM boards b LEFT JOIN lists l ON l.board_id = b.id AND l.is_archived = 0 LEFT JOIN cards c ON c.list_id = l.id  WHERE b.id =$1 OR DER BY l.stage_order ASC, l.position ASC, c.position ASC"
+		query := "SELECT b.id, b.name, b.status, b.archived_at, b.created_at, b.updated_at, l.id AS lists__id, l.board_id AS lists__board_id, l.name AS lists__name, l.stage_order AS lists__stage_order, l.position AS lists__position, l.is_archived AS lists__is_archived, l.created_at AS lists__created_at, l.updated_at AS lists__updated_at, c.id AS lists__cards__id, c.list_id AS lists__cards__list_id, c.title AS lists__cards__title, c.description AS lists__cards__description, c.position AS lists__cards__position, c.created_at AS lists__cards__created_at, c.updated_at AS lists__cards__updated_at FROM boards b LEFT JOIN lists l ON l.board_id = b.id AND l.is_archived = 0 LEFT JOIN cards c ON c.list_id = l.id  WHERE b.id = $1  OR DER BY l.stage_order ASC, l.position ASC, c.position ASC "
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"board_id": boardID,
@@ -310,12 +321,22 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, err)
+		}
 		return result, err
+	}
+	if queryLogger != nil {
+		queryLogger.SetQuery(query, args)
 	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("BoardTree: failed to prepare statement: %w (query: %s)", err, query)
+		prepErr := fmt.Errorf("BoardTree: failed to prepare statement: %w (query: %s)", err, query)
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, prepErr)
+		}
+		return result, prepErr
 	}
 	defer stmt.Close()
 	// Execute query for hierarchical aggregation (one affinity)
@@ -484,6 +505,9 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	}
 	for _, v := range _parentMap {
 		result = *v
+	}
+	if queryLogger != nil {
+		queryLogger.Finish(queryLogInfo, nil)
 	}
 
 	return result, nil

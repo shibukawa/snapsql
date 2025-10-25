@@ -57,6 +57,12 @@ func init() {
 		opts = append(opts, cel.Variable("title", cel.StringType))
 		opts = append(opts, cel.Variable("description", cel.StringType))
 		opts = append(opts, cel.Variable("position", cel.DoubleType))
+		opts = append(opts, cel.Variable("title", cel.StringType))
+		opts = append(opts, cel.Variable("description", cel.StringType))
+		opts = append(opts, cel.Variable("position", cel.DoubleType))
+		opts = append(opts, cel.Variable("title", cel.StringType))
+		opts = append(opts, cel.Variable("description", cel.StringType))
+		opts = append(opts, cel.Variable("position", cel.DoubleType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -133,15 +139,25 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 	}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
+		{Name: "created_at", Type: "time.Time", Required: false},
+		{Name: "updated_at", Type: "time.Time", Required: false},
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 	_ = systemValues // avoid unused if not referenced in args
+	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+		FuncName:   "CardCreate",
+		SourceFile: "query/CardCreate",
+		Dialect:    "sqlite",
+		QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+	})
+	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+		QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+		Executor:  executor,
+	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "INSERT INTO cards ( list_id, title, description, position , created_at, updated_at) VALUES ( (SELECT l.id FROM lists AS l JOIN boards b ON l.board_id = b.id  WHERE b.status = 'active' ORDER BY l.stage_order ASC LIMIT 1),$1,$2,$3, $4, $5)  RETURNING id, list_id, title, description, position, created_at, updated_at"
+		query := "INSERT INTO cards ( list_id, title, description, position , created_at, updated_at) VALUES ( (SELECT l.id FROM lists AS l JOIN boards b ON l.board_id = b.id  WHERE b.status = 'active' ORDER BY l.stage_order ASC LIMIT 1, $1, $2), $3, $4, $5 )\n\n RETURNING id, list_id, title, description, position, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"title":       title,
@@ -149,37 +165,47 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 			"position":    position,
 		}
 
-		evalRes0, _, err := cardCreatePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := cardCreatePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
-
-		evalRes2, _, err := cardCreatePrograms[2].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
 
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
 
+		evalRes2, _, err := cardCreatePrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
+		}
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
+
+		evalRes3, _, err := cardCreatePrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
+		}
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes3))
+
+		evalRes4, _, err := cardCreatePrograms[2].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
+		}
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes4))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, err)
+		}
 		return result, err
+	}
+	if queryLogger != nil {
+		queryLogger.SetQuery(query, args)
 	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("CardCreate: failed to prepare statement: %w (query: %s)", err, query)
+		prepErr := fmt.Errorf("CardCreate: failed to prepare statement: %w (query: %s)", err, query)
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, prepErr)
+		}
+		return result, prepErr
 	}
 	defer stmt.Close()
 	// Execute query and scan single row
@@ -195,6 +221,9 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 	)
 	if err != nil {
 		return result, fmt.Errorf("failed to scan row: %w", err)
+	}
+	if queryLogger != nil {
+		queryLogger.Finish(queryLogInfo, nil)
 	}
 
 	return result, nil

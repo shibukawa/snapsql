@@ -58,6 +58,9 @@ func init() {
 		opts = append(opts, cel.Variable("card_id", cel.IntType))
 		opts = append(opts, cel.Variable("title", cel.StringType))
 		opts = append(opts, cel.Variable("description", cel.StringType))
+		opts = append(opts, cel.Variable("card_id", cel.IntType))
+		opts = append(opts, cel.Variable("title", cel.StringType))
+		opts = append(opts, cel.Variable("description", cel.StringType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -114,16 +117,10 @@ func init() {
 func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, title string, description string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardUpdateResult, error] {
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardUpdate", "[]cardupdateresult")
-	// Extract implicit parameters
-	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-	}
-	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
-	_ = systemValues // avoid unused if not referenced in args
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "UPDATE cards SET title =$1, description =$2, updated_at =$3  WHERE id =$4  RETURNING id, list_id, title, description, position, created_at, updated_at"
+		query := "UPDATE cards SET title = $1, description = $2, updated_at = CURRENT_TIMESTAMP  WHERE id = $3   RETURNING id, list_id, title, description, position, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"card_id":     cardID,
@@ -142,13 +139,12 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
 
-		evalRes3, _, err := cardUpdatePrograms[2].Eval(paramMap)
+		evalRes2, _, err := cardUpdatePrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
 		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes3))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
 		return query, args, nil
 	}
 	return func(yield func(*CardUpdateResult, error) bool) {
@@ -178,6 +174,20 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 			}
 
 			return
+		}
+
+		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+			FuncName:   "CardUpdate",
+			SourceFile: "query/CardUpdate",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		})
+		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+			Executor:  executor,
+		}
+		if queryLogger != nil {
+			queryLogger.SetQuery(query, args)
 		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
@@ -215,6 +225,9 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 		if err := rows.Err(); err != nil {
 			_ = yield(nil, fmt.Errorf("CardUpdate: error iterating rows: %w", err))
 			return
+		}
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, nil)
 		}
 	}
 }

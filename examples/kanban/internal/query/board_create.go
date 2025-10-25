@@ -54,6 +54,8 @@ func init() {
 			cel.Container("root"),
 		}
 		opts = append(opts, cel.Variable("name", cel.StringType))
+		opts = append(opts, cel.Variable("name", cel.StringType))
+		opts = append(opts, cel.Variable("name", cel.StringType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -106,15 +108,25 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 	}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
+		{Name: "created_at", Type: "time.Time", Required: false},
+		{Name: "updated_at", Type: "time.Time", Required: false},
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 	_ = systemValues // avoid unused if not referenced in args
+	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+		FuncName:   "BoardCreate",
+		SourceFile: "query/BoardCreate",
+		Dialect:    "sqlite",
+		QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+	})
+	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+		QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+		Executor:  executor,
+	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "INSERT INTO boards (name, status, created_at, updated_at) VALUES ($1, 'active', $2, $3)  RETURNING id, name, status, archived_at, created_at, updated_at"
+		query := "INSERT INTO boards (name, status, created_at, updated_at) VALUES ($1, 'active', $2, $3)\n\n RETURNING id, name, status, archived_at, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"name": name,
@@ -133,12 +145,22 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, err)
+		}
 		return result, err
+	}
+	if queryLogger != nil {
+		queryLogger.SetQuery(query, args)
 	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("BoardCreate: failed to prepare statement: %w (query: %s)", err, query)
+		prepErr := fmt.Errorf("BoardCreate: failed to prepare statement: %w (query: %s)", err, query)
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, prepErr)
+		}
+		return result, prepErr
 	}
 	defer stmt.Close()
 	// Execute query and scan single row
@@ -153,6 +175,9 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 	)
 	if err != nil {
 		return result, fmt.Errorf("failed to scan row: %w", err)
+	}
+	if queryLogger != nil {
+		queryLogger.Finish(queryLogInfo, nil)
 	}
 
 	return result, nil

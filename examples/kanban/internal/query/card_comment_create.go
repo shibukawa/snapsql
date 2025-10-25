@@ -53,6 +53,10 @@ func init() {
 		}
 		opts = append(opts, cel.Variable("card_id", cel.IntType))
 		opts = append(opts, cel.Variable("body", cel.StringType))
+		opts = append(opts, cel.Variable("card_id", cel.IntType))
+		opts = append(opts, cel.Variable("body", cel.StringType))
+		opts = append(opts, cel.Variable("card_id", cel.IntType))
+		opts = append(opts, cel.Variable("body", cel.StringType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -117,15 +121,25 @@ func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardI
 	}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "created_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
-		{Name: "updated_at", Type: "time.Time", Required: false, DefaultValue: "CURRENT_TIMESTAMP"},
+		{Name: "created_at", Type: "time.Time", Required: false},
+		{Name: "updated_at", Type: "time.Time", Required: false},
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 	_ = systemValues // avoid unused if not referenced in args
+	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
+		FuncName:   "CardCommentCreate",
+		SourceFile: "query/CardCommentCreate",
+		Dialect:    "sqlite",
+		QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+	})
+	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
+		QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+		Executor:  executor,
+	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "INSERT INTO card_comments ( card_id, body , created_at, updated_at) VALUES ($1,$2, $3, $4)  RETURNING id, card_id, body, created_at"
+		query := "INSERT INTO card_comments ( card_id, body , created_at, updated_at) VALUES ( $1, $2 , $3, $4)\n\n RETURNING id, card_id, body, created_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"card_id": cardID,
@@ -151,12 +165,22 @@ func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardI
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, err)
+		}
 		return result, err
+	}
+	if queryLogger != nil {
+		queryLogger.SetQuery(query, args)
 	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		return result, fmt.Errorf("CardCommentCreate: failed to prepare statement: %w (query: %s)", err, query)
+		prepErr := fmt.Errorf("CardCommentCreate: failed to prepare statement: %w (query: %s)", err, query)
+		if queryLogger != nil {
+			queryLogger.Finish(queryLogInfo, prepErr)
+		}
+		return result, prepErr
 	}
 	defer stmt.Close()
 	// Execute query and scan single row
@@ -169,6 +193,9 @@ func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardI
 	)
 	if err != nil {
 		return result, fmt.Errorf("failed to scan row: %w", err)
+	}
+	if queryLogger != nil {
+		queryLogger.Finish(queryLogInfo, nil)
 	}
 
 	return result, nil
