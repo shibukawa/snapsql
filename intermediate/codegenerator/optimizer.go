@@ -276,6 +276,7 @@ func OptimizeLoopBoundaries(instructions []OptimizedInstruction) []OptimizedInst
 			loopStart := i
 			loopEnd := -1
 
+		LoopSearch:
 			for j := i + 1; j < len(instructions); j++ {
 				switch instructions[j].Op {
 				case "LOOP_START":
@@ -284,7 +285,7 @@ func OptimizeLoopBoundaries(instructions []OptimizedInstruction) []OptimizedInst
 					loopDepth--
 					if loopDepth == 0 {
 						loopEnd = j
-						break
+						break LoopSearch
 					}
 				}
 			}

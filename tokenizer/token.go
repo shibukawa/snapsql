@@ -500,6 +500,7 @@ func (p *Position) String() string {
 	if p == nil {
 		return ""
 	}
+
 	return strconv.Itoa(p.Line) + ":" + strconv.Itoa(p.Column)
 }
 

@@ -259,6 +259,7 @@ VALUES /*# for u : user_rows */
 	require.NotEmpty(t, tokens, "VALUES clause tokens should not be empty")
 
 	var directiveKinds []string
+
 	for _, tk := range tokens {
 		if tk.Directive != nil {
 			directiveKinds = append(directiveKinds, tk.Directive.Type)

@@ -43,6 +43,7 @@ func GenerateLimitClauseOrSystem(limitClause *parser.LimitClause, builder *Instr
 	builder.addIfSystemLimit()
 	builder.addEmitSystemLimit()
 	builder.addRawElseCondition(nil)
+
 	trimmedTokens := trimTrailingWhitespaceTokens(tokens[2:])
 	err := builder.ProcessTokens(trimmedTokens)
 	builder.addEndCondition(nil)

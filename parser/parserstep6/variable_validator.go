@@ -125,6 +125,7 @@ func validateVariables(statement cmn.StatementNode, paramNs *cmn.Namespace, cons
 					if scope.loopEntered {
 						_ = paramNs.ExitLoop()
 					}
+
 					validateForLoopTermination(tokens, scope.startIndex, indexByTokenIndex, perr)
 				}
 			}
@@ -179,11 +180,7 @@ func validateForLoopTermination(tokens []tokenizer.Token, startIndex int, indexB
 
 func validateForLoopConditionalBranches(tokens []tokenizer.Token, branchStart int, forEnd int, indexByTokenIndex map[int]int, perr *cmn.ParseError) {
 	current := branchStart
-	for {
-		if current < 0 || current >= len(tokens) {
-			break
-		}
-
+	for current >= 0 && current < len(tokens) {
 		token := tokens[current]
 		if token.Directive == nil {
 			break
@@ -222,6 +219,7 @@ func validateForLoopConditionalBranches(tokens []tokenizer.Token, branchStart in
 
 func findFirstTopLevelToken(tokens []tokenizer.Token, startPos, endPos int) int {
 	depth := 0
+
 	for i := startPos + 1; i < endPos; i++ {
 		tok := tokens[i]
 		if tok.Directive != nil {
@@ -230,17 +228,21 @@ func findFirstTopLevelToken(tokens []tokenizer.Token, startPos, endPos int) int 
 				if depth == 0 {
 					return i
 				}
+
 				depth++
+
 				continue
 			case "end":
 				if depth > 0 {
 					depth--
 				}
+
 				continue
 			case "elseif", "else":
 				if depth == 0 {
 					return i
 				}
+
 				continue
 			}
 		}
@@ -284,12 +286,15 @@ func setTypeInfo(typeInfo map[string]any, pos tokenizer.Position, descriptor any
 	key := pos.String()
 	if existing, ok := typeInfo[key]; ok {
 		existingMap, existingIsMap := existing.(map[string]any)
+
 		newMap, newIsMap := descriptor.(map[string]any)
 		if existingIsMap && newIsMap {
 			for k, v := range newMap {
 				existingMap[k] = v
 			}
+
 			typeInfo[key] = existingMap
+
 			return
 		}
 	}
@@ -309,12 +314,14 @@ func buildTypeDescriptor(value any, typeHint string) any {
 
 	if strings.HasSuffix(normalized, "[]") {
 		baseHint := strings.TrimSuffix(normalized, "[]")
+
 		switch v := value.(type) {
 		case []any:
 			if len(v) > 0 {
 				return []any{buildTypeDescriptor(v[0], baseHint)}
 			}
 		}
+
 		return []any{buildTypeDescriptor(nil, baseHint)}
 	}
 
@@ -323,6 +330,7 @@ func buildTypeDescriptor(value any, typeHint string) any {
 		if descriptorMap := normalizeObjectDescriptor(value); len(descriptorMap) > 0 {
 			return descriptorMap
 		}
+
 		return "object"
 	case "json":
 		return normalized
@@ -330,12 +338,15 @@ func buildTypeDescriptor(value any, typeHint string) any {
 		if descriptorMap := normalizeObjectDescriptor(value); len(descriptorMap) > 0 {
 			return descriptorMap
 		}
+
 		if slice, ok := value.([]any); ok {
 			if len(slice) > 0 {
 				return []any{buildTypeDescriptor(slice[0], "")}
 			}
+
 			return []any{buildTypeDescriptor(nil, "")}
 		}
+
 		return "any"
 	}
 
@@ -353,15 +364,19 @@ func normalizeObjectDescriptor(value any) map[string]any {
 
 func buildDescriptorMap(source map[string]any) map[string]any {
 	result := make(map[string]any)
+
 	for k, v := range source {
 		if k == "#" {
 			continue
 		}
+
 		result[k] = buildTypeDescriptor(v, "")
 	}
+
 	if len(result) == 0 {
 		return nil
 	}
+
 	return result
 }
 
@@ -376,6 +391,7 @@ func normalizeTypeHint(typeStr string) string {
 		if base == "" {
 			base = "any"
 		}
+
 		return base + "[]"
 	}
 
@@ -422,10 +438,12 @@ func inferTypeFromValue(value any) string {
 		if len(v) == 0 {
 			return "any[]"
 		}
+
 		base := inferTypeFromValue(v[0])
 		if base == "" {
 			base = "any"
 		}
+
 		return base + "[]"
 	case map[string]any:
 		if tag, ok := v["#"]; ok {
@@ -433,6 +451,7 @@ func inferTypeFromValue(value any) string {
 				return tagStr
 			}
 		}
+
 		return "object"
 	default:
 		return "any"
@@ -564,7 +583,8 @@ func processForLoop(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.
 		return false, nil
 	}
 
-	itemDescriptor := any(nil)
+	var itemDescriptor any
+
 	itemType, _ := paramNs.GetLoopVariableType(itemName)
 
 	if value, valueType, evalErr := paramNs.Eval(itemName); evalErr == nil {

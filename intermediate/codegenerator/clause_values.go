@@ -83,12 +83,15 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 				}
 
 				builder.AddForLoopStart(loopVar, collection, token.Position.String())
+
 				i++
+
 				continue
 
 			case "end":
 				if len(builder.loopStack) > 0 {
 					loopEndPos := token.Position.String()
+
 					for j := len(builder.instructions) - 1; j >= 0; j-- {
 						instr := builder.instructions[j]
 						if instr.Op == OpEmitUnlessBoundary {
@@ -100,6 +103,7 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 							if trimmedVal == "" {
 								continue
 							}
+
 							if trimmedVal == "," || trimmedVal == "AND" || trimmedVal == "OR" {
 								continue
 							}
@@ -112,7 +116,9 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 					}
 
 					builder.AddForLoopEnd(loopEndPos)
+
 					i++
+
 					continue
 				}
 			}

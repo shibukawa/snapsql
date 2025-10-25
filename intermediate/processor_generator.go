@@ -11,13 +11,18 @@ import (
 )
 
 // InstructionGenerator generates intermediate instructions using the unified codegenerator package.
+var (
+	errNilStatement             = errors.New("code generation requires a non-nil statement")
+	errUnsupportedStatementType = errors.New("unsupported statement type")
+)
+
 type InstructionGenerator struct{}
 
 func (i *InstructionGenerator) Name() string { return "InstructionGenerator" }
 
 func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	if ctx == nil || ctx.Statement == nil {
-		return errors.New("code generation requires a non-nil statement")
+		return errNilStatement
 	}
 
 	genCtx := newGenerationContextFromProcessing(ctx)
@@ -39,7 +44,7 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	case *parser.DeleteFromStatement:
 		instructions, expressions, environments, err = codegenerator.GenerateDeleteInstructions(stmt, genCtx)
 	default:
-		return fmt.Errorf("unsupported statement type: %T", ctx.Statement)
+		return fmt.Errorf("%w: %T", errUnsupportedStatementType, ctx.Statement)
 	}
 
 	if err != nil {

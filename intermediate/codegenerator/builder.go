@@ -127,7 +127,7 @@ func (b *InstructionBuilder) EvaluateExpression(expr string) (interface{}, error
 
 	// Check bounds
 	if envIndex < 0 || envIndex >= len(b.context.CELEnvironments) {
-		return nil, fmt.Errorf("invalid environment index: %d", envIndex)
+		panic(fmt.Sprintf("invalid environment index: %d", envIndex))
 	}
 
 	// Get environment
@@ -1868,7 +1868,6 @@ func (b *InstructionBuilder) emitInClauseLoop(tokens []tokenizer.Token, startIdx
 
 	i := startIdx + 1
 	valueTokens := []tokenizer.Token{} // リテラル値トークンを収集
-	commaPositions := []int{}          // カンマのインデックスを記録
 
 	// 括弧内のトークンを走査して、リテラル値とカンマを抽出
 	for i < len(tokens) {
@@ -1887,7 +1886,6 @@ func (b *InstructionBuilder) emitInClauseLoop(tokens []tokenizer.Token, startIdx
 
 		// カンマの位置を記録
 		if token.Type == tokenizer.COMMA {
-			commaPositions = append(commaPositions, len(valueTokens))
 			i++
 
 			continue

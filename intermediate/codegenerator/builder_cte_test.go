@@ -158,17 +158,17 @@ func TestTokenDumpInCTE(t *testing.T) {
 		{
 			name:              "CTE with normal comment",
 			sql:               "WITH cte AS (SELECT id /* normal comment */ FROM users) SELECT id FROM cte",
-			diagnosticMessage: "通常のコメント /* normal comment */ がトークンレベルでどう処理されるかを確認",
+			diagnosticMessage: "Verify how regular block comments are tokenized inside the CTE",
 		},
 		{
 			name:              "CTE with multiple comments",
 			sql:               "WITH cte AS (SELECT id /* first */, name /* second */ FROM users) SELECT id FROM cte",
-			diagnosticMessage: "複数のコメントがトークンレベルで処理される様子を確認",
+			diagnosticMessage: "Inspect token stream when multiple comments appear back to back",
 		},
 		{
 			name:              "CTE with line comment",
 			sql:               "WITH cte AS (SELECT id -- line comment\nFROM users) SELECT id FROM cte",
-			diagnosticMessage: "ラインコメント -- が CTE 内でどう処理されるかを確認",
+			diagnosticMessage: "Ensure line comments inside the CTE are preserved correctly",
 		},
 	}
 

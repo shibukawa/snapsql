@@ -48,10 +48,12 @@ func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.Fi
 		if closingParenIdx >= 0 {
 			// 括弧の直前までのトークンを処理
 			tokensBeforeParen := tokens[:closingParenIdx]
+
 			options := []ProcessTokensOption{}
 			if skipLeadingTrivia {
 				options = append(options, WithSkipLeadingTrivia())
 			}
+
 			if err := builder.ProcessTokens(tokensBeforeParen, options...); err != nil {
 				return fmt.Errorf("code generation: %w", err)
 			}
@@ -70,6 +72,7 @@ func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.Fi
 			if skipLeadingTrivia {
 				options = append(options, WithSkipLeadingTrivia())
 			}
+
 			if err := builder.ProcessTokens(tokens, options...); err != nil {
 				return fmt.Errorf("code generation: %w", err)
 			}
@@ -80,6 +83,7 @@ func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.Fi
 		if skipLeadingTrivia {
 			options = append(options, WithSkipLeadingTrivia())
 		}
+
 		if err := builder.ProcessTokens(tokens, options...); err != nil {
 			return fmt.Errorf("code generation: %w", err)
 		}
