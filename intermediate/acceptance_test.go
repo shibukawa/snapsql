@@ -97,8 +97,8 @@ func TestAcceptance(t *testing.T) {
 
 	// Run each test
 	errorExpectationOverrides := map[string]bool{
-		"016_system_fields_missing_explicit_err":        false,
-		"027_insert_system_fields_explicit_missing_err": false,
+		"016_system_fields_missing_explicit_err":        true,
+		"027_insert_system_fields_explicit_missing_err": true,
 	}
 
 	for _, entry := range entries {

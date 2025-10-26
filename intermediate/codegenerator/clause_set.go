@@ -36,6 +36,12 @@ func generateSetClause(clause *parser.SetClause, builder *InstructionBuilder) er
 
 	// システムフィールドを SET に追加（重複排除）
 	fields := getUpdateSystemFieldsFiltered(builder.context, existingFields)
+
+	// システムフィールドのバリデーション：explicit パラメータが要求される場合、パラメータが存在するか確認
+	if err := validateExplicitSystemFields(builder.context, fields, "update"); err != nil {
+		return err
+	}
+
 	appendSystemFieldUpdates(builder, fields)
 
 	return nil

@@ -41,6 +41,11 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 	// システムフィールド値が必要かチェック
 	fields := getInsertSystemFieldsFiltered(builder.context, existingColumns)
 
+	// システムフィールドのバリデーション：explicit パラメータが要求される場合、パラメータが存在するか確認
+	if err := validateExplicitSystemFields(builder.context, fields, "insert"); err != nil {
+		return err
+	}
+
 	// Phase 1: VALUES キーワードの送信
 	// VALUES句の開始まで（最初の括弧や変数展開ディレクティブまで）のトークンを処理
 	i := 0

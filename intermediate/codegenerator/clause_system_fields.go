@@ -169,3 +169,42 @@ func appendSystemFieldUpdates(builder *InstructionBuilder, fields []snapsql.Syst
 		})
 	}
 }
+
+// validateExplicitSystemFields validates that explicit system fields have corresponding parameters.
+// For INSERT: checks OnInsert.Parameter == "explicit"
+// For UPDATE: checks OnUpdate.Parameter == "explicit"
+func validateExplicitSystemFields(ctx *GenerationContext, fields []snapsql.SystemField, operation string) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	// Get all available parameters from function definition
+	availableParams := make(map[string]bool)
+	if ctx.FunctionDefinition != nil && ctx.FunctionDefinition.ParameterOrder != nil {
+		for _, paramName := range ctx.FunctionDefinition.ParameterOrder {
+			availableParams[paramName] = true
+		}
+	}
+
+	// Check each field
+	for _, field := range fields {
+		var paramType string
+		if operation == "insert" {
+			paramType = string(field.OnInsert.Parameter)
+		} else if operation == "update" {
+			paramType = string(field.OnUpdate.Parameter)
+		}
+
+		// If parameter is "explicit", it must be provided in function parameters
+		if paramType == "explicit" {
+			if !availableParams[field.Name] {
+				return fmt.Errorf(
+					"system field '%s' requires explicit parameter '%s' for %s operation, but parameter is not defined in function",
+					field.Name, field.Name, operation,
+				)
+			}
+		}
+	}
+
+	return nil
+}

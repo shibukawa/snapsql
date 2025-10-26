@@ -42,6 +42,11 @@ func generateInsertIntoClause(into *parser.InsertIntoClause, columns []parser.Fi
 	// システムフィールドをカラムリストに追加する場合
 	fields := getInsertSystemFieldsFiltered(builder.context, existingColumns)
 
+	// システムフィールドのバリデーション：explicit パラメータが要求される場合、パラメータが存在するか確認
+	if err := validateExplicitSystemFields(builder.context, fields, "insert"); err != nil {
+		return err
+	}
+
 	if len(fields) > 0 {
 		// 括弧の位置を見つける
 		closingParenIdx := findClosingParenIndex(tokens)
