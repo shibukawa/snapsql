@@ -115,6 +115,18 @@ func GenerateInsertInstructionsWithFunctionDef(stmt parser.StatementNode, ctx *G
 			return nil, nil, nil, fmt.Errorf("failed to generate SELECT clause: %w", err)
 		}
 
+		// Get system fields that need to be added to SELECT
+		existingColumns := make(map[string]bool)
+		for _, col := range insertStmt.Columns {
+			existingColumns[col.Name] = true
+		}
+		systemFields := getInsertSystemFieldsFiltered(ctx, existingColumns)
+
+		// Append system field expressions to SELECT clause
+		if len(systemFields) > 0 {
+			appendSystemFieldsToSelectClause(builder, systemFields)
+		}
+
 		// FROM句以降を処理（SELECT文と同様）
 		if insertStmt.From != nil {
 			if err := generateFromClause(insertStmt.From, builder); err != nil {

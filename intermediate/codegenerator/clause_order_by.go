@@ -13,9 +13,6 @@ func generateOrderByClause(clause *parser.OrderByClause, builder *InstructionBui
 	}
 
 	tokens := clause.RawTokens()
-
-	// Phase 1: トークンをそのまま処理
-	// 将来的には、ここでトークンのカスタマイズを行う
 	// 例: ASC/DESC の処理、NULLS FIRST/LAST の処理など
 
 	if err := builder.ProcessTokens(tokens); err != nil {

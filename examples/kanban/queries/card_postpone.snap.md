@@ -18,21 +18,21 @@ WITH
     done_stage AS (
         SELECT stage_order AS stage_limit
         FROM lists
-        WHERE board_id = /*= src_board_id */1
+        WHERE board_id = /*= src_board_id */99
         ORDER BY stage_order DESC, id DESC
         LIMIT 1
     ),
     new_list AS (
         SELECT id AS new_list_id
         FROM lists
-        WHERE board_id = /*= dst_board_id */2
+        WHERE board_id = /*= dst_board_id */99
         ORDER BY stage_order ASC, id ASC
         LIMIT 1
     ),
     undone_lists AS (
         SELECT old.id AS old_list_id
         FROM lists AS old
-        WHERE old.board_id = /*= src_board_id */1
+        WHERE old.board_id = /*= src_board_id */99
             AND old.stage_order < (
             SELECT stage_limit FROM done_stage
             )

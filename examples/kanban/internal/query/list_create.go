@@ -120,7 +120,7 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "INSERT INTO lists ( board_id, name, stage_order, position , created_at, updated_at) SELECT $1  AS board_id, lt.name, lt.stage_order AS stage_order, CAST(lt.stage_order AS REAL) AS position FROM list_templates AS lt  WHERE lt.is_active = 1 ORDER BY lt.stage_order  RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
+		query := "INSERT INTO lists ( board_id, name, stage_order, position , created_at, updated_at) SELECT $1  AS board_id, lt.name, lt.stage_order AS stage_order, CAST(lt.stage_order AS REAL) AS position , CURRENT_TIMESTAMP AS created_at, CURRENT_TIMESTAMP AS updated_at FROM list_templates AS lt  WHERE lt.is_active = 1 ORDER BY lt.stage_order  RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"board_id": boardID,

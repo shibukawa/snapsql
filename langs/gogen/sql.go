@@ -84,7 +84,10 @@ func ensureKeywordSpacing(val string) string {
 	}
 
 	upperTrimmed := strings.ToUpper(trimmed)
-	for _, kw := range []string{"AND", "OR", "WHERE", "JOIN", "ON"} {
+
+	// Check keywords in order: longer keywords first to avoid partial matches
+	// e.g., check "ORDER" before "OR" to prevent "ORDER BY" from matching "OR"
+	for _, kw := range []string{"WHERE", "JOIN", "ORDER", "GROUP", "AND", "OR", "ON"} {
 		if !strings.HasPrefix(upperTrimmed, kw) {
 			continue
 		}

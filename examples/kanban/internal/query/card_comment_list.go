@@ -88,7 +88,7 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id = $1  OR DER BY created_at ASC, id ASC "
+		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id = $1  ORDER BY created_at ASC, id ASC "
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"card_id": cardID,

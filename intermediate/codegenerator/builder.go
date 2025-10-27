@@ -231,6 +231,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token, opts ...Pro
 	if cfg.skipLeadingTrivia {
 		tokens = skipLeadingTrivia(tokens)
 	}
+
 	// Step 1: 方言変換（トークン列全体を事前処理）
 	convertedTokens := b.applyDialectConversions(tokens)
 

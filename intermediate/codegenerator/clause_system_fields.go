@@ -2,10 +2,42 @@ package codegenerator
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
+
+// normalizeDefaultExpressionForDialect converts default expressions based on the SQL dialect.
+// For example, NOW() in PostgreSQL becomes CURRENT_TIMESTAMP in SQLite.
+func normalizeDefaultExpressionForDialect(expr interface{}, dialect snapsql.Dialect) string {
+	exprStr := fmt.Sprintf("%v", expr)
+	exprUpper := strings.ToUpper(strings.TrimSpace(exprStr))
+
+	// Normalize NOW() variants
+	if exprUpper == "NOW()" || exprUpper == "NOW" {
+		switch dialect {
+		case snapsql.DialectSQLite:
+			return "CURRENT_TIMESTAMP"
+		case snapsql.DialectMySQL:
+			return "NOW()"
+		case snapsql.DialectMariaDB:
+			return "NOW()"
+		case snapsql.DialectPostgres:
+			return "NOW()"
+		default:
+			return "CURRENT_TIMESTAMP"
+		}
+	}
+
+	// Normalize CURRENT_TIMESTAMP variants
+	if exprUpper == "CURRENT_TIMESTAMP" {
+		return "CURRENT_TIMESTAMP"
+	}
+
+	// For other expressions, return as-is
+	return exprStr
+}
 
 // findClosingParenIndex finds the index of the closing parenthesis in a token slice.
 // Returns the index of the token containing ')', or -1 if not found.
@@ -126,10 +158,14 @@ func insertSystemFieldNames(builder *InstructionBuilder, fields []snapsql.System
 
 // insertSystemFieldValues appends system field values to VALUES clause.
 // Inserts OpEmitSystemValue instructions for each system field.
+// Default values are normalized based on SQL dialect.
 func insertSystemFieldValues(builder *InstructionBuilder, fields []snapsql.SystemField) {
 	if len(fields) == 0 {
 		return
 	}
+
+	// Get dialect from builder context
+	dialect := builder.context.Dialect
 
 	for _, field := range fields {
 		// Add comma separator
@@ -138,21 +174,28 @@ func insertSystemFieldValues(builder *InstructionBuilder, fields []snapsql.Syste
 			Value: ", ",
 		})
 
+		// Normalize default expression based on dialect
+		defaultValue := normalizeDefaultExpressionForDialect(field.OnInsert.Default, dialect)
+
 		// Add system field value as OpEmitSystemValue instruction
 		builder.instructions = append(builder.instructions, Instruction{
 			Op:           OpEmitSystemValue,
 			SystemField:  field.Name,
-			DefaultValue: fmt.Sprintf("%v", field.OnInsert.Default),
+			DefaultValue: defaultValue,
 		})
 	}
 }
 
 // appendSystemFieldUpdates appends system field updates to SET clause.
 // Adds OpEmitStatic with ", field = default" followed by OpEmitSystemValue instructions.
+// Default values are normalized based on SQL dialect.
 func appendSystemFieldUpdates(builder *InstructionBuilder, fields []snapsql.SystemField) {
 	if len(fields) == 0 {
 		return
 	}
+
+	// Get dialect from builder context
+	dialect := builder.context.Dialect
 
 	for _, field := range fields {
 		// Add comma and field assignment
@@ -161,12 +204,59 @@ func appendSystemFieldUpdates(builder *InstructionBuilder, fields []snapsql.Syst
 			Value: ", " + field.Name + " = ",
 		})
 
+		// Normalize default expression based on dialect
+		defaultValue := normalizeDefaultExpressionForDialect(field.OnUpdate.Default, dialect)
+
 		// Add system field value as OpEmitSystemValue instruction
 		builder.instructions = append(builder.instructions, Instruction{
 			Op:           OpEmitSystemValue,
 			SystemField:  field.Name,
-			DefaultValue: fmt.Sprintf("%v", field.OnUpdate.Default),
+			DefaultValue: defaultValue,
 		})
+	}
+}
+
+// appendSystemFieldsToSelectClause appends system field expressions to SELECT clause for INSERT...SELECT.
+// For each system field with OnInsert.Default or OnInsert.Parameter, adds ", default_expr AS field_name"
+// to the SELECT clause. Default expressions are normalized based on SQL dialect.
+func appendSystemFieldsToSelectClause(builder *InstructionBuilder, fields []snapsql.SystemField) {
+	if len(fields) == 0 {
+		return
+	}
+
+	// Get dialect from builder context
+	dialect := builder.context.Dialect
+
+	for i, field := range fields {
+		// Add comma separator
+		builder.instructions = append(builder.instructions, Instruction{
+			Op:    OpEmitStatic,
+			Value: ", ",
+		})
+
+		// Determine the expression to use for this field
+		var expr string
+		if field.OnInsert.Default != nil {
+			// Normalize default expression based on dialect
+			expr = normalizeDefaultExpressionForDialect(field.OnInsert.Default, dialect)
+		} else if field.OnInsert.Parameter != "" && field.OnInsert.Parameter != snapsql.ParameterExplicit {
+			// For non-explicit parameters, use the parameter directly
+			// This would be handled via CEL variable references
+			expr = string(field.OnInsert.Parameter)
+		}
+
+		// Add field expression as static emit
+		if expr != "" {
+			value := expr + " AS " + field.Name
+			// Add space after the last field to separate from FROM clause
+			if i == len(fields)-1 {
+				value += " "
+			}
+			builder.instructions = append(builder.instructions, Instruction{
+				Op:    OpEmitStatic,
+				Value: value,
+			})
+		}
 	}
 }
 

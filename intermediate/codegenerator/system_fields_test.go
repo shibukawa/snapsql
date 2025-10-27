@@ -320,3 +320,84 @@ func TestSystemFieldsInUpdate(t *testing.T) {
 		})
 	}
 }
+
+// TestSystemFieldsInInsertSelect tests INSERT...SELECT with system fields
+func TestSystemFieldsInInsertSelect(t *testing.T) {
+	// System fields configuration
+	config := &snapsql.Config{
+		System: snapsql.SystemConfig{
+			Fields: []snapsql.SystemField{
+				{
+					Name: "created_at",
+					Type: "timestamp",
+					OnInsert: snapsql.SystemFieldOperation{
+						Default: "NOW()",
+					},
+				},
+				{
+					Name: "updated_at",
+					Type: "timestamp",
+					OnInsert: snapsql.SystemFieldOperation{
+						Default: "NOW()",
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name                   string
+		sql                    string
+		dialect                snapsql.Dialect
+		config                 *snapsql.Config
+		expectedInstructions   []Instruction
+		shouldHaveSystemFields bool
+	}{
+		{
+			name:                   "INSERT...SELECT with system fields",
+			sql:                    "INSERT INTO lists (board_id, name) SELECT id, name FROM templates",
+			dialect:                snapsql.DialectSQLite,
+			config:                 config,
+			shouldHaveSystemFields: true,
+			expectedInstructions: []Instruction{
+				// Should include system field names in INSERT INTO
+				// Then SELECT with system field expressions
+				// Note: For SQLite dialect, NOW() is normalized to CURRENT_TIMESTAMP
+				{Op: OpEmitStatic, Value: "INSERT INTO lists ( board_id, name , created_at, updated_at) SELECT id, name , CURRENT_TIMESTAMP AS created_at, CURRENT_TIMESTAMP AS updated_at FROM templates", Pos: "1:1"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := strings.NewReader(tt.sql)
+			stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+			require.NoError(t, err, "ParseSQLFile should succeed")
+			require.NotNil(t, stmt)
+
+			ctx := NewGenerationContext(tt.dialect)
+			if tt.config != nil {
+				ctx.SetConfig(tt.config)
+			}
+
+			instructions, _, _, err := GenerateInsertInstructions(stmt, ctx)
+
+			require.NoError(t, err, "GenerateInsertInstructions should succeed")
+			require.NotEmpty(t, instructions, "Should generate instructions")
+
+			// Find the main EMIT_STATIC instruction (should contain full SQL)
+			mainInstr := instructions[0]
+			assert.Equal(t, OpEmitStatic, mainInstr.Op)
+
+			if tt.shouldHaveSystemFields {
+				// Check that system fields appear in SELECT
+				assert.Contains(t, mainInstr.Value, "created_at")
+				assert.Contains(t, mainInstr.Value, "updated_at")
+				// For SQLite, NOW() should be normalized to CURRENT_TIMESTAMP
+				assert.Contains(t, mainInstr.Value, "CURRENT_TIMESTAMP")
+			}
+
+			t.Logf("✓ %s: Generated SQL: %s", tt.name, mainInstr.Value)
+		})
+	}
+}

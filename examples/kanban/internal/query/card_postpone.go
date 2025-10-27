@@ -125,7 +125,7 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "WITH done_stage AS ( SELECT stage_order AS stage_limit FROM lists  WHERE board_id = $1  OR DER BY stage_order DESC, id DESC LIMIT 1 ), new_list AS ( SELECT id AS new_list_id FROM lists  WHERE board_id = $2  OR DER BY stage_order ASC, id ASC LIMIT 1 ), undone_lists AS ( SELECT old.id AS old_list_id FROM lists AS old  WHERE old.board_id = $3  AND old.stage_order < ( SELECT stage_limit FROM done_stage ) )UPDATE cards SET list_id = (SELECT new_list_id FROM new_list), updated_at = CURRENT_TIMESTAMP  WHERE list_id IN ( SELECT old_list_id FROM undone_lists )"
+		query := "WITH done_stage AS ( SELECT stage_order AS stage_limit FROM lists  WHERE board_id = $1  ORDER BY stage_order DESC, id DESC LIMIT 1 ), new_list AS ( SELECT id AS new_list_id FROM lists  WHERE board_id = $2  ORDER BY stage_order ASC, id ASC LIMIT 1 ), undone_lists AS ( SELECT old.id AS old_list_id FROM lists AS old  WHERE old.board_id = $3  AND old.stage_order < ( SELECT stage_limit FROM done_stage ) )UPDATE cards SET list_id = (SELECT new_list_id FROM new_list), updated_at = CURRENT_TIMESTAMP  WHERE list_id IN ( SELECT old_list_id FROM undone_lists )"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"src_board_id": srcBoardID,
