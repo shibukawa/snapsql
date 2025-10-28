@@ -172,7 +172,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	}
 
 	// Process query execution
-	queryExecution, err := generateQueryExecution(g.Format, responseStruct, g.hierarchicalMetas, responseType, funcName, errorZeroValue)
+	queryExecution, err := generateQueryExecution(g.Format, responseStruct, g.hierarchicalMetas, responseType, funcName, errorZeroValue, true)
 	if err != nil {
 		return fmt.Errorf("failed to generate query execution: %w", err)
 	}
@@ -1323,7 +1323,7 @@ var result {{ .ResponseType }}
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "{{ .LowerFuncName }}", "{{ .ResponseType | toLower }}")
 
-	{{- if not .QueryExecution.IsIterator }}
+{{- if not .QueryExecution.IsIterator }}
 	// Check for mock mode
 	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 		mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
@@ -1338,9 +1338,9 @@ var result {{ .ResponseType }}
 
 		return result, nil
 	}
-	{{- end }}
+{{- end }}
 
-	{{- if and .ImplicitParams .SQLBuilder.HasSystemArguments }}
+{{- if and .ImplicitParams .SQLBuilder.HasSystemArguments }}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{{- range .ImplicitParams }}
@@ -1349,20 +1349,19 @@ var result {{ .ResponseType }}
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
 	_ = systemValues // avoid unused if not referenced in args
-	{{- end }}
+{{- end }}
 
-	{{- if not .QueryExecution.IsIterator }}
-	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
-		FuncName:   "{{ .FunctionName }}",
-		SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
-		Dialect:    "{{ .Dialect }}",
-		QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
+{{- if not .QueryExecution.IsIterator }}
+	logger := snapsqlgo.QueryLoggerFromContext(ctx)
+	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+		return snapsqlgo.QueryLogMetadata{
+			FuncName:   "{{ .FunctionName }}",
+			SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
+			Dialect:    "{{ .Dialect }}",
+			QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
+		}, executor
 	})
-	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
-		QueryType: snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
-		Executor:  executor,
-	}
-	{{- end }}
+{{- end }}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
@@ -1406,20 +1405,34 @@ var result {{ .ResponseType }}
 
 {{- if .QueryExecution.IsIterator }}
 	return func(yield func({{ .IteratorYieldType }}, error) bool) {
+		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+			return snapsqlgo.QueryLogMetadata{
+				FuncName:   "{{ .FunctionName }}",
+				SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
+				Dialect:    "{{ .Dialect }}",
+				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+			}, executor
+		})
+
 		query, args, err := buildQueryAndArgs()
 		if err != nil {
+			logger.SetErr(err)
 			_ = yield(nil, err)
 			return
 		}
+		logger.SetQuery(query, args)
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 			mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
 			if err != nil {
+				logger.SetErr(err)
 				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to get mock data: %w", err))
 				return
 			}
 
 			rows, err := snapsqlgo.MapMockDataToStruct[{{ .ResponseType }}](mockData)
 			if err != nil {
+				logger.SetErr(err)
 				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to map mock data to {{ .ResponseType }} struct: %w", err))
 				return
 			}
@@ -1434,67 +1447,32 @@ var result {{ .ResponseType }}
 			return
 		}
 
-		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
-			FuncName:   "{{ .FunctionName }}",
-			SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
-			Dialect:    "{{ .Dialect }}",
-			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
-		})
-		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
-			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
-			Executor:  executor,
-		}
-		if queryLogger != nil {
-			queryLogger.SetQuery(query, args)
-		}
-
 		{{- range .QueryExecution.IteratorBody }}
 		{{ . }}
 		{{- end }}
-		if queryLogger != nil {
-			queryLogger.Finish(queryLogInfo, nil)
-		}
 	}
-		{{- else }}
+{{- else }}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
-		{{- if not .QueryExecution.IsIterator }}
-		if queryLogger != nil {
-			queryLogger.Finish(queryLogInfo, err)
-		}
-		{{- end }}
+		logger.SetErr(err)
 		return {{ .ErrorZeroValue }}, err
 	}
-	{{- if not .QueryExecution.IsIterator }}
-	if queryLogger != nil {
-		queryLogger.SetQuery(query, args)
+	logger.SetQuery(query, args)
+	// Execute query
+	stmt, err := executor.PrepareContext(ctx, query)
+	if err != nil {
+		err = fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w (query: %s)", err, query)
+		logger.SetErr(err)
+		return {{ .ErrorZeroValue }}, err
 	}
-	{{- end }}
-		// Execute query
-		stmt, err := executor.PrepareContext(ctx, query)
-		if err != nil {
-			prepErr := fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w (query: %s)", err, query)
-			{{- if not .QueryExecution.IsIterator }}
-			if queryLogger != nil {
-				queryLogger.Finish(queryLogInfo, prepErr)
-			}
-			{{- end }}
-			return {{ .ErrorZeroValue }}, prepErr
-		}
-		defer stmt.Close()
+	defer stmt.Close()
 
-		{{- range .QueryExecution.Code }}
-		{{ . }}
-		{{- end }}
-
-		{{- if not .QueryExecution.IsIterator }}
-	if queryLogger != nil {
-		queryLogger.Finish(queryLogInfo, nil)
-	}
+	{{- range .QueryExecution.Code }}
+	{{ . }}
 	{{- end }}
 
-		return result, nil
-		{{- end }}
+	return result, nil
+{{- end }}
 }
 `
 

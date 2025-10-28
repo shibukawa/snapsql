@@ -10,7 +10,7 @@ var executionContextKey = executionContextKeyType{}
 
 // executionContext aggregates per-request runtime options that affect generated code execution.
 type executionContext struct {
-	logger *loggerConfig
+	logger *loggingConfig
 }
 
 // withExecutionContext returns a new context that includes the provided ExecutionContext options.
@@ -52,7 +52,7 @@ func ExtractExecutionContext(ctx context.Context) *executionContext {
 }
 
 // WithLogger is a convenience wrapper that stores logging configuration on the context.
-func WithLogger(ctx context.Context, logger LoggerFunc, cfg ...LoggerOpt) context.Context {
+func WithLogger(ctx context.Context, sink QueryLogSink, cfg ...LoggerOpt) context.Context {
 	ctx, ec := withExecutionContext(ctx)
 
 	var singleOpt LoggerOpt
@@ -68,12 +68,17 @@ func WithLogger(ctx context.Context, logger LoggerFunc, cfg ...LoggerOpt) contex
 		singleOpt.ExplainSlowQueryThreshold = 0
 	}
 
-	ec.logger = &loggerConfig{
-		Sink:                      logger,
-		IncludeStack:              singleOpt.IncludeStack,
-		StackDepth:                singleOpt.StackDepth,
-		ExplainMode:               singleOpt.ExplainMode,
-		ExplainSlowQueryThreshold: singleOpt.ExplainSlowQueryThreshold,
+	if sink == nil {
+		ec.logger = nil
+		return ctx
+	}
+
+	ec.logger = &loggingConfig{
+		sink:                      sink,
+		includeStack:              singleOpt.IncludeStack,
+		stackDepth:                singleOpt.StackDepth,
+		explainMode:               singleOpt.ExplainMode,
+		explainSlowQueryThreshold: singleOpt.ExplainSlowQueryThreshold,
 	}
 
 	return ctx

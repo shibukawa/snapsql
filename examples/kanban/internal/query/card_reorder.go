@@ -126,20 +126,34 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 		return query, args, nil
 	}
 	return func(yield func(*CardReorderResult, error) bool) {
+		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+			return snapsqlgo.QueryLogMetadata{
+				FuncName:   "CardReorder",
+				SourceFile: "query/CardReorder",
+				Dialect:    "sqlite",
+				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+			}, executor
+		})
+
 		query, args, err := buildQueryAndArgs()
 		if err != nil {
+			logger.SetErr(err)
 			_ = yield(nil, err)
 			return
 		}
+		logger.SetQuery(query, args)
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 			mockData, err := snapsqlgo.GetMockDataFromFiles(cardReorderMockPath, funcConfig.MockDataNames)
 			if err != nil {
+				logger.SetErr(err)
 				_ = yield(nil, fmt.Errorf("CardReorder: failed to get mock data: %w", err))
 				return
 			}
 
 			rows, err := snapsqlgo.MapMockDataToStruct[[]CardReorderResult](mockData)
 			if err != nil {
+				logger.SetErr(err)
 				_ = yield(nil, fmt.Errorf("CardReorder: failed to map mock data to []CardReorderResult struct: %w", err))
 				return
 			}
@@ -153,30 +167,20 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 
 			return
 		}
-
-		queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
-			FuncName:   "CardReorder",
-			SourceFile: "query/CardReorder",
-			Dialect:    "sqlite",
-			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
-		})
-		queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
-			QueryType: snapsqlgo.QueryLogQueryTypeSelect,
-			Executor:  executor,
-		}
-		if queryLogger != nil {
-			queryLogger.SetQuery(query, args)
-		}
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			_ = yield(nil, fmt.Errorf("CardReorder: failed to prepare statement: %w (query: %s)", err, query))
+			err = fmt.Errorf("CardReorder: failed to prepare statement: %w (query: %s)", err, query)
+			logger.SetErr(err)
+			_ = yield(nil, err)
 			return
 		}
 		defer stmt.Close()
 
 		rows, err := stmt.QueryContext(ctx, args...)
 		if err != nil {
-			_ = yield(nil, fmt.Errorf("CardReorder: failed to execute query: %w", err))
+			err = fmt.Errorf("CardReorder: failed to execute query: %w", err)
+			logger.SetErr(err)
+			_ = yield(nil, err)
 			return
 		}
 		defer rows.Close()
@@ -192,7 +196,9 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 				&item.CreatedAt,
 				&item.UpdatedAt,
 			); err != nil {
-				_ = yield(nil, fmt.Errorf("CardReorder: failed to scan row: %w", err))
+				err = fmt.Errorf("CardReorder: failed to scan row: %w", err)
+				logger.SetErr(err)
+				_ = yield(nil, err)
 				return
 			}
 			if !yield(item, nil) {
@@ -201,11 +207,10 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 		}
 
 		if err := rows.Err(); err != nil {
-			_ = yield(nil, fmt.Errorf("CardReorder: error iterating rows: %w", err))
+			err = fmt.Errorf("CardReorder: error iterating rows: %w", err)
+			logger.SetErr(err)
+			_ = yield(nil, err)
 			return
-		}
-		if queryLogger != nil {
-			queryLogger.Finish(queryLogInfo, nil)
 		}
 	}
 }

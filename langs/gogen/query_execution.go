@@ -26,7 +26,7 @@ type queryExecutionData struct {
 }
 
 // generateQueryExecution generates query execution and result mapping code
-func generateQueryExecution(format *intermediate.IntermediateFormat, responseStruct *responseStructData, metas []*hierarchicalNodeMeta, responseType, functionName, errorZeroValue string) (*queryExecutionData, error) {
+func generateQueryExecution(format *intermediate.IntermediateFormat, responseStruct *responseStructData, metas []*hierarchicalNodeMeta, responseType, functionName, errorZeroValue string, withLogger bool) (*queryExecutionData, error) {
 	var code []string
 
 	needsSnapsql := false
@@ -155,6 +155,55 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedResponseAffinity, format.ResponseAffinity)
 	}
 
+	// Post-process to wrap error returns when logging is enabled
+	if withLogger {
+		processed := make([]string, 0, len(code))
+		for _, line := range code {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "return ") {
+				if idx := strings.Index(line, ", fmt.Errorf"); idx != -1 {
+					indent := line[:strings.Index(line, "return")]
+					left := strings.TrimSpace(line[strings.Index(line, "return")+len("return ") : idx])
+					fmtExpr := strings.TrimSpace(line[idx+2:])
+					processed = append(processed,
+						indent+"err = "+fmtExpr,
+						indent+"logger.SetErr(err)",
+						indent+"return "+left+", err",
+					)
+
+					continue
+				}
+
+				if idx := strings.Index(line, ", snapsql."); idx != -1 {
+					indent := line[:strings.Index(line, "return")]
+					left := strings.TrimSpace(line[strings.Index(line, "return")+len("return ") : idx])
+					errExpr := strings.TrimSpace(line[idx+2:])
+					processed = append(processed,
+						indent+"err = "+errExpr,
+						indent+"logger.SetErr(err)",
+						indent+"return "+left+", err",
+					)
+
+					continue
+				}
+
+				if strings.HasSuffix(trimmed, ", err") {
+					indent := line[:strings.Index(line, "return")]
+					processed = append(processed,
+						indent+"logger.SetErr(err)",
+						indent+trimmed,
+					)
+
+					continue
+				}
+			}
+
+			processed = append(processed, line)
+		}
+
+		code = processed
+	}
+
 	return &queryExecutionData{Code: code, NeedsSnapsqlImport: needsSnapsql}, nil
 }
 
@@ -245,14 +294,18 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 
 	code = append(code, "stmt, err := executor.PrepareContext(ctx, query)")
 	code = append(code, "if err != nil {")
-	code = append(code, fmt.Sprintf("\t_ = yield(nil, fmt.Errorf(\"%sfailed to prepare statement: %%w (query: %%s)\", err, query))", prefix))
+	code = append(code, fmt.Sprintf("\terr = fmt.Errorf(\"%sfailed to prepare statement: %%w (query: %%s)\", err, query)", prefix))
+	code = append(code, "\tlogger.SetErr(err)")
+	code = append(code, "\t_ = yield(nil, err)")
 	code = append(code, "\treturn")
 	code = append(code, "}")
 	code = append(code, "defer stmt.Close()")
 	code = append(code, "")
 	code = append(code, "rows, err := stmt.QueryContext(ctx, args...)")
 	code = append(code, "if err != nil {")
-	code = append(code, fmt.Sprintf("\t_ = yield(nil, fmt.Errorf(\"%sfailed to execute query: %%w\", err))", prefix))
+	code = append(code, fmt.Sprintf("\terr = fmt.Errorf(\"%sfailed to execute query: %%w\", err)", prefix))
+	code = append(code, "\tlogger.SetErr(err)")
+	code = append(code, "\t_ = yield(nil, err)")
 	code = append(code, "\treturn")
 	code = append(code, "}")
 	code = append(code, "defer rows.Close()")
@@ -266,7 +319,9 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 	}
 
 	code = append(code, "\t); err != nil {")
-	code = append(code, fmt.Sprintf("\t\t_ = yield(nil, fmt.Errorf(\"%sfailed to scan row: %%w\", err))", prefix))
+	code = append(code, fmt.Sprintf("\t\terr = fmt.Errorf(\"%sfailed to scan row: %%w\", err)", prefix))
+	code = append(code, "\t\tlogger.SetErr(err)")
+	code = append(code, "\t\t_ = yield(nil, err)")
 	code = append(code, "\t\treturn")
 	code = append(code, "\t}")
 	code = append(code, "\tif !yield(item, nil) {")
@@ -275,7 +330,9 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 	code = append(code, "}")
 	code = append(code, "")
 	code = append(code, "if err := rows.Err(); err != nil {")
-	code = append(code, fmt.Sprintf("\t_ = yield(nil, fmt.Errorf(\"%serror iterating rows: %%w\", err))", prefix))
+	code = append(code, fmt.Sprintf("\terr = fmt.Errorf(\"%serror iterating rows: %%w\", err)", prefix))
+	code = append(code, "\tlogger.SetErr(err)")
+	code = append(code, "\t_ = yield(nil, err)")
 	code = append(code, "\treturn")
 	code = append(code, "}")
 

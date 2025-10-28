@@ -112,16 +112,15 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 
 		return result, nil
 	}
-	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
-		FuncName:   "CardPostpone",
-		SourceFile: "query/CardPostpone",
-		Dialect:    "sqlite",
-		QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+	logger := snapsqlgo.QueryLoggerFromContext(ctx)
+	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+		return snapsqlgo.QueryLogMetadata{
+			FuncName:   "CardPostpone",
+			SourceFile: "query/CardPostpone",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+		}, executor
 	})
-	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
-		QueryType: snapsqlgo.QueryLogQueryTypeExec,
-		Executor:  executor,
-	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
@@ -153,31 +152,24 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
-		if queryLogger != nil {
-			queryLogger.Finish(queryLogInfo, err)
-		}
+		logger.SetErr(err)
 		return nil, err
 	}
-	if queryLogger != nil {
-		queryLogger.SetQuery(query, args)
-	}
+	logger.SetQuery(query, args)
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		prepErr := fmt.Errorf("CardPostpone: failed to prepare statement: %w (query: %s)", err, query)
-		if queryLogger != nil {
-			queryLogger.Finish(queryLogInfo, prepErr)
-		}
-		return nil, prepErr
+		err = fmt.Errorf("CardPostpone: failed to prepare statement: %w (query: %s)", err, query)
+		logger.SetErr(err)
+		return nil, err
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
 	_, err = stmt.ExecContext(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("CardPostpone: failed to execute statement: %w", err)
-	}
-	if queryLogger != nil {
-		queryLogger.Finish(queryLogInfo, nil)
+		err = fmt.Errorf("CardPostpone: failed to execute statement: %w", err)
+		logger.SetErr(err)
+		return nil, err
 	}
 
 	return result, nil

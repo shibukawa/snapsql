@@ -9,38 +9,37 @@ type testSink struct {
 	entries []QueryLogEntry
 }
 
-func (s *testSink) asFunc() LoggerFunc {
+func (s *testSink) sink() QueryLogSink {
 	return func(_ context.Context, entry QueryLogEntry) {
 		s.entries = append(s.entries, entry)
 	}
 }
 
 func TestQueryLoggerDisabled(t *testing.T) {
-	t.Helper()
-
-	logger := QueryLoggerFromContext(t.Context(), QueryLogMetadata{})
+	logger := QueryLoggerFromContext(context.Background())
 	if logger != nil {
-		t.Fatalf("expected nil logger when disabled")
+		t.Fatalf("expected nil logger when not configured")
 	}
 }
 
 func TestQueryLoggerEmitsEntry(t *testing.T) {
 	sink := &testSink{}
-	ctx := WithLogger(t.Context(), sink.asFunc())
-	meta := QueryLogMetadata{
-		FuncName:   "TestFunc",
-		SourceFile: "pkg/TestFunc",
-		Dialect:    "postgres",
-		QueryType:  QueryLogQueryTypeSelect,
-	}
+	ctx := WithLogger(context.Background(), sink.sink())
 
-	logger := QueryLoggerFromContext(ctx, meta)
+	logger := QueryLoggerFromContext(ctx)
 	if logger == nil {
 		t.Fatalf("expected logger instance")
 	}
 
 	logger.SetQuery("SELECT 1", []any{42})
-	logger.Finish(QueryLogExecutionInfo{QueryType: QueryLogQueryTypeSelect}, nil)
+	logger.Write(ctx, func() (QueryLogMetadata, DBExecutor) {
+		return QueryLogMetadata{
+			FuncName:   "TestFunc",
+			SourceFile: "pkg/TestFunc",
+			Dialect:    "postgres",
+			QueryType:  QueryLogQueryTypeSelect,
+		}, nil
+	})
 
 	if len(sink.entries) != 1 {
 		t.Fatalf("expected one log entry, got %d", len(sink.entries))
@@ -60,9 +59,35 @@ func TestQueryLoggerEmitsEntry(t *testing.T) {
 	}
 }
 
-func TestWithExecutionContextCopiesLoggingConfig(t *testing.T) {
-	ec := ExtractExecutionContext(t.Context())
-	if ec.logger == nil {
-		t.Fatalf("expected logging config to be set")
+func TestWithLoggerCopiesOptions(t *testing.T) {
+	sink := &testSink{}
+	opts := LoggerOpt{IncludeStack: true, StackDepth: 0, ExplainSlowQueryThreshold: -1}
+	ctx := WithLogger(context.Background(), sink.sink(), opts)
+
+	ec := ExtractExecutionContext(ctx)
+	if ec == nil || ec.logger == nil {
+		t.Fatalf("expected logger configuration to be stored")
 	}
+
+	if !ec.logger.includeStack {
+		t.Fatalf("expected includeStack to be true")
+	}
+
+	if ec.logger.stackDepth != 16 {
+		t.Fatalf("expected stack depth to default to 16, got %d", ec.logger.stackDepth)
+	}
+
+	if ec.logger.explainSlowQueryThreshold != 0 {
+		t.Fatalf("expected threshold to clamp at 0, got %s", ec.logger.explainSlowQueryThreshold)
+	}
+}
+
+func TestLoggerWriteNil(t *testing.T) {
+	var logger *QueryLogger
+	logger.SetQuery("", nil)
+	logger.SetErr(nil)
+	logger.Write(context.Background(), func() (QueryLogMetadata, DBExecutor) {
+		t.Fatalf("callback should not be invoked for nil logger")
+		return QueryLogMetadata{}, nil
+	})
 }

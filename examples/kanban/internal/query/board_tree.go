@@ -292,16 +292,15 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 
 		return result, nil
 	}
-	queryLogger := snapsqlgo.QueryLoggerFromContext(ctx, snapsqlgo.QueryLogMetadata{
-		FuncName:   "BoardTree",
-		SourceFile: "query/BoardTree",
-		Dialect:    "sqlite",
-		QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+	logger := snapsqlgo.QueryLoggerFromContext(ctx)
+	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+		return snapsqlgo.QueryLogMetadata{
+			FuncName:   "BoardTree",
+			SourceFile: "query/BoardTree",
+			Dialect:    "sqlite",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+		}, executor
 	})
-	queryLogInfo := snapsqlgo.QueryLogExecutionInfo{
-		QueryType: snapsqlgo.QueryLogQueryTypeSelect,
-		Executor:  executor,
-	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
@@ -320,22 +319,16 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
-		if queryLogger != nil {
-			queryLogger.Finish(queryLogInfo, err)
-		}
+		logger.SetErr(err)
 		return result, err
 	}
-	if queryLogger != nil {
-		queryLogger.SetQuery(query, args)
-	}
+	logger.SetQuery(query, args)
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		prepErr := fmt.Errorf("BoardTree: failed to prepare statement: %w (query: %s)", err, query)
-		if queryLogger != nil {
-			queryLogger.Finish(queryLogInfo, prepErr)
-		}
-		return result, prepErr
+		err = fmt.Errorf("BoardTree: failed to prepare statement: %w (query: %s)", err, query)
+		logger.SetErr(err)
+		return result, err
 	}
 	defer stmt.Close()
 	// Execute query for hierarchical aggregation (one affinity)
@@ -504,9 +497,6 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	}
 	for _, v := range _parentMap {
 		result = *v
-	}
-	if queryLogger != nil {
-		queryLogger.Finish(queryLogInfo, nil)
 	}
 
 	return result, nil
