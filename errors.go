@@ -9,6 +9,9 @@ var (
 	ErrParameterNotProvided = errors.New("statement requires explicit parameter but it was not provided")
 	// ErrSystemFieldNotIncluded indicates a required system field was not listed in the column list.
 	ErrSystemFieldNotIncluded = errors.New("statement requires explicit system field to be included in column list")
+	// ErrSystemFieldExplicitParameterMissing indicates a system field configured with explicit parameter mode
+	// is missing the corresponding function parameter definition.
+	ErrSystemFieldExplicitParameterMissing = errors.New("system field requires explicit parameter but parameter is not defined in function")
 	// ErrParameterConfiguredError is returned when a parameter that must not appear was found.
 	ErrParameterConfiguredError = errors.New("statement should not include parameter (configured as error)")
 	// ErrInvalidStatementCast indicates a failure to cast a statement node to a more specific type.

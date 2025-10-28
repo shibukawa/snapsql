@@ -296,10 +296,7 @@ func validateExplicitSystemFields(ctx *GenerationContext, fields []snapsql.Syste
 		// If parameter is "explicit", it must be provided in function parameters
 		if paramType == "explicit" {
 			if !availableParams[field.Name] {
-				return fmt.Errorf(
-					"system field '%s' requires explicit parameter '%s' for %s operation, but parameter is not defined in function",
-					field.Name, field.Name, operation,
-				)
+				return fmt.Errorf("%w: field=%s, operation=%s", snapsql.ErrSystemFieldExplicitParameterMissing, field.Name, operation)
 			}
 		}
 	}

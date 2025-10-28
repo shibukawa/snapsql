@@ -226,6 +226,10 @@ func (l *QueryLogger) runExplain(ctx context.Context, executor DBExecutor, query
 		planLines = append(planLines, builder.String())
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil
+	}
+
 	if len(planLines) == 0 {
 		return nil
 	}
