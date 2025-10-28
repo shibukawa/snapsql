@@ -285,6 +285,7 @@ func validateExplicitSystemFields(ctx *GenerationContext, fields []snapsql.Syste
 	// Check each field
 	for _, field := range fields {
 		var paramType string
+
 		switch operation {
 		case "insert":
 			paramType = string(field.OnInsert.Parameter)

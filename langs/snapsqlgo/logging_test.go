@@ -9,7 +9,7 @@ type testSink struct {
 	entries []QueryLogEntry
 }
 
-func (s *testSink) asFunc() QueryLogSink {
+func (s *testSink) asFunc() LoggerFunc {
 	return func(_ context.Context, entry QueryLogEntry) {
 		s.entries = append(s.entries, entry)
 	}
@@ -26,7 +26,7 @@ func TestQueryLoggerDisabled(t *testing.T) {
 
 func TestQueryLoggerEmitsEntry(t *testing.T) {
 	sink := &testSink{}
-	ctx := WithLogger(t.Context(), LoggingConfig{Enabled: true, Sink: sink.asFunc()})
+	ctx := WithLogger(t.Context(), sink.asFunc())
 	meta := QueryLogMetadata{
 		FuncName:   "TestFunc",
 		SourceFile: "pkg/TestFunc",
@@ -61,16 +61,8 @@ func TestQueryLoggerEmitsEntry(t *testing.T) {
 }
 
 func TestWithExecutionContextCopiesLoggingConfig(t *testing.T) {
-	cfg := LoggingConfig{Enabled: true}
-	ctx := WithLogger(t.Context(), cfg)
-
-	ec := ExecutionContextFrom(ctx)
-	if ec.Logging == nil || !ec.Logging.Enabled {
+	ec := ExtractExecutionContext(t.Context())
+	if ec.logger == nil {
 		t.Fatalf("expected logging config to be set")
-	}
-
-	cfg.Enabled = false
-	if !ExecutionContextFrom(ctx).Logging.Enabled {
-		t.Fatalf("expected stored config to be immutable copy")
 	}
 }

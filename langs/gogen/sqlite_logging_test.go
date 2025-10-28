@@ -17,7 +17,7 @@ type captureSink struct {
 	entries []snapsqlgo.QueryLogEntry
 }
 
-func (s *captureSink) asFunc() snapsqlgo.QueryLogSink {
+func (s *captureSink) asFunc() snapsqlgo.LoggerFunc {
 	return func(_ context.Context, entry snapsqlgo.QueryLogEntry) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -67,11 +67,7 @@ func TestGeneratedKanbanQueryLogging(t *testing.T) {
 	setupKanbanBoardTable(t, db)
 
 	sink := &captureSink{}
-	ctx := snapsqlgo.WithLogger(t.Context(), snapsqlgo.LoggingConfig{
-		Enabled:       true,
-		Sink:          sink.asFunc(),
-		CaptureParams: true,
-	})
+	ctx := snapsqlgo.WithLogger(t.Context(), sink.asFunc())
 
 	result, err := querylogtest.BoardGet(ctx, db, 1)
 	if err != nil {

@@ -8,16 +8,21 @@ import (
 	"time"
 )
 
-// LoggingConfig controls query logging behavior.
-type LoggingConfig struct {
-	Enabled                   bool
-	Sink                      QueryLogSink
+// LoggerConfig controls query logging behavior.
+type loggerConfig struct {
+	Sink                      LoggerFunc
 	IncludeStack              bool
 	StackDepth                int
 	ExplainMode               ExplainMode
 	ExplainSlowQueryThreshold time.Duration
-	CaptureParams             bool
-	CaptureSQLSource          bool
+}
+
+// LoggerOpt controls query logging behavior.
+type LoggerOpt struct {
+	IncludeStack              bool
+	StackDepth                int
+	ExplainMode               ExplainMode
+	ExplainSlowQueryThreshold time.Duration
 }
 
 // ExplainMode defines how EXPLAIN should be executed.
@@ -29,8 +34,8 @@ const (
 	ExplainModeAnalyze
 )
 
-// QueryLogSink receives QueryLogEntry events.
-type QueryLogSink func(context.Context, QueryLogEntry)
+// LoggerFunc receives QueryLogEntry events.
+type LoggerFunc func(context.Context, QueryLogEntry)
 
 // QueryLogQueryType categorizes queries for logging.
 type QueryLogQueryType string
@@ -85,19 +90,20 @@ type QueryLogExecutionInfo struct {
 // QueryLogger coordinates per-query logging lifecycle.
 type QueryLogger struct {
 	ctx   context.Context
-	cfg   *LoggingConfig
+	cfg   *loggerConfig
 	meta  QueryLogMetadata
 	entry QueryLogEntry
 }
 
 // QueryLoggerFromContext creates a logger using configuration stored on the context.
 func QueryLoggerFromContext(ctx context.Context, meta QueryLogMetadata) *QueryLogger {
-	execCtx := ExecutionContextFrom(ctx)
+	execCtx := ExtractExecutionContext(ctx)
 
-	cfg := execCtx.Logging
-	if cfg == nil || !cfg.Enabled || cfg.Sink == nil {
+	if execCtx == nil || execCtx.logger == nil {
 		return nil
 	}
+
+	cfg := execCtx.logger
 
 	logger := &QueryLogger{
 		ctx:  ctx,

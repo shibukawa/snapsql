@@ -2,80 +2,79 @@ package snapsqlgo
 
 import "context"
 
-// executionContextKey is the context key used to store ExecutionContext
-var executionContextKey struct{}
+// executionContextKeyType is the type for the context key to avoid collisions
+type executionContextKeyType struct{}
 
-// ExecutionContext aggregates per-request runtime options that affect generated code execution.
-type ExecutionContext struct {
-	Logging *LoggingConfig
+// executionContextKey is the context key used to store ExecutionContext
+var executionContextKey = executionContextKeyType{}
+
+// executionContext aggregates per-request runtime options that affect generated code execution.
+type executionContext struct {
+	logger *loggerConfig
 }
 
-// ExecutionContextOpt mutates an ExecutionContext copy before storing it in context.
-type ExecutionContextOpt func(*ExecutionContext)
+// withExecutionContext returns a new context that includes the provided ExecutionContext options.
+func withExecutionContext(ctx context.Context) (context.Context, *executionContext) {
+	var ec *executionContext
 
-// WithExecutionContext returns a new context that includes the provided ExecutionContext options.
-func WithExecutionContext(ctx context.Context, opts ...ExecutionContextOpt) context.Context {
-	existing := ExecutionContextFrom(ctx)
-	clone := existing.clone()
+	if value := ctx.Value(executionContextKey); value != nil {
+		var ok bool
 
-	for _, opt := range opts {
-		if opt == nil {
-			continue
+		ec, ok = value.(*executionContext)
+		if !ok {
+			panic("invalid type stored in context for executionContextKey")
 		}
-
-		opt(clone)
 	}
 
-	return context.WithValue(ctx, executionContextKey, clone)
+	if ec == nil {
+		ec = &executionContext{}
+		return context.WithValue(ctx, executionContextKey, ec), ec
+	}
+
+	return ctx, ec
 }
 
-// ExecutionContextFrom retrieves the aggregated ExecutionContext from context. It never returns nil.
-func ExecutionContextFrom(ctx context.Context) *ExecutionContext {
+// ExtractExecutionContext retrieves the aggregated ExecutionContext from context.
+func ExtractExecutionContext(ctx context.Context) *executionContext {
 	if ctx == nil {
-		return &ExecutionContext{}
+		return nil
 	}
 
 	if value := ctx.Value(executionContextKey); value != nil {
-		if ec, ok := value.(*ExecutionContext); ok && ec != nil {
+		if ec, ok := value.(*executionContext); !ok {
+			panic("invalid type stored in context for executionContextKey")
+		} else {
 			return ec
 		}
 	}
 
-	return &ExecutionContext{}
-}
-
-// WithQueryLogging configures per-request query logging.
-func WithQueryLogging(cfg LoggingConfig) ExecutionContextOpt {
-	return func(ec *ExecutionContext) {
-		copyCfg := cfg
-		if copyCfg.IncludeStack && copyCfg.StackDepth <= 0 {
-			copyCfg.StackDepth = 16
-		}
-
-		if copyCfg.ExplainSlowQueryThreshold < 0 {
-			copyCfg.ExplainSlowQueryThreshold = 0
-		}
-
-		ec.Logging = &copyCfg
-	}
+	return nil
 }
 
 // WithLogger is a convenience wrapper that stores logging configuration on the context.
-func WithLogger(ctx context.Context, cfg LoggingConfig) context.Context {
-	return WithExecutionContext(ctx, WithQueryLogging(cfg))
-}
+func WithLogger(ctx context.Context, logger LoggerFunc, cfg ...LoggerOpt) context.Context {
+	ctx, ec := withExecutionContext(ctx)
 
-func (ec *ExecutionContext) clone() *ExecutionContext {
-	if ec == nil {
-		return &ExecutionContext{}
+	var singleOpt LoggerOpt
+	if len(cfg) > 0 {
+		singleOpt = cfg[0]
 	}
 
-	clone := *ec
-
-	if ec.Logging != nil {
-		cfgCopy := *ec.Logging
-		clone.Logging = &cfgCopy
+	if singleOpt.IncludeStack && singleOpt.StackDepth <= 0 {
+		singleOpt.StackDepth = 16
 	}
 
-	return &clone
+	if singleOpt.ExplainSlowQueryThreshold < 0 {
+		singleOpt.ExplainSlowQueryThreshold = 0
+	}
+
+	ec.logger = &loggerConfig{
+		Sink:                      logger,
+		IncludeStack:              singleOpt.IncludeStack,
+		StackDepth:                singleOpt.StackDepth,
+		ExplainMode:               singleOpt.ExplainMode,
+		ExplainSlowQueryThreshold: singleOpt.ExplainSlowQueryThreshold,
+	}
+
+	return ctx
 }
