@@ -93,6 +93,7 @@ type QueryLogger struct {
 // QueryLoggerFromContext creates a logger using configuration stored on the context.
 func QueryLoggerFromContext(ctx context.Context, meta QueryLogMetadata) *QueryLogger {
 	execCtx := ExecutionContextFrom(ctx)
+
 	cfg := execCtx.Logging
 	if cfg == nil || !cfg.Enabled || cfg.Sink == nil {
 		return nil
@@ -201,6 +202,7 @@ func (l *QueryLogger) runExplain(executor DBExecutor) *ExplainResult {
 	}
 
 	raw := make([]sql.RawBytes, len(columns))
+
 	dests := make([]any, len(columns))
 	for i := range raw {
 		dests[i] = &raw[i]
@@ -214,14 +216,17 @@ func (l *QueryLogger) runExplain(executor DBExecutor) *ExplainResult {
 		}
 
 		var builder strings.Builder
+
 		for idx, col := range raw {
 			if idx > 0 {
 				builder.WriteByte('\t')
 			}
+
 			if col == nil {
 				builder.WriteString("NULL")
 				continue
 			}
+
 			builder.Write(col)
 		}
 
@@ -240,6 +245,7 @@ func buildExplainSQL(mode ExplainMode, query string) string {
 	if mode == ExplainModeAnalyze {
 		prefix = "EXPLAIN ANALYZE "
 	}
+
 	return prefix + query
 }
 
@@ -253,9 +259,11 @@ func captureStackTrace(depth int) []runtime.Frame {
 	frames := runtime.CallersFrames(pcs[:n])
 
 	var result []runtime.Frame
+
 	for {
 		frame, more := frames.Next()
 		result = append(result, frame)
+
 		if !more {
 			break
 		}

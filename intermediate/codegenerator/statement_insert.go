@@ -98,14 +98,24 @@ func GenerateInsertInstructionsWithFunctionDef(stmt parser.StatementNode, ctx *G
 
 	// INSERT INTO 句を処理（必須）
 	skipLeadingInto := insertStmt.CTE() == nil
-	if err := generateInsertIntoClause(insertStmt.Into, insertStmt.Columns, builder, skipLeadingInto); err != nil {
+
+	systemFields, err := generateInsertIntoClause(insertStmt.Into, insertStmt.Columns, builder, skipLeadingInto)
+	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to generate INSERT INTO clause: %w", err)
+	}
+
+	// Add system fields to Columns if they were added by generateInsertIntoClause
+	// This ensures that generateValuesClause can detect them
+	if len(systemFields) > 0 {
+		for _, field := range systemFields {
+			insertStmt.Columns = append(insertStmt.Columns, parser.FieldName{Name: field.Name})
+		}
 	}
 
 	// VALUES句とSELECT句の分岐処理
 	if insertStmt.ValuesList != nil {
 		// VALUES形式のINSERT
-		if err := generateValuesClause(insertStmt.ValuesList, builder, insertStmt.Columns); err != nil {
+		if err := generateValuesClause(insertStmt.ValuesList, builder, insertStmt.Columns, systemFields); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to generate VALUES clause: %w", err)
 		}
 	} else if insertStmt.Select != nil {
@@ -115,14 +125,8 @@ func GenerateInsertInstructionsWithFunctionDef(stmt parser.StatementNode, ctx *G
 			return nil, nil, nil, fmt.Errorf("failed to generate SELECT clause: %w", err)
 		}
 
-		// Get system fields that need to be added to SELECT
-		existingColumns := make(map[string]bool)
-		for _, col := range insertStmt.Columns {
-			existingColumns[col.Name] = true
-		}
-		systemFields := getInsertSystemFieldsFiltered(ctx, existingColumns)
-
 		// Append system field expressions to SELECT clause
+		// Use the system fields that were added by generateInsertIntoClause
 		if len(systemFields) > 0 {
 			appendSystemFieldsToSelectClause(builder, systemFields)
 		}

@@ -22,6 +22,7 @@ func WithExecutionContext(ctx context.Context, opts ...ExecutionContextOpt) cont
 		if opt == nil {
 			continue
 		}
+
 		opt(clone)
 	}
 
@@ -50,6 +51,7 @@ func WithQueryLogging(cfg LoggingConfig) ExecutionContextOpt {
 		if copyCfg.IncludeStack && copyCfg.StackDepth <= 0 {
 			copyCfg.StackDepth = 16
 		}
+
 		if copyCfg.ExplainSlowQueryThreshold < 0 {
 			copyCfg.ExplainSlowQueryThreshold = 0
 		}

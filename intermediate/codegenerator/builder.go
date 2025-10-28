@@ -33,6 +33,7 @@ type InstructionBuilder struct {
 	loopStack              []loopLevel
 	envStack               []int // CELEnvironment のインデックススタック（root=0から始まる）
 	dummyValuesInitialized bool  // FunctionDefinition からのダミー値初期化済みフラグ
+	systemFieldsAdded      bool  // VALUES句でシステムフィールド値が既に追加されているかフラグ
 }
 
 // NewInstructionBuilder は新しい InstructionBuilder を作成する
@@ -43,6 +44,11 @@ func NewInstructionBuilder(ctx *GenerationContext) *InstructionBuilder {
 		envStack:               []int{0}, // root environment from start
 		dummyValuesInitialized: false,
 	}
+}
+
+// BeginValueGroup resets the system field insertion flag before starting a new VALUES group.
+func (b *InstructionBuilder) BeginValueGroup() {
+	b.systemFieldsAdded = false
 }
 
 // lookupTypeDescriptor returns the parser-provided descriptor for the given token.

@@ -156,7 +156,7 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "INSERT INTO cards ( list_id, title, description, position , created_at, updated_at) VALUES ( (SELECT l.id FROM lists AS l JOIN boards b ON l.board_id = b.id  WHERE b.status = 'active' ORDER BY l.stage_order ASC LIMIT 1, $1, $2), $3, $4, $5 )\n\n RETURNING id, list_id, title, description, position, created_at, updated_at"
+		query := "INSERT INTO cards ( list_id, title, description, position , created_at, updated_at) VALUES ( (SELECT l.id FROM lists AS l JOIN boards b ON l.board_id = b.id  WHERE b.status = 'active' ORDER BY l.stage_order ASC LIMIT 1), $1, $2, $3 , $4, $5)\n\n RETURNING id, list_id, title, description, position, created_at, updated_at"
 		args := make([]any, 0)
 		paramMap := map[string]any{
 			"title":       title,
@@ -164,27 +164,27 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 			"position":    position,
 		}
 
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
+		evalRes0, _, err := cardCreatePrograms[0].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
+		}
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
 
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
+		evalRes1, _, err := cardCreatePrograms[1].Eval(paramMap)
+		if err != nil {
+			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
+		}
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
 
-		evalRes2, _, err := cardCreatePrograms[0].Eval(paramMap)
+		evalRes2, _, err := cardCreatePrograms[2].Eval(paramMap)
 		if err != nil {
 			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
 		}
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
 
-		evalRes3, _, err := cardCreatePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes3))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
 
-		evalRes4, _, err := cardCreatePrograms[2].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes4))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

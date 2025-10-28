@@ -159,10 +159,14 @@ func insertSystemFieldNames(builder *InstructionBuilder, fields []snapsql.System
 // insertSystemFieldValues appends system field values to VALUES clause.
 // Inserts OpEmitSystemValue instructions for each system field.
 // Default values are normalized based on SQL dialect.
+// Only inserts once - subsequent calls are no-ops.
 func insertSystemFieldValues(builder *InstructionBuilder, fields []snapsql.SystemField) {
-	if len(fields) == 0 {
+	if len(fields) == 0 || builder.systemFieldsAdded {
 		return
 	}
+
+	// Mark that system fields have been added
+	builder.systemFieldsAdded = true
 
 	// Get dialect from builder context
 	dialect := builder.context.Dialect
@@ -252,6 +256,7 @@ func appendSystemFieldsToSelectClause(builder *InstructionBuilder, fields []snap
 			if i == len(fields)-1 {
 				value += " "
 			}
+
 			builder.instructions = append(builder.instructions, Instruction{
 				Op:    OpEmitStatic,
 				Value: value,
@@ -270,6 +275,7 @@ func validateExplicitSystemFields(ctx *GenerationContext, fields []snapsql.Syste
 
 	// Get all available parameters from function definition
 	availableParams := make(map[string]bool)
+
 	if ctx.FunctionDefinition != nil && ctx.FunctionDefinition.ParameterOrder != nil {
 		for _, paramName := range ctx.FunctionDefinition.ParameterOrder {
 			availableParams[paramName] = true
@@ -279,9 +285,10 @@ func validateExplicitSystemFields(ctx *GenerationContext, fields []snapsql.Syste
 	// Check each field
 	for _, field := range fields {
 		var paramType string
-		if operation == "insert" {
+		switch operation {
+		case "insert":
 			paramType = string(field.OnInsert.Parameter)
-		} else if operation == "update" {
+		case "update":
 			paramType = string(field.OnUpdate.Parameter)
 		}
 

@@ -21,6 +21,7 @@ func (s *captureSink) asFunc() snapsqlgo.QueryLogSink {
 	return func(_ context.Context, entry snapsqlgo.QueryLogEntry) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+
 		s.entries = append(s.entries, entry)
 	}
 }
@@ -28,13 +29,16 @@ func (s *captureSink) asFunc() snapsqlgo.QueryLogSink {
 func (s *captureSink) Entries() []snapsqlgo.QueryLogEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	out := make([]snapsqlgo.QueryLogEntry, len(s.entries))
 	copy(out, s.entries)
+
 	return out
 }
 
 func setupKanbanBoardTable(t *testing.T, db *sql.DB) {
 	t.Helper()
+
 	schema := `CREATE TABLE boards (
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -46,6 +50,7 @@ func setupKanbanBoardTable(t *testing.T, db *sql.DB) {
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to create boards table: %v", err)
 	}
+
 	now := time.Now()
 	if _, err := db.Exec(`INSERT INTO boards (id, name, status, archived_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)`, 1, "Demo Board", "active", now, now); err != nil {
 		t.Fatalf("failed to insert board: %v", err)
@@ -72,6 +77,7 @@ func TestGeneratedKanbanQueryLogging(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BoardGet returned error: %v", err)
 	}
+
 	if result.Name != "Demo Board" {
 		t.Fatalf("unexpected board name: %s", result.Name)
 	}
@@ -80,13 +86,16 @@ func TestGeneratedKanbanQueryLogging(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 log entry, got %d", len(entries))
 	}
+
 	entry := entries[0]
 	if entry.SQL == "" {
 		t.Fatalf("expected SQL to be captured")
 	}
+
 	if len(entry.Args) != 1 {
 		t.Fatalf("expected 1 arg, got %d", len(entry.Args))
 	}
+
 	if entry.Error != "" {
 		t.Fatalf("expected successful log, got error %s", entry.Error)
 	}

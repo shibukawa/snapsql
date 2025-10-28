@@ -22,10 +22,11 @@ import (
 //   - values: *parser.ValuesClause - VALUES節のAST
 //   - builder: *InstructionBuilder - 命令ビルダー
 //   - columnNames: []parser.FieldName - カラム名リスト（重複排除用）
+//   - systemFields: []snapsql.SystemField - INTO句に追加されたシステムフィールド（Optional）
 //
 // Returns:
 //   - error: エラー
-func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuilder, columnNames []parser.FieldName) error {
+func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuilder, columnNames []parser.FieldName, systemFields []snapsql.SystemField) error {
 	if values == nil {
 		return fmt.Errorf("%w: VALUES clause is required for VALUES-based INSERT", ErrMissingClause)
 	}
@@ -34,12 +35,21 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 
 	// 既存のカラムリストからマップを作成（重複排除用）
 	existingColumns := make(map[string]bool)
-	for _, col := range columnNames {
+	columnPositions := make(map[string]int) // システムフィールドの位置を記録
+
+	for idx, col := range columnNames {
 		existingColumns[col.Name] = true
+		columnPositions[col.Name] = idx
 	}
 
 	// システムフィールド値が必要かチェック
-	fields := getInsertSystemFieldsFiltered(builder.context, existingColumns)
+	// 渡されたsystemFieldsがあれば使用、なければシステムフィールド処理なし
+	// (systemFieldsはgenerateInsertIntoClauseで追加されたシステムフィールドのみを含む)
+	var fields []snapsql.SystemField
+	if len(systemFields) > 0 {
+		// INTO句で追加されたシステムフィールドのみを使用
+		fields = systemFields
+	}
 
 	// システムフィールドのバリデーション：explicit パラメータが要求される場合、パラメータが存在するか確認
 	if err := validateExplicitSystemFields(builder.context, fields, "insert"); err != nil {
@@ -202,6 +212,8 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 							// parenGroup[len-1] は閉じ括弧
 							innerTokens := parenGroup[1 : len(parenGroup)-1]
 
+							builder.BeginValueGroup()
+
 							// 開き括弧を手動で追加
 							builder.AddInstruction(Instruction{
 								Op:    OpEmitStatic,
@@ -230,29 +242,12 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 									}
 								}
 							} else if len(fields) > 0 {
-								// システムフィールド挿入位置を探す
-								lastParenIdx := findLastClosingParenInGroup(innerTokens)
-								if lastParenIdx >= 0 {
-									// 括弧の前までを処理
-									if err := builder.ProcessTokens(innerTokens[:lastParenIdx]); err != nil {
-										return err
-									}
-
-									insertSystemFieldValues(builder, fields)
-									// 括弧から後ろを処理
-									if err := builder.ProcessTokens(innerTokens[lastParenIdx:]); err != nil {
-										return err
-									}
-								} else {
-									// すべての内部トークンを処理
-									if err := builder.ProcessTokens(innerTokens); err != nil {
-										return err
-									}
-									// 末尾にシステムフィールド値を挿入
-									insertSystemFieldValues(builder, fields)
+								if err := builder.ProcessTokens(innerTokens); err != nil {
+									return err
 								}
+
+								insertSystemFieldValues(builder, fields)
 							} else {
-								// すべての内部トークンを処理
 								if err := builder.ProcessTokens(innerTokens); err != nil {
 									return err
 								}
@@ -314,6 +309,8 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 								// 括弧をスキップして、括弧内の全トークンを抽出
 								innerTokens := parenGroup[1 : len(parenGroup)-1]
 
+								builder.BeginValueGroup()
+
 								// 開き括弧を手動で追加
 								builder.AddInstruction(Instruction{
 									Op:    OpEmitStatic,
@@ -342,29 +339,12 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 										}
 									}
 								} else if len(fields) > 0 {
-									// システムフィールド挿入位置を探す
-									lastParenIdx := findLastClosingParenInGroup(innerTokens)
-									if lastParenIdx >= 0 {
-										// 括弧の前までを処理
-										if err := builder.ProcessTokens(innerTokens[:lastParenIdx]); err != nil {
-											return err
-										}
-
-										insertSystemFieldValues(builder, fields)
-										// 括弧から後ろを処理
-										if err := builder.ProcessTokens(innerTokens[lastParenIdx:]); err != nil {
-											return err
-										}
-									} else {
-										// すべての内部トークンを処理
-										if err := builder.ProcessTokens(innerTokens); err != nil {
-											return err
-										}
-										// 末尾にシステムフィールド値を挿入
-										insertSystemFieldValues(builder, fields)
+									if err := builder.ProcessTokens(innerTokens); err != nil {
+										return err
 									}
+
+									insertSystemFieldValues(builder, fields)
 								} else {
-									// すべての内部トークンを処理
 									if err := builder.ProcessTokens(innerTokens); err != nil {
 										return err
 									}
@@ -399,6 +379,8 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 						// innerTokens: 括弧トークンをスキップして括弧内の値だけを抽出
 						innerTokens := parenGroup[1 : len(parenGroup)-1]
 
+						builder.BeginValueGroup()
+
 						// 開き括弧を手動で追加
 						builder.AddInstruction(Instruction{
 							Op:    OpEmitStatic,
@@ -407,24 +389,11 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 						})
 
 						if len(fields) > 0 {
-							lastParenIdx := findLastClosingParenInGroup(innerTokens)
-							if lastParenIdx >= 0 {
-								if err := builder.ProcessTokens(innerTokens[:lastParenIdx]); err != nil {
-									return err
-								}
-
-								insertSystemFieldValues(builder, fields)
-
-								if err := builder.ProcessTokens(innerTokens[lastParenIdx:]); err != nil {
-									return err
-								}
-							} else {
-								if err := builder.ProcessTokens(innerTokens); err != nil {
-									return err
-								}
-
-								insertSystemFieldValues(builder, fields)
+							if err := builder.ProcessTokens(innerTokens); err != nil {
+								return err
 							}
+
+							insertSystemFieldValues(builder, fields)
 						} else {
 							if err := builder.ProcessTokens(innerTokens); err != nil {
 								return err
@@ -450,6 +419,8 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 				innerTokens := parenGroup[1 : len(parenGroup)-1]
 
 				// 開き括弧を手動で追加
+				builder.BeginValueGroup()
+
 				builder.AddInstruction(Instruction{
 					Op:    OpEmitStatic,
 					Value: "(",
@@ -457,24 +428,11 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 				})
 
 				if len(fields) > 0 {
-					lastParenIdx := findLastClosingParenInGroup(innerTokens)
-					if lastParenIdx >= 0 {
-						if err := builder.ProcessTokens(innerTokens[:lastParenIdx]); err != nil {
-							return err
-						}
-
-						insertSystemFieldValues(builder, fields)
-
-						if err := builder.ProcessTokens(innerTokens[lastParenIdx:]); err != nil {
-							return err
-						}
-					} else {
-						if err := builder.ProcessTokens(innerTokens); err != nil {
-							return err
-						}
-
-						insertSystemFieldValues(builder, fields)
+					if err := builder.ProcessTokens(innerTokens); err != nil {
+						return err
 					}
+
+					insertSystemFieldValues(builder, fields)
 				} else {
 					if err := builder.ProcessTokens(innerTokens); err != nil {
 						return err
@@ -497,6 +455,13 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 
 			i++
 		}
+	}
+
+	// Phase 3: Final system field insertion
+	// After all user parameters are processed, insert system field values
+	// This ensures they are placed after user parameters in the generated code
+	if len(fields) > 0 && !builder.systemFieldsAdded {
+		insertSystemFieldValues(builder, fields)
 	}
 
 	return nil
@@ -557,6 +522,10 @@ func handleArrayDirective(builder *InstructionBuilder, tokens []tokenizer.Token,
 
 	// Ready to emit instructions
 	builder.AddForLoopStart(loopVar, varName, token.Position.String())
+
+	builder.BeginValueGroup()
+
+	builder.BeginValueGroup()
 
 	builder.AddInstruction(Instruction{
 		Op:    OpEmitStatic,
@@ -815,17 +784,6 @@ func extractParenthesizedGroup(tokens []tokenizer.Token, startIdx int) ([]tokeni
 	}
 
 	return group, len(tokens)
-}
-
-// findLastClosingParenInGroup finds the index of the last ')' token in a token group
-func findLastClosingParenInGroup(tokens []tokenizer.Token) int {
-	for i := len(tokens) - 1; i >= 0; i-- {
-		if tokens[i].Value == ")" {
-			return i
-		}
-	}
-
-	return -1
 }
 
 func parseForDirectiveCondition(condition string) (string, string, error) {
