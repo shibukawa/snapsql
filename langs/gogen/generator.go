@@ -171,6 +171,11 @@ func (g *Generator) Generate(w io.Writer) error {
 		return fmt.Errorf("failed to process SQL builder: %w", err)
 	}
 
+	hasRowLockInstruction := hasEmitSystemFor(g.Format.Instructions)
+	if sqlBuilder != nil {
+		sqlBuilder.NeedsRowLockClause = hasRowLockInstruction
+	}
+
 	// Process query execution
 	queryExecution, err := generateQueryExecution(g.Format, responseStruct, g.hierarchicalMetas, responseType, funcName, errorZeroValue, true)
 	if err != nil {
@@ -199,7 +204,16 @@ func (g *Generator) Generate(w io.Writer) error {
 		errorZeroValue = "nil"
 	}
 
-	isSelectQuery := !strings.EqualFold(g.Format.ResponseAffinity, string(intermediate.ResponseAffinityNone))
+	isSelectQuery := strings.EqualFold(g.Format.StatementType, "select")
+	if !isSelectQuery {
+		if guess := guessSelectFromInstructions(g.Format.Instructions); guess != nil {
+			isSelectQuery = *guess
+		}
+	}
+
+	if !isSelectQuery && g.Format.StatementType == "" {
+		isSelectQuery = !strings.EqualFold(g.Format.ResponseAffinity, string(intermediate.ResponseAffinityNone))
+	}
 
 	data := struct {
 		Timestamp          time.Time
@@ -1351,14 +1365,36 @@ var result {{ .ResponseType }}
 	_ = systemValues // avoid unused if not referenced in args
 {{- end }}
 
+	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
+	rowLockMode := snapsqlgo.RowLockNone
+	if execCtx != nil {
+		rowLockMode = execCtx.RowLockMode()
+	}
+	if rowLockMode != snapsqlgo.RowLockNone {
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }}, rowLockMode)
+	}
+	rowLockClause := ""
+	if rowLockMode != snapsqlgo.RowLockNone {
+		var rowLockErr error
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("{{ .Dialect }}", rowLockMode)
+		if rowLockErr != nil {
+			panic(rowLockErr)
+		}
+	}
+	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
+		RowLockClause: rowLockClause,
+		RowLockMode:   rowLockMode,
+	}
+
 {{- if not .QueryExecution.IsIterator }}
-	logger := snapsqlgo.QueryLoggerFromContext(ctx)
+	logger := execCtx.QueryLogger()
 	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "{{ .FunctionName }}",
 			SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
 			Dialect:    "{{ .Dialect }}",
 			QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
+			Options:    queryLogOptions,
 		}, executor
 	})
 {{- end }}
@@ -1405,13 +1441,14 @@ var result {{ .ResponseType }}
 
 {{- if .QueryExecution.IsIterator }}
 	return func(yield func({{ .IteratorYieldType }}, error) bool) {
-		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		logger := execCtx.QueryLogger()
 		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "{{ .FunctionName }}",
 				SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
 				Dialect:    "{{ .Dialect }}",
-				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+				QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
+				Options:    queryLogOptions,
 			}, executor
 		})
 
@@ -1421,6 +1458,11 @@ var result {{ .ResponseType }}
 			_ = yield(nil, err)
 			return
 		}
+{{- if .SQLBuilder.NeedsRowLockClause }}
+		if queryLogOptions.RowLockClause != "" {
+			query += queryLogOptions.RowLockClause
+		}
+{{- end }}
 		logger.SetQuery(query, args)
 		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
 			mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
@@ -1457,6 +1499,11 @@ var result {{ .ResponseType }}
 		logger.SetErr(err)
 		return {{ .ErrorZeroValue }}, err
 	}
+{{- if .SQLBuilder.NeedsRowLockClause }}
+	if queryLogOptions.RowLockClause != "" {
+		query += queryLogOptions.RowLockClause
+	}
+{{- end }}
 	logger.SetQuery(query, args)
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
@@ -1529,6 +1576,42 @@ func parseStructDefinition(structDef string) (string, map[string]string) {
 	}
 
 	return typeName, fields
+}
+
+func guessSelectFromInstructions(instructions []intermediate.Instruction) *bool {
+	for _, inst := range instructions {
+		if inst.Op != intermediate.OpEmitStatic {
+			continue
+		}
+
+		trimmed := strings.TrimSpace(inst.Value)
+		if trimmed == "" {
+			continue
+		}
+
+		upper := strings.ToUpper(trimmed)
+		if strings.HasPrefix(upper, "SELECT") {
+			val := true
+			return &val
+		}
+
+		if strings.HasPrefix(upper, "INSERT") || strings.HasPrefix(upper, "UPDATE") || strings.HasPrefix(upper, "DELETE") {
+			val := false
+			return &val
+		}
+	}
+
+	return nil
+}
+
+func hasEmitSystemFor(instructions []intermediate.Instruction) bool {
+	for _, inst := range instructions {
+		if inst.Op == intermediate.OpEmitSystemFor {
+			return true
+		}
+	}
+
+	return false
 }
 
 // goTypeToCELType converts Go types to CEL type names

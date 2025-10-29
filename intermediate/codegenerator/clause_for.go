@@ -1,6 +1,7 @@
 package codegenerator
 
 import (
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/parser"
 )
 
@@ -20,9 +21,15 @@ import (
 // handles both cases transparently.
 func GenerateForClauseOrSystem(forClause *parser.ForClause, builder *InstructionBuilder) error {
 	if forClause == nil {
-		// FOR clause is not present in SQL
+		// FOR clause is not present in SQL.
+		// SQLite 方言では悲観ロック構文を生成しないため EMIT_SYSTEM_FOR をスキップする。
+		if builder != nil && builder.context != nil && builder.context.Dialect == snapsql.DialectSQLite {
+			return nil
+		}
+
 		// Emit system FOR if provided at runtime
 		builder.RegisterEmitSystemFor()
+
 		return nil
 	}
 

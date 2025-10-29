@@ -10,7 +10,7 @@ import (
 
 // loggingConfig controls query logging behaviour stored on context.
 type loggingConfig struct {
-	sink                      QueryLogSink
+	logger                    LoggerFunc
 	includeStack              bool
 	stackDepth                int
 	explainMode               ExplainMode
@@ -34,8 +34,8 @@ const (
 	ExplainModeAnalyze
 )
 
-// QueryLogSink receives QueryLogEntry events.
-type QueryLogSink func(context.Context, QueryLogEntry)
+// LoggerFunc receives QueryLogEntry events.
+type LoggerFunc func(context.Context, QueryLogEntry)
 
 // QueryLogQueryType categorizes queries for logging.
 type QueryLogQueryType string
@@ -48,6 +48,7 @@ const (
 // QueryOptionsSnapshot captures runtime options relevant to logging.
 type QueryOptionsSnapshot struct {
 	RowLockClause string
+	RowLockMode   RowLockMode
 }
 
 // QueryLogEntry represents a single query execution event.
@@ -84,10 +85,9 @@ type QueryLogger struct {
 	err     error
 }
 
-// QueryLoggerFromContext fetches logging configuration from context and returns a logger instance.
-func QueryLoggerFromContext(ctx context.Context) *QueryLogger {
-	ec := ExtractExecutionContext(ctx)
-	if ec == nil || ec.logger == nil || ec.logger.sink == nil {
+// QueryLogger produces a QueryLogger from the execution context.
+func (ec *ExecutionContext) QueryLogger() *QueryLogger {
+	if ec == nil || ec.logger == nil || ec.logger.logger == nil {
 		return nil
 	}
 
@@ -164,7 +164,7 @@ func (l *QueryLogger) Write(ctx context.Context, metaProvider func() (QueryLogMe
 		}
 	}
 
-	l.cfg.sink(ctx, entry)
+	l.cfg.logger(ctx, entry)
 }
 
 func (l *QueryLogger) shouldCaptureExplain(duration time.Duration) bool {

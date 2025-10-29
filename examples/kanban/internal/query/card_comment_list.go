@@ -86,6 +86,27 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardCommentList", "[]cardcommentlistresult")
 
+	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
+	rowLockMode := snapsqlgo.RowLockNone
+	if execCtx != nil {
+		rowLockMode = execCtx.RowLockMode()
+	}
+	if rowLockMode != snapsqlgo.RowLockNone {
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeSelect, rowLockMode)
+	}
+	rowLockClause := ""
+	if rowLockMode != snapsqlgo.RowLockNone {
+		var rowLockErr error
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		if rowLockErr != nil {
+			panic(rowLockErr)
+		}
+	}
+	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
+		RowLockClause: rowLockClause,
+		RowLockMode:   rowLockMode,
+	}
+
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id = $1  ORDER BY created_at ASC, id ASC "
@@ -102,13 +123,14 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 		return query, args, nil
 	}
 	return func(yield func(*CardCommentListResult, error) bool) {
-		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		logger := execCtx.QueryLogger()
 		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "CardCommentList",
 				SourceFile: "query/CardCommentList",
 				Dialect:    "sqlite",
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+				Options:    queryLogOptions,
 			}, executor
 		})
 

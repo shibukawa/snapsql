@@ -93,6 +93,9 @@ type IntermediateFormat struct {
 	// Format version
 	FormatVersion string `json:"format_version"`
 
+	// StatementType describes the root SQL statement (select/insert/update/delete)
+	StatementType string `json:"statement_type,omitempty"`
+
 	// Query name
 	Name string `json:"name,omitempty"`
 

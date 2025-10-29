@@ -161,3 +161,20 @@ func TestWithSystemValue_ImmutableContext(t *testing.T) {
 	assert.Equal(t, 1, values1Updated["version"])
 	assert.NotContains(t, values2AfterUpdate, "version")
 }
+
+func TestWithRowLockVariadic(t *testing.T) {
+	ctx := WithRowLock(t.Context())
+	ec := ExtractExecutionContext(ctx)
+	require.NotNil(t, ec)
+	assert.Equal(t, RowLockForUpdate, ec.RowLockMode())
+
+	ctx = WithRowLock(ctx, RowLockForShare, RowLockForUpdateSkipLocked)
+	ec = ExtractExecutionContext(ctx)
+	require.NotNil(t, ec)
+	assert.Equal(t, RowLockForUpdateSkipLocked, ec.RowLockMode())
+
+	ctx = WithRowLock(ctx, RowLockNone)
+	ec = ExtractExecutionContext(ctx)
+	require.NotNil(t, ec)
+	assert.Equal(t, RowLockNone, ec.RowLockMode())
+}

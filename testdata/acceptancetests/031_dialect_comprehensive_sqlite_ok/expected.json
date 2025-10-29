@@ -34,8 +34,7 @@
     {"op": "IF_SYSTEM_OFFSET"},
     {"op": "EMIT_STATIC", "value": " OFFSET "},
     {"op": "EMIT_SYSTEM_OFFSET"},
-    {"op": "END"},
-    {"op": "EMIT_SYSTEM_FOR"}
+    {"op": "END"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"}

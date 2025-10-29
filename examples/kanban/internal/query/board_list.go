@@ -74,6 +74,27 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardList", "[]boardlistresult")
 
+	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
+	rowLockMode := snapsqlgo.RowLockNone
+	if execCtx != nil {
+		rowLockMode = execCtx.RowLockMode()
+	}
+	if rowLockMode != snapsqlgo.RowLockNone {
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeSelect, rowLockMode)
+	}
+	rowLockClause := ""
+	if rowLockMode != snapsqlgo.RowLockNone {
+		var rowLockErr error
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		if rowLockErr != nil {
+			panic(rowLockErr)
+		}
+	}
+	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
+		RowLockClause: rowLockClause,
+		RowLockMode:   rowLockMode,
+	}
+
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "SELECT id, name, status, archived_at, created_at, updated_at FROM boards ORDER BY created_at DESC "
@@ -81,13 +102,14 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 		return query, args, nil
 	}
 	return func(yield func(*BoardListResult, error) bool) {
-		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		logger := execCtx.QueryLogger()
 		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "BoardList",
 				SourceFile: "query/BoardList",
 				Dialect:    "sqlite",
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+				Options:    queryLogOptions,
 			}, executor
 		})
 

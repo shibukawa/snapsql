@@ -22,6 +22,7 @@ type sqlBuilderData struct {
 	ArgumentSystemFields  []string // system field names aligned with Arguments slice (empty string for non-system)
 	HasSystemArguments    bool     // true if Arguments includes system parameters
 	HasNonSystemArguments bool     // true if Arguments includes regular expressions
+	NeedsRowLockClause    bool     // true if SQL expects a runtime row-lock clause appended
 }
 
 // processSQLBuilderWithDialect processes instructions and generates SQL building code for a specific dialect
@@ -160,6 +161,10 @@ func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstru
 		parameterIndex        = 1
 	)
 
+	needsRowLockClause := slices.ContainsFunc(instructions, func(inst codegenerator.OptimizedInstruction) bool {
+		return inst.Op == codegenerator.OpEmitSystemFor
+	})
+
 	// helper: 直前のパーツの末尾と次のパーツの先頭が共に単語/識別子の場合は間に空白を入れる
 	needsSpaceBetween := func(left, right string) bool {
 		if left == "" || right == "" {
@@ -216,6 +221,8 @@ func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstru
 			arguments = append(arguments, -1) // Use -1 to indicate system parameter
 			argumentSystemFields = append(argumentSystemFields, inst.SystemField)
 			hasSystemArguments = true
+		case codegenerator.OpEmitSystemFor:
+			// handled at runtime via rowLockClause
 		}
 	}
 
@@ -246,6 +253,7 @@ func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstru
 		ArgumentSystemFields:  argumentSystemFields,
 		HasSystemArguments:    hasSystemArguments,
 		HasNonSystemArguments: hasNonSystemArguments,
+		NeedsRowLockClause:    needsRowLockClause,
 	}, nil
 }
 
@@ -257,6 +265,9 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 	hasSystemArguments := false
 	condVarDeclared := false
 	evalCounter := 0
+	needsRowLockClause := slices.ContainsFunc(instructions, func(inst codegenerator.OptimizedInstruction) bool {
+		return inst.Op == codegenerator.OpEmitSystemFor
+	})
 
 	// Track control flow stack with loop variable names
 	type controlFrame struct {
@@ -363,6 +374,9 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 			code = append(code, fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues[%q]))", inst.SystemField))
 			hasArguments = true
 			hasSystemArguments = true
+
+		case codegenerator.OpEmitSystemFor:
+			// Row-lock clause appended after query construction
 
 		case "EMIT_UNLESS_BOUNDARY":
 			if needsBoundaryTracking {
@@ -511,5 +525,6 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 		BuilderCode:        code,
 		HasArguments:       hasArguments,
 		HasSystemArguments: hasSystemArguments,
+		NeedsRowLockClause: needsRowLockClause,
 	}, nil
 }

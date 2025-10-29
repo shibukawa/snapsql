@@ -254,7 +254,7 @@ func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) 
 func HasDynamicInstructions(instructions []OptimizedInstruction) bool {
 	for _, inst := range instructions {
 		switch inst.Op {
-		case "IF", "ELSEIF", "ELSE", "LOOP_START", "LOOP_END":
+		case "IF", "ELSEIF", "ELSE", "LOOP_START", "LOOP_END", OpEmitSystemFor:
 			return true
 		}
 	}

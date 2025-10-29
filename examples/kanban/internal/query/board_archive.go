@@ -74,6 +74,27 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardArchive", "[]boardarchiveresult")
 
+	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
+	rowLockMode := snapsqlgo.RowLockNone
+	if execCtx != nil {
+		rowLockMode = execCtx.RowLockMode()
+	}
+	if rowLockMode != snapsqlgo.RowLockNone {
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeExec, rowLockMode)
+	}
+	rowLockClause := ""
+	if rowLockMode != snapsqlgo.RowLockNone {
+		var rowLockErr error
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		if rowLockErr != nil {
+			panic(rowLockErr)
+		}
+	}
+	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
+		RowLockClause: rowLockClause,
+		RowLockMode:   rowLockMode,
+	}
+
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE boards SET status = 'archived', archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP  WHERE status = 'active'  RETURNING id, name, status, archived_at, created_at, updated_at"
@@ -81,13 +102,14 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 		return query, args, nil
 	}
 	return func(yield func(*BoardArchiveResult, error) bool) {
-		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		logger := execCtx.QueryLogger()
 		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "BoardArchive",
 				SourceFile: "query/BoardArchive",
 				Dialect:    "sqlite",
-				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+				QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+				Options:    queryLogOptions,
 			}, executor
 		})
 

@@ -17,7 +17,7 @@ type captureSink struct {
 	entries []snapsqlgo.QueryLogEntry
 }
 
-func (s *captureSink) asFunc() snapsqlgo.QueryLogSink {
+func (s *captureSink) asFunc() snapsqlgo.LoggerFunc {
 	return func(_ context.Context, entry snapsqlgo.QueryLogEntry) {
 		s.mu.Lock()
 		defer s.mu.Unlock()

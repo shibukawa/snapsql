@@ -1,0 +1,15 @@
+dialect: "postgres"
+input_dir: "./queries"
+
+generation:
+  validate: true
+  generators:
+    go:
+      output: "./querylogtest/pg"
+      disabled: false
+      preserve_hierarchy: true
+      settings:
+        package: "pg"
+    json:
+      output: "./generated_pg"
+      disabled: true

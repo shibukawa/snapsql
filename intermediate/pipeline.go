@@ -113,6 +113,7 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 
 	result := &IntermediateFormat{
 		FormatVersion:      "1",
+		StatementType:      determineStatementType(ctx.Statement),
 		Description:        ctx.Description,
 		FunctionName:       ctx.FunctionName,
 		Parameters:         ctx.Parameters,
@@ -358,6 +359,21 @@ func lookupColumnInfo(table *snapsql.TableInfo, column string) *snapsql.ColumnIn
 	}
 
 	return nil
+}
+
+func determineStatementType(stmt parser.StatementNode) string {
+	switch stmt.(type) {
+	case *parser.SelectStatement:
+		return "select"
+	case *parser.InsertIntoStatement:
+		return "insert"
+	case *parser.UpdateStatement:
+		return "update"
+	case *parser.DeleteFromStatement:
+		return "delete"
+	default:
+		return "unknown"
+	}
 }
 
 // CreateDefaultPipeline creates a pipeline with default processors
