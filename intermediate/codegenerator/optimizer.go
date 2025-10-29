@@ -1,23 +1,24 @@
-package intermediate
+package codegenerator
 
 import (
 	"strconv"
 	"strings"
 )
 
-// OptimizedInstruction represents an optimized instruction
+// OptimizedInstruction represents an optimized instruction derived from runtime generation.
 type OptimizedInstruction struct {
 	Op                  string
 	Value               string
 	ExprIndex           *int
 	SqlFragment         string
-	Variable            string // for LOOP_START
-	CollectionExprIndex *int   // for LOOP_START
-	EnvIndex            *int   // for LOOP_START/LOOP_END
-	SystemField         string // for ADD_SYSTEM_PARAM - system field name
+	Dialects            []string
+	Variable            string
+	CollectionExprIndex *int
+	EnvIndex            *int
+	SystemField         string
 }
 
-// OptimizeInstructions filters and optimizes instructions for a specific dialect
+// OptimizeInstructions filters and optimizes instructions for a specific dialect.
 func OptimizeInstructions(instructions []Instruction, dialect string) ([]OptimizedInstruction, error) {
 	var result []OptimizedInstruction
 
@@ -27,7 +28,6 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 
 	var systemStack []systemClauseState
 
-	// helper to know if we are skipping current instruction because we are before ELSE in a system clause
 	isSkippingSystem := func() bool {
 		return len(systemStack) > 0 && systemStack[len(systemStack)-1].skipping
 	}
@@ -51,28 +51,16 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 
 		switch inst.Op {
 		case OpEmitStatic:
-			result = append(result, OptimizedInstruction{
-				Op:    "EMIT_STATIC",
-				Value: inst.Value,
-			})
+			result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: inst.Value})
 
 		case OpEmitEval:
-			// Split EMIT_EVAL into placeholder and parameter handling
-			result = append(result, OptimizedInstruction{
-				Op:    "EMIT_STATIC",
-				Value: "?",
-			})
-			result = append(result, OptimizedInstruction{
-				Op:        "ADD_PARAM",
-				ExprIndex: inst.ExprIndex,
-			})
+			result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: "?"})
+			result = append(result, OptimizedInstruction{Op: "ADD_PARAM", ExprIndex: inst.ExprIndex})
 
 		case OpEmitUnlessBoundary:
-			// Check if we're in a static context (no control flow between here and next BOUNDARY)
 			isStaticContext := true
 			boundaryFound := false
 
-			// Look ahead to find the next BOUNDARY or control flow instruction
 			for j := i + 1; j < len(instructions); j++ {
 				nextInst := instructions[j]
 				switch nextInst.Op {
@@ -87,65 +75,40 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 
 		checkComplete:
 			if isStaticContext && boundaryFound {
-				// Skip this instruction (will be handled by BOUNDARY)
+				// handled by boundary
 			} else if isStaticContext && !boundaryFound {
-				// No BOUNDARY found, emit as static
-				result = append(result, OptimizedInstruction{
-					Op:    "EMIT_STATIC",
-					Value: inst.Value,
-				})
+				result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: inst.Value})
 			} else {
-				// Dynamic context - need runtime boundary handling
-				result = append(result, OptimizedInstruction{
-					Op:    "EMIT_UNLESS_BOUNDARY",
-					Value: inst.Value,
-				})
+				result = append(result, OptimizedInstruction{Op: "EMIT_UNLESS_BOUNDARY", Value: inst.Value})
 			}
 
 		case OpBoundary:
-			// In static context, BOUNDARY is just a marker
-			// In dynamic context, it needs to be handled at runtime
-			result = append(result, OptimizedInstruction{
-				Op: "BOUNDARY",
-			})
+			result = append(result, OptimizedInstruction{Op: "BOUNDARY"})
 
 		case OpIf:
-			result = append(result, OptimizedInstruction{
-				Op:        "IF",
-				ExprIndex: inst.ExprIndex,
-			})
+			result = append(result, OptimizedInstruction{Op: "IF", ExprIndex: inst.ExprIndex})
 
 		case OpElseIf:
-			result = append(result, OptimizedInstruction{
-				Op:        "ELSEIF",
-				ExprIndex: inst.ExprIndex,
-			})
+			result = append(result, OptimizedInstruction{Op: "ELSEIF", ExprIndex: inst.ExprIndex})
 
 		case OpElse:
 			if len(systemStack) > 0 {
 				if systemStack[len(systemStack)-1].skipping {
-					// handled in skipping branch above
 					continue
 				}
 
-				// Inside ELSE part of system clause: ignore control token
 				continue
 			}
 
-			result = append(result, OptimizedInstruction{
-				Op: "ELSE",
-			})
+			result = append(result, OptimizedInstruction{Op: "ELSE"})
 
 		case OpEnd:
 			if len(systemStack) > 0 {
-				// Closing a system clause, drop control token
 				systemStack = systemStack[:len(systemStack)-1]
 				continue
 			}
 
-			result = append(result, OptimizedInstruction{
-				Op: "END",
-			})
+			result = append(result, OptimizedInstruction{Op: "END"})
 
 		case OpLoopStart:
 			result = append(result, OptimizedInstruction{
@@ -156,44 +119,35 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 			})
 
 		case OpLoopEnd:
-			result = append(result, OptimizedInstruction{
-				Op:       "LOOP_END",
-				EnvIndex: inst.EnvIndex,
-			})
+			result = append(result, OptimizedInstruction{Op: "LOOP_END", EnvIndex: inst.EnvIndex})
 
 		case OpIfSystemLimit, OpIfSystemOffset:
-			// Start a system clause and skip the first branch
 			systemStack = append(systemStack, systemClauseState{skipping: true})
 			continue
 
 		case OpEmitSystemLimit, OpEmitSystemOffset:
-			// Skip system limit/offset emissions (not supported in static SQL)
+			// ignored for static SQL
 
 		case OpEmitSystemValue:
-			// Handle system value emission - convert to placeholder and parameter
+			result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: "?"})
+			result = append(result, OptimizedInstruction{Op: "ADD_SYSTEM_PARAM", SystemField: inst.SystemField})
+
+		case OpEmitIfDialect:
 			result = append(result, OptimizedInstruction{
-				Op:    "EMIT_STATIC",
-				Value: "?",
-			})
-			result = append(result, OptimizedInstruction{
-				Op:          "ADD_SYSTEM_PARAM",
-				SystemField: inst.SystemField,
+				Op:          "EMIT_IF_DIALECT",
+				SqlFragment: inst.SqlFragment,
+				Dialects:    append([]string(nil), inst.Dialects...),
 			})
 		}
 	}
 
-	// Merge adjacent EMIT_STATIC instructions
 	merged := MergeAdjacentStatic(result)
-
-	// Apply dialect-specific placeholder style
 	merged = applyPlaceholderStyle(merged, dialect)
 
 	return merged, nil
 }
 
-// containsDialect checks if the target dialect is in the list of supported dialects
-
-// MergeAdjacentStatic merges adjacent EMIT_STATIC instructions
+// MergeAdjacentStatic merges adjacent EMIT_STATIC instructions.
 func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruction {
 	if len(instructions) == 0 {
 		return instructions
@@ -202,17 +156,12 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 	var (
 		result        []OptimizedInstruction
 		currentStatic strings.Builder
+		hasStatic     bool
 	)
-
-	hasStatic := false
 
 	flushStatic := func() {
 		if hasStatic {
-			result = append(result, OptimizedInstruction{
-				Op:    "EMIT_STATIC",
-				Value: currentStatic.String(),
-			})
-
+			result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: currentStatic.String()})
 			currentStatic.Reset()
 
 			hasStatic = false
@@ -224,11 +173,13 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 			currentStatic.WriteString(inst.Value)
 
 			hasStatic = true
-		} else {
-			flushStatic()
 
-			result = append(result, inst)
+			continue
 		}
+
+		flushStatic()
+
+		result = append(result, inst)
 	}
 
 	flushStatic()
@@ -255,8 +206,8 @@ func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) 
 		inSingle := false
 		inDouble := false
 
-		for i := range len(s) {
-			ch := s[i]
+		for idx := range len(s) {
+			ch := s[idx]
 
 			switch ch {
 			case '\'':
@@ -299,7 +250,7 @@ func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) 
 	return instructions
 }
 
-// HasDynamicInstructions checks if instructions contain dynamic elements (IF, FOR, etc.)
+// HasDynamicInstructions reports whether optimized instructions include runtime control flow.
 func HasDynamicInstructions(instructions []OptimizedInstruction) bool {
 	for _, inst := range instructions {
 		switch inst.Op {
@@ -311,42 +262,38 @@ func HasDynamicInstructions(instructions []OptimizedInstruction) bool {
 	return false
 }
 
-// OptimizeLoopBoundaries analyzes EMIT_UNLESS_BOUNDARY instructions within loops
-// and converts non-trailing ones to EMIT_STATIC.
-// Only the last EMIT_UNLESS_BOUNDARY in each loop iteration should remain conditional.
+// OptimizeLoopBoundaries converts non-terminal EMIT_UNLESS_BOUNDARY instructions inside loops to EMIT_STATIC.
 func OptimizeLoopBoundaries(instructions []OptimizedInstruction) []OptimizedInstruction {
 	result := make([]OptimizedInstruction, 0, len(instructions))
 
 	for i := 0; i < len(instructions); i++ {
 		inst := instructions[i]
 
-		// Check if this is a LOOP_START
 		if inst.Op == "LOOP_START" {
 			result = append(result, inst)
 
-			// Find the matching LOOP_END
 			loopDepth := 1
 			loopStart := i
 			loopEnd := -1
 
+		LoopSearch:
 			for j := i + 1; j < len(instructions); j++ {
-				if instructions[j].Op == "LOOP_START" {
+				switch instructions[j].Op {
+				case "LOOP_START":
 					loopDepth++
-				} else if instructions[j].Op == "LOOP_END" {
+				case "LOOP_END":
 					loopDepth--
 					if loopDepth == 0 {
 						loopEnd = j
-						break
+						break LoopSearch
 					}
 				}
 			}
 
 			if loopEnd == -1 {
-				// No matching LOOP_END found, just continue
 				continue
 			}
 
-			// Find all EMIT_UNLESS_BOUNDARY instructions in this loop
 			var boundaryIndices []int
 
 			for j := loopStart + 1; j < loopEnd; j++ {
@@ -355,38 +302,27 @@ func OptimizeLoopBoundaries(instructions []OptimizedInstruction) []OptimizedInst
 				}
 			}
 
-			// Process loop body
 			for j := i + 1; j < loopEnd; j++ {
 				loopInst := instructions[j]
-
-				// Check if this is an EMIT_UNLESS_BOUNDARY
 				if loopInst.Op == "EMIT_UNLESS_BOUNDARY" {
-					// Check if this is the last EMIT_UNLESS_BOUNDARY in the loop
 					isLast := len(boundaryIndices) > 0 && j == boundaryIndices[len(boundaryIndices)-1]
-
 					if isLast {
-						// Keep as EMIT_UNLESS_BOUNDARY (will be handled with isLast flag)
 						result = append(result, loopInst)
 					} else {
-						// Convert to EMIT_STATIC (always emit)
-						result = append(result, OptimizedInstruction{
-							Op:    "EMIT_STATIC",
-							Value: loopInst.Value,
-						})
+						result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: loopInst.Value})
 					}
 				} else {
 					result = append(result, loopInst)
 				}
 			}
 
-			// Add LOOP_END
 			result = append(result, instructions[loopEnd])
-
-			// Skip to after the loop
 			i = loopEnd
-		} else {
-			result = append(result, inst)
+
+			continue
 		}
+
+		result = append(result, inst)
 	}
 
 	return result

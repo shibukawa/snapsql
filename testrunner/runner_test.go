@@ -118,7 +118,7 @@ func TestRunPackageTests(t *testing.T) {
 	projectRoot := filepath.Dir(wd) // Go up one level from testrunner
 	runner := NewTestRunner(projectRoot)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	// Test running tests for the tokenizer package (simple, fast tests)

@@ -1,14 +1,12 @@
 package schemaimport
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestLoadRuntimeSuccess(t *testing.T) {
-	ctx := context.Background()
 	tmp := t.TempDir()
 
 	tblsPath := filepath.Join(tmp, ".tbls.yml")
@@ -28,7 +26,7 @@ func TestLoadRuntimeSuccess(t *testing.T) {
 		t.Fatalf("write schema: %v", err)
 	}
 
-	runtime, err := LoadRuntime(ctx, Options{WorkingDir: tmp})
+	runtime, err := LoadRuntime(t.Context(), Options{WorkingDir: tmp})
 	if err != nil {
 		t.Fatalf("LoadRuntime returned error: %v", err)
 	}
@@ -56,9 +54,7 @@ func TestLoadRuntimeSuccess(t *testing.T) {
 }
 
 func TestLoadRuntimePropagatesErrors(t *testing.T) {
-	ctx := context.Background()
-
-	if _, err := LoadRuntime(ctx, Options{}); err == nil {
+	if _, err := LoadRuntime(t.Context(), Options{}); err == nil {
 		t.Fatalf("expected error when tbls config missing")
 	}
 }

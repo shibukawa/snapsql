@@ -8,6 +8,7 @@ import (
 
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 )
 
 // sqlBuilderData represents SQL building code generation data
@@ -31,13 +32,13 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 	}
 
 	// Use intermediate package's optimization with dialect filtering
-	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
+	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {
 		return nil, fmt.Errorf("failed to optimize instructions: %w", err)
 	}
 
 	// Check if we need dynamic building
-	needsDynamic := intermediate.HasDynamicInstructions(optimizedInstructions)
+	needsDynamic := codegenerator.HasDynamicInstructions(optimizedInstructions)
 
 	if !needsDynamic {
 		// Generate static SQL
@@ -83,7 +84,10 @@ func ensureKeywordSpacing(val string) string {
 	}
 
 	upperTrimmed := strings.ToUpper(trimmed)
-	for _, kw := range []string{"AND", "OR", "WHERE", "JOIN", "ON"} {
+
+	// Check keywords in order: longer keywords first to avoid partial matches
+	// e.g., check "ORDER" before "OR" to prevent "ORDER BY" from matching "OR"
+	for _, kw := range []string{"WHERE", "JOIN", "ORDER", "GROUP", "AND", "OR", "ON"} {
 		if !strings.HasPrefix(upperTrimmed, kw) {
 			continue
 		}
@@ -146,7 +150,7 @@ func isWordCharBeforePlaceholder(b byte) bool {
 }
 
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions
-func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
+func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var (
 		sqlParts              []string
 		arguments             []int
@@ -246,7 +250,7 @@ func generateStaticSQLFromOptimized(instructions []intermediate.OptimizedInstruc
 }
 
 // generateDynamicSQLFromOptimized generates dynamic SQL building code from optimized instructions
-func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, functionName string) (*sqlBuilderData, error) {
+func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, functionName string) (*sqlBuilderData, error) {
 	var code []string
 
 	hasArguments := false
@@ -262,7 +266,7 @@ func generateDynamicSQLFromOptimized(instructions []intermediate.OptimizedInstru
 
 	controlStack := []controlFrame{}
 
-	needsBoundaryTracking := slices.ContainsFunc(instructions, func(inst intermediate.OptimizedInstruction) bool {
+	needsBoundaryTracking := slices.ContainsFunc(instructions, func(inst codegenerator.OptimizedInstruction) bool {
 		return inst.Op == "EMIT_UNLESS_BOUNDARY" || inst.Op == "BOUNDARY" || inst.Op == "LOOP_START"
 	})
 

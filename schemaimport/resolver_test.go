@@ -1,7 +1,6 @@
 package schemaimport
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,7 +30,7 @@ func TestResolveConfigLoadsTblsConfigAndDerivesSchemaPath(t *testing.T) {
 		OutputDir:  "schema-out",
 	}
 
-	cfg, err := ResolveConfig(context.Background(), opts)
+	cfg, err := ResolveConfig(t.Context(), opts)
 	if err != nil {
 		t.Fatalf("ResolveConfig returned error: %v", err)
 	}
@@ -76,7 +75,7 @@ func TestResolveConfigHonoursExplicitPaths(t *testing.T) {
 		SchemaJSONPath: "fixtures/schema.json",
 	}
 
-	cfg, err := ResolveConfig(context.Background(), opts)
+	cfg, err := ResolveConfig(t.Context(), opts)
 	if err != nil {
 		t.Fatalf("ResolveConfig returned error: %v", err)
 	}
@@ -102,7 +101,7 @@ func TestResolveConfigMissingConfigReturnsError(t *testing.T) {
 
 	tmp := t.TempDir()
 
-	_, err := ResolveConfig(context.Background(), Options{WorkingDir: tmp})
+	_, err := ResolveConfig(t.Context(), Options{WorkingDir: tmp})
 	if err == nil {
 		t.Fatalf("expected error when config is missing")
 	}
@@ -120,7 +119,7 @@ func TestResolveConfigExplicitAbsolutePaths(t *testing.T) {
 		SchemaJSONPath: filepath.Join(tmp, "schema.json"),
 	}
 
-	cfg, err := ResolveConfig(context.Background(), opts)
+	cfg, err := ResolveConfig(t.Context(), opts)
 	if err != nil {
 		t.Fatalf("ResolveConfig returned error: %v", err)
 	}

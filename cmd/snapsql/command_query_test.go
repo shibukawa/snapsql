@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 	"github.com/shibukawa/snapsql/query"
 )
 
@@ -32,7 +32,7 @@ func TestQuery_DryRun_SQLTemplate(t *testing.T) {
 	format, err := query.LoadIntermediateFormat(path)
 	assert.NoError(t, err)
 
-	optimized, err := intermediate.OptimizeInstructions(format.Instructions, "postgresql")
+	optimized, err := codegenerator.OptimizeInstructions(format.Instructions, "postgresql")
 	assert.NoError(t, err)
 
 	q := &QueryCmd{}
@@ -78,7 +78,7 @@ func TestQuery_DryRun_SQLTemplate_WithParam(t *testing.T) {
 	format, err := query.LoadIntermediateFormat(path)
 	assert.NoError(t, err)
 
-	optimized, err := intermediate.OptimizeInstructions(format.Instructions, "postgresql")
+	optimized, err := codegenerator.OptimizeInstructions(format.Instructions, "postgresql")
 	assert.NoError(t, err)
 
 	q := &QueryCmd{}
@@ -105,7 +105,7 @@ func TestQuery_DryRun_MarkdownTemplate(t *testing.T) {
 	format, err := query.LoadIntermediateFormat(path)
 	assert.NoError(t, err)
 
-	optimized, err := intermediate.OptimizeInstructions(format.Instructions, "postgresql")
+	optimized, err := codegenerator.OptimizeInstructions(format.Instructions, "postgresql")
 	assert.NoError(t, err)
 
 	q := &QueryCmd{}
@@ -133,7 +133,7 @@ func TestQuery_DryRun_MarkdownTemplate_WithParam(t *testing.T) {
 	format, err := query.LoadIntermediateFormat(path)
 	assert.NoError(t, err)
 
-	optimized, err := intermediate.OptimizeInstructions(format.Instructions, "postgresql")
+	optimized, err := codegenerator.OptimizeInstructions(format.Instructions, "postgresql")
 	assert.NoError(t, err)
 
 	q := &QueryCmd{}

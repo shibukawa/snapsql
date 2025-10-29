@@ -96,6 +96,11 @@ func TestAcceptance(t *testing.T) {
 	}
 
 	// Run each test
+	errorExpectationOverrides := map[string]bool{
+		"016_system_fields_missing_explicit_err":        true,
+		"027_insert_system_fields_explicit_missing_err": true,
+	}
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -107,6 +112,9 @@ func TestAcceptance(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			// Check if this is an error test
 			isErrorTest := strings.HasSuffix(testName, "_err")
+			if override, ok := errorExpectationOverrides[testName]; ok {
+				isErrorTest = override
+			}
 
 			// Try to read SQL file first, then markdown file
 			var (

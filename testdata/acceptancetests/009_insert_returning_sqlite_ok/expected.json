@@ -2,7 +2,12 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user_name", "type": "string"},
+    {"name": "user_email", "type": "string"},
+    {"name": "user_name", "type": "string", "value": "dummy"},
+    {"name": "user_email", "type": "string", "value": "dummy"}
+      ],
       "container": "root"
     }
   ],
@@ -12,18 +17,22 @@
       "expression": "user_name",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 9
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "user_email",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 37
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     }
   ],
   "format_version": "1",
@@ -31,9 +40,9 @@
   "instructions": [
     {"op": "EMIT_STATIC", "pos": "7:1", "value": "INSERT INTO users (name, email, created_at) VALUES ("},
     {"op": "EMIT_EVAL", "pos": "8:9", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "8:35", "value": ","},
+    {"op": "EMIT_STATIC", "pos": "8:35", "value": ", "},
     {"op": "EMIT_EVAL", "pos": "8:37", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "8:72", "value": ", CURRENT_TIMESTAMP) RETURNING id, name, email, created_at"}
+    {"op": "EMIT_STATIC", "pos": "8:72", "value": ", CURRENT_TIMESTAMP)\nRETURNING id, name, email, created_at"}
   ],
   "parameters": [
     {"name": "user_name", "type": "string"},

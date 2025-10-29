@@ -874,7 +874,7 @@ func detectQueryType(sql string) QueryType {
 }
 
 func detectQueryTypeFromParser(sql string) (QueryType, bool) {
-	stmt, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "detect_query.sql", "", parser.DefaultOptions)
+	stmt, _, _, err := parser.ParseSQLFile(strings.NewReader(sql), nil, "detect_query.sql", "", parser.DefaultOptions)
 	if err != nil || stmt == nil {
 		return 0, false
 	}

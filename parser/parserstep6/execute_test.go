@@ -99,7 +99,8 @@ SELECT name FROM users LIMIT /*= limit */10`,
 			assert.NoError(t, err)
 
 			// Execute parserstep6 (which includes parserstep5 processing)
-			parseErr := Execute(statement, paramNs, constNs)
+			typeInfo, parseErr := Execute(statement, paramNs, constNs)
+			_ = typeInfo
 
 			// Check expected error count
 			if tt.expectedErrors == 0 {
@@ -199,7 +200,8 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 			}
 
 			// Execute parserstep6 with function definition
-			parseErr6 := Execute(stmt, paramNs, constNs)
+			typeInfo6, parseErr6 := Execute(stmt, paramNs, constNs)
+			_ = typeInfo6
 
 			if tt.expectError {
 				assert.True(t, len(parseErr6.Errors) > 0, "Expected error but got none")

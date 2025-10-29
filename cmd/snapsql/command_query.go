@@ -17,6 +17,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/explain"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/parser"
 	"github.com/shibukawa/snapsql/query"
@@ -378,7 +379,7 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 		dialect = q.getDialectFromOptions(options)
 	}
 
-	optimizedInstructions, err := intermediate.OptimizeInstructions(format.Instructions, dialect)
+	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {
 		return fmt.Errorf("failed to optimize instructions: %w", err)
 	}
@@ -515,7 +516,7 @@ func (q *QueryCmd) getDialectFromOptions(options query.QueryOptions) string {
 }
 
 // buildSQLFromOptimized builds SQL from optimized instructions (for dry-run)
-func (q *QueryCmd) buildSQLFromOptimized(instructions []intermediate.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]any) (string, []any, error) {
+func (q *QueryCmd) buildSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]any) (string, []any, error) {
 	var (
 		builder           strings.Builder
 		args              []any
@@ -664,7 +665,7 @@ func (q *QueryCmd) extractSlowQueryThreshold(defaultThreshold time.Duration) tim
 		}
 		defer file.Close()
 
-		_, def, err := parser.ParseSQLFile(file, nil, q.TemplateFile, filepath.Dir(q.TemplateFile), parser.DefaultOptions)
+		_, _, def, err := parser.ParseSQLFile(file, nil, q.TemplateFile, filepath.Dir(q.TemplateFile), parser.DefaultOptions)
 		if err != nil || def == nil {
 			return defaultThreshold
 		}

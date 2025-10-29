@@ -2,7 +2,10 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user", "type": "../testdata/acceptancetests/021_values_object_expansion_ok/User"},
+    {"name": "user", "type": "../testdata/acceptancetests/021_values_object_expansion_ok/User", "value": ""}
+      ],
       "container": "root"
     }
   ],
@@ -12,9 +15,15 @@
       "expression": "user",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 6,
+        "column": 45
+      },
+      "type_descriptor": {
+        "email": "string",
+        "id": "int",
+        "name": "string"
+      },
+      "result_type": 3
     }
   ],
   "format_version": "1",

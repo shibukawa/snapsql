@@ -1,7 +1,6 @@
 package schemaimport
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -88,7 +87,7 @@ func TestLoadSchemaJSONAndConvertSuccess(t *testing.T) {
 		DSN: tblsconfig.DSN{URL: "postgres://localhost/app"},
 	}
 
-	if err := importer.LoadSchemaJSON(context.Background()); err != nil {
+	if err := importer.LoadSchemaJSON(t.Context()); err != nil {
 		t.Fatalf("LoadSchemaJSON returned error: %v", err)
 	}
 
@@ -100,7 +99,7 @@ func TestLoadSchemaJSONAndConvertSuccess(t *testing.T) {
 		t.Fatalf("unexpected schema driver: %#v", importer.schema)
 	}
 
-	converted, err := importer.Convert(context.Background())
+	converted, err := importer.Convert(t.Context())
 	if err != nil {
 		t.Fatalf("Convert returned error: %v", err)
 	}
@@ -146,7 +145,7 @@ func TestLoadSchemaJSONMissingFile(t *testing.T) {
 	cfg := NewConfig(Options{SchemaJSONPath: "./missing.json"})
 	importer := NewImporter(cfg)
 
-	if err := importer.LoadSchemaJSON(context.Background()); err == nil {
+	if err := importer.LoadSchemaJSON(t.Context()); err == nil {
 		t.Fatalf("expected error for missing file")
 	}
 }
@@ -165,7 +164,7 @@ func TestLoadSchemaJSONValidationFailure(t *testing.T) {
 	cfg := NewConfig(Options{SchemaJSONPath: schemaPath})
 	importer := NewImporter(cfg)
 
-	if err := importer.LoadSchemaJSON(context.Background()); err == nil {
+	if err := importer.LoadSchemaJSON(t.Context()); err == nil {
 		t.Fatalf("expected validation error for schema without driver and tables")
 	}
 }
@@ -184,11 +183,11 @@ func TestConvertAppliesDriverSpecificTypeMapping(t *testing.T) {
 	cfg := NewConfig(Options{SchemaJSONPath: schemaPath})
 	importer := NewImporter(cfg)
 
-	if err := importer.LoadSchemaJSON(context.Background()); err != nil {
+	if err := importer.LoadSchemaJSON(t.Context()); err != nil {
 		t.Fatalf("LoadSchemaJSON returned error: %v", err)
 	}
 
-	schemas, err := importer.Convert(context.Background())
+	schemas, err := importer.Convert(t.Context())
 	if err != nil {
 		t.Fatalf("Convert failed: %v", err)
 	}
@@ -226,11 +225,11 @@ func TestConvertMarksPrimaryKeysFromConstraints(t *testing.T) {
 
 	importer := NewImporter(cfg)
 
-	if err := importer.LoadSchemaJSON(context.Background()); err != nil {
+	if err := importer.LoadSchemaJSON(t.Context()); err != nil {
 		t.Fatalf("LoadSchemaJSON returned error: %v", err)
 	}
 
-	schemas, err := importer.Convert(context.Background())
+	schemas, err := importer.Convert(t.Context())
 	if err != nil {
 		t.Fatalf("Convert failed: %v", err)
 	}

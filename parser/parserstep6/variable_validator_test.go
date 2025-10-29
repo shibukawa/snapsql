@@ -88,7 +88,8 @@ SELECT id, name FROM users LIMIT /*= limit */10`,
 
 			// Validate variables
 			perr := &cmn.ParseError{}
-			validateVariables(parsed, paramNs, constNs, perr)
+			typeInfo := make(map[string]any)
+			validateVariables(parsed, paramNs, constNs, perr, typeInfo)
 
 			if len(perr.Errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d errors", tt.expectedErrors, len(perr.Errors))

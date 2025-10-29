@@ -45,7 +45,7 @@ SELECT 1 FROM tasks WHERE is_archived = /*= is_archived */false`
 	constNs, err := cmn.NewNamespaceFromConstants(map[string]any{})
 	assert.NoError(t, err)
 
-	if err := Execute(stmt, paramNs, constNs); err != nil {
+	if _, err := Execute(stmt, paramNs, constNs); err != nil {
 		t.Fatalf("Execute step6 failed: %v", err)
 	}
 

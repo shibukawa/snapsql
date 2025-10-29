@@ -2,7 +2,12 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "name", "type": "string"},
+    {"name": "email", "type": "string"},
+    {"name": "name", "type": "string", "value": "dummy"},
+    {"name": "email", "type": "string", "value": "dummy"}
+      ],
       "container": "root"
     }
   ],
@@ -12,42 +17,40 @@
       "expression": "name",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 18,
+        "column": 41
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "email",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 18,
+        "column": 60
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     }
   ],
   "description": "Create a new user with automatic system column handling via context.",
   "format_version": "1",
   "function_name": "input",
-  "implicit_parameters": [
-    {"name": "created_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
-    {"name": "updated_at", "type": "timestamp", "default": "CURRENT_TIMESTAMP"},
-    {"name": "created_by", "type": "int"},
-    {"name": "version", "type": "int", "default": 1}
-  ],
   "instructions": [
     {"op": "EMIT_STATIC", "pos": "18:1", "value": "INSERT INTO users (name, email, created_at, updated_at, created_by, version) VALUES ("},
     {"op": "EMIT_EVAL", "pos": "18:41", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "18:58", "value": ","},
+    {"op": "EMIT_STATIC", "pos": "18:58", "value": ", "},
     {"op": "EMIT_EVAL", "pos": "18:60", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": ", "},
-    {"op": "EMIT_SYSTEM_VALUE", "pos": "18:90", "system_field": "created_at"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": ", "},
-    {"op": "EMIT_SYSTEM_VALUE", "pos": "18:90", "system_field": "updated_at"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": ", "},
-    {"op": "EMIT_SYSTEM_VALUE", "pos": "18:90", "system_field": "created_by"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": ", "},
-    {"op": "EMIT_SYSTEM_VALUE", "pos": "18:90", "system_field": "version"},
+    {"op": "EMIT_STATIC", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "NOW()", "system_field": "created_at"},
+    {"op": "EMIT_STATIC", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "NOW()", "system_field": "updated_at"},
+    {"op": "EMIT_STATIC", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "\u003cnil\u003e", "system_field": "created_by"},
+    {"op": "EMIT_STATIC", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "1", "system_field": "version"},
     {"op": "EMIT_STATIC", "pos": "18:90", "value": ")"}
   ],
   "parameters": [
@@ -55,42 +58,6 @@
     {"name": "email", "type": "string"}
   ],
   "response_affinity": "none",
-  "system_fields": [
-    {
-      "name": "created_at",
-      "on_insert": {
-        "default": "CURRENT_TIMESTAMP",
-        "parameter": "implicit"
-      }
-    },
-    {
-      "name": "updated_at",
-      "on_insert": {
-        "default": "CURRENT_TIMESTAMP",
-        "parameter": "implicit"
-      },
-      "on_update": {
-        "default": "CURRENT_TIMESTAMP",
-        "parameter": "implicit"
-      }
-    },
-    {
-      "name": "created_by",
-      "on_insert": {
-        "parameter": "implicit"
-      }
-    },
-    {
-      "name": "version",
-      "on_insert": {
-        "default": 1,
-        "parameter": "implicit"
-      },
-      "on_update": {
-        "parameter": "implicit"
-      }
-    }
-  ],
   "table_references": [
     {"name": "users", "context": "main"}
   ],

@@ -53,6 +53,8 @@ const (
 	DIVIDE // /
 	// MODULO represents '%'.
 	MODULO // %
+	// CONCAT represents '||'.
+	CONCAT // ||
 
 	// EQUAL represents '='.
 	EQUAL // =
@@ -312,6 +314,8 @@ func (t TokenType) String() string {
 		return "DIVIDE"
 	case MODULO:
 		return "MODULO"
+	case CONCAT:
+		return "CONCAT"
 	case OVER:
 		return "OVER"
 	case PARTITION:
@@ -492,7 +496,11 @@ type Position struct {
 	Offset int
 }
 
-func (p Position) String() string {
+func (p *Position) String() string {
+	if p == nil {
+		return ""
+	}
+
 	return strconv.Itoa(p.Line) + ":" + strconv.Itoa(p.Column)
 }
 

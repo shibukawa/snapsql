@@ -81,7 +81,7 @@ func tryFullParserWithInspect(sql string, opt InspectOptions) (InspectResult, bo
 	// Use sentinel FunctionDefinition (empty). Constants are empty.
 	fd := &parser.FunctionDefinition{}
 
-	stmt, err := parser.RawParse(tokens, fd, map[string]any{}, parser.Options{InspectMode: true})
+	stmt, _, err := parser.RawParse(tokens, fd, map[string]any{}, parser.Options{InspectMode: true})
 	if err != nil {
 		if opt.Strict {
 			return res, true, err

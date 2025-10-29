@@ -2,7 +2,9 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user_id", "type": "int", "value": 1}
+      ],
       "container": "root"
     }
   ],
@@ -12,25 +14,28 @@
       "expression": "user_id",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 23,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "get_comprehensive_dialect_test_mysql",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name, CAST(age AS INTEGER) as age_cast_standard, CAST(price AS DECIMAL(10,2)) as price_cast_postgresql, CAST(salary + bonus AS NUMERIC(12,2)) as total_cast_complex, CONCAT(first_name, ' ', last_name) as full_name_mysql, CONCAT(first_name, ' ', last_name) as full_name_postgresql, NOW() as time_mysql, NOW() as time_standard, 1 as bool_true, 0 as bool_false, RAND() as random_mysql, RAND() as random_postgresql, CAST(NOW() AS CHAR) as nested_cast_time, CONCAT('ID: ', CAST(id AS CHAR)) as nested_concat_cast FROM users WHERE id ="},
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "SELECT id, name, CAST(age AS INTEGER) as age_cast_standard, CAST(price AS DECIMAL(10,2)) as price_cast_postgresql, CAST(salary + bonus AS NUMERIC(12,2)) as total_cast_complex, CONCAT(first_name, ' ', last_name) as full_name_mysql, CONCAT(first_name, ' ', last_name) as full_name_postgresql, NOW() as time_mysql, NOW() as time_standard, 1 as bool_true, 0 as bool_false, RAND() as random_mysql, RAND() as random_postgresql, CAST(NOW() AS CHAR) as nested_cast_time, CONCAT('ID: ', CAST(id AS CHAR)) as nested_concat_cast FROM users WHERE id = "},
     {"op": "EMIT_EVAL", "pos": "23:12", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "24:3", "value": "AND active = 1 AND created_at \u003e NOW()"},
-    {"op": "IF_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " LIMIT "},
-    {"op": "EMIT_SYSTEM_LIMIT", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"},
-    {"op": "IF_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "EMIT_STATIC", "pos": "0:0", "value": " OFFSET "},
-    {"op": "EMIT_SYSTEM_OFFSET", "pos": "0:0"},
-    {"op": "END", "pos": "0:0"}
+    {"op": "EMIT_STATIC", "pos": "24:0", "value": " AND active = 1 AND created_at \u003e NOW() "},
+    {"op": "IF_SYSTEM_LIMIT"},
+    {"op": "EMIT_STATIC", "value": " LIMIT "},
+    {"op": "EMIT_SYSTEM_LIMIT"},
+    {"op": "END"},
+    {"op": "IF_SYSTEM_OFFSET"},
+    {"op": "EMIT_STATIC", "value": " OFFSET "},
+    {"op": "EMIT_SYSTEM_OFFSET"},
+    {"op": "END"},
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"}

@@ -2,7 +2,10 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user_id", "type": "int", "value": 1},
+    {"name": "new_name", "type": "string", "value": "dummy"}
+      ],
       "container": "root"
     }
   ],
@@ -12,28 +15,32 @@
       "expression": "new_name",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 8,
+        "column": 12
+      },
+      "type_descriptor": "string",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "user_id",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 9,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "update_user_with_returning",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "7:1", "value": "UPDATE users SET name ="},
+    {"op": "EMIT_STATIC", "pos": "7:1", "value": "UPDATE users SET name = "},
     {"op": "EMIT_EVAL", "pos": "8:12", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "8:41", "value": ", updated_at = CURRENT_TIMESTAMP WHERE id ="},
+    {"op": "EMIT_STATIC", "pos": "8:41", "value": ", updated_at = NOW() WHERE id = "},
     {"op": "EMIT_EVAL", "pos": "9:12", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "10:1", "value": "RETURNING id, name, email, updated_at"}
+    {"op": "EMIT_STATIC", "pos": "10:0", "value": " RETURNING id, name, email, updated_at"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"},

@@ -2,7 +2,19 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+        {
+          "name": "users",
+          "type": "../testdata/acceptancetests/024_values_object_array_expansion_ok/User[]"
+        },
+        {
+          "name": "users",
+          "type": "../testdata/acceptancetests/024_values_object_array_expansion_ok/User[]",
+          "value": [
+            ""
+          ]
+        }
+      ],
       "container": "root"
     }
   ],
@@ -12,9 +24,13 @@
       "expression": "users",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 6,
+        "column": 45
+      },
+      "type_descriptor": [
+    {"email": "string", "id": "int", "name": "string"}
+      ],
+      "result_type": 4
     }
   ],
   "format_version": "1",

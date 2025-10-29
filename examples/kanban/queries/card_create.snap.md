@@ -28,9 +28,9 @@ VALUES (
      WHERE b.status = 'active'
      ORDER BY l.stage_order ASC
      LIMIT 1),
-    /*= title */'New Card',
-    /*= description */'',
-    /*= position */0.0
+    /*= title */'Dummy Card Title',
+    /*= description */'Dummy Description',
+    /*= position */99.0
 )
 RETURNING
     id,

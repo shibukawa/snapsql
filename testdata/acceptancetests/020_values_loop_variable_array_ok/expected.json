@@ -2,16 +2,27 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+        {
+          "name": "users",
+          "type": "../testdata/acceptancetests/020_values_loop_variable_array_ok/User[]"
+        },
+        {
+          "name": "users",
+          "type": "../testdata/acceptancetests/020_values_loop_variable_array_ok/User[]",
+          "value": [
+            ""
+          ]
+        }
+      ],
       "container": "root"
     },
     {
       "index": 1,
       "additional_variables": [
-    {"name": "user", "type": "any"}
+        {"name": "user", "type": "any"}
       ],
-      "container": "for user : users",
-      "parent_index": 0
+      "container": "for user : users"
     }
   ],
   "cel_expressions": [
@@ -20,55 +31,61 @@
       "expression": "users",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 7,
+        "column": 8
+      },
+      "type_descriptor": {
+        "id": "int",
+        "name": "string",
+        "tags": [
+          "string"
+        ]
+      },
+      "result_type": 3
     },
     {
       "id": "expr_002",
       "expression": "user.id",
       "environment_index": 1,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 7,
+        "column": 32
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_003",
       "expression": "user.tags",
       "environment_index": 1,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 7,
+        "column": 48
+      },
+      "type_descriptor": [
+        "string"
+      ],
+      "result_type": 2
     }
-  ],
-  "envs": [
-    [],
-    [
-      {
-        "name": "user",
-        "type": "any"
-      }
-    ]
   ],
   "format_version": "1",
   "function_name": "insertUserTags",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "6:1", "value": "INSERT INTO user_tags (user_id, tag) VALUES"},
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "INSERT INTO user_tags (user_id, tag) VALUES "},
     {
       "op": "LOOP_START",
       "pos": "7:8",
       "variable": "user",
       "collection_expr_index": 0,
-      "env_index": 2
+      "env_index": 1
     },
     {"op": "EMIT_STATIC", "pos": "7:31", "value": "("},
     {"op": "EMIT_EVAL", "pos": "7:32", "expr_index": 1},
-    {"op": "EMIT_UNLESS_BOUNDARY", "pos": "7:46", "value": ","},
+    {"op": "EMIT_STATIC", "pos": "7:46", "value": ", "},
     {"op": "EMIT_EVAL", "pos": "7:48", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "7:64", "value": ")"},
-    {"op": "LOOP_END", "pos": "7:66", "env_index": 0}
+    {"op": "EMIT_STATIC", "pos": "7:64", "value": ") "},
+    {"op": "LOOP_END", "pos": "7:64", "env_index": 0},
+    {"op": "EMIT_STATIC", "pos": "8:0"}
   ],
   "parameters": [
     {

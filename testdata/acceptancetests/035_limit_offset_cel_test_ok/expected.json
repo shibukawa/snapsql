@@ -2,7 +2,11 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "min_age", "type": "int", "value": 1},
+    {"name": "page_size", "type": "int", "value": 1},
+    {"name": "page", "type": "int", "value": 1}
+      ],
       "container": "root"
     }
   ],
@@ -12,46 +16,54 @@
       "expression": "min_age",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 15,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_002",
       "expression": "page_size != 0 ? page_size : 10",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 16,
+        "column": 7
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     },
     {
       "id": "expr_003",
       "expression": "page \u003e 0 ? (page - 1) * page_size : 0",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 17,
+        "column": 8
+      },
+      "type_descriptor": "any",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "get_users_with_cel_limit_offset",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "8:1", "value": "SELECT id, name, age FROM users WHERE age \u003e="},
+    {"op": "EMIT_STATIC", "pos": "8:1", "value": "SELECT id, name, age FROM users WHERE age \u003e= "},
     {"op": "EMIT_EVAL", "pos": "15:12", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "16:1", "value": " LIMIT "},
-    {"op": "IF_SYSTEM_LIMIT", "pos": "16:1"},
-    {"op": "EMIT_SYSTEM_LIMIT", "pos": "16:1"},
-    {"op": "ELSE", "pos": "16:1"},
+    {"op": "EMIT_STATIC", "pos": "16:0", "value": "  LIMIT "},
+    {"op": "IF_SYSTEM_LIMIT"},
+    {"op": "EMIT_SYSTEM_LIMIT"},
+    {"op": "ELSE"},
     {"op": "EMIT_EVAL", "pos": "16:7", "expr_index": 1},
-    {"op": "END", "pos": "16:1"},
+    {"op": "END"},
     {"op": "EMIT_STATIC", "pos": "17:1", "value": " OFFSET "},
-    {"op": "IF_SYSTEM_OFFSET", "pos": "17:1"},
-    {"op": "EMIT_SYSTEM_OFFSET", "pos": "17:1"},
-    {"op": "ELSE", "pos": "17:1"},
+    {"op": "IF_SYSTEM_OFFSET"},
+    {"op": "EMIT_SYSTEM_OFFSET"},
+    {"op": "ELSE"},
     {"op": "EMIT_EVAL", "pos": "17:8", "expr_index": 2},
-    {"op": "END", "pos": "17:1"}
+    {"op": "EMIT_STATIC", "pos": "18:0", "value": " "},
+    {"op": "END"},
+    {"op": "EMIT_SYSTEM_FOR"}
   ],
   "parameters": [
     {"name": "min_age", "type": "int"},

@@ -1,7 +1,6 @@
 package markdownparser
 
 import (
-	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -22,10 +21,8 @@ func setupPostgres(t *testing.T) (*sql.DB, func()) {
 		t.Skip("skipping postgres container in short mode")
 	}
 
-	ctx := context.Background()
-
-	cont, err := postgres.Run(ctx,
-		"postgres:17-alpine",
+	cont, err := postgres.Run(t.Context(),
+		"postgres:18-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
@@ -35,16 +32,16 @@ func setupPostgres(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("start postgres: %v", err)
 	}
 
-	connStr, err := cont.ConnectionString(ctx, "sslmode=disable")
+	connStr, err := cont.ConnectionString(t.Context(), "sslmode=disable")
 	if err != nil {
-		_ = cont.Terminate(ctx)
+		_ = cont.Terminate(t.Context())
 
 		t.Fatalf("postgres conn string: %v", err)
 	}
 
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
-		_ = cont.Terminate(ctx)
+		_ = cont.Terminate(t.Context())
 
 		t.Fatalf("open postgres: %v", err)
 	}
@@ -64,7 +61,7 @@ func setupPostgres(t *testing.T) (*sql.DB, func()) {
 
 	cleanup := func() {
 		_ = db.Close()
-		_ = cont.Terminate(context.Background())
+		_ = cont.Terminate(t.Context())
 	}
 
 	return db, cleanup
@@ -79,9 +76,7 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 		t.Skip("skipping mysql container in short mode")
 	}
 
-	ctx := context.Background()
-
-	cont, err := mysql.Run(ctx,
+	cont, err := mysql.Run(t.Context(),
 		"mysql:8.4",
 		mysql.WithDatabase("testdb"),
 		mysql.WithUsername("testuser"),
@@ -91,16 +86,16 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("start mysql: %v", err)
 	}
 
-	connStr, err := cont.ConnectionString(ctx)
+	connStr, err := cont.ConnectionString(t.Context())
 	if err != nil {
-		_ = cont.Terminate(ctx)
+		_ = cont.Terminate(t.Context())
 
 		t.Fatalf("mysql conn string: %v", err)
 	}
 
 	db, err := sql.Open("mysql", connStr)
 	if err != nil {
-		_ = cont.Terminate(ctx)
+		_ = cont.Terminate(t.Context())
 
 		t.Fatalf("open mysql: %v", err)
 	}
@@ -120,7 +115,7 @@ func setupMySQL(t *testing.T) (*sql.DB, func()) {
 
 	cleanup := func() {
 		_ = db.Close()
-		_ = cont.Terminate(context.Background())
+		_ = cont.Terminate(t.Context())
 	}
 
 	return db, cleanup

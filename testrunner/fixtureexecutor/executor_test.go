@@ -1,7 +1,6 @@
 package fixtureexecutor
 
 import (
-	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -518,8 +517,7 @@ func TestTestRunner_RunTests(t *testing.T) {
 	})
 
 	// Run tests
-	ctx := context.Background()
-	summary, err := runner.RunTests(ctx, testCases)
+	summary, err := runner.RunTests(t.Context(), testCases)
 	require.NoError(t, err)
 	require.NotNil(t, summary)
 

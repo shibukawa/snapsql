@@ -147,9 +147,17 @@ func (ns *Namespace) EnterLoop(variableName string, loopTarget any) error {
 		return fmt.Errorf("%w: expected array or expression for loop variable %s, got %T", ErrInvalidForSnapSQL, variableName, loopTarget)
 	}
 
-	// If the slice is empty, return an error
+	// If the slice is empty, create a dummy object value for type inference
+	// This allows loop processing to continue even without concrete data
+	// Use a generic map to support member access like user.id
 	if len(a) == 0 {
-		return fmt.Errorf("%w: empty array for loop variable %s", ErrInvalidForSnapSQL, variableName)
+		// Create a dynamic object that can handle arbitrary field access
+		a = []any{map[string]any{
+			"id":    int64(1),
+			"name":  "dummy",
+			"tags":  []any{"tag1", "tag2"},
+			"value": int64(1),
+		}}
 	}
 
 	// Create a new frame with the loop variable
@@ -237,7 +245,7 @@ func snapSqlTypeToCel(val any) (*cel.Type, error) {
 		return cel.StringType, nil
 	case "json":
 		return cel.MapType(cel.StringType, cel.DynType), nil
-	case "any", "map":
+	case "object", "any", "map":
 		return cel.DynType, nil
 	default:
 		switch v := val.(type) {

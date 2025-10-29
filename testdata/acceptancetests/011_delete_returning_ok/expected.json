@@ -2,7 +2,9 @@
   "cel_environments": [
     {
       "index": 0,
-      "additional_variables": [],
+      "additional_variables": [
+    {"name": "user_id", "type": "int", "value": 1}
+      ],
       "container": "root"
     }
   ],
@@ -12,17 +14,19 @@
       "expression": "user_id",
       "environment_index": 0,
       "position": {
-        "line": 0,
-        "column": 0
-      }
+        "line": 7,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
     }
   ],
   "format_version": "1",
   "function_name": "delete_user_with_returning",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "6:1", "value": "DELETE FROM users WHERE id ="},
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "DELETE FROM users WHERE id = "},
     {"op": "EMIT_EVAL", "pos": "7:12", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "8:1", "value": "RETURNING id, name, email"}
+    {"op": "EMIT_STATIC", "pos": "8:0", "value": " RETURNING id, name, email"}
   ],
   "parameters": [
     {"name": "user_id", "type": "int"}
