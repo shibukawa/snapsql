@@ -9,15 +9,15 @@ type testSink struct {
 	entries []QueryLogEntry
 }
 
-func (s *testSink) sink() QueryLogSink {
+func (s *testSink) sink() LoggerFunc {
 	return func(_ context.Context, entry QueryLogEntry) {
 		s.entries = append(s.entries, entry)
 	}
 }
 
 func TestQueryLoggerDisabled(t *testing.T) {
-	logger := QueryLoggerFromContext(context.Background())
-	if logger != nil {
+	var ec *ExecutionContext
+	if logger := ec.QueryLogger(); logger != nil {
 		t.Fatalf("expected nil logger when not configured")
 	}
 }
@@ -26,7 +26,9 @@ func TestQueryLoggerEmitsEntry(t *testing.T) {
 	sink := &testSink{}
 	ctx := WithLogger(context.Background(), sink.sink())
 
-	logger := QueryLoggerFromContext(ctx)
+	ec := ExtractExecutionContext(ctx)
+
+	logger := ec.QueryLogger()
 	if logger == nil {
 		t.Fatalf("expected logger instance")
 	}
@@ -90,4 +92,10 @@ func TestLoggerWriteNil(t *testing.T) {
 		t.Fatalf("callback should not be invoked for nil logger")
 		return QueryLogMetadata{}, nil
 	})
+}
+
+func TestExecutionContextQueryLoggerNil(t *testing.T) {
+	if logger := (*ExecutionContext)(nil).QueryLogger(); logger != nil {
+		t.Fatalf("expected nil logger for nil execution context")
+	}
 }

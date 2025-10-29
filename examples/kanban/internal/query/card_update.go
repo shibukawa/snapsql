@@ -117,6 +117,27 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardUpdate", "[]cardupdateresult")
 
+	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
+	rowLockMode := snapsqlgo.RowLockNone
+	if execCtx != nil {
+		rowLockMode = execCtx.RowLockMode()
+	}
+	if rowLockMode != snapsqlgo.RowLockNone {
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeExec, rowLockMode)
+	}
+	rowLockClause := ""
+	if rowLockMode != snapsqlgo.RowLockNone {
+		var rowLockErr error
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		if rowLockErr != nil {
+			panic(rowLockErr)
+		}
+	}
+	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
+		RowLockClause: rowLockClause,
+		RowLockMode:   rowLockMode,
+	}
+
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE cards SET title = $1, description = $2, updated_at = CURRENT_TIMESTAMP  WHERE id = $3   RETURNING id, list_id, title, description, position, created_at, updated_at"
@@ -147,13 +168,14 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 		return query, args, nil
 	}
 	return func(yield func(*CardUpdateResult, error) bool) {
-		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		logger := execCtx.QueryLogger()
 		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "CardUpdate",
 				SourceFile: "query/CardUpdate",
 				Dialect:    "sqlite",
-				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+				QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+				Options:    queryLogOptions,
 			}, executor
 		})
 

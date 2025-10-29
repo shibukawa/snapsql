@@ -8,26 +8,56 @@ type executionContextKeyType struct{}
 // executionContextKey is the context key used to store ExecutionContext
 var executionContextKey = executionContextKeyType{}
 
-// executionContext aggregates per-request runtime options that affect generated code execution.
-type executionContext struct {
-	logger *loggingConfig
+// RowLockMode represents the pessimistic lock mode requested for SELECT statements.
+type RowLockMode int
+
+const (
+	// RowLockNone disables pessimistic locking.
+	RowLockNone RowLockMode = iota
+	// RowLockForUpdate emits "FOR UPDATE".
+	RowLockForUpdate
+	// RowLockForShare emits "FOR SHARE" (where supported).
+	RowLockForShare
+	// RowLockForUpdateNoWait emits "FOR UPDATE NOWAIT".
+	RowLockForUpdateNoWait
+	// RowLockForUpdateSkipLocked emits "FOR UPDATE SKIP LOCKED".
+	RowLockForUpdateSkipLocked
+)
+
+type rowLockConfig struct {
+	mode RowLockMode
 }
 
-// withExecutionContext returns a new context that includes the provided ExecutionContext options.
-func withExecutionContext(ctx context.Context) (context.Context, *executionContext) {
-	var ec *executionContext
+// ExecutionContext aggregates per-request runtime options that affect generated code execution.
+type ExecutionContext struct {
+	logger  *loggingConfig
+	rowLock *rowLockConfig
+}
+
+// RowLockMode reports the configured pessimistic lock mode, defaulting to RowLockNone.
+func (ec *ExecutionContext) RowLockMode() RowLockMode {
+	if ec == nil || ec.rowLock == nil {
+		return RowLockNone
+	}
+
+	return ec.rowLock.mode
+}
+
+// withExecutionContext returns a context containing the reusable ExecutionContext instance.
+func withExecutionContext(ctx context.Context) (context.Context, *ExecutionContext) {
+	var ec *ExecutionContext
 
 	if value := ctx.Value(executionContextKey); value != nil {
 		var ok bool
 
-		ec, ok = value.(*executionContext)
+		ec, ok = value.(*ExecutionContext)
 		if !ok {
 			panic("invalid type stored in context for executionContextKey")
 		}
 	}
 
 	if ec == nil {
-		ec = &executionContext{}
+		ec = &ExecutionContext{}
 		return context.WithValue(ctx, executionContextKey, ec), ec
 	}
 
@@ -35,13 +65,13 @@ func withExecutionContext(ctx context.Context) (context.Context, *executionConte
 }
 
 // ExtractExecutionContext retrieves the aggregated ExecutionContext from context.
-func ExtractExecutionContext(ctx context.Context) *executionContext {
+func ExtractExecutionContext(ctx context.Context) *ExecutionContext {
 	if ctx == nil {
 		return nil
 	}
 
 	if value := ctx.Value(executionContextKey); value != nil {
-		if ec, ok := value.(*executionContext); !ok {
+		if ec, ok := value.(*ExecutionContext); !ok {
 			panic("invalid type stored in context for executionContextKey")
 		} else {
 			return ec
@@ -52,7 +82,7 @@ func ExtractExecutionContext(ctx context.Context) *executionContext {
 }
 
 // WithLogger is a convenience wrapper that stores logging configuration on the context.
-func WithLogger(ctx context.Context, sink QueryLogSink, cfg ...LoggerOpt) context.Context {
+func WithLogger(ctx context.Context, logger LoggerFunc, cfg ...LoggerOpt) context.Context {
 	ctx, ec := withExecutionContext(ctx)
 
 	var singleOpt LoggerOpt
@@ -68,18 +98,41 @@ func WithLogger(ctx context.Context, sink QueryLogSink, cfg ...LoggerOpt) contex
 		singleOpt.ExplainSlowQueryThreshold = 0
 	}
 
-	if sink == nil {
+	if logger == nil {
 		ec.logger = nil
 		return ctx
 	}
 
 	ec.logger = &loggingConfig{
-		sink:                      sink,
+		logger:                    logger,
 		includeStack:              singleOpt.IncludeStack,
 		stackDepth:                singleOpt.StackDepth,
 		explainMode:               singleOpt.ExplainMode,
 		explainSlowQueryThreshold: singleOpt.ExplainSlowQueryThreshold,
 	}
+
+	return ctx
+}
+
+// WithRowLock records the requested pessimistic lock mode on the context.
+//
+// The mode defaults to RowLockForUpdate when omitted. Providing RowLockNone clears
+// any previously configured lock mode. When multiple modes are provided the last
+// value wins, enabling helper wrappers to override earlier defaults.
+func WithRowLock(ctx context.Context, modes ...RowLockMode) context.Context {
+	mode := RowLockForUpdate
+	if len(modes) > 0 {
+		mode = modes[len(modes)-1]
+	}
+
+	ctx, ec := withExecutionContext(ctx)
+
+	if mode == RowLockNone {
+		ec.rowLock = nil
+		return ctx
+	}
+
+	ec.rowLock = &rowLockConfig{mode: mode}
 
 	return ctx
 }

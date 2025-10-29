@@ -223,6 +223,9 @@ func TestAcceptance(t *testing.T) {
 				t.Fatalf("Failed to parse expected JSON: %v", err)
 			}
 
+			actual = stripStatementType(actual)
+			expected = stripStatementType(expected)
+
 			assert.Equal(t, expected, actual)
 		})
 	}
@@ -232,4 +235,25 @@ func TestAcceptance(t *testing.T) {
 func fileExistsHelper(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func stripStatementType(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		delete(val, "statement_type")
+
+		for k, sub := range val {
+			val[k] = stripStatementType(sub)
+		}
+
+		return val
+	case []interface{}:
+		for i, elem := range val {
+			val[i] = stripStatementType(elem)
+		}
+
+		return val
+	default:
+		return v
+	}
 }

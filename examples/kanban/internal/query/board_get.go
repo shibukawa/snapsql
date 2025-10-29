@@ -104,13 +104,35 @@ func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, o
 
 		return result, nil
 	}
-	logger := snapsqlgo.QueryLoggerFromContext(ctx)
+
+	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
+	rowLockMode := snapsqlgo.RowLockNone
+	if execCtx != nil {
+		rowLockMode = execCtx.RowLockMode()
+	}
+	if rowLockMode != snapsqlgo.RowLockNone {
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeSelect, rowLockMode)
+	}
+	rowLockClause := ""
+	if rowLockMode != snapsqlgo.RowLockNone {
+		var rowLockErr error
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		if rowLockErr != nil {
+			panic(rowLockErr)
+		}
+	}
+	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
+		RowLockClause: rowLockClause,
+		RowLockMode:   rowLockMode,
+	}
+	logger := execCtx.QueryLogger()
 	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "BoardGet",
 			SourceFile: "query/BoardGet",
 			Dialect:    "sqlite",
 			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+			Options:    queryLogOptions,
 		}, executor
 	})
 

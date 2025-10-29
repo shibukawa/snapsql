@@ -214,6 +214,33 @@ func TestOptimizedInstructionsWithSystemColumns(t *testing.T) {
 	assert.Equal(t, ")", optimized[4].Value)
 }
 
+func TestGenerateRowLockExecutionCode(t *testing.T) {
+	format := &intermediate.IntermediateFormat{
+		FormatVersion: "1",
+		FunctionName:  "row_lock_select",
+		Description:   "Select with row lock",
+		Instructions: []intermediate.Instruction{
+			{Op: intermediate.OpEmitStatic, Value: "SELECT id FROM widgets"},
+			{Op: intermediate.OpEmitSystemFor},
+		},
+		ResponseAffinity: "none",
+	}
+
+	gen := &Generator{
+		PackageName: "rowlock",
+		Format:      format,
+		Dialect:     "postgres",
+	}
+
+	var output strings.Builder
+	require.NoError(t, gen.Generate(&output))
+
+	code := output.String()
+    assert.Contains(t, code, "EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeSelect, rowLockMode)")
+	assert.Contains(t, code, `rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("postgres", rowLockMode)`)
+	assert.Contains(t, code, "Options:    queryLogOptions")
+}
+
 func intPtr(i int) *int {
 	return &i
 }

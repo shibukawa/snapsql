@@ -104,6 +104,27 @@ func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 
 	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listArchive", "[]listarchiveresult")
 
+	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
+	rowLockMode := snapsqlgo.RowLockNone
+	if execCtx != nil {
+		rowLockMode = execCtx.RowLockMode()
+	}
+	if rowLockMode != snapsqlgo.RowLockNone {
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeExec, rowLockMode)
+	}
+	rowLockClause := ""
+	if rowLockMode != snapsqlgo.RowLockNone {
+		var rowLockErr error
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		if rowLockErr != nil {
+			panic(rowLockErr)
+		}
+	}
+	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
+		RowLockClause: rowLockClause,
+		RowLockMode:   rowLockMode,
+	}
+
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE lists SET is_archived = $1, updated_at = CURRENT_TIMESTAMP  WHERE id = $2   RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
@@ -127,13 +148,14 @@ func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 		return query, args, nil
 	}
 	return func(yield func(*ListArchiveResult, error) bool) {
-		logger := snapsqlgo.QueryLoggerFromContext(ctx)
+		logger := execCtx.QueryLogger()
 		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "ListArchive",
 				SourceFile: "query/ListArchive",
 				Dialect:    "sqlite",
-				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+				QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+				Options:    queryLogOptions,
 			}, executor
 		})
 
