@@ -2,6 +2,7 @@ package parserstep7
 
 import (
 	"fmt"
+	"maps"
 
 	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -165,14 +166,10 @@ func (sp *SubqueryParser) buildFieldSources(stmt cmn.StatementNode) error {
 
 	// 3. Convert to interface{} types and set results in StatementNode
 	interfaceFieldSources := make(map[string]*cmn.SQFieldSource)
-	for k, v := range fieldSources {
-		interfaceFieldSources[k] = v
-	}
+	maps.Copy(interfaceFieldSources, fieldSources)
 
 	interfaceTableReferences := make(map[string]*cmn.SQTableReference)
-	for k, v := range tableReferences {
-		interfaceTableReferences[k] = v
-	}
+	maps.Copy(interfaceTableReferences, tableReferences)
 
 	cmn.SetFieldSources(stmt, interfaceFieldSources)
 	cmn.SetTableReferences(stmt, interfaceTableReferences)

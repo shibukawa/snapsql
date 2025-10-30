@@ -171,8 +171,8 @@ func durationFromMillis(ms float64) time.Duration {
 }
 
 func analyzeSQLitePlanText(raw string, opts AnalyzerOptions, eval *PerformanceEvaluation) {
-	lines := strings.Split(raw, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(raw, "\n")
+	for line := range lines {
 		detail := strings.TrimSpace(line)
 		if detail == "" {
 			continue

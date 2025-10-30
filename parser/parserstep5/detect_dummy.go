@@ -120,7 +120,7 @@ func findParenthesesRange(tokens []tokenizer.Token, startIndex int) []int {
 			if parenLevel == 0 {
 				// Found matching closing parenthesis
 				result := make([]int, i-startIndex+1)
-				for j := 0; j < len(result); j++ {
+				for j := range result {
 					result[j] = startIndex + j
 				}
 

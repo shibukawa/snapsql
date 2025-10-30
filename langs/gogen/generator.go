@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -216,8 +217,8 @@ func (g *Generator) Generate(w io.Writer) error {
 	}
 
 	sliceElementType := ""
-	if strings.HasPrefix(responseType, "[]") {
-		sliceElementType = strings.TrimPrefix(responseType, "[]")
+	if after, ok := strings.CutPrefix(responseType, "[]"); ok {
+		sliceElementType = after
 	}
 
 	responseAffinity := g.Format.ResponseAffinity
@@ -351,13 +352,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		},
 		"isSystemColumn": func(paramName string) bool {
 			systemColumns := []string{"created_at", "updated_at", "created_by", "updated_by", "version"}
-			for _, col := range systemColumns {
-				if paramName == col {
-					return true
-				}
-			}
-
-			return false
+			return slices.Contains(systemColumns, paramName)
 		},
 		"hasAnySystemParam": func(names []string) bool {
 			systemColumns := map[string]struct{}{"created_at": {}, "updated_at": {}, "created_by": {}, "updated_by": {}, "version": {}}
@@ -371,11 +366,11 @@ func (g *Generator) Generate(w io.Writer) error {
 		},
 		"celTypeConvert": func(typeName string) string {
 			// Handle array types
-			if strings.HasPrefix(typeName, "[]") {
-				elementType := strings.TrimPrefix(typeName, "[]")
+			if after, ok := strings.CutPrefix(typeName, "[]"); ok {
+				elementType := after
 				// Drop pointer for element types in CEL object representation
-				if strings.HasPrefix(elementType, "*") {
-					elementType = strings.TrimPrefix(elementType, "*")
+				if after, ok := strings.CutPrefix(elementType, "*"); ok {
+					elementType = after
 				}
 
 				elementCELType := convertSingleType(elementType)
@@ -384,8 +379,8 @@ func (g *Generator) Generate(w io.Writer) error {
 			}
 
 			// Handle pointer types
-			if strings.HasPrefix(typeName, "*") {
-				baseType := strings.TrimPrefix(typeName, "*")
+			if after, ok := strings.CutPrefix(typeName, "*"); ok {
+				baseType := after
 				// For nullable types, we still use the base type in CEL
 				return convertSingleType(baseType)
 			}
@@ -651,8 +646,8 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 // convertToGoType converts SnapSQL type to Go type
 func convertToGoType(snapType string) (string, error) {
 	// Handle arrays
-	if strings.HasSuffix(snapType, "[]") {
-		baseType := strings.TrimSuffix(snapType, "[]")
+	if before, ok := strings.CutSuffix(snapType, "[]"); ok {
+		baseType := before
 
 		goBaseType, err := convertToGoType(baseType)
 		if err != nil {
@@ -663,8 +658,8 @@ func convertToGoType(snapType string) (string, error) {
 	}
 
 	// Handle pointers
-	if strings.HasSuffix(snapType, "*") {
-		baseType := strings.TrimSuffix(snapType, "*")
+	if before, ok := strings.CutSuffix(snapType, "*"); ok {
+		baseType := before
 
 		goBaseType, err := convertToGoType(baseType)
 		if err != nil {
@@ -1016,8 +1011,8 @@ func convertTypeToGo(typeName string) (string, error) {
 	case "any":
 		return "any", nil
 	default:
-		if strings.HasSuffix(typeName, "[]") {
-			elementType := strings.TrimSuffix(typeName, "[]")
+		if before, ok := strings.CutSuffix(typeName, "[]"); ok {
+			elementType := before
 
 			goElementType, err := convertTypeToGo(elementType)
 			if err != nil {
@@ -1682,16 +1677,16 @@ func hasEmitSystemFor(instructions []intermediate.Instruction) bool {
 // goTypeToCELType converts Go types to CEL type names
 func goTypeToCELType(goType string) string {
 	// Handle array/slice types
-	if strings.HasPrefix(goType, "[]") {
-		elementType := strings.TrimPrefix(goType, "[]")
+	if after, ok := strings.CutPrefix(goType, "[]"); ok {
+		elementType := after
 		elementCELType := goTypeToCELType(elementType)
 
 		return "[]" + elementCELType
 	}
 
 	// Handle pointer types
-	if strings.HasPrefix(goType, "*") {
-		baseType := strings.TrimPrefix(goType, "*")
+	if after, ok := strings.CutPrefix(goType, "*"); ok {
+		baseType := after
 		return "*" + goTypeToCELType(baseType)
 	}
 
@@ -1718,16 +1713,16 @@ func goTypeToCELType(goType string) string {
 // snapTypeToCELType converts SnapSQL types to CEL type names
 func snapTypeToCELType(snapType string) string {
 	// Handle array types
-	if strings.HasPrefix(snapType, "[]") {
-		elementType := strings.TrimPrefix(snapType, "[]")
+	if after, ok := strings.CutPrefix(snapType, "[]"); ok {
+		elementType := after
 		elementCELType := snapTypeToCELType(elementType)
 
 		return "[]" + elementCELType
 	}
 
 	// Handle pointer types
-	if strings.HasPrefix(snapType, "*") {
-		baseType := strings.TrimPrefix(snapType, "*")
+	if after, ok := strings.CutPrefix(snapType, "*"); ok {
+		baseType := after
 		return "*" + snapTypeToCELType(baseType)
 	}
 

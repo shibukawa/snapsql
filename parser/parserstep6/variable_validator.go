@@ -2,6 +2,8 @@ package parserstep6
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -289,9 +291,7 @@ func setTypeInfo(typeInfo map[string]any, pos tokenizer.Position, descriptor any
 
 		newMap, newIsMap := descriptor.(map[string]any)
 		if existingIsMap && newIsMap {
-			for k, v := range newMap {
-				existingMap[k] = v
-			}
+			maps.Copy(existingMap, newMap)
 
 			typeInfo[key] = existingMap
 
@@ -312,8 +312,8 @@ func buildTypeDescriptor(value any, typeHint string) any {
 		normalized = "any"
 	}
 
-	if strings.HasSuffix(normalized, "[]") {
-		baseHint := strings.TrimSuffix(normalized, "[]")
+	if before, ok := strings.CutSuffix(normalized, "[]"); ok {
+		baseHint := before
 
 		switch v := value.(type) {
 		case []any:
@@ -463,13 +463,8 @@ func isSystemColumn(varName string) bool {
 	systemColumns := []string{
 		"created_at", "updated_at", "created_by", "updated_by", "version",
 	}
-	for _, col := range systemColumns {
-		if varName == col {
-			return true
-		}
-	}
 
-	return false
+	return slices.Contains(systemColumns, varName)
 }
 
 // validateVariableDirective validates a variable directive

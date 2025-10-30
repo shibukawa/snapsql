@@ -107,7 +107,7 @@ func TestBuildSQLAddsSpacingAfterBoundaryTokens(t *testing.T) {
 		},
 	}
 
-	params := map[string]interface{}{
+	params := map[string]any{
 		"param1": 123,
 		"param2": 456,
 	}

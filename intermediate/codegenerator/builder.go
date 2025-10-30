@@ -127,7 +127,7 @@ func (b *InstructionBuilder) popEnvironment() {
 // Returns:
 //   - result: interface{} - The evaluated result (can be []any, map[string]any, scalar, etc.)
 //   - error: error if evaluation fails
-func (b *InstructionBuilder) EvaluateExpression(expr string) (interface{}, error) {
+func (b *InstructionBuilder) EvaluateExpression(expr string) (any, error) {
 	// Get current environment index
 	envIndex := b.getCurrentEnvironmentIndex()
 
@@ -140,7 +140,7 @@ func (b *InstructionBuilder) EvaluateExpression(expr string) (interface{}, error
 	env := b.context.CELEnvironments[envIndex]
 
 	// Build parameter map from environment variables (dummy values)
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 
 	var celVars []cel.EnvOption
 
@@ -161,9 +161,9 @@ func (b *InstructionBuilder) EvaluateExpression(expr string) (interface{}, error
 				celType = cel.DoubleType
 			case bool:
 				celType = cel.BoolType
-			case []interface{}:
+			case []any:
 				celType = cel.ListType(cel.DynType)
-			case map[string]interface{}:
+			case map[string]any:
 				celType = cel.MapType(cel.StringType, cel.DynType)
 			default:
 				celType = cel.DynType
@@ -689,10 +689,14 @@ func (b *InstructionBuilder) mergeStaticInstructions() []Instruction {
 		firstPos := current.Pos
 
 		// 次の命令も EMIT_STATIC ならマージ
+		var mergedValueSb692 strings.Builder
+
 		for i+1 < len(b.instructions) && b.instructions[i+1].Op == OpEmitStatic {
 			i++
-			mergedValue += b.instructions[i].Value
+			mergedValueSb692.WriteString(b.instructions[i].Value)
 		}
+
+		mergedValue += mergedValueSb692.String()
 
 		// マージされた命令の直後が LOOP_END の場合、末尾のカンマ/AND/OR を分割
 		// （IF/END の場合は分割しない）
@@ -1214,9 +1218,11 @@ func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokeniz
 
 		// 引数を || で連結
 		result := []tokenizer.Token{}
+
 		for argIdx, arg := range arguments {
 			// 引数のホワイトスペースをトリム
 			trimmedArg := []tokenizer.Token{}
+
 			for _, t := range arg {
 				if t.Type != tokenizer.WHITESPACE {
 					trimmedArg = append(trimmedArg, t)
@@ -1381,6 +1387,7 @@ func (b *InstructionBuilder) convertCastToPostgres(tokens []tokenizer.Token, cas
 	// 変換: (expr)::type
 	// 式トークンからホワイトスペースを除去
 	filteredExprTokens := []tokenizer.Token{}
+
 	for _, t := range exprTokens {
 		if t.Type != tokenizer.WHITESPACE {
 			filteredExprTokens = append(filteredExprTokens, t)
@@ -1389,6 +1396,7 @@ func (b *InstructionBuilder) convertCastToPostgres(tokens []tokenizer.Token, cas
 
 	// 型トークンからホワイトスペースを除去
 	filteredTypeTokens := []tokenizer.Token{}
+
 	for _, t := range typeTokens {
 		if t.Type != tokenizer.WHITESPACE {
 			filteredTypeTokens = append(filteredTypeTokens, t)
@@ -1464,11 +1472,11 @@ func (b *InstructionBuilder) AddForLoopStart(elementVar, collectionVarName, pos 
 	// This allows us to determine the loop variable's type at build time
 	collectionValue, err := b.EvaluateExpression(collectionVarName)
 
-	var firstElement interface{} = nil
+	var firstElement any = nil
 
 	if err == nil && collectionValue != nil {
 		// Try to extract first element from array
-		if arr, ok := collectionValue.([]interface{}); ok && len(arr) > 0 {
+		if arr, ok := collectionValue.([]any); ok && len(arr) > 0 {
 			firstElement = arr[0]
 		}
 	}
@@ -1721,8 +1729,8 @@ func (b *InstructionBuilder) CheckEvalResultType(expr string) EvalResultType {
 	varType := varInfo.Type
 
 	// Check for array types (ends with "[]")
-	if strings.HasSuffix(varType, "[]") {
-		baseType := strings.TrimSuffix(varType, "[]")
+	if before, ok := strings.CutSuffix(varType, "[]"); ok {
+		baseType := before
 
 		// Check if it's an array of objects
 		if isObjectType(baseType) {
@@ -1734,8 +1742,8 @@ func (b *InstructionBuilder) CheckEvalResultType(expr string) EvalResultType {
 	}
 
 	// Check for pointer types (starts with "*")
-	if strings.HasPrefix(varType, "*") {
-		baseType := strings.TrimPrefix(varType, "*")
+	if after, ok := strings.CutPrefix(varType, "*"); ok {
+		baseType := after
 
 		// Check if it's a pointer to an object
 		if isObjectType(baseType) {
@@ -1960,10 +1968,11 @@ func (b *InstructionBuilder) initializeDummyValuesFromFunctionDefinition() {
 
 		// パラメータの型文字列を取得
 		var typeStr string
+
 		switch v := paramValue.(type) {
 		case string:
 			typeStr = v
-		case map[string]interface{}:
+		case map[string]any:
 			// 型情報を含むオブジェクト
 			if t, ok := v["type"]; ok {
 				if typeVal, ok := t.(string); ok {
@@ -1993,7 +2002,7 @@ func (b *InstructionBuilder) initializeDummyValuesFromFunctionDefinition() {
 }
 
 // generateDummyValueFromType は型文字列からダミー値を生成する
-func (b *InstructionBuilder) generateDummyValueFromType(typeStr string) interface{} {
+func (b *InstructionBuilder) generateDummyValueFromType(typeStr string) any {
 	t := strings.ToLower(strings.TrimSpace(typeStr))
 
 	switch t {
@@ -2026,17 +2035,17 @@ func (b *InstructionBuilder) generateDummyValueFromType(typeStr string) interfac
 	case "uuid":
 		return "00000000-0000-0000-0000-000000000000"
 	case "json":
-		return map[string]interface{}{"#": "json"}
+		return map[string]any{"#": "json"}
 	case "any":
-		return map[string]interface{}{"#": "any"}
+		return map[string]any{"#": "any"}
 	case "object":
-		return map[string]interface{}{"#": "object"}
+		return map[string]any{"#": "object"}
 	}
 
 	// リスト型: int[], string[] 等
 	if len(t) > 2 && t[len(t)-2:] == "[]" {
 		baseType := t[:len(t)-2]
-		return []interface{}{b.generateDummyValueFromType(baseType)}
+		return []any{b.generateDummyValueFromType(baseType)}
 	}
 
 	return ""

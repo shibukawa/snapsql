@@ -7,11 +7,11 @@ import (
 
 // TypeInferenceError represents an error that occurred during type inference
 type TypeInferenceError struct {
-	FieldName string      // Field name where the error occurred
-	Position  int         // Position of the field in the statement
-	ErrorType string      // Type of error (e.g., "unknown_function", "type_mismatch")
-	Message   string      // Human-readable error message
-	Details   interface{} // Additional details about the error
+	FieldName string // Field name where the error occurred
+	Position  int    // Position of the field in the statement
+	ErrorType string // Type of error (e.g., "unknown_function", "type_mismatch")
+	Message   string // Human-readable error message
+	Details   any    // Additional details about the error
 }
 
 // Error implements the error interface

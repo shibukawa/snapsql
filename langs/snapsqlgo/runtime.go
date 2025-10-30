@@ -123,7 +123,7 @@ type FuncConfig struct {
 	ExplainCallback      func(ExplainResult)
 	EnableLogging        bool
 	LogFormat            LogFormat
-	LogOutput            interface{}
+	LogOutput            any
 	RuntimeLimit         *int
 	RuntimeOffset        *int
 }
@@ -299,8 +299,8 @@ func matchFunctionConfig(configMap map[string]*FuncConfig, funcName string, quer
 	// 2. Query type with function name glob
 	queryTypePattern := queryType + ":"
 	for pattern, config := range configMap {
-		if strings.HasPrefix(pattern, queryTypePattern) {
-			globPattern := strings.TrimPrefix(pattern, queryTypePattern)
+		if after, ok := strings.CutPrefix(pattern, queryTypePattern); ok {
+			globPattern := after
 			if matchGlob(globPattern, funcName) {
 				return config
 			}

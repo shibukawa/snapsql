@@ -246,10 +246,7 @@ func (cmd *FormatCmd) showDiff(original, formatted, filename string) error {
 	originalLines := strings.Split(original, "\n")
 	formattedLines := strings.Split(formatted, "\n")
 
-	maxLines := len(originalLines)
-	if len(formattedLines) > maxLines {
-		maxLines = len(formattedLines)
-	}
+	maxLines := max(len(formattedLines), len(originalLines))
 
 	for i := range maxLines {
 		var origLine, formLine string

@@ -353,7 +353,7 @@ SELECT id FROM filtered_users WHERE salary >= /*= min_salary */50000
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL with constants
-			constants := map[string]interface{}{
+			constants := map[string]any{
 				"status_filter": "active",
 				"min_age":       18,
 				"dept_id":       1,
@@ -459,7 +459,7 @@ SELECT id FROM high_earners`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			constants := map[string]interface{}{
+			constants := map[string]any{
 				"dept_id":    1,
 				"min_salary": 50000,
 			}

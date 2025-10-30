@@ -502,9 +502,13 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 	// Node instance maps (for fast lookup) keyed by chain keys
 	for _, n := range orderedNodes {
 		structName := responseStruct.Name
+
+		var structNameSb505 strings.Builder
 		for _, seg := range n.Path {
-			structName += celNameToGoName(seg)
+			structNameSb505.WriteString(celNameToGoName(seg))
 		}
+
+		structName += structNameSb505.String()
 
 		mapVar := "_nodeMap" + structName
 		code = append(code, fmt.Sprintf("var %s map[string]*%s", mapVar, structName))
@@ -586,9 +590,13 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 		depthPathKey := strings.Join(n.Path, "__")
 
 		structName := responseStruct.Name
+
+		var structNameSb589 strings.Builder
 		for _, seg := range n.Path {
-			structName += celNameToGoName(seg)
+			structNameSb589.WriteString(celNameToGoName(seg))
 		}
+
+		structName += structNameSb589.String()
 
 		mapVar := "_nodeMap_" + strings.Join(n.Path, "_")
 		keyVar := "_k_" + strings.Join(n.Path, "_")
@@ -597,9 +605,13 @@ func generateAggregatedScanCode(responseStruct *responseStructData, isMany bool)
 
 		if len(n.Path) > 1 {
 			parentStruct := responseStruct.Name
+
+			var parentStructSb600 strings.Builder
 			for _, seg := range n.Path[:len(n.Path)-1] {
-				parentStruct += celNameToGoName(seg)
+				parentStructSb600.WriteString(celNameToGoName(seg))
 			}
+
+			parentStruct += parentStructSb600.String()
 
 			parentMapVar = "_nodeMap" + parentStruct
 		}
@@ -802,9 +814,13 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 	for _, m := range metas {
 		// Compose struct name same as generateHierarchicalStructs
 		structName := mainStruct
+
+		var structNameSb805 strings.Builder
 		for _, seg := range m.Path {
-			structName += celNameToGoName(seg)
+			structNameSb805.WriteString(celNameToGoName(seg))
 		}
+
+		structName += structNameSb805.String()
 
 		code = append(code, fmt.Sprintf("var _nodeMap_%s map[string]*%s", strings.Join(m.Path, "_"), structName))
 	}
@@ -856,9 +872,13 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 	for _, m := range metas {
 		if m.Depth == 1 {
 			childStructName := mainStruct
+
+			var childStructNameSb859 strings.Builder
 			for _, seg := range m.Path {
-				childStructName += celNameToGoName(seg)
+				childStructNameSb859.WriteString(celNameToGoName(seg))
 			}
+
+			childStructName += childStructNameSb859.String()
 
 			code = append(code, fmt.Sprintf("        parentObj.%s = make([]*%s, 0)", celNameToGoName(m.Path[0]), childStructName))
 		}
@@ -966,9 +986,13 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 
 				if isChild {
 					childStructName := mainStruct
+
+					var childStructNameSb969 strings.Builder
 					for _, seg := range child.Path {
-						childStructName += celNameToGoName(seg)
+						childStructNameSb969.WriteString(celNameToGoName(seg))
 					}
+
+					childStructName += childStructNameSb969.String()
 
 					childFieldName := celNameToGoName(child.Path[len(child.Path)-1])
 					code = append(code, fmt.Sprintf("            node_%s.%s = make([]*%s, 0)", strings.Join(m.Path, "_"), childFieldName, childStructName))

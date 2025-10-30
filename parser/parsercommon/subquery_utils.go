@@ -3,6 +3,7 @@ package parsercommon
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	snapsql "github.com/shibukawa/snapsql"
@@ -277,10 +278,8 @@ func AddDependencyToGraph(dg *SQDependencyGraph, fromNodeID, toNodeID string) er
 	}
 
 	// Add dependency if not already present
-	for _, dep := range fromNode.Dependencies {
-		if dep == toNodeID {
-			return nil // Already exists
-		}
+	if slices.Contains(fromNode.Dependencies, toNodeID) {
+		return nil // Already exists
 	}
 
 	fromNode.Dependencies = append(fromNode.Dependencies, toNodeID)
@@ -318,18 +317,23 @@ func GetScopeHierarchyVisualizationFromGraph(dg *SQDependencyGraph) string {
 	}
 
 	result := "Scope Hierarchy:\n"
+
+	var resultSb321 strings.Builder
 	for nodeID, node := range nodes {
-		result += fmt.Sprintf("- %s (%s)\n", nodeID, node.NodeType.String())
+		resultSb321.WriteString(fmt.Sprintf("- %s (%s)\n", nodeID, node.NodeType.String()))
+
 		if len(node.Dependencies) > 0 {
-			result += "  Dependencies: " + fmt.Sprintf("%v", node.Dependencies) + "\n"
+			resultSb321.WriteString("  Dependencies: " + fmt.Sprintf("%v", node.Dependencies) + "\n")
 		}
 	}
+
+	result += resultSb321.String()
 
 	return result
 }
 
 // AddFieldSourceToNodeInGraph adds a field source to a specific node (legacy compatibility)
-func AddFieldSourceToNodeInGraph(dg *SQDependencyGraph, nodeID string, fieldSource interface{}) error {
+func AddFieldSourceToNodeInGraph(dg *SQDependencyGraph, nodeID string, fieldSource any) error {
 	if dg == nil {
 		return ErrNoDependencyGraph
 	}
@@ -342,7 +346,7 @@ func AddFieldSourceToNodeInGraph(dg *SQDependencyGraph, nodeID string, fieldSour
 }
 
 // AddTableReferenceToNodeInGraph adds a table reference to a specific node
-func AddTableReferenceToNodeInGraph(dg *SQDependencyGraph, nodeID string, tableRef interface{}) error {
+func AddTableReferenceToNodeInGraph(dg *SQDependencyGraph, nodeID string, tableRef any) error {
 	if dg == nil {
 		return ErrNoDependencyGraph
 	}
@@ -355,7 +359,7 @@ func AddTableReferenceToNodeInGraph(dg *SQDependencyGraph, nodeID string, tableR
 }
 
 // GetAccessibleFieldsForNodeInGraph returns accessible fields for a node (legacy compatibility)
-func GetAccessibleFieldsForNodeInGraph(dg *SQDependencyGraph, nodeID string) (interface{}, error) {
+func GetAccessibleFieldsForNodeInGraph(dg *SQDependencyGraph, nodeID string) (any, error) {
 	if dg == nil {
 		return nil, ErrNoDependencyGraph
 	}
@@ -375,7 +379,7 @@ func ValidateFieldAccessForNodeInGraph(dg *SQDependencyGraph, nodeID, fieldName 
 }
 
 // ResolveFieldInNodeFromGraph resolves field references
-func ResolveFieldInNodeFromGraph(dg *SQDependencyGraph, nodeID, fieldName string) (interface{}, error) {
+func ResolveFieldInNodeFromGraph(dg *SQDependencyGraph, nodeID, fieldName string) (any, error) {
 	if dg == nil {
 		return nil, ErrNoDependencyGraph
 	}

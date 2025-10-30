@@ -179,10 +179,9 @@ func (da *DependencyAnalyzer) findCriticalNodes() []string {
 	// Find nodes with high in-degree (many dependents)
 	var criticalNodes []string
 
-	threshold := len(nodes) / 4 // 25% threshold
-	if threshold < 2 {
-		threshold = 2
-	}
+	threshold := max(
+		// 25% threshold
+		len(nodes)/4, 2)
 
 	for nodeID, degree := range inDegree {
 		if degree >= threshold {

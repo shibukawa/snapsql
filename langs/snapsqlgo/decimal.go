@@ -58,27 +58,27 @@ func (d *Decimal) Type() ref.Type {
 }
 
 // Value returns the raw Go value
-func (d *Decimal) Value() interface{} {
+func (d *Decimal) Value() any {
 	return d.Decimal
 }
 
 // ConvertToNative converts the CelDecimal to a Go native type
-func (d *Decimal) ConvertToNative(typeDesc reflect.Type) (interface{}, error) {
+func (d *Decimal) ConvertToNative(typeDesc reflect.Type) (any, error) {
 	// If the target type is decimal.Decimal, return the underlying value
-	if typeDesc == reflect.TypeOf(decimal.Decimal{}) {
+	if typeDesc == reflect.TypeFor[decimal.Decimal]() {
 		return d.Decimal, nil
 	}
 	// If the target type is *decimal.Decimal, return a pointer
-	if typeDesc == reflect.TypeOf(&decimal.Decimal{}) {
+	if typeDesc == reflect.TypeFor[*decimal.Decimal]() {
 		return &d.Decimal, nil
 	}
 	// Handle conversion to other common types like float64, string, etc.
-	if typeDesc == reflect.TypeOf(float64(0)) {
+	if typeDesc == reflect.TypeFor[float64]() {
 		f, _ := d.Float64()
 		return f, nil
 	}
 
-	if typeDesc == reflect.TypeOf("") {
+	if typeDesc == reflect.TypeFor[string]() {
 		return d.String(), nil
 	}
 
@@ -105,7 +105,7 @@ func (d *Decimal) Equal(other ref.Val) ref.Val {
 	o, ok := other.(*Decimal)
 	if !ok {
 		// Try to convert other to Decimal if possible
-		converted, err := other.ConvertToNative(reflect.TypeOf(d.Decimal))
+		converted, err := other.ConvertToNative(reflect.TypeFor[decimal.Decimal]())
 		if err == nil {
 			o, ok = converted.(*Decimal)
 		}

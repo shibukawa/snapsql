@@ -2,6 +2,7 @@ package typeinference
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/shibukawa/snapsql"
@@ -195,10 +196,8 @@ func (v *SchemaValidator) resolveTableAlias(tableName string) string {
 func (v *SchemaValidator) findSchemaForTable(tableName string) string {
 	for _, schemaName := range v.schemaResolver.GetAllSchemas() {
 		tables := v.schemaResolver.GetTablesInSchema(schemaName)
-		for _, table := range tables {
-			if table == tableName {
-				return schemaName
-			}
+		if slices.Contains(tables, tableName) {
+			return schemaName
 		}
 	}
 
@@ -258,10 +257,8 @@ func (v *SchemaValidator) areTypesCompatible(inferredType, schemaType string) bo
 	}
 
 	if compatible, exists := compatiblePairs[normalizedInferred]; exists {
-		for _, compatType := range compatible {
-			if compatType == normalizedSchema {
-				return true
-			}
+		if slices.Contains(compatible, normalizedSchema) {
+			return true
 		}
 	}
 

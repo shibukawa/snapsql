@@ -458,7 +458,7 @@ FROM users`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL - パーサーがディレクティブを処理するために定数を提供
-			constants := map[string]interface{}{
+			constants := map[string]any{
 				"include_age_filter": true,
 				"use_premium":        true,
 				"priority":           1,
@@ -611,7 +611,7 @@ SELECT id FROM users WHERE status = /*= status */'active' OR priority_status = /
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Parse SQL - パーサーがディレクティブを処理するために定数を提供
-			constants := map[string]interface{}{
+			constants := map[string]any{
 				"user_id":      1,
 				"status":       "active",
 				"min_priority": 1,

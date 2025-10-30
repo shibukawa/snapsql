@@ -230,8 +230,8 @@ func applyInitSQL(t *testing.T, db *sql.DB, baseDir string) {
 
 	if parts := strings.Split(t.Name(), "/"); len(parts) > 1 {
 		for _, p := range parts {
-			if strings.HasPrefix(p, "dialect=") {
-				dialect = strings.TrimPrefix(p, "dialect=")
+			if after, ok := strings.CutPrefix(p, "dialect="); ok {
+				dialect = after
 				break
 			}
 		}
@@ -324,7 +324,7 @@ func detectDialect(path string) string {
 	}
 
 	header := rest[:end]
-	for _, line := range strings.Split(header, "\n") {
+	for line := range strings.SplitSeq(header, "\n") {
 		raw := strings.TrimSpace(line)
 
 		lower := strings.ToLower(raw)

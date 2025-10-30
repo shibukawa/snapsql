@@ -169,7 +169,7 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 		case "json":
 			// Parse JSON while preserving order using yaml parser (which preserves order)
 			// Convert JSON to YAML first, then parse with yaml parser
-			var jsonData interface{}
+			var jsonData any
 			if err := json.Unmarshal([]byte(doc.ParametersText), &jsonData); err != nil {
 				return nil, fmt.Errorf("failed to parse JSON parameters: %w", err)
 			}
@@ -216,8 +216,8 @@ func ParseFunctionDefinitionFromSnapSQLDocument(doc *markdownparser.SnapSQLDocum
 func parseListFormatParameters(text string) (yaml.MapSlice, error) {
 	var rawParams yaml.MapSlice
 
-	lines := strings.Split(strings.TrimSpace(text), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(strings.TrimSpace(text), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -773,8 +773,8 @@ func (f *FunctionDefinition) resolveCommonTypeRef(typeStr string) (any, string) 
 	if strings.HasPrefix(path, ".") {
 		absTargetPath = filepath.Clean(filepath.Join(baseDir, path))
 		targetPath, _ = filepath.Rel(f.projectRootPath, absTargetPath)
-	} else if strings.HasPrefix(path, "/") {
-		targetPath = strings.TrimPrefix(path, "/")
+	} else if after, ok := strings.CutPrefix(path, "/"); ok {
+		targetPath = after
 		absTargetPath = filepath.Clean(filepath.Join(f.projectRootPath, targetPath))
 	} else {
 		targetPath = filepath.Clean(filepath.Join(f.projectRootPath, path))

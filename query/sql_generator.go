@@ -3,6 +3,7 @@ package query
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -99,13 +100,13 @@ func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect string) *S
 }
 
 // Generate generates SQL and parameters from the instructions
-func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interface{}, error) {
+func (g *SQLGenerator) Generate(params map[string]any) (string, []any, error) {
 	if g.loopBoundaryErr != nil {
 		return "", nil, g.loopBoundaryErr
 	}
 
 	if params == nil {
-		params = make(map[string]interface{})
+		params = make(map[string]any)
 	}
 
 	// Reset generated cache per invocation to avoid leaking values across calls.
@@ -113,7 +114,7 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 
 	var result strings.Builder
 
-	sqlParams := make([]interface{}, 0)
+	sqlParams := make([]any, 0)
 	state := &generationState{
 		builder:   &result,
 		sqlParams: &sqlParams,
@@ -135,7 +136,7 @@ func (g *SQLGenerator) Generate(params map[string]interface{}) (string, []interf
 
 type generationState struct {
 	builder         *strings.Builder
-	sqlParams       *[]interface{}
+	sqlParams       *[]any
 	lastChar        byte
 	hasLast         bool
 	boundaryEnabled bool
@@ -207,7 +208,7 @@ func isWhitespace(b byte) bool {
 	}
 }
 
-func (g *SQLGenerator) processInstructions(state *generationState, params map[string]interface{}, conditionStack *[]bool, start, end int) error {
+func (g *SQLGenerator) processInstructions(state *generationState, params map[string]any, conditionStack *[]bool, start, end int) error {
 	for i := start; i < end; i++ {
 		instr := g.instructions[i]
 
@@ -388,7 +389,7 @@ func (g *SQLGenerator) processInstructions(state *generationState, params map[st
 	return nil
 }
 
-func (g *SQLGenerator) handleLoop(state *generationState, params map[string]interface{}, conditionStack *[]bool, startIndex int, instr intermediate.Instruction) (int, error) {
+func (g *SQLGenerator) handleLoop(state *generationState, params map[string]any, conditionStack *[]bool, startIndex int, instr intermediate.Instruction) (int, error) {
 	if instr.Variable == "" {
 		return 0, fmt.Errorf("%w: loop variable missing at instruction %d", ErrUnsupportedOperation, startIndex)
 	}
@@ -428,8 +429,8 @@ func (g *SQLGenerator) handleLoop(state *generationState, params map[string]inte
 	return endIndex, nil
 }
 
-func (g *SQLGenerator) evaluateLoopCollection(instr intermediate.Instruction, index int, params map[string]interface{}) ([]interface{}, error) {
-	var raw interface{}
+func (g *SQLGenerator) evaluateLoopCollection(instr intermediate.Instruction, index int, params map[string]any) ([]any, error) {
+	var raw any
 
 	if instr.CollectionExprIndex != nil {
 		exprIndex := *instr.CollectionExprIndex
@@ -459,18 +460,18 @@ func (g *SQLGenerator) evaluateLoopCollection(instr intermediate.Instruction, in
 	return normalizeCollectionValue(raw)
 }
 
-func normalizeCollectionValue(value interface{}) ([]interface{}, error) {
+func normalizeCollectionValue(value any) ([]any, error) {
 	if value == nil {
-		return []interface{}{}, nil
+		return []any{}, nil
 	}
 
 	switch v := value.(type) {
-	case []interface{}:
-		return append([]interface{}{}, v...), nil
+	case []any:
+		return append([]any{}, v...), nil
 	case traits.Lister:
 		iter := v.Iterator()
 
-		result := make([]interface{}, 0)
+		result := make([]any, 0)
 		for hasNext(iter.HasNext()) {
 			result = append(result, iter.Next().Value())
 		}
@@ -482,7 +483,7 @@ func normalizeCollectionValue(value interface{}) ([]interface{}, error) {
 	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
 		length := rv.Len()
 
-		result := make([]interface{}, length)
+		result := make([]any, length)
 		for i := range length {
 			result[i] = rv.Index(i).Interface()
 		}
@@ -558,7 +559,7 @@ func containsBoundary(instructions []intermediate.Instruction) bool {
 	return false
 }
 
-func (g *SQLGenerator) shouldEmitSystemClause(params map[string]interface{}, key string) bool {
+func (g *SQLGenerator) shouldEmitSystemClause(params map[string]any, key string) bool {
 	if params == nil {
 		return true
 	}
@@ -598,7 +599,7 @@ func (g *SQLGenerator) resolveSystemNumeric(defaultValue string, kind string) st
 	return value
 }
 
-func (g *SQLGenerator) resolveSystemValue(fieldName string, params map[string]interface{}) (any, error) {
+func (g *SQLGenerator) resolveSystemValue(fieldName string, params map[string]any) (any, error) {
 	name := strings.ToLower(strings.TrimSpace(fieldName))
 	if name == "" {
 		return nil, fmt.Errorf("%w: system field name missing", ErrUnsupportedOperation)
@@ -708,7 +709,7 @@ func (g *SQLGenerator) generateFallbackValue(typeName, fieldName string) any {
 	return uuid.NewString()
 }
 
-func toInt64(v interface{}) int64 {
+func toInt64(v any) int64 {
 	switch val := v.(type) {
 	case int:
 		return int64(val)
@@ -728,7 +729,7 @@ func toInt64(v interface{}) int64 {
 	}
 }
 
-func toFloat64(v interface{}) float64 {
+func toFloat64(v any) float64 {
 	switch val := v.(type) {
 	case float32:
 		return float64(val)
@@ -749,7 +750,7 @@ func toFloat64(v interface{}) float64 {
 }
 
 // evaluateExpression evaluates a CEL expression and returns the result
-func (g *SQLGenerator) evaluateExpression(expression string, params map[string]interface{}) (interface{}, error) {
+func (g *SQLGenerator) evaluateExpression(expression string, params map[string]any) (any, error) {
 	// Simple parameter lookup for now
 	if value, exists := params[expression]; exists {
 		return value, nil
@@ -767,14 +768,12 @@ func (g *SQLGenerator) evaluateExpression(expression string, params map[string]i
 	}
 
 	// Create evaluation context
-	evalParams := map[string]interface{}{
+	evalParams := map[string]any{
 		"params": params,
 	}
 
 	// Add individual parameters to the context for direct access
-	for k, v := range params {
-		evalParams[k] = v
-	}
+	maps.Copy(evalParams, params)
 
 	result, _, err := program.Eval(evalParams)
 	if err != nil {
@@ -785,7 +784,7 @@ func (g *SQLGenerator) evaluateExpression(expression string, params map[string]i
 }
 
 // evaluateCondition evaluates a condition expression and returns a boolean result
-func (g *SQLGenerator) evaluateCondition(expression string, params map[string]interface{}) (bool, error) {
+func (g *SQLGenerator) evaluateCondition(expression string, params map[string]any) (bool, error) {
 	result, err := g.evaluateExpression(expression, params)
 	if err != nil {
 		return false, err

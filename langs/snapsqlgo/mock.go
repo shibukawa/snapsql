@@ -194,10 +194,7 @@ func (r *mockRegistry) register(functionName string, cases []MockCase, opts ...M
 			return MockCase{}, fmt.Errorf("%w: %s", ErrMockCaseNotFound, opt.Name)
 		}
 
-		idx := opt.Index
-		if idx < 0 {
-			idx = 0
-		}
+		idx := max(opt.Index, 0)
 
 		if idx >= len(normalized) {
 			return MockCase{}, fmt.Errorf("%w: mock case index %d out of range for %s", ErrMock, idx, functionName)

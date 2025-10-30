@@ -15,9 +15,9 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 		name         string
 		instructions []intermediate.Instruction
 		expressions  []intermediate.CELExpression
-		params       map[string]interface{}
+		params       map[string]any
 		expectedSQL  string
-		expectedArgs []interface{}
+		expectedArgs []any
 		expectError  bool
 	}{
 		{
@@ -26,9 +26,9 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 				{Op: intermediate.OpEmitStatic, Value: "SELECT * FROM users"},
 			},
 			expressions:  []intermediate.CELExpression{},
-			params:       map[string]interface{}{},
+			params:       map[string]any{},
 			expectedSQL:  "SELECT * FROM users",
-			expectedArgs: []interface{}{},
+			expectedArgs: []any{},
 			expectError:  false,
 		},
 		{
@@ -40,11 +40,11 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 			expressions: []intermediate.CELExpression{
 				{Expression: "user_id"},
 			},
-			params: map[string]interface{}{
+			params: map[string]any{
 				"user_id": 123,
 			},
 			expectedSQL:  "SELECT * FROM users WHERE id = ?",
-			expectedArgs: []interface{}{123},
+			expectedArgs: []any{123},
 			expectError:  false,
 		},
 		{
@@ -59,12 +59,12 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 				{Expression: "user_id"},
 				{Expression: "user_name"},
 			},
-			params: map[string]interface{}{
+			params: map[string]any{
 				"user_id":   123,
 				"user_name": "John",
 			},
 			expectedSQL:  "SELECT * FROM users WHERE id = ? AND name = ?",
-			expectedArgs: []interface{}{123, "John"},
+			expectedArgs: []any{123, "John"},
 			expectError:  false,
 		},
 		{
@@ -76,7 +76,7 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 			expressions: []intermediate.CELExpression{
 				{Expression: "user_id"},
 			},
-			params:      map[string]interface{}{},
+			params:      map[string]any{},
 			expectedSQL: "",
 			expectError: true,
 		},
@@ -87,7 +87,7 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 				{Op: intermediate.OpEmitEval, ExprIndex: intPtr(99)},
 			},
 			expressions: []intermediate.CELExpression{},
-			params:      map[string]interface{}{},
+			params:      map[string]any{},
 			expectedSQL: "",
 			expectError: true,
 		},
@@ -119,9 +119,9 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 		name         string
 		instructions []intermediate.Instruction
 		expressions  []intermediate.CELExpression
-		params       map[string]interface{}
+		params       map[string]any
 		expectedSQL  string
-		expectedArgs []interface{}
+		expectedArgs []any
 		expectError  bool
 	}{
 		{
@@ -135,11 +135,11 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 			expressions: []intermediate.CELExpression{
 				{Expression: "include_active"},
 			},
-			params: map[string]interface{}{
+			params: map[string]any{
 				"include_active": true,
 			},
 			expectedSQL:  "SELECT * FROM users WHERE active = true",
-			expectedArgs: []interface{}{},
+			expectedArgs: []any{},
 			expectError:  false,
 		},
 		{
@@ -153,11 +153,11 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 			expressions: []intermediate.CELExpression{
 				{Expression: "include_active"},
 			},
-			params: map[string]interface{}{
+			params: map[string]any{
 				"include_active": false,
 			},
 			expectedSQL:  "SELECT * FROM users",
-			expectedArgs: []interface{}{},
+			expectedArgs: []any{},
 			expectError:  false,
 		},
 		{
@@ -173,11 +173,11 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 			expressions: []intermediate.CELExpression{
 				{Expression: "show_active"},
 			},
-			params: map[string]interface{}{
+			params: map[string]any{
 				"show_active": false,
 			},
 			expectedSQL:  "SELECT * FROM users WHERE active = false",
-			expectedArgs: []interface{}{},
+			expectedArgs: []any{},
 			expectError:  false,
 		},
 	}
@@ -232,7 +232,7 @@ func TestSQLGenerator_SystemValueDefaults(t *testing.T) {
 	}
 
 	generator := NewSQLGenerator(format, "postgresql")
-	params := map[string]interface{}{}
+	params := map[string]any{}
 
 	sql, args, err := generator.Generate(params)
 	assert.NoError(t, err)
@@ -259,9 +259,9 @@ func TestSQLGenerator_Generate_LoopOperations(t *testing.T) {
 		name         string
 		instructions []intermediate.Instruction
 		expressions  []intermediate.CELExpression
-		params       map[string]interface{}
+		params       map[string]any
 		expectedSQL  string
-		expectedArgs []interface{}
+		expectedArgs []any
 	}{
 		{
 			name: "single level loop",
@@ -278,11 +278,11 @@ func TestSQLGenerator_Generate_LoopOperations(t *testing.T) {
 				{Expression: "items"},
 				{Expression: "value"},
 			},
-			params: map[string]interface{}{
-				"items": []interface{}{"foo", "bar"},
+			params: map[string]any{
+				"items": []any{"foo", "bar"},
 			},
 			expectedSQL:  "INSERT [? ] [? ] ;",
-			expectedArgs: []interface{}{"foo", "bar"},
+			expectedArgs: []any{"foo", "bar"},
 		},
 		{
 			name: "nested loops",
@@ -304,14 +304,14 @@ func TestSQLGenerator_Generate_LoopOperations(t *testing.T) {
 				{Expression: "group"},
 				{Expression: "member"},
 			},
-			params: map[string]interface{}{
-				"groups": []interface{}{
-					[]interface{}{"a", "b"},
-					[]interface{}{"c"},
+			params: map[string]any{
+				"groups": []any{
+					[]any{"a", "b"},
+					[]any{"c"},
 				},
 			},
 			expectedSQL:  "BEGIN [ {? } {? } ] [ {? } ] END",
-			expectedArgs: []interface{}{"a", "b", "c"},
+			expectedArgs: []any{"a", "b", "c"},
 		},
 		{
 			name: "empty collection",
@@ -325,11 +325,11 @@ func TestSQLGenerator_Generate_LoopOperations(t *testing.T) {
 			expressions: []intermediate.CELExpression{
 				{Expression: "items"},
 			},
-			params: map[string]interface{}{
-				"items": []interface{}{},
+			params: map[string]any{
+				"items": []any{},
 			},
 			expectedSQL:  "DELETE FROM t WHERE flag = true",
-			expectedArgs: []interface{}{},
+			expectedArgs: []any{},
 		},
 		{
 			name: "loop removes trailing comma",
@@ -347,11 +347,11 @@ func TestSQLGenerator_Generate_LoopOperations(t *testing.T) {
 				{Expression: "rows"},
 				{Expression: "row"},
 			},
-			params: map[string]interface{}{
-				"rows": []interface{}{1, 2},
+			params: map[string]any{
+				"rows": []any{1, 2},
 			},
 			expectedSQL:  "INSERT INTO t VALUES(?),\n(?)\nRETURNING id",
-			expectedArgs: []interface{}{1, 2},
+			expectedArgs: []any{1, 2},
 		},
 	}
 

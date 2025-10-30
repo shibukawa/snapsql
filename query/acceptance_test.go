@@ -150,7 +150,7 @@ type expectedResult struct {
 	Count   int              `yaml:"count,omitempty"`
 }
 
-func toRowMaps(cols []string, rows [][]interface{}) []map[string]any {
+func toRowMaps(cols []string, rows [][]any) []map[string]any {
 	out := make([]map[string]any, len(rows))
 
 	for i, r := range rows {

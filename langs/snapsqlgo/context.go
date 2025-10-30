@@ -2,10 +2,11 @@ package snapsqlgo
 
 import (
 	"context"
+	"maps"
 )
 
 // WithSystemValue adds a system value to the context
-func WithSystemValue(ctx context.Context, key string, value interface{}) context.Context {
+func WithSystemValue(ctx context.Context, key string, value any) context.Context {
 	systemValues := getSystemValuesFromContext(ctx)
 	if systemValues == nil {
 		systemValues = make(map[string]any)
@@ -13,9 +14,7 @@ func WithSystemValue(ctx context.Context, key string, value interface{}) context
 
 	// Create a copy to avoid modifying the original map
 	newSystemValues := make(map[string]any)
-	for k, v := range systemValues {
-		newSystemValues[k] = v
-	}
+	maps.Copy(newSystemValues, systemValues)
 
 	newSystemValues[key] = value
 

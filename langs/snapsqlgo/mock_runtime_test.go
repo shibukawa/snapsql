@@ -98,6 +98,7 @@ func TestWithMockIteratorSequence(t *testing.T) {
 	iterator := querylogtest.BoardList(ctx, noopExecutor{TB: t})
 
 	var captured []querylogtest.BoardListResult
+
 	iterator(func(res *querylogtest.BoardListResult, err error) bool {
 		require.NoError(t, err)
 		require.NotNil(t, res)
@@ -115,6 +116,7 @@ func TestWithMockIteratorSequence(t *testing.T) {
 	iterator = querylogtest.BoardList(ctx, noopExecutor{TB: t})
 
 	var seqErr error
+
 	iterator(func(res *querylogtest.BoardListResult, err error) bool {
 		seqErr = err
 		return false

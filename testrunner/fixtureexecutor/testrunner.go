@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -239,13 +240,9 @@ func (tr *TestRunner) executeTestWithContext(ctx context.Context, testCase *mark
 
 	// Merge default parameters with test case parameters
 	parameters := make(map[string]any)
-	for k, v := range tr.parameters {
-		parameters[k] = v
-	}
+	maps.Copy(parameters, tr.parameters)
 
-	for k, v := range testCase.Parameters {
-		parameters[k] = v
-	}
+	maps.Copy(parameters, testCase.Parameters)
 
 	sql := testCase.SQL
 	if sql == "" {

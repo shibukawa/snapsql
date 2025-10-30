@@ -1,6 +1,7 @@
 package typeinference
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/shibukawa/snapsql/parser"
@@ -405,9 +406,9 @@ func (g *EnhancedFieldNameGenerator) extractMainIdentifier(expr string) string {
 	}
 
 	expr = strings.Trim(expr, " ()")
-	words := strings.Fields(expr)
+	words := strings.FieldsSeq(expr)
 
-	for _, word := range words {
+	for word := range words {
 		word = strings.Trim(word, "(),;")
 		if g.isValidIdentifier(word) {
 			return strings.ToLower(word)
@@ -435,10 +436,8 @@ func (g *EnhancedFieldNameGenerator) isValidIdentifier(word string) bool {
 		"UPPER", "LOWER", "LENGTH", "TRIM", "SUBSTRING", "LEFT", "RIGHT",
 	}
 
-	for _, keyword := range keywords {
-		if upper == keyword {
-			return false
-		}
+	if slices.Contains(keywords, upper) {
+		return false
 	}
 
 	// Must start with letter or underscore

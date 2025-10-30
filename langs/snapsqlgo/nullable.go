@@ -42,7 +42,7 @@ func NormalizeNullableTimestamp(value any) any {
 		}
 
 		if v.Type() == types.TimestampType {
-			native, err := v.ConvertToNative(reflect.TypeOf(time.Time{}))
+			native, err := v.ConvertToNative(reflect.TypeFor[time.Time]())
 			if err == nil {
 				if ts, ok := native.(time.Time); ok {
 					if ts.IsZero() {
@@ -54,7 +54,7 @@ func NormalizeNullableTimestamp(value any) any {
 			}
 		}
 
-		native, err := v.ConvertToNative(reflect.TypeOf((*any)(nil)).Elem())
+		native, err := v.ConvertToNative(reflect.TypeFor[any]())
 		if err == nil {
 			return NormalizeNullableTimestamp(native)
 		}

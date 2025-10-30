@@ -90,7 +90,7 @@ func Truthy(value any) bool {
 			return false
 		}
 
-		native, err := v.ConvertToNative(reflect.TypeOf((*any)(nil)).Elem())
+		native, err := v.ConvertToNative(reflect.TypeFor[any]())
 		if err == nil {
 			if native == nil {
 				return false

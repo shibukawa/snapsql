@@ -219,9 +219,9 @@ func (e *Executor) validateTableState(tx *sql.Tx, spec ValidationSpec) error {
 	var actualData []map[string]any
 
 	for rows.Next() {
-		values := make([]interface{}, len(columns))
+		values := make([]any, len(columns))
 
-		valuePtrs := make([]interface{}, len(columns))
+		valuePtrs := make([]any, len(columns))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
@@ -302,7 +302,7 @@ func (e *Executor) validateExistence(tx *sql.Tx, spec ValidationSpec) error {
 		// Build WHERE clause from other fields
 		var (
 			conditions []string
-			args       []interface{}
+			args       []any
 		)
 
 		for key, value := range expectedRow {

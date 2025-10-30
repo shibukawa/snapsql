@@ -3,6 +3,7 @@ package fixtureexecutor
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -88,9 +89,7 @@ func (f *FixtureError) Context() map[string]string {
 	}
 
 	out := make(map[string]string, len(f.context))
-	for k, v := range f.context {
-		out[k] = v
-	}
+	maps.Copy(out, f.context)
 
 	return out
 }
@@ -255,9 +254,7 @@ func copyContext(ctx map[string]string) map[string]string {
 	}
 
 	out := make(map[string]string, len(ctx))
-	for k, v := range ctx {
-		out[k] = v
-	}
+	maps.Copy(out, ctx)
 
 	return out
 }

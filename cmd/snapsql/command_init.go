@@ -264,7 +264,7 @@ func createVSCodeSettings(ctx *Context) error {
 	schemaPatterns := []string{"snapsql.yaml", "**/snapsql*.yaml"}
 
 	// Check if settings.json already exists
-	var settings map[string]interface{}
+	var settings map[string]any
 
 	existingData, err := os.ReadFile(settingsPath)
 	if err == nil {
@@ -275,21 +275,21 @@ func createVSCodeSettings(ctx *Context) error {
 				color.Yellow("Warning: existing settings.json is invalid, creating new one")
 			}
 
-			settings = make(map[string]interface{})
+			settings = make(map[string]any)
 		}
 	} else {
 		// File doesn't exist, create new settings
-		settings = make(map[string]interface{})
+		settings = make(map[string]any)
 	}
 
 	// Add or update yaml.schemas configuration
-	yamlSchemas, ok := settings["yaml.schemas"].(map[string]interface{})
+	yamlSchemas, ok := settings["yaml.schemas"].(map[string]any)
 	if !ok {
-		yamlSchemas = make(map[string]interface{})
+		yamlSchemas = make(map[string]any)
 	}
 
 	// Convert patterns to interface slice for JSON
-	patterns := make([]interface{}, len(schemaPatterns))
+	patterns := make([]any, len(schemaPatterns))
 	for i, p := range schemaPatterns {
 		patterns[i] = p
 	}

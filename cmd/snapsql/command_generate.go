@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -410,8 +411,10 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 
 	// Base arguments (shared across files)
 	baseArgs := []string{"--output", outputDir}
+
 	for key, value := range generator.Settings {
 		var strValue string
+
 		switch v := value.(type) {
 		case string:
 			strValue = v
@@ -723,9 +726,7 @@ func (g *GenerateCmd) loadConstants(config *Config, ctx *Context) (map[string]an
 		}
 
 		// Merge constants
-		for k, v := range fileConstants {
-			constants[k] = v
-		}
+		maps.Copy(constants, fileConstants)
 	}
 
 	return constants, nil

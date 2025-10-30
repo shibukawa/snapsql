@@ -152,6 +152,7 @@ func generateHierarchicalStructs(functionName string, nodes map[string]*node, ro
 
 	// Map pathKey -> structName for reference
 	structNames := map[string]string{}
+
 	for _, n := range nodeList {
 		suffixParts := make([]string, len(n.PathSegments))
 		for i, s := range n.PathSegments {

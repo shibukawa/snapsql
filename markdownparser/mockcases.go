@@ -1,6 +1,7 @@
 package markdownparser
 
 import (
+	"maps"
 	"time"
 
 	"github.com/shibukawa/snapsql"
@@ -70,9 +71,7 @@ func cloneMapAny(src map[string]any) map[string]any {
 	}
 
 	dup := make(map[string]any, len(src))
-	for k, v := range src {
-		dup[k] = v
-	}
+	maps.Copy(dup, src)
 
 	return dup
 }
@@ -90,9 +89,7 @@ func cloneSliceMap(src []map[string]any) []map[string]any {
 		}
 
 		copied := make(map[string]any, len(row))
-		for k, v := range row {
-			copied[k] = v
-		}
+		maps.Copy(copied, row)
 
 		dup[i] = copied
 	}

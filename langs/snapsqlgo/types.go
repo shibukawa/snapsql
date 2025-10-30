@@ -31,18 +31,18 @@ import (
 
 // FieldInfo represents information about a struct field
 type FieldInfo struct {
-	Name     string                    // CEL上で使用する名前
-	GoName   string                    // Go構造体のフィールド名
-	CelType  *types.Type               // CEL型情報
-	Accessor func(interface{}) ref.Val // 静的アクセサー関数
+	Name     string            // CEL上で使用する名前
+	GoName   string            // Go構造体のフィールド名
+	CelType  *types.Type       // CEL型情報
+	Accessor func(any) ref.Val // 静的アクセサー関数
 }
 
 // StructInfo represents information about a struct type
 type StructInfo struct {
-	Name      string                    // 構造体名
-	CelType   *types.Type               // CEL型情報
-	Fields    map[string]FieldInfo      // フィールド情報
-	Converter func(interface{}) ref.Val // 静的変換関数
+	Name      string               // 構造体名
+	CelType   *types.Type          // CEL型情報
+	Fields    map[string]FieldInfo // フィールド情報
+	Converter func(any) ref.Val    // 静的変換関数
 }
 
 // LocalTypeRegistry manages custom types for a specific function
@@ -76,12 +76,12 @@ func (r *LocalTypeRegistry) GetStructInfo(name string) (StructInfo, bool) {
 // CustomValue wraps a Go struct to implement CEL ref.Val interface
 type CustomValue struct {
 	structInfo StructInfo
-	value      interface{}
+	value      any
 	registry   *LocalTypeRegistry
 }
 
 // NewCustomValue creates a new custom value
-func NewCustomValue(structInfo StructInfo, value interface{}, registry *LocalTypeRegistry) *CustomValue {
+func NewCustomValue(structInfo StructInfo, value any, registry *LocalTypeRegistry) *CustomValue {
 	return &CustomValue{
 		structInfo: structInfo,
 		value:      value,
@@ -104,7 +104,7 @@ func (v *CustomValue) Get(index ref.Val) ref.Val {
 }
 
 // ConvertToNative converts to Go native type
-func (v *CustomValue) ConvertToNative(typeDesc reflect.Type) (interface{}, error) {
+func (v *CustomValue) ConvertToNative(typeDesc reflect.Type) (any, error) {
 	if typeDesc == reflect.TypeOf(v.value) {
 		return v.value, nil
 	}
@@ -138,7 +138,7 @@ func (v *CustomValue) Type() ref.Type {
 }
 
 // Value returns Go value
-func (v *CustomValue) Value() interface{} {
+func (v *CustomValue) Value() any {
 	return v.value
 }
 
@@ -157,7 +157,7 @@ func NewLocalTypeAdapter(registry *LocalTypeRegistry) *LocalTypeAdapter {
 }
 
 // NativeToValue converts Go native values to CEL values
-func (a *LocalTypeAdapter) NativeToValue(value interface{}) ref.Val {
+func (a *LocalTypeAdapter) NativeToValue(value any) ref.Val {
 	if value == nil {
 		return types.NullValue
 	}
@@ -246,7 +246,7 @@ func (p *LocalTypeProvider) NewValue(typeName string, fields map[string]ref.Val)
 var _ types.Provider = (*LocalTypeProvider)(nil)
 
 // ConvertGoValueToCEL converts Go values to CEL values (exported for generated code)
-func ConvertGoValueToCEL(value interface{}) ref.Val {
+func ConvertGoValueToCEL(value any) ref.Val {
 	if value == nil {
 		return types.NullValue
 	}
@@ -345,7 +345,7 @@ func CreateCELOptionsWithTypes(typeDefinitions map[string]map[string]FieldInfo) 
 }
 
 // CreateFieldInfo creates a FieldInfo with static accessor for a CEL field.
-func CreateFieldInfo(celName string, celType *types.Type, accessor func(interface{}) ref.Val) FieldInfo {
+func CreateFieldInfo(celName string, celType *types.Type, accessor func(any) ref.Val) FieldInfo {
 	// Convert CEL name to Go name automatically
 	goName := celNameToGoName(celName)
 

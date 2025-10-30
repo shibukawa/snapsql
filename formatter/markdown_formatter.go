@@ -72,8 +72,8 @@ func (f *MarkdownFormatter) Format(markdown string) (string, error) {
 					}
 
 					// Add the formatted SQL with proper indentation
-					sqlLines := strings.Split(strings.TrimRight(formattedSQL, "\n"), "\n")
-					for _, sqlLine := range sqlLines {
+					sqlLines := strings.SplitSeq(strings.TrimRight(formattedSQL, "\n"), "\n")
+					for sqlLine := range sqlLines {
 						if strings.TrimSpace(sqlLine) != "" {
 							result.WriteString(blockIndent)
 							result.WriteString(sqlLine)
@@ -255,8 +255,8 @@ func (f *MarkdownFormatter) processSQLContent(result *strings.Builder, sqlConten
 	}
 
 	// Add the formatted SQL with proper indentation
-	sqlLines := strings.Split(strings.TrimRight(formattedSQL, "\n"), "\n")
-	for _, sqlLine := range sqlLines {
+	sqlLines := strings.SplitSeq(strings.TrimRight(formattedSQL, "\n"), "\n")
+	for sqlLine := range sqlLines {
 		if strings.TrimSpace(sqlLine) != "" {
 			result.WriteString(indent)
 			result.WriteString(sqlLine)
