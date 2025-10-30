@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Fetch comments chronologically",
+    "parameters": {
+      "card_id": 401
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "body": "Looks good",
+            "card_id": 401,
+            "created_at": "2025-09-14T11:00:00Z",
+            "id": 600
+          },
+          {
+            "body": "Please update",
+            "card_id": 401,
+            "created_at": "2025-09-14T11:05:00Z",
+            "id": 601
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "body": "Looks good",
+                "card_id": 401,
+                "created_at": "2025-09-14T11:00:00Z",
+                "id": 600
+              },
+              {
+                "body": "Please update",
+                "card_id": 401,
+                "created_at": "2025-09-14T11:05:00Z",
+                "id": 601
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

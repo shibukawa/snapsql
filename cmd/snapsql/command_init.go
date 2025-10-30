@@ -38,6 +38,8 @@ func (i *InitCmd) Run(ctx *Context) error {
 		dirs = append(dirs, "generated")
 	}
 
+	dirs = append(dirs, filepath.Join("testdata", "mock"))
+
 	for _, dir := range dirs {
 		err := createDir(dir)
 		if err != nil {
@@ -131,6 +133,14 @@ generation:
       settings:
         pretty: true
         include_metadata: true
+
+    mock:
+      output: "./testdata/mock"
+      preserve_hierarchy: true
+      settings:
+        embed: true
+        package: "mock"
+        filename: "mock.go"
     
     go:
       output: "./internal/queries"
@@ -173,6 +183,13 @@ func createKanbanConfig() error {
 	b.WriteString("      settings:\n")
 	b.WriteString("        pretty: true\n")
 	b.WriteString("        include_metadata: true\n")
+	b.WriteString("    mock:\n")
+	b.WriteString("      output: \"./testdata/mock\"\n")
+	b.WriteString("      preserve_hierarchy: true\n")
+	b.WriteString("      settings:\n")
+	b.WriteString("        embed: true\n")
+	b.WriteString("        package: \"mock\"\n")
+	b.WriteString("        filename: \"mock.go\"\n")
 	b.WriteString("    go:\n")
 	b.WriteString("      output: \"./internal/query\"\n")
 	b.WriteString("      preserve_hierarchy: true\n")

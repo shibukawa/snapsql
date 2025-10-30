@@ -23,6 +23,8 @@ type queryExecutionData struct {
 	IsIterator        bool
 	IteratorBody      []string
 	IteratorYieldType string
+	ReturnsSQLResult  bool
+	ResponseAffinity  string
 }
 
 // generateQueryExecution generates query execution and result mapping code
@@ -129,6 +131,8 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 				IsIterator:         true,
 				IteratorBody:       iteratorBody,
 				IteratorYieldType:  "*" + responseStruct.Name,
+				ReturnsSQLResult:   returnsSQLResult,
+				ResponseAffinity:   format.ResponseAffinity,
 			}, nil
 		}
 
@@ -204,7 +208,12 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		code = processed
 	}
 
-	return &queryExecutionData{Code: code, NeedsSnapsqlImport: needsSnapsql}, nil
+	return &queryExecutionData{
+		Code:               code,
+		NeedsSnapsqlImport: needsSnapsql,
+		ReturnsSQLResult:   returnsSQLResult,
+		ResponseAffinity:   format.ResponseAffinity,
+	}, nil
 }
 
 // generateScanCode generates code for scanning database results

@@ -13,6 +13,13 @@ generation:
     json:
       output: "./generated"
       disabled: false
+    mock:
+      output: "./testdata/mock"
+      disabled: false
+      settings:
+        embed: true
+        package: "mock"
+        filename: "mock.go"
 
 system:
   fields:

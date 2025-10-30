@@ -1,0 +1,39 @@
+[
+  {
+    "name": "Insert comment returns stored row",
+    "parameters": {
+      "body": "Looks good!",
+      "card_id": 500
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "body": "Looks good!",
+            "card_id": 500,
+            "created_at": [
+              "currentdate"
+            ],
+            "id": 1
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "body": "Looks good!",
+                "card_id": 500,
+                "created_at": [
+                  "currentdate"
+                ],
+                "id": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

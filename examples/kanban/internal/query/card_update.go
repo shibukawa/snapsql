@@ -115,8 +115,6 @@ func init() {
 // CardUpdate Updates the title and description of a card and refreshes its timestamp.
 func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, title string, description string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardUpdateResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardUpdate", "[]cardupdateresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -186,23 +184,27 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardUpdateMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardUpdate: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "CardUpdate"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]CardUpdateResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[CardUpdateResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardUpdate: failed to map mock data to []CardUpdateResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("CardUpdate: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

@@ -102,8 +102,6 @@ func init() {
 // ListRename Renames a list and updates its timestamp for optimistic concurrency.
 func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, name string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListRenameResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listRename", "[]listrenameresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -166,23 +164,27 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(listRenameMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("ListRename: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "ListRename"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]ListRenameResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[ListRenameResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("ListRename: failed to map mock data to []ListRenameResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("ListRename: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

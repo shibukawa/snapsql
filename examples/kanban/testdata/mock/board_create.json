@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Create board returns persisted row",
+    "parameters": {
+      "name": "Sprint Planning"
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "archived_at": [
+              null
+            ],
+            "created_at": [
+              "currentdate"
+            ],
+            "id": 1,
+            "name": "Sprint Planning",
+            "status": "active",
+            "updated_at": [
+              "currentdate"
+            ]
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "archived_at": [
+                  null
+                ],
+                "created_at": [
+                  "currentdate"
+                ],
+                "id": 1,
+                "name": "Sprint Planning",
+                "status": "active",
+                "updated_at": [
+                  "currentdate"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Move card to different list",
+    "parameters": {
+      "card_id": 800,
+      "target_list_id": 201,
+      "target_position": 5
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "created_at": "2025-09-15T11:00:00Z",
+            "description": "",
+            "id": 800,
+            "list_id": 201,
+            "position": 5,
+            "title": "Ship new feature",
+            "updated_at": [
+              "currentdate"
+            ]
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "created_at": "2025-09-15T11:00:00Z",
+                "description": "",
+                "id": 800,
+                "list_id": 201,
+                "position": 5,
+                "title": "Ship new feature",
+                "updated_at": [
+                  "currentdate"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

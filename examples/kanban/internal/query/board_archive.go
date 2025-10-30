@@ -72,8 +72,6 @@ func init() {
 // BoardArchive Archives the currently active board by switching its status to archived and stamping the archive timestamp. Because only one board can be active at a time, no parameters are required.
 func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*BoardArchiveResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardArchive", "[]boardarchiveresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -120,23 +118,27 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(boardArchiveMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("BoardArchive: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "BoardArchive"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]BoardArchiveResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[BoardArchiveResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("BoardArchive: failed to map mock data to []BoardArchiveResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("BoardArchive: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

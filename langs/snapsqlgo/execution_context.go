@@ -32,6 +32,7 @@ type rowLockConfig struct {
 type ExecutionContext struct {
 	logger  *loggingConfig
 	rowLock *rowLockConfig
+	mocks   *mockRegistry
 }
 
 // RowLockMode reports the configured pessimistic lock mode, defaulting to RowLockNone.

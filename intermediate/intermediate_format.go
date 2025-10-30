@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // Parameter represents a function parameter
@@ -140,6 +142,9 @@ type IntermediateFormat struct {
 
 	// Table references used in the query (including CTEs, subqueries, and joins)
 	TableReferences []TableReferenceInfo `json:"table_references,omitempty"`
+
+	// MockTestCases stores parsed test cases for mock generation / WithMock integration
+	MockTestCases []snapsql.MockTestCase `json:"test_cases,omitempty"`
 
 	// Indicates whether the main statement guarantees ordered results via ORDER BY
 	HasOrderedResult bool `json:"has_ordered_result,omitempty"`

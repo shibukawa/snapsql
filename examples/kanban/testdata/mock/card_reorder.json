@@ -1,0 +1,45 @@
+[
+  {
+    "name": "Reorder card within list",
+    "parameters": {
+      "card_id": 900,
+      "position": 2.5
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "created_at": "2025-09-12T09:30:00Z",
+            "description": "",
+            "id": 900,
+            "list_id": 300,
+            "position": 2.5,
+            "title": "Regression",
+            "updated_at": [
+              "currentdate"
+            ]
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "created_at": "2025-09-12T09:30:00Z",
+                "description": "",
+                "id": 900,
+                "list_id": 300,
+                "position": 2.5,
+                "title": "Regression",
+                "updated_at": [
+                  "currentdate"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

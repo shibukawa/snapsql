@@ -1,0 +1,48 @@
+[
+  {
+    "name": "Insert list returns created row",
+    "parameters": {
+      "board_id": 7
+    },
+    "responses": [
+      {
+        "tables": [
+          {
+            "table": "lists",
+            "strategy": "pk-match",
+            "rows": [
+              {
+                "board_id": 7,
+                "created_at": [
+                  "currentdate"
+                ],
+                "id": 1,
+                "is_archived": 0,
+                "name": "Backlog",
+                "position": 1,
+                "stage_order": 1,
+                "updated_at": [
+                  "currentdate"
+                ]
+              },
+              {
+                "board_id": 7,
+                "created_at": [
+                  "currentdate"
+                ],
+                "id": 2,
+                "is_archived": 0,
+                "name": "In Progress",
+                "position": 2,
+                "stage_order": 2,
+                "updated_at": [
+                  "currentdate"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

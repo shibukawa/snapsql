@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Fetch single board",
+    "parameters": {
+      "board_id": 10
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "archived_at": "2025-09-05T08:00:00Z",
+            "created_at": "2025-08-01T08:00:00Z",
+            "id": 10,
+            "name": "Backlog",
+            "status": "archived",
+            "updated_at": "2025-08-03T12:00:00Z"
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "archived_at": "2025-09-05T08:00:00Z",
+                "created_at": "2025-08-01T08:00:00Z",
+                "id": 10,
+                "name": "Backlog",
+                "status": "archived",
+                "updated_at": "2025-08-03T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

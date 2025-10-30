@@ -277,22 +277,6 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 2
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardTree", "boardtreeresult")
-	// Check for mock mode
-	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(boardTreeMockPath, funcConfig.MockDataNames)
-		if err != nil {
-			return result, fmt.Errorf("BoardTree: failed to get mock data: %w", err)
-		}
-
-		result, err = snapsqlgo.MapMockDataToStruct[BoardTreeResult](mockData)
-		if err != nil {
-			return result, fmt.Errorf("BoardTree: failed to map mock data to BoardTreeResult struct: %w", err)
-		}
-
-		return result, nil
-	}
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -345,6 +329,23 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 		return result, err
 	}
 	logger.SetQuery(query, args)
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "BoardTree"); mockMatched {
+		if mockErr != nil {
+			logger.SetErr(mockErr)
+			return result, mockErr
+		}
+		if mockExec.Err != nil {
+			logger.SetErr(mockExec.Err)
+			return result, mockExec.Err
+		}
+		mapped, err := snapsqlgo.MapMockExecutionToStruct[BoardTreeResult](mockExec)
+		if err != nil {
+			logger.SetErr(err)
+			return result, fmt.Errorf("BoardTree: failed to map mock execution: %w", err)
+		}
+		result = mapped
+		return result, nil
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {

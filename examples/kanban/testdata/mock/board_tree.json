@@ -1,0 +1,160 @@
+[
+  {
+    "name": "Board tree includes active lists and their cards",
+    "parameters": {
+      "board_id": 5
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "archived_at": null,
+            "created_at": "2025-09-18T09:00:00Z",
+            "id": 5,
+            "lists__board_id": 5,
+            "lists__cards__created_at": "2025-09-18T09:30:00Z",
+            "lists__cards__description": "Install dependencies",
+            "lists__cards__id": 500,
+            "lists__cards__list_id": 50,
+            "lists__cards__position": 1,
+            "lists__cards__title": "Set up project",
+            "lists__cards__updated_at": "2025-09-18T09:30:00Z",
+            "lists__created_at": "2025-09-18T09:10:00Z",
+            "lists__id": 50,
+            "lists__is_archived": 0,
+            "lists__name": "Todo",
+            "lists__position": 1,
+            "lists__stage_order": 1,
+            "lists__updated_at": "2025-09-18T09:10:00Z",
+            "name": "Release Plan",
+            "status": "active",
+            "updated_at": "2025-09-18T09:00:00Z"
+          },
+          {
+            "archived_at": null,
+            "created_at": "2025-09-18T09:00:00Z",
+            "id": 5,
+            "lists__board_id": 5,
+            "lists__cards__created_at": "2025-09-18T10:00:00Z",
+            "lists__cards__description": "Sketch main screens",
+            "lists__cards__id": 501,
+            "lists__cards__list_id": 50,
+            "lists__cards__position": 2,
+            "lists__cards__title": "Design wireframes",
+            "lists__cards__updated_at": "2025-09-18T10:00:00Z",
+            "lists__created_at": "2025-09-18T09:10:00Z",
+            "lists__id": 50,
+            "lists__is_archived": 0,
+            "lists__name": "Todo",
+            "lists__position": 1,
+            "lists__stage_order": 1,
+            "lists__updated_at": "2025-09-18T09:10:00Z",
+            "name": "Release Plan",
+            "status": "active",
+            "updated_at": "2025-09-18T09:00:00Z"
+          },
+          {
+            "archived_at": null,
+            "created_at": "2025-09-18T09:00:00Z",
+            "id": 5,
+            "lists__board_id": 5,
+            "lists__cards__created_at": null,
+            "lists__cards__description": null,
+            "lists__cards__id": null,
+            "lists__cards__list_id": null,
+            "lists__cards__position": null,
+            "lists__cards__title": null,
+            "lists__cards__updated_at": null,
+            "lists__created_at": "2025-09-18T09:20:00Z",
+            "lists__id": 51,
+            "lists__is_archived": 0,
+            "lists__name": "Done",
+            "lists__position": 2,
+            "lists__stage_order": 4,
+            "lists__updated_at": "2025-09-18T09:20:00Z",
+            "name": "Release Plan",
+            "status": "active",
+            "updated_at": "2025-09-18T09:00:00Z"
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "archived_at": null,
+                "created_at": "2025-09-18T09:00:00Z",
+                "id": 5,
+                "lists__board_id": 5,
+                "lists__cards__created_at": "2025-09-18T09:30:00Z",
+                "lists__cards__description": "Install dependencies",
+                "lists__cards__id": 500,
+                "lists__cards__list_id": 50,
+                "lists__cards__position": 1,
+                "lists__cards__title": "Set up project",
+                "lists__cards__updated_at": "2025-09-18T09:30:00Z",
+                "lists__created_at": "2025-09-18T09:10:00Z",
+                "lists__id": 50,
+                "lists__is_archived": 0,
+                "lists__name": "Todo",
+                "lists__position": 1,
+                "lists__stage_order": 1,
+                "lists__updated_at": "2025-09-18T09:10:00Z",
+                "name": "Release Plan",
+                "status": "active",
+                "updated_at": "2025-09-18T09:00:00Z"
+              },
+              {
+                "archived_at": null,
+                "created_at": "2025-09-18T09:00:00Z",
+                "id": 5,
+                "lists__board_id": 5,
+                "lists__cards__created_at": "2025-09-18T10:00:00Z",
+                "lists__cards__description": "Sketch main screens",
+                "lists__cards__id": 501,
+                "lists__cards__list_id": 50,
+                "lists__cards__position": 2,
+                "lists__cards__title": "Design wireframes",
+                "lists__cards__updated_at": "2025-09-18T10:00:00Z",
+                "lists__created_at": "2025-09-18T09:10:00Z",
+                "lists__id": 50,
+                "lists__is_archived": 0,
+                "lists__name": "Todo",
+                "lists__position": 1,
+                "lists__stage_order": 1,
+                "lists__updated_at": "2025-09-18T09:10:00Z",
+                "name": "Release Plan",
+                "status": "active",
+                "updated_at": "2025-09-18T09:00:00Z"
+              },
+              {
+                "archived_at": null,
+                "created_at": "2025-09-18T09:00:00Z",
+                "id": 5,
+                "lists__board_id": 5,
+                "lists__cards__created_at": null,
+                "lists__cards__description": null,
+                "lists__cards__id": null,
+                "lists__cards__list_id": null,
+                "lists__cards__position": null,
+                "lists__cards__title": null,
+                "lists__cards__updated_at": null,
+                "lists__created_at": "2025-09-18T09:20:00Z",
+                "lists__id": 51,
+                "lists__is_archived": 0,
+                "lists__name": "Done",
+                "lists__position": 2,
+                "lists__stage_order": 4,
+                "lists__updated_at": "2025-09-18T09:20:00Z",
+                "name": "Release Plan",
+                "status": "active",
+                "updated_at": "2025-09-18T09:00:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -115,8 +115,6 @@ func init() {
 // CardMove Moves a card to a target list and position, using a transactional update for drag-and-drop operations.
 func CardMove(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, targetListID int, targetPosition float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardMoveResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardMove", "[]cardmoveresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -186,23 +184,27 @@ func CardMove(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, ta
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardMoveMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardMove: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "CardMove"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]CardMoveResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[CardMoveResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardMove: failed to map mock data to []CardMoveResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("CardMove: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

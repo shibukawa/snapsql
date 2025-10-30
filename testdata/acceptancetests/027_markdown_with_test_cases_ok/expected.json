@@ -47,6 +47,68 @@
     {"name": "name", "type": "any", "is_nullable": true},
     {"name": "age", "type": "any", "is_nullable": true}
   ],
+  "test_cases": [
+    {
+      "name": "Test Case 1: Find existing user",
+      "parameters": {
+        "user_id": 123
+      },
+      "responses": [
+        {
+          "expected": [
+            {
+              "age": 30,
+              "id": 123,
+              "name": "John Doe"
+            }
+          ],
+          "tables": [
+            {
+              "rows": [
+                {
+                  "age": 30,
+                  "id": 123,
+                  "name": "John Doe"
+                }
+              ],
+              "strategy": "all",
+              "table": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Test Case 2: Find young user",
+      "parameters": {
+        "user_id": 456
+      },
+      "responses": [
+        {
+          "expected": [
+            {
+              "age": 25,
+              "id": 456,
+              "name": "Jane Smith"
+            }
+          ],
+          "tables": [
+            {
+              "rows": [
+                {
+                  "age": 25,
+                  "id": 456,
+                  "name": "Jane Smith"
+                }
+              ],
+              "strategy": "all",
+              "table": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "table_references": [
     {"name": "users", "context": "main"}
   ],

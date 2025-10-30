@@ -120,22 +120,6 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
-
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardCreate", "cardcreateresult")
-	// Check for mock mode
-	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(cardCreateMockPath, funcConfig.MockDataNames)
-		if err != nil {
-			return result, fmt.Errorf("CardCreate: failed to get mock data: %w", err)
-		}
-
-		result, err = snapsqlgo.MapMockDataToStruct[CardCreateResult](mockData)
-		if err != nil {
-			return result, fmt.Errorf("CardCreate: failed to map mock data to CardCreateResult struct: %w", err)
-		}
-
-		return result, nil
-	}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false},
@@ -214,6 +198,23 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 		return result, err
 	}
 	logger.SetQuery(query, args)
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "CardCreate"); mockMatched {
+		if mockErr != nil {
+			logger.SetErr(mockErr)
+			return result, mockErr
+		}
+		if mockExec.Err != nil {
+			logger.SetErr(mockExec.Err)
+			return result, mockExec.Err
+		}
+		mapped, err := snapsqlgo.MapMockExecutionToStruct[CardCreateResult](mockExec)
+		if err != nil {
+			logger.SetErr(err)
+			return result, fmt.Errorf("CardCreate: failed to map mock execution: %w", err)
+		}
+		result = mapped
+		return result, nil
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {

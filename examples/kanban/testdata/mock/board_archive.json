@@ -1,0 +1,52 @@
+[
+  {
+    "name": "Active board is archived",
+    "responses": [
+      {
+        "tables": [
+          {
+            "table": "boards",
+            "strategy": "pk-match",
+            "rows": [
+              {
+                "archived_at": [
+                  "currentdate"
+                ],
+                "created_at": "2025-09-20T10:00:00Z",
+                "id": 1,
+                "name": "Sprint Board",
+                "status": "archived",
+                "updated_at": [
+                  "currentdate"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "No active boards returns empty result",
+    "responses": [
+      {
+        "tables": [
+          {
+            "table": "boards",
+            "strategy": "pk-match",
+            "rows": [
+              {
+                "archived_at": "2025-09-10T12:00:00Z",
+                "created_at": "2025-09-01T09:00:00Z",
+                "id": 1,
+                "name": "Archived Board",
+                "status": "archived",
+                "updated_at": "2025-09-10T12:00:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -72,8 +72,6 @@ func init() {
 // BoardList Fetches every board with basic metadata, ordered by most recently created first. Used for the dashboard overview.
 func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*BoardListResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardList", "[]boardlistresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -120,23 +118,27 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(boardListMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("BoardList: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "BoardList"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]BoardListResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[BoardListResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("BoardList: failed to map mock data to []BoardListResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("BoardList: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

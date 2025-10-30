@@ -1,0 +1,41 @@
+[
+  {
+    "name": "Move undone cards to new board",
+    "parameters": {
+      "dst_board_id": 20,
+      "src_board_id": 10
+    },
+    "responses": [
+      {
+        "tables": [
+          {
+            "table": "cards",
+            "strategy": "all",
+            "rows": [
+              {
+                "created_at": "2025-09-15T09:10:00Z",
+                "description": "Collect feedback",
+                "id": 1001,
+                "list_id": 201,
+                "position": 1,
+                "title": "Spec requirements",
+                "updated_at": [
+                  "currentdate"
+                ]
+              },
+              {
+                "created_at": "2025-09-15T09:20:00Z",
+                "description": "GA rollout",
+                "id": 1002,
+                "list_id": 199,
+                "position": 1,
+                "title": "Release",
+                "updated_at": "2025-09-29T09:20:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

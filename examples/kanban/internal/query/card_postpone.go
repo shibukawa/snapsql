@@ -97,22 +97,6 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardPostpone", "any")
-	// Check for mock mode
-	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(cardPostponeMockPath, funcConfig.MockDataNames)
-		if err != nil {
-			return nil, fmt.Errorf("CardPostpone: failed to get mock data: %w", err)
-		}
-
-		result, err = snapsqlgo.MapMockDataToStruct[any](mockData)
-		if err != nil {
-			return nil, fmt.Errorf("CardPostpone: failed to map mock data to any struct: %w", err)
-		}
-
-		return result, nil
-	}
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -178,6 +162,30 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 		return nil, err
 	}
 	logger.SetQuery(query, args)
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "CardPostpone"); mockMatched {
+		if mockErr != nil {
+			logger.SetErr(mockErr)
+			return nil, mockErr
+		}
+		if mockExec.Err != nil {
+			logger.SetErr(mockExec.Err)
+			return nil, mockExec.Err
+		}
+		mockResult := mockExec.SQLResult()
+		if mockResult != nil {
+			result = mockResult
+			return result, nil
+		}
+		if len(mockExec.ExpectedRows()) > 0 {
+			mapped, err := snapsqlgo.MapMockExecutionToStruct[any](mockExec)
+			if err != nil {
+				logger.SetErr(err)
+				return nil, fmt.Errorf("CardPostpone: failed to map mock execution: %w", err)
+			}
+			result = mapped
+		}
+		return result, nil
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {

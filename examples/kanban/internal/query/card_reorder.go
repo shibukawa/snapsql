@@ -101,8 +101,6 @@ func init() {
 // CardReorder Adjusts the position field of a card without changing its list, supporting intra-list reordering.
 func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, position float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardReorderResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardReorder", "[]cardreorderresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -165,23 +163,27 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardReorderMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardReorder: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "CardReorder"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]CardReorderResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[CardReorderResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardReorder: failed to map mock data to []CardReorderResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("CardReorder: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}
