@@ -10,7 +10,7 @@ import (
 
 // normalizeDefaultExpressionForDialect converts default expressions based on the SQL dialect.
 // For example, NOW() in PostgreSQL becomes CURRENT_TIMESTAMP in SQLite.
-func normalizeDefaultExpressionForDialect(expr interface{}, dialect snapsql.Dialect) string {
+func normalizeDefaultExpressionForDialect(expr any, dialect snapsql.Dialect) string {
 	exprStr := fmt.Sprintf("%v", expr)
 	exprUpper := strings.ToUpper(strings.TrimSpace(exprStr))
 

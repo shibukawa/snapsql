@@ -178,9 +178,9 @@ func accessLogMiddleware(next http.Handler) http.Handler {
 // applySchema loads and executes schema SQL from embedded sql/schema.sql file.
 func applySchema(ctx context.Context, db *sql.DB) error {
 	// Split the schema SQL by semicolons to get individual statements
-	stmts := strings.Split(kanban.SchemaSQL, ";")
+	stmts := strings.SplitSeq(kanban.SchemaSQL, ";")
 
-	for _, stmt := range stmts {
+	for stmt := range stmts {
 		// Trim whitespace and skip empty statements
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {

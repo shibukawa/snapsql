@@ -54,7 +54,7 @@ func TestWhereInLiteralValues(t *testing.T) {
 			if tt.name != "WHERE_IN_literal_values" {
 				funcDef := &parser.FunctionDefinition{
 					ParameterOrder: []string{"values"},
-					OriginalParameters: map[string]interface{}{
+					OriginalParameters: map[string]any{
 						"values": "int[]",
 					},
 				}

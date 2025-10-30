@@ -611,8 +611,8 @@ func extractDatabaseNameFromDSN(dsn string) string {
 		return ""
 	}
 
-	if strings.HasPrefix(dsn, "sqlite://") {
-		trimmed := strings.TrimPrefix(dsn, "sqlite://")
+	if after, ok := strings.CutPrefix(dsn, "sqlite://"); ok {
+		trimmed := after
 		trimmed = strings.TrimSuffix(trimmed, "/")
 
 		base := filepath.Base(trimmed)

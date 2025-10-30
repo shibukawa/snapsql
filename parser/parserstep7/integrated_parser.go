@@ -2,6 +2,7 @@ package parserstep7
 
 import (
 	"fmt"
+	"strings"
 
 	snapsql "github.com/shibukawa/snapsql"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
@@ -29,7 +30,7 @@ func NewSubqueryParserIntegrated() *SubqueryParserIntegrated {
 
 // ParseStatement parses a statement and extracts all subquery dependencies
 // This method stores the results directly in the StatementNode for easy access
-func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, functionDef interface{}) error {
+func (spi *SubqueryParserIntegrated) ParseStatement(stmt cmn.StatementNode, functionDef any) error {
 	spi.errorHandler.Clear()
 
 	if stmt == nil {
@@ -127,9 +128,13 @@ func (spi *SubqueryParserIntegrated) GetDependencyVisualization() string {
 	}
 
 	result := "Dependency Graph:\n"
+
+	var resultSb130 strings.Builder
 	for _, node := range nodes {
-		result += fmt.Sprintf("- %s (%s)\n", node.ID, node.NodeType.String())
+		resultSb130.WriteString(fmt.Sprintf("- %s (%s)\n", node.ID, node.NodeType.String()))
 	}
+
+	result += resultSb130.String()
 
 	return result
 }

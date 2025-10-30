@@ -123,8 +123,8 @@ func ExtractElementDescriptor(descriptor any) any {
 
 		return nil
 	case string:
-		if strings.HasSuffix(v, "[]") {
-			return strings.TrimSuffix(v, "[]")
+		if before, ok := strings.CutSuffix(v, "[]"); ok {
+			return before
 		}
 
 		return nil
@@ -214,7 +214,7 @@ type CELExpression struct {
 	ID               string         `json:"id"`
 	Expression       string         `json:"expression"`
 	EnvironmentIndex int            `json:"environment_index"`
-	Position         Position       `json:"position,omitempty"`
+	Position         Position       `json:"position,omitzero"`
 	TypeDescriptor   any            `json:"type_descriptor,omitempty"`
 	ResultType       EvalResultType `json:"result_type,omitempty"`
 }
@@ -229,9 +229,9 @@ type CELEnvironment struct {
 
 // CELVariableInfo represents information about a CEL variable
 type CELVariableInfo struct {
-	Name  string      `json:"name"`
-	Type  string      `json:"type"`
-	Value interface{} `json:"value,omitempty"` // Dummy value for type evaluation
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Value any    `json:"value,omitempty"` // Dummy value for type evaluation
 }
 
 // Position represents the position of an expression in the source

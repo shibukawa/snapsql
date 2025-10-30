@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -270,9 +271,7 @@ func (q *QueryCmd) loadConstants(config *Config, ctx *Context) (map[string]any, 
 		}
 
 		// Merge constants
-		for k, v := range fileConstants {
-			constants[k] = v
-		}
+		maps.Copy(constants, fileConstants)
 
 		if ctx.Verbose {
 			color.Blue("Loaded constants from %s", file)
@@ -526,9 +525,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []codegenerator.OptimizedI
 
 	// Create parameter map for evaluation
 	paramMap := make(map[string]any)
-	for k, v := range params {
-		paramMap[k] = v
-	}
+	maps.Copy(paramMap, params)
 
 	// Create CEL programs for expressions
 	celPrograms := make(map[int]*cel.Program)
@@ -601,9 +598,7 @@ func (q *QueryCmd) buildSQLFromOptimized(instructions []codegenerator.OptimizedI
 				}
 
 				evalParams := map[string]any{"params": paramMap}
-				for k, v := range paramMap {
-					evalParams[k] = v
-				}
+				maps.Copy(evalParams, paramMap)
 
 				result, _, err := (*program).Eval(evalParams)
 				if err != nil {
@@ -775,6 +770,7 @@ func (q *QueryCmd) printPerformanceWarnings(ctx *Context, evaluation *explain.Pe
 	tableMap := intermediate.BuildTableReferenceMap(refs)
 	physicalNames := physicalNameCandidatesFromMetadata(tables)
 	warnLabel := color.New(color.Bold, color.FgYellow).Sprint("WARN")
+
 	fmt.Fprintln(color.Output, "\nPerformance warnings:")
 
 	for _, warn := range evaluation.Warnings {
@@ -949,6 +945,7 @@ func (q *QueryCmd) printPerformanceEstimates(ctx *Context, evaluation *explain.P
 	}
 
 	infoLabel := color.New(color.Bold, color.FgCyan).Sprint("INFO")
+
 	fmt.Fprintln(color.Output, "\nPerformance estimates:")
 
 	printed := make(map[string]struct{})

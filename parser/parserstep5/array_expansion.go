@@ -445,7 +445,7 @@ func expandObjectInTokens(tokens []tokenizer.Token, info ObjectExpansionInfo, na
 	}
 
 	// Convert to map
-	objectMap, ok := objectValue.(map[string]interface{})
+	objectMap, ok := objectValue.(map[string]any)
 	if !ok {
 		return
 	}
@@ -524,7 +524,7 @@ func expandObjectArrayInTokens(tokens []tokenizer.Token, info ObjectArrayExpansi
 	for i := range arrayLength {
 		element := rv.Index(i).Interface()
 
-		objectMap, ok := element.(map[string]interface{})
+		objectMap, ok := element.(map[string]any)
 		if !ok {
 			gerr.Add(fmt.Errorf("%w: at index %d: %T", snapsql.ErrArrayElementNotObject, i, element))
 			return

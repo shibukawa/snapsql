@@ -1,0 +1,51 @@
+[
+  {
+    "name": "Insert card into list",
+    "parameters": {
+      "description": "Add coverage for kanban queries",
+      "list_id": 300,
+      "position": 10,
+      "title": "Write tests"
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "created_at": [
+              "currentdate"
+            ],
+            "description": "Add coverage for kanban queries",
+            "id": 1,
+            "list_id": 300,
+            "position": 10,
+            "title": "Write tests",
+            "updated_at": [
+              "currentdate"
+            ]
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "created_at": [
+                  "currentdate"
+                ],
+                "description": "Add coverage for kanban queries",
+                "id": 1,
+                "list_id": 300,
+                "position": 10,
+                "title": "Write tests",
+                "updated_at": [
+                  "currentdate"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

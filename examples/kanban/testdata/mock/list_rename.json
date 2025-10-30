@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Rename list updates name only",
+    "parameters": {
+      "list_id": 650,
+      "name": "In Progress"
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "board_id": 21,
+            "created_at": "2025-09-07T09:00:00Z",
+            "id": 650,
+            "is_archived": 0,
+            "name": "In Progress",
+            "position": 1,
+            "stage_order": 1,
+            "updated_at": [
+              "currentdate"
+            ]
+          }
+        ],
+        "tables": [
+          {
+            "table": "",
+            "strategy": "all",
+            "rows": [
+              {
+                "board_id": 21,
+                "created_at": "2025-09-07T09:00:00Z",
+                "id": 650,
+                "is_archived": 0,
+                "name": "In Progress",
+                "position": 1,
+                "stage_order": 1,
+                "updated_at": [
+                  "currentdate"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -185,7 +185,7 @@ func (f *Formatter) formatAsJSON(result *QueryResult, output io.Writer) error {
 	maps := rowsToMaps(result.Columns, result.Rows)
 
 	// Create result object
-	jsonResult := map[string]interface{}{
+	jsonResult := map[string]any{
 		"data":     maps,
 		"count":    result.Count,
 		"duration": result.Duration.String(),
@@ -232,7 +232,7 @@ func (f *Formatter) formatAsYAML(result *QueryResult, output io.Writer) error {
 	maps := rowsToMaps(result.Columns, result.Rows)
 
 	// Create result object
-	yamlResult := map[string]interface{}{
+	yamlResult := map[string]any{
 		"data":     maps,
 		"count":    result.Count,
 		"duration": result.Duration.String(),
@@ -250,11 +250,11 @@ func (f *Formatter) formatAsYAML(result *QueryResult, output io.Writer) error {
 }
 
 // rowsToMaps converts rows to maps
-func rowsToMaps(columns []string, rows [][]interface{}) []map[string]interface{} {
-	var result []map[string]interface{}
+func rowsToMaps(columns []string, rows [][]any) []map[string]any {
+	var result []map[string]any
 
 	for _, row := range rows {
-		rowMap := make(map[string]interface{})
+		rowMap := make(map[string]any)
 
 		for i, col := range columns {
 			if i < len(row) {
@@ -269,7 +269,7 @@ func rowsToMaps(columns []string, rows [][]interface{}) []map[string]interface{}
 }
 
 // formatValue formats a value as a string
-func formatValue(val interface{}) string {
+func formatValue(val any) string {
 	if val == nil {
 		return "NULL"
 	}
@@ -281,7 +281,7 @@ func formatValue(val interface{}) string {
 		return string(v)
 	case bool:
 		return strconv.FormatBool(v)
-	case map[string]interface{}:
+	case map[string]any:
 		// Format JSON objects
 		data, err := json.Marshal(v)
 		if err != nil {
@@ -289,7 +289,7 @@ func formatValue(val interface{}) string {
 		}
 
 		return string(data)
-	case []interface{}:
+	case []any:
 		// Format JSON arrays
 		data, err := json.Marshal(v)
 		if err != nil {

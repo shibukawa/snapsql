@@ -232,9 +232,10 @@ func validateConfig(config *Config) error {
 			"json":       true,
 			"go":         true,
 			"typescript": true,
+			"mock":       true,
 		}
 		if !validGenerators[name] {
-			return fmt.Errorf("%w: unknown generator type '%s': must be one of json, go, typescript", ErrConfigValidation, name)
+			return fmt.Errorf("%w: unknown generator type '%s': must be one of json, go, mock, typescript", ErrConfigValidation, name)
 		}
 	}
 

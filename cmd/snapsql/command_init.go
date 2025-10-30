@@ -38,6 +38,8 @@ func (i *InitCmd) Run(ctx *Context) error {
 		dirs = append(dirs, "generated")
 	}
 
+	dirs = append(dirs, filepath.Join("testdata", "mock"))
+
 	for _, dir := range dirs {
 		err := createDir(dir)
 		if err != nil {
@@ -131,6 +133,14 @@ generation:
       settings:
         pretty: true
         include_metadata: true
+
+    mock:
+      output: "./testdata/mock"
+      preserve_hierarchy: true
+      settings:
+        embed: true
+        package: "mock"
+        filename: "mock.go"
     
     go:
       output: "./internal/queries"
@@ -173,6 +183,13 @@ func createKanbanConfig() error {
 	b.WriteString("      settings:\n")
 	b.WriteString("        pretty: true\n")
 	b.WriteString("        include_metadata: true\n")
+	b.WriteString("    mock:\n")
+	b.WriteString("      output: \"./testdata/mock\"\n")
+	b.WriteString("      preserve_hierarchy: true\n")
+	b.WriteString("      settings:\n")
+	b.WriteString("        embed: true\n")
+	b.WriteString("        package: \"mock\"\n")
+	b.WriteString("        filename: \"mock.go\"\n")
 	b.WriteString("    go:\n")
 	b.WriteString("      output: \"./internal/query\"\n")
 	b.WriteString("      preserve_hierarchy: true\n")
@@ -247,7 +264,7 @@ func createVSCodeSettings(ctx *Context) error {
 	schemaPatterns := []string{"snapsql.yaml", "**/snapsql*.yaml"}
 
 	// Check if settings.json already exists
-	var settings map[string]interface{}
+	var settings map[string]any
 
 	existingData, err := os.ReadFile(settingsPath)
 	if err == nil {
@@ -258,21 +275,21 @@ func createVSCodeSettings(ctx *Context) error {
 				color.Yellow("Warning: existing settings.json is invalid, creating new one")
 			}
 
-			settings = make(map[string]interface{})
+			settings = make(map[string]any)
 		}
 	} else {
 		// File doesn't exist, create new settings
-		settings = make(map[string]interface{})
+		settings = make(map[string]any)
 	}
 
 	// Add or update yaml.schemas configuration
-	yamlSchemas, ok := settings["yaml.schemas"].(map[string]interface{})
+	yamlSchemas, ok := settings["yaml.schemas"].(map[string]any)
 	if !ok {
-		yamlSchemas = make(map[string]interface{})
+		yamlSchemas = make(map[string]any)
 	}
 
 	// Convert patterns to interface slice for JSON
-	patterns := make([]interface{}, len(schemaPatterns))
+	patterns := make([]any, len(schemaPatterns))
 	for i, p := range schemaPatterns {
 		patterns[i] = p
 	}

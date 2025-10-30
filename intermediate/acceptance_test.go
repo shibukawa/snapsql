@@ -73,6 +73,7 @@ func loadTableInfo(testDir string) (map[string]*TableInfo, error) {
 	}
 
 	result := make(map[string]*TableInfo)
+
 	for tableName, tableSchema := range yamlTableInfo.Tables {
 		tinfo := &TableInfo{Name: tableName, Columns: map[string]*ColumnInfo{}}
 		for colName, col := range tableSchema.Columns {
@@ -211,7 +212,7 @@ func TestAcceptance(t *testing.T) {
 			}
 
 			// Parse both JSON for comparison
-			var actual, expected interface{}
+			var actual, expected any
 
 			err = json.Unmarshal(actualJSON, &actual)
 			if err != nil {
@@ -237,9 +238,9 @@ func fileExistsHelper(path string) bool {
 	return err == nil
 }
 
-func stripStatementType(v interface{}) interface{} {
+func stripStatementType(v any) any {
 	switch val := v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		delete(val, "statement_type")
 
 		for k, sub := range val {
@@ -247,7 +248,7 @@ func stripStatementType(v interface{}) interface{} {
 		}
 
 		return val
-	case []interface{}:
+	case []any:
 		for i, elem := range val {
 			val[i] = stripStatementType(elem)
 		}

@@ -89,22 +89,6 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
-
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardCreate", "boardcreateresult")
-	// Check for mock mode
-	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(boardCreateMockPath, funcConfig.MockDataNames)
-		if err != nil {
-			return result, fmt.Errorf("BoardCreate: failed to get mock data: %w", err)
-		}
-
-		result, err = snapsqlgo.MapMockDataToStruct[BoardCreateResult](mockData)
-		if err != nil {
-			return result, fmt.Errorf("BoardCreate: failed to map mock data to BoardCreateResult struct: %w", err)
-		}
-
-		return result, nil
-	}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false},
@@ -169,6 +153,23 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 		return result, err
 	}
 	logger.SetQuery(query, args)
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "BoardCreate"); mockMatched {
+		if mockErr != nil {
+			logger.SetErr(mockErr)
+			return result, mockErr
+		}
+		if mockExec.Err != nil {
+			logger.SetErr(mockExec.Err)
+			return result, mockExec.Err
+		}
+		mapped, err := snapsqlgo.MapMockExecutionToStruct[BoardCreateResult](mockExec)
+		if err != nil {
+			logger.SetErr(err)
+			return result, fmt.Errorf("BoardCreate: failed to map mock execution: %w", err)
+		}
+		result = mapped
+		return result, nil
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {

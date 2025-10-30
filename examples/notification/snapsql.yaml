@@ -33,6 +33,14 @@ generation:
       output: "./generated"
       disabled: true
 
+    mock:
+      output: "./testdata/mock"
+      disabled: false
+      settings:
+        embed: true
+        package: "mock"
+        filename: "mock.go"
+
 # Validation settings
 validation:
   strict: false

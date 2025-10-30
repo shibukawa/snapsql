@@ -92,22 +92,6 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listCreate", "listcreateresult")
-	// Check for mock mode
-	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles(listCreateMockPath, funcConfig.MockDataNames)
-		if err != nil {
-			return result, fmt.Errorf("ListCreate: failed to get mock data: %w", err)
-		}
-
-		result, err = snapsqlgo.MapMockDataToStruct[ListCreateResult](mockData)
-		if err != nil {
-			return result, fmt.Errorf("ListCreate: failed to map mock data to ListCreateResult struct: %w", err)
-		}
-
-		return result, nil
-	}
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -160,6 +144,23 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 		return result, err
 	}
 	logger.SetQuery(query, args)
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "ListCreate"); mockMatched {
+		if mockErr != nil {
+			logger.SetErr(mockErr)
+			return result, mockErr
+		}
+		if mockExec.Err != nil {
+			logger.SetErr(mockExec.Err)
+			return result, mockExec.Err
+		}
+		mapped, err := snapsqlgo.MapMockExecutionToStruct[ListCreateResult](mockExec)
+		if err != nil {
+			logger.SetErr(err)
+			return result, fmt.Errorf("ListCreate: failed to map mock execution: %w", err)
+		}
+		result = mapped
+		return result, nil
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {

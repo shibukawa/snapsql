@@ -227,6 +227,7 @@ func (ftr *FixtureTestRunner) RunAllFixtureTests(ctx context.Context) (*FixtureT
 	}
 
 	var summary *fixtureexecutor.TestSummary
+
 	if len(runnableCases) > 0 {
 		// Create test runner and execute tests
 		runner := fixtureexecutor.NewTestRunner(ftr.db, ftr.dialect, ftr.options)
@@ -533,10 +534,7 @@ func (ftr *FixtureTestRunner) printVerboseDiscovery(summaries []fileTestSummary)
 
 	fmt.Printf("Discovered markdown tests (files: %d, cases: %d):\n", len(summaries), totalCases)
 
-	fileLimit := len(summaries)
-	if fileLimit > verboseListLimit {
-		fileLimit = verboseListLimit
-	}
+	fileLimit := min(len(summaries), verboseListLimit)
 
 	for i := range fileLimit {
 		summary := summaries[i]
@@ -553,10 +551,7 @@ func (ftr *FixtureTestRunner) printVerboseDiscovery(summaries []fileTestSummary)
 			continue
 		}
 
-		caseLimit := len(summary.cases)
-		if caseLimit > verboseListLimit {
-			caseLimit = verboseListLimit
-		}
+		caseLimit := min(len(summary.cases), verboseListLimit)
 
 		for j := range caseLimit {
 			tc := summary.cases[j]
@@ -1107,8 +1102,8 @@ func relativeLocation(path, location string) string {
 		return "<unknown>"
 	}
 
-	if strings.HasPrefix(location, path) {
-		rest := strings.TrimPrefix(location, path)
+	if after, ok := strings.CutPrefix(location, path); ok {
+		rest := after
 
 		rest = strings.TrimPrefix(rest, ":")
 		if rest == "" {

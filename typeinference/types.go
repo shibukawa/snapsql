@@ -2,6 +2,7 @@ package typeinference
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -775,10 +776,8 @@ func (e *TypeInferenceEngine2) inferComplexFieldType(field *parser.SelectField) 
 func (e *TypeInferenceEngine2) findSchemaForTable(tableName string) string {
 	for _, schemaName := range e.schemaResolver.GetAllSchemas() {
 		tables := e.schemaResolver.GetTablesInSchema(schemaName)
-		for _, table := range tables {
-			if table == tableName {
-				return schemaName
-			}
+		if slices.Contains(tables, tableName) {
+			return schemaName
 		}
 	}
 

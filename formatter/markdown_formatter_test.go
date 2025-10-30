@@ -280,9 +280,7 @@ select p.id,p.title,p.content,u.name as author from posts p join users u on p.us
 select date_trunc('day',created_at) as date,count(*) as post_count,count(distinct user_id) as unique_authors from posts where created_at >= current_date - interval '30 days' group by date_trunc('day',created_at) order by date
 ` + "```"
 
-	t.ResetTimer()
-
-	for range t.N {
+	for t.Loop() {
 		_, err := formatter.Format(complexMarkdown)
 		if err != nil {
 			t.Fatal(err)

@@ -102,8 +102,6 @@ func init() {
 // ListArchive Sets the archive flag on a list, keeping other attributes intact.
 func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, isArchived bool, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListArchiveResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listArchive", "[]listarchiveresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -166,23 +164,27 @@ func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(listArchiveMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("ListArchive: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "ListArchive"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]ListArchiveResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[ListArchiveResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("ListArchive: failed to map mock data to []ListArchiveResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("ListArchive: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

@@ -207,9 +207,9 @@ func (f *SQLFormatter) formatTokens(tokens []Token) string {
 	for i, token := range tokens {
 		switch token.Type {
 		case TokenSnapDirective:
-			if strings.HasPrefix(token.Value, "/*#") {
+			if after, ok := strings.CutPrefix(token.Value, "/*#"); ok {
 				// Handle if/for directives
-				directive := strings.TrimSpace(strings.Trim(strings.TrimPrefix(token.Value, "/*#"), "*/"))
+				directive := strings.TrimSpace(strings.Trim(after, "*/"))
 
 				if strings.HasPrefix(directive, "if ") || strings.HasPrefix(directive, "for ") {
 					if needsNewline {

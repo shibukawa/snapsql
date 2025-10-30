@@ -84,8 +84,6 @@ func init() {
 // CardCommentList Retrieves comments associated with a card, ordered by creation time ascending for chronological display.
 func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardCommentListResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "cardCommentList", "[]cardcommentlistresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -141,23 +139,27 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(cardCommentListMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardCommentList: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "CardCommentList"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]CardCommentListResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[CardCommentListResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("CardCommentList: failed to map mock data to []CardCommentListResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("CardCommentList: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

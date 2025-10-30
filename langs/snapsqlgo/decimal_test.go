@@ -64,7 +64,7 @@ func TestDecimal(t *testing.T) {
 
 	// CEL式を評価
 	// カスタムラッパー型 `Decimal` のインスタンスを渡す
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"a": &Decimal{productPrice}, // ラッパーで包んでポインタを渡す
 		"b": &Decimal{priceLimit},
 	}

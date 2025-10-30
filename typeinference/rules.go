@@ -1,6 +1,7 @@
 package typeinference
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/shibukawa/snapsql"
@@ -275,10 +276,8 @@ func promoteNumericTypes(left, right string) string {
 	types := []string{left, right}
 
 	for _, priority := range []string{"string", "float", "decimal", "int"} {
-		for _, t := range types {
-			if t == priority {
-				return priority
-			}
+		if slices.Contains(types, priority) {
+			return priority
 		}
 	}
 

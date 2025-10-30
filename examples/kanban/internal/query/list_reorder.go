@@ -102,8 +102,6 @@ func init() {
 // ListReorder Adjusts the position value of a list to support drag and drop operations.
 func ListReorder(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, position float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListReorderResult, error] {
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "listReorder", "[]listreorderresult")
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -166,23 +164,27 @@ func ListReorder(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 			return
 		}
 		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(listReorderMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("ListReorder: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "ListReorder"); mockMatched {
+			if mockErr != nil {
+				logger.SetErr(mockErr)
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				logger.SetErr(mockExec.Err)
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]ListReorderResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[ListReorderResult](mockExec)
 			if err != nil {
 				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("ListReorder: failed to map mock data to []ListReorderResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("ListReorder: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}

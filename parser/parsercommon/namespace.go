@@ -254,8 +254,8 @@ func snapSqlTypeToCel(val any) (*cel.Type, error) {
 		case map[string]any:
 			return cel.DynType, nil
 		case string:
-			if strings.HasSuffix(v, "[]") {
-				baseType, err := snapSqlTypeToCel(strings.TrimSuffix(v, "[]"))
+			if before, ok := strings.CutSuffix(v, "[]"); ok {
+				baseType, err := snapSqlTypeToCel(before)
 				if err != nil {
 					return nil, err
 				}

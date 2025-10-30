@@ -2,6 +2,7 @@ package intermediate
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -85,9 +86,7 @@ func determineResponseType(stmt parser.StatementNode, tableInfo map[string]*snap
 func augmentTableInfoWithDerivedTables(stmt parser.StatementNode, tableInfo map[string]*snapsql.TableInfo) map[string]*snapsql.TableInfo {
 	// Create a copy of tableInfo to avoid modifying the original
 	augmented := make(map[string]*snapsql.TableInfo, len(tableInfo))
-	for k, v := range tableInfo {
-		augmented[k] = v
-	}
+	maps.Copy(augmented, tableInfo)
 
 	// Get SubqueryAnalysisResult
 	if !stmt.HasSubqueryAnalysis() {

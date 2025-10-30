@@ -83,6 +83,7 @@ type QueryLogger struct {
 	sql     string
 	args    []any
 	err     error
+	skip    bool
 }
 
 // QueryLogger produces a QueryLogger from the execution context.
@@ -103,6 +104,10 @@ func (l *QueryLogger) SetQuery(sql string, args []any) {
 		return
 	}
 
+	if l.skip {
+		return
+	}
+
 	l.sql = sql
 	if len(args) == 0 {
 		l.args = nil
@@ -120,12 +125,32 @@ func (l *QueryLogger) SetErr(err error) {
 		return
 	}
 
+	if l.skip {
+		return
+	}
+
 	l.err = err
+}
+
+// Disable prevents the logger from emitting output for the current execution.
+func (l *QueryLogger) Disable() {
+	if l == nil {
+		return
+	}
+
+	l.skip = true
+	l.sql = ""
+	l.args = nil
+	l.err = nil
 }
 
 // Write finalizes the log entry via the provided metadata callback.
 func (l *QueryLogger) Write(ctx context.Context, metaProvider func() (QueryLogMetadata, DBExecutor)) {
 	if l == nil {
+		return
+	}
+
+	if l.skip {
 		return
 	}
 

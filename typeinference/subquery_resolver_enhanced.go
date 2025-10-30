@@ -249,12 +249,12 @@ func (esr *EnhancedSubqueryResolver) extractCTEName(node *parser.SQDependencyNod
 
 // extractCTENameFromNodeID extracts CTE name from node ID
 func (esr *EnhancedSubqueryResolver) extractCTENameFromNodeID(nodeID string) string {
-	if strings.HasPrefix(nodeID, "cte_") {
-		return strings.TrimPrefix(nodeID, "cte_")
+	if after, ok := strings.CutPrefix(nodeID, "cte_"); ok {
+		return after
 	}
 
-	if strings.HasPrefix(nodeID, "with_") {
-		return strings.TrimPrefix(nodeID, "with_")
+	if after, ok := strings.CutPrefix(nodeID, "with_"); ok {
+		return after
 	}
 
 	return nodeID

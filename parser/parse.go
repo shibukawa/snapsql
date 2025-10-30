@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
 	"strings"
 
@@ -423,9 +424,7 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 	// Merge constants with dummy data from function definition
 	mergedConstants := make(map[string]any)
 
-	for k, v := range constants {
-		mergedConstants[k] = v
-	}
+	maps.Copy(mergedConstants, constants)
 	// Add dummy data (dummy data takes precedence if constants is nil or doesn't contain the key)
 	if dummyDataAny := functionDef.DummyData(); dummyDataAny != nil {
 		if dummyData, ok := dummyDataAny.(map[string]any); ok {

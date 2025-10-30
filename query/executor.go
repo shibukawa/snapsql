@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 	"time"
@@ -63,15 +64,15 @@ type QueryOptions struct {
 type QueryResult struct {
 	// Query information
 	SQL        string        `json:"sql"`
-	Parameters []interface{} `json:"parameters"`
+	Parameters []any         `json:"parameters"`
 	Duration   time.Duration `json:"duration"`
 	// Table references resolved from intermediate format
 	TableReferences []intermediate.TableReferenceInfo `json:"table_references,omitempty"`
 
 	// Result data
-	Columns []string        `json:"columns"`
-	Rows    [][]interface{} `json:"rows"`
-	Count   int             `json:"count"`
+	Columns []string `json:"columns"`
+	Rows    [][]any  `json:"rows"`
+	Count   int      `json:"count"`
 
 	// For EXPLAIN queries
 	ExplainPlan string `json:"explain_plan,omitempty"`
@@ -92,7 +93,7 @@ func NewExecutor(db *sql.DB) *Executor {
 // LoadIntermediateFormat is now implemented in template_loader.go
 
 // ExecuteWithTemplate executes a query using a template file
-func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string, params map[string]interface{}, options QueryOptions) (*QueryResult, error) {
+func (e *Executor) ExecuteWithTemplate(ctx context.Context, templateFile string, params map[string]any, options QueryOptions) (*QueryResult, error) {
 	// Load template
 	format, err := LoadIntermediateFormat(templateFile)
 	if err != nil {
@@ -173,20 +174,18 @@ func isWriteWithoutReturning(sql string) bool {
 }
 
 // buildSQLFromOptimized builds SQL from optimized instructions
-func (e *Executor) buildSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]interface{}) (string, []interface{}, error) {
+func (e *Executor) buildSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, params map[string]any) (string, []any, error) {
 	var (
 		builder strings.Builder
-		args    []interface{}
+		args    []any
 		// Boundary handling state
 		deferredTokens    []string // tokens seen as EMIT_UNLESS_BOUNDARY since last boundary
 		hasContentSinceBd bool     // true if any EMIT_STATIC appended since last boundary
 	)
 
 	// Create parameter map for evaluation
-	paramMap := make(map[string]interface{})
-	for k, v := range params {
-		paramMap[k] = v
-	}
+	paramMap := make(map[string]any)
+	maps.Copy(paramMap, params)
 
 	// Create CEL programs for expressions
 	celPrograms := make(map[int]*cel.Program)
@@ -276,10 +275,8 @@ func (e *Executor) buildSQLFromOptimized(instructions []codegenerator.OptimizedI
 					return "", nil, fmt.Errorf("%w: %d", snapsql.ErrExpressionIndexNotFound, *inst.ExprIndex)
 				}
 				// Provide both params map and individual variables
-				evalParams := map[string]interface{}{"params": paramMap}
-				for k, v := range paramMap {
-					evalParams[k] = v
-				}
+				evalParams := map[string]any{"params": paramMap}
+				maps.Copy(evalParams, paramMap)
 
 				result, _, err := (*program).Eval(evalParams)
 				if err != nil {
@@ -404,7 +401,7 @@ func getDialectFromDriver(driver string) string {
 }
 
 // Execute executes a query using an intermediate format
-func (e *Executor) Execute(ctx context.Context, format *intermediate.IntermediateFormat, params map[string]interface{}, options QueryOptions) (*QueryResult, error) {
+func (e *Executor) Execute(ctx context.Context, format *intermediate.IntermediateFormat, params map[string]any, options QueryOptions) (*QueryResult, error) {
 	// Generate SQL from intermediate format using optimized instructions
 	dialect := getDialectFromDriver(options.Driver)
 
@@ -433,7 +430,7 @@ func (e *Executor) Execute(ctx context.Context, format *intermediate.Intermediat
 }
 
 // executeSQL runs the given SQL with args and formats the result according to options
-func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{}, options QueryOptions) (*QueryResult, error) {
+func (e *Executor) executeSQL(ctx context.Context, sql string, args []any, options QueryOptions) (*QueryResult, error) {
 	// Create query context with timeout
 	queryCtx := ctx
 
@@ -462,7 +459,7 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 			Parameters: args,
 			Duration:   duration,
 			Columns:    []string{"rows_affected", "last_insert_id"},
-			Rows:       [][]interface{}{{ra, li}},
+			Rows:       [][]any{{ra, li}},
 			Count:      1,
 		}, nil
 	}
@@ -512,9 +509,9 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 
 		// Aggregate rows into a plan string (driver-agnostic)
 		cols, _ := rows2.Columns()
-		vals := make([]interface{}, len(cols))
+		vals := make([]any, len(cols))
 
-		ptrs := make([]interface{}, len(cols))
+		ptrs := make([]any, len(cols))
 		for i := range vals {
 			ptrs[i] = &vals[i]
 		}
@@ -548,11 +545,11 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 		return result, nil
 	}
 
-	var resultRows [][]interface{}
+	var resultRows [][]any
 
-	values := make([]interface{}, len(columns))
+	values := make([]any, len(columns))
 
-	scanArgs := make([]interface{}, len(columns))
+	scanArgs := make([]any, len(columns))
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
@@ -562,7 +559,7 @@ func (e *Executor) executeSQL(ctx context.Context, sql string, args []interface{
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		rowValues := make([]interface{}, len(columns))
+		rowValues := make([]any, len(columns))
 		for i, v := range values {
 			rowValues[i] = convertSQLValue(v)
 		}
@@ -648,7 +645,7 @@ func readOriginalSQL(path string) (string, error) {
 }
 
 // convertSQLValue converts SQL values to appropriate Go types
-func convertSQLValue(v interface{}) interface{} {
+func convertSQLValue(v any) any {
 	if v == nil {
 		return nil
 	}
@@ -660,7 +657,7 @@ func convertSQLValue(v interface{}) interface{} {
 
 		// Check if it's a JSON object or array
 		if (str[0] == '{' && str[len(str)-1] == '}') || (str[0] == '[' && str[len(str)-1] == ']') {
-			var jsonValue interface{}
+			var jsonValue any
 
 			err := json.Unmarshal(value, &jsonValue)
 			if err == nil {

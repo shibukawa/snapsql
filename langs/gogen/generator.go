@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -215,6 +216,16 @@ func (g *Generator) Generate(w io.Writer) error {
 		isSelectQuery = !strings.EqualFold(g.Format.ResponseAffinity, string(intermediate.ResponseAffinityNone))
 	}
 
+	sliceElementType := ""
+	if after, ok := strings.CutPrefix(responseType, "[]"); ok {
+		sliceElementType = after
+	}
+
+	responseAffinity := g.Format.ResponseAffinity
+	if responseAffinity == "" {
+		responseAffinity = string(intermediate.ResponseAffinityNone)
+	}
+
 	data := struct {
 		Timestamp          time.Time
 		PackageName        string
@@ -227,6 +238,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		CELPrograms        []celProgramData
 		Instructions       []instruction
 		ResponseType       string
+		SliceElementType   string
 		FunctionReturnType string
 		ResponseStruct     *responseStructData
 		SQLBuilder         *sqlBuilderData
@@ -245,6 +257,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		DeclareResult      bool
 		ErrorZeroValue     string
 		IsSelectQuery      bool
+		ResponseAffinity   string
 	}{
 		Timestamp:          time.Now(),
 		PackageName:        g.PackageName,
@@ -257,6 +270,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		CELPrograms:        celPrograms,
 		Parameters:         parameters,
 		ResponseType:       responseType,
+		SliceElementType:   sliceElementType,
 		ResponseStruct:     responseStruct,
 		SQLBuilder:         sqlBuilder,
 		QueryExecution:     queryExecution,
@@ -273,6 +287,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		DeclareResult:      declareResult,
 		ErrorZeroValue:     errorZeroValue,
 		IsSelectQuery:      isSelectQuery,
+		ResponseAffinity:   responseAffinity,
 	}
 
 	if queryExecution.IsIterator && responseStruct != nil {
@@ -337,13 +352,7 @@ func (g *Generator) Generate(w io.Writer) error {
 		},
 		"isSystemColumn": func(paramName string) bool {
 			systemColumns := []string{"created_at", "updated_at", "created_by", "updated_by", "version"}
-			for _, col := range systemColumns {
-				if paramName == col {
-					return true
-				}
-			}
-
-			return false
+			return slices.Contains(systemColumns, paramName)
 		},
 		"hasAnySystemParam": func(names []string) bool {
 			systemColumns := map[string]struct{}{"created_at": {}, "updated_at": {}, "created_by": {}, "updated_by": {}, "version": {}}
@@ -357,11 +366,11 @@ func (g *Generator) Generate(w io.Writer) error {
 		},
 		"celTypeConvert": func(typeName string) string {
 			// Handle array types
-			if strings.HasPrefix(typeName, "[]") {
-				elementType := strings.TrimPrefix(typeName, "[]")
+			if after, ok := strings.CutPrefix(typeName, "[]"); ok {
+				elementType := after
 				// Drop pointer for element types in CEL object representation
-				if strings.HasPrefix(elementType, "*") {
-					elementType = strings.TrimPrefix(elementType, "*")
+				if after, ok := strings.CutPrefix(elementType, "*"); ok {
+					elementType = after
 				}
 
 				elementCELType := convertSingleType(elementType)
@@ -370,8 +379,8 @@ func (g *Generator) Generate(w io.Writer) error {
 			}
 
 			// Handle pointer types
-			if strings.HasPrefix(typeName, "*") {
-				baseType := strings.TrimPrefix(typeName, "*")
+			if after, ok := strings.CutPrefix(typeName, "*"); ok {
+				baseType := after
 				// For nullable types, we still use the base type in CEL
 				return convertSingleType(baseType)
 			}
@@ -637,8 +646,8 @@ func processParameters(params []intermediate.Parameter, funcName string) ([]para
 // convertToGoType converts SnapSQL type to Go type
 func convertToGoType(snapType string) (string, error) {
 	// Handle arrays
-	if strings.HasSuffix(snapType, "[]") {
-		baseType := strings.TrimSuffix(snapType, "[]")
+	if before, ok := strings.CutSuffix(snapType, "[]"); ok {
+		baseType := before
 
 		goBaseType, err := convertToGoType(baseType)
 		if err != nil {
@@ -649,8 +658,8 @@ func convertToGoType(snapType string) (string, error) {
 	}
 
 	// Handle pointers
-	if strings.HasSuffix(snapType, "*") {
-		baseType := strings.TrimSuffix(snapType, "*")
+	if before, ok := strings.CutSuffix(snapType, "*"); ok {
+		baseType := before
 
 		goBaseType, err := convertToGoType(baseType)
 		if err != nil {
@@ -709,8 +718,15 @@ func convertToGoType(snapType string) (string, error) {
 // processResponseType determines the response type based on response affinity and responses
 func processResponseType(format *intermediate.IntermediateFormat) (string, error) {
 	if len(format.Responses) == 0 {
-		// No response fields -> plain write without RETURNING
-		return "sql.Result", nil
+		switch strings.ToLower(format.ResponseAffinity) {
+		case "many":
+			return "[]map[string]any", nil
+		case "one":
+			return "map[string]any", nil
+		default:
+			// No response fields -> treat as command without RETURNING
+			return "sql.Result", nil
+		}
 	}
 
 	// Rely solely on pipeline-determined ResponseAffinity (generator no longer mutates it)
@@ -995,8 +1011,8 @@ func convertTypeToGo(typeName string) (string, error) {
 	case "any":
 		return "any", nil
 	default:
-		if strings.HasSuffix(typeName, "[]") {
-			elementType := strings.TrimSuffix(typeName, "[]")
+		if before, ok := strings.CutSuffix(typeName, "[]"); ok {
+			elementType := before
 
 			goElementType, err := convertTypeToGo(elementType)
 			if err != nil {
@@ -1335,25 +1351,6 @@ var result {{ .ResponseType }}
 // Count: {{ if .HierarchicalMetas }}{{ len .HierarchicalMetas }}{{ else }}0{{ end }}
 {{- end }}
 
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "{{ .LowerFuncName }}", "{{ .ResponseType | toLower }}")
-
-{{- if not .QueryExecution.IsIterator }}
-	// Check for mock mode
-	if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-		mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
-		if err != nil {
-			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to get mock data: %w", err)
-		}
-
-		result, err = snapsqlgo.MapMockDataToStruct[{{ .ResponseType }}](mockData)
-		if err != nil {
-			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock data to {{ .ResponseType }} struct: %w", err)
-		}
-
-		return result, nil
-	}
-{{- end }}
-
 {{- if and .ImplicitParams .SQLBuilder.HasSystemArguments }}
 	// Extract implicit parameters
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
@@ -1463,24 +1460,27 @@ var result {{ .ResponseType }}
 			query += queryLogOptions.RowLockClause
 		}
 {{- end }}
-		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles({{ .LowerFuncName }}MockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to get mock data: %w", err))
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "{{ .FunctionName }}"); mockMatched {
+			if logger != nil {
+				logger.Disable()
+			}
+			if mockErr != nil {
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[{{ .ResponseType }}](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[{{ .SliceElementType }}](mockExec)
 			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to map mock data to {{ .ResponseType }} struct: %w", err))
+				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}
@@ -1488,7 +1488,7 @@ var result {{ .ResponseType }}
 
 			return
 		}
-
+		logger.SetQuery(query, args)
 		{{- range .QueryExecution.IteratorBody }}
 		{{ . }}
 		{{- end }}
@@ -1504,7 +1504,67 @@ var result {{ .ResponseType }}
 		query += queryLogOptions.RowLockClause
 	}
 {{- end }}
-	logger.SetQuery(query, args)
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "{{ .FunctionName }}"); mockMatched {
+		if logger != nil {
+			logger.Disable()
+		}
+		if mockErr != nil {
+			return {{ .ErrorZeroValue }}, mockErr
+		}
+		if mockExec.Err != nil {
+			return {{ .ErrorZeroValue }}, mockExec.Err
+		}
+{{- if eq .ResponseAffinity "none" }}
+		mockResult := mockExec.SQLResult()
+{{- if .QueryExecution.ReturnsSQLResult }}
+		if mockResult == nil {
+			mockResult = snapsqlgo.NewMockResult(mockExec.Opt.RowsAffected, mockExec.Opt.LastInsertID)
+		}
+		if mockResult != nil {
+			result = mockResult
+		}
+		return result, nil
+{{- else }}
+		if mockResult != nil {
+			result = mockResult
+			return result, nil
+		}
+		if len(mockExec.ExpectedRows()) > 0 {
+			mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
+			if err != nil {
+				logger.SetErr(err)
+				return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+			}
+			result = mapped
+		}
+		return result, nil
+{{- end }}
+{{- else if eq .ResponseAffinity "one" }}
+		mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
+		if err != nil {
+			logger.SetErr(err)
+			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+		}
+		result = mapped
+		return result, nil
+{{- else if eq .ResponseAffinity "many" }}
+		mapped, err := snapsqlgo.MapMockExecutionToSlice[{{ .SliceElementType }}](mockExec)
+		if err != nil {
+			logger.SetErr(err)
+			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+		}
+		result = mapped
+		return result, nil
+{{- else }}
+		mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
+		if err != nil {
+			logger.SetErr(err)
+			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+		}
+		result = mapped
+		return result, nil
+{{- end }}
+	}
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
@@ -1617,16 +1677,16 @@ func hasEmitSystemFor(instructions []intermediate.Instruction) bool {
 // goTypeToCELType converts Go types to CEL type names
 func goTypeToCELType(goType string) string {
 	// Handle array/slice types
-	if strings.HasPrefix(goType, "[]") {
-		elementType := strings.TrimPrefix(goType, "[]")
+	if after, ok := strings.CutPrefix(goType, "[]"); ok {
+		elementType := after
 		elementCELType := goTypeToCELType(elementType)
 
 		return "[]" + elementCELType
 	}
 
 	// Handle pointer types
-	if strings.HasPrefix(goType, "*") {
-		baseType := strings.TrimPrefix(goType, "*")
+	if after, ok := strings.CutPrefix(goType, "*"); ok {
+		baseType := after
 		return "*" + goTypeToCELType(baseType)
 	}
 
@@ -1653,16 +1713,16 @@ func goTypeToCELType(goType string) string {
 // snapTypeToCELType converts SnapSQL types to CEL type names
 func snapTypeToCELType(snapType string) string {
 	// Handle array types
-	if strings.HasPrefix(snapType, "[]") {
-		elementType := strings.TrimPrefix(snapType, "[]")
+	if after, ok := strings.CutPrefix(snapType, "[]"); ok {
+		elementType := after
 		elementCELType := snapTypeToCELType(elementType)
 
 		return "[]" + elementCELType
 	}
 
 	// Handle pointer types
-	if strings.HasPrefix(snapType, "*") {
-		baseType := strings.TrimPrefix(snapType, "*")
+	if after, ok := strings.CutPrefix(snapType, "*"); ok {
+		baseType := after
 		return "*" + snapTypeToCELType(baseType)
 	}
 

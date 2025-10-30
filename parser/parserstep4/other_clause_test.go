@@ -15,7 +15,7 @@ func testClauseFinalization(t *testing.T, tests []struct {
 	name      string
 	sql       string
 	wantError bool
-}, statementType string, finalizeFunc func(interface{}, *cmn.ParseError)) {
+}, statementType string, finalizeFunc func(any, *cmn.ParseError)) {
 	t.Helper()
 
 	for _, tc := range tests {
@@ -59,7 +59,7 @@ func TestFinalizeDeleteFromClause(t *testing.T) {
 		{"delete error (no table)", "DELETE FROM WHERE id = 1", true},
 	}
 
-	testClauseFinalization(t, tests, "DELETE", func(clause interface{}, perr *cmn.ParseError) {
+	testClauseFinalization(t, tests, "DELETE", func(clause any, perr *cmn.ParseError) {
 		finalizeDeleteFromClause(clause.(*cmn.DeleteFromClause), perr)
 	})
 }
@@ -74,7 +74,7 @@ func TestFinalizeUpdateClause(t *testing.T) {
 		{"update error (no table)", "UPDATE SET name = 'foo' WHERE id = 1", true},
 	}
 
-	testClauseFinalization(t, tests, "UPDATE", func(clause interface{}, perr *cmn.ParseError) {
+	testClauseFinalization(t, tests, "UPDATE", func(clause any, perr *cmn.ParseError) {
 		finalizeUpdateClause(clause.(*cmn.UpdateClause), perr)
 	})
 }

@@ -81,8 +81,8 @@ func LoadSchemaFromSQL(path string) (map[string]*snapsql.TableInfo, error) {
 
 		// Table-level PRIMARY KEY
 		if m := tablePKRe.FindStringSubmatch(strings.ToUpper(line)); m != nil {
-			cols := strings.Split(m[1], ",")
-			for _, c := range cols {
+			cols := strings.SplitSeq(m[1], ",")
+			for c := range cols {
 				colName := strings.TrimSpace(strings.ToLower(c))
 				if ci, ok := current.Columns[colName]; ok {
 					ci.IsPrimaryKey = true

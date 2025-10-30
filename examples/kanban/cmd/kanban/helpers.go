@@ -23,8 +23,8 @@ func extractSQLiteFilePath(dsn string) (string, error) {
 
 	hasFilePrefix := false
 
-	if strings.HasPrefix(dsn, "file:") {
-		pathPart = strings.TrimPrefix(dsn, "file:")
+	if after, ok := strings.CutPrefix(dsn, "file:"); ok {
+		pathPart = after
 
 		if strings.HasPrefix(pathPart, "//") {
 			pathPart = pathPart[2:]

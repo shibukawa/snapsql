@@ -172,7 +172,7 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 				// 実際の値を評価して型判定 (リフレクションベース)
 				isArrayType := false
 				if varInfo.Value != nil {
-					_, isArrayType = varInfo.Value.([]interface{})
+					_, isArrayType = varInfo.Value.([]any)
 				}
 
 				if isArrayType {
@@ -278,8 +278,8 @@ func generateValuesClause(values *parser.ValuesClause, builder *InstructionBuild
 					isObjectType := false
 
 					if varInfo.Value != nil {
-						_, isMap := varInfo.Value.(map[string]interface{})
-						_, isArray := varInfo.Value.([]interface{})
+						_, isMap := varInfo.Value.(map[string]any)
+						_, isArray := varInfo.Value.([]any)
 						// Object type if it's a map but NOT an array
 						isObjectType = isMap && !isArray
 					}

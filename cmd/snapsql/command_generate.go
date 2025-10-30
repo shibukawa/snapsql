@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/langs/gogen"
+	"github.com/shibukawa/snapsql/langs/mockgen"
 	"github.com/shibukawa/snapsql/markdownparser"
 )
 
@@ -192,6 +194,8 @@ func generateForLanguage(lang string, generator GeneratorConfig, intermediateFil
 	case "go":
 		// Use built-in Go generator
 		return generateGoFiles(generator, intermediateFiles, ctx)
+	case "mock":
+		return generateMockFiles(generator, intermediateFiles, ctx)
 	case "typescript":
 		// Use external plugin if available, otherwise show not implemented message
 		_, err := exec.LookPath("snapsql-gen-typescript")
@@ -295,6 +299,97 @@ func generateGoFiles(generator GeneratorConfig, intermediateFiles []string, ctx 
 	return nil
 }
 
+func generateMockFiles(generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
+	if len(intermediateFiles) == 0 {
+		return nil
+	}
+
+	outputDir := generator.Output
+	if outputDir == "" {
+		outputDir = mockgen.DefaultOutputDir
+	}
+
+	if ctx.Config != "" && !filepath.IsAbs(outputDir) {
+		var baseDir string
+
+		if !filepath.IsAbs(ctx.Config) {
+			cwd, _ := os.Getwd()
+			baseDir = filepath.Dir(filepath.Join(cwd, ctx.Config))
+		} else {
+			baseDir = filepath.Dir(ctx.Config)
+		}
+
+		outputDir = filepath.Clean(filepath.Join(baseDir, outputDir))
+	}
+
+	toBool := func(v any) bool {
+		switch val := v.(type) {
+		case bool:
+			return val
+		case string:
+			parsed, err := strconv.ParseBool(val)
+			if err == nil {
+				return parsed
+			}
+		}
+
+		return false
+	}
+
+	embedPackage := "mock"
+	embedFile := "mock.go"
+	generateEmbed := false
+
+	if generator.Settings != nil {
+		if v, ok := generator.Settings["embed"]; ok {
+			generateEmbed = toBool(v)
+		}
+
+		if v, ok := generator.Settings["package"]; ok {
+			if pkg, ok2 := v.(string); ok2 && pkg != "" {
+				embedPackage = pkg
+			}
+		}
+
+		if v, ok := generator.Settings["filename"]; ok {
+			if fn, ok2 := v.(string); ok2 && fn != "" {
+				embedFile = fn
+			}
+		}
+	}
+
+	gen := mockgen.Generator{
+		OutputDir:         outputDir,
+		PreserveHierarchy: generator.PreserveHierarchy,
+		GenerateEmbed:     generateEmbed,
+		EmbedPackage:      embedPackage,
+		EmbedFile:         embedFile,
+	}
+
+	if generator.PreserveHierarchy {
+		gen.IntermediateRoot = commonAncestorDir(intermediateFiles)
+	}
+
+	for _, intermediateFile := range intermediateFiles {
+		outputFile, err := gen.Generate(intermediateFile)
+		if err != nil {
+			return err
+		}
+
+		if ctx.Verbose {
+			color.Green("Generated: %s", outputFile)
+		}
+	}
+
+	if path, err := gen.Finalize(); err != nil {
+		return err
+	} else if path != "" && ctx.Verbose {
+		color.Green("Generated: %s", path)
+	}
+
+	return nil
+}
+
 // generateWithExternalPlugin attempts to use an external generator plugin
 func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
 	pluginName := "snapsql-gen-" + lang
@@ -316,8 +411,10 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 
 	// Base arguments (shared across files)
 	baseArgs := []string{"--output", outputDir}
+
 	for key, value := range generator.Settings {
 		var strValue string
+
 		switch v := value.(type) {
 		case string:
 			strValue = v
@@ -357,6 +454,39 @@ func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermed
 	}
 
 	return nil
+}
+
+func commonAncestorDir(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+
+	ancestor := filepath.Dir(paths[0])
+
+	for ancestor != "" {
+		allWithin := true
+
+		for _, p := range paths[1:] {
+			rel, err := filepath.Rel(ancestor, filepath.Dir(p))
+			if err != nil || strings.HasPrefix(rel, "..") {
+				allWithin = false
+				break
+			}
+		}
+
+		if allWithin {
+			return ancestor
+		}
+
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			break
+		}
+
+		ancestor = parent
+	}
+
+	return ancestor
 }
 
 // generateSpecificLanguage generates files for a specific language
@@ -596,9 +726,7 @@ func (g *GenerateCmd) loadConstants(config *Config, ctx *Context) (map[string]an
 		}
 
 		// Merge constants
-		for k, v := range fileConstants {
-			constants[k] = v
-		}
+		maps.Copy(constants, fileConstants)
 	}
 
 	return constants, nil

@@ -262,10 +262,10 @@ func TestSQLFormatter_IndentationLevels(t *testing.T) {
 	result, err := formatter.Format(input)
 	assert.NoError(t, err)
 
-	lines := strings.Split(result, "\n")
+	lines := strings.SplitSeq(result, "\n")
 
 	// Check indentation levels
-	for _, line := range lines {
+	for line := range lines {
 		if strings.Contains(line, "/*# if condition1 */") {
 			assert.Equal(t, 0, countLeadingSpaces(line))
 		}
@@ -319,9 +319,7 @@ parameters:
 */
 select u.id,u.name,u.email /*# if include_profile */ ,p.bio,p.avatar_url /*# end */ from users u /*# if include_profile */ left join profiles p on u.id=p.user_id /*# end */ where u.id=/*= user_id */ /*# if start_date != "" && end_date != "" */ and u.created_at between /*= start_date */ and /*= end_date */ /*# end */ order by u.created_at desc limit 100`
 
-	t.ResetTimer()
-
-	for range t.N {
+	for t.Loop() {
 		_, err := formatter.Format(complexSQL)
 		if err != nil {
 			t.Fatal(err)
