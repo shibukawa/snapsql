@@ -1,0 +1,201 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": [
+        {
+          "name": "status",
+          "type": "string",
+          "value": "dummy"
+        },
+        {
+          "name": "account_id",
+          "type": "int",
+          "value": 1
+        },
+        {
+          "name": "include_primary",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "include_status",
+          "type": "bool",
+          "value": true
+        }
+      ],
+      "container": "root"
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "status",
+      "environment_index": 0,
+      "position": {
+        "line": 16,
+        "column": 16
+      },
+      "type_descriptor": "string",
+      "result_type": 1
+    },
+    {
+      "id": "expr_002",
+      "expression": "include_primary",
+      "environment_index": 0,
+      "position": {
+        "line": 12,
+        "column": 1
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
+    },
+    {
+      "id": "expr_003",
+      "expression": "account_id",
+      "environment_index": 0,
+      "position": {
+        "line": 13,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
+    },
+    {
+      "id": "expr_004",
+      "expression": "include_status",
+      "environment_index": 0,
+      "position": {
+        "line": 15,
+        "column": 1
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
+    }
+  ],
+  "format_version": "1",
+  "function_name": "update_accounts_multi_if",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC",
+      "pos": "9:1",
+      "value": "UPDATE accounts SET status = "
+    },
+    {
+      "op": "EMIT_EVAL",
+      "pos": "10:14",
+      "expr_index": 0
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "11:0",
+      "value": " WHERE 1 = 1 "
+    },
+    {
+      "op": "IF",
+      "pos": "12:1",
+      "expr_index": 1
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "13:0",
+      "value": " AND id = "
+    },
+    {
+      "op": "EMIT_EVAL",
+      "pos": "13:12",
+      "expr_index": 2
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "14:0",
+      "value": " "
+    },
+    {
+      "op": "END",
+      "pos": "14:1"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "15:0",
+      "value": " "
+    },
+    {
+      "op": "IF",
+      "pos": "15:1",
+      "expr_index": 3
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "16:0",
+      "value": " AND status = "
+    },
+    {
+      "op": "EMIT_EVAL",
+      "pos": "16:16",
+      "expr_index": 0
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "17:0",
+      "value": " "
+    },
+    {
+      "op": "END",
+      "pos": "17:1"
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "18:0"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "status",
+      "type": "string"
+    },
+    {
+      "name": "account_id",
+      "type": "int"
+    },
+    {
+      "name": "include_primary",
+      "type": "bool"
+    },
+    {
+      "name": "include_status",
+      "type": "bool"
+    }
+  ],
+  "response_affinity": "none",
+  "statement_type": "update",
+  "table_references": [
+    {
+      "name": "accounts",
+      "context": "main"
+    }
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ],
+  "where_clause": {
+    "status": "exists",
+    "expression_refs": [
+      1,
+      3
+    ],
+    "dynamic_conditions": [
+      {
+        "expr_index": 1,
+        "negated_when_empty": true,
+        "description": "include_primary"
+      },
+      {
+        "expr_index": 3,
+        "negated_when_empty": true,
+        "description": "include_status"
+      }
+    ],
+    "raw_text": "WHERE"
+  }
+}

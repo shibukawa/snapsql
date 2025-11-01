@@ -53,7 +53,7 @@ func GenerateSelectInstructions(stmt parser.StatementNode, ctx *GenerationContex
 
 	// WHERE 句を処理（任意）
 	if selectStmt.Where != nil {
-		if err := generateWhereClause(selectStmt.Where, builder); err != nil {
+		if _, err := generateWhereClause(selectStmt.Where, builder, false); err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to generate WHERE clause: %w", err)
 		}
 	}

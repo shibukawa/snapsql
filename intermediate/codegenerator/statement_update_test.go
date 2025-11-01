@@ -148,3 +148,126 @@ func TestGenerateUpdateInstructions(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateUpdateInstructionsWhereMetaDynamic(t *testing.T) {
+	sql := `/*# parameters: { include_where: bool } */
+UPDATE users SET status = 'inactive'
+WHERE
+/*# if include_where */
+    id = 1
+/*# end */`
+
+	reader := strings.NewReader(sql)
+	stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+	require.NoError(t, err)
+
+	updateStmt, ok := stmt.(*parser.UpdateStatement)
+	require.True(t, ok)
+
+	ctx := NewGenerationContext(snapsql.DialectPostgres)
+	_, _, _, err = GenerateUpdateInstructions(updateStmt, ctx)
+	require.NoError(t, err)
+
+	meta := ctx.WhereClauseMeta()
+	require.NotNil(t, meta)
+	assert.True(t, meta.Present)
+	assert.Equal(t, StatusConditional, meta.Status)
+	assert.NotEmpty(t, meta.ExpressionRefs)
+	require.Len(t, meta.RemovalCombos, 1)
+	require.Len(t, meta.RemovalCombos[0], 1)
+	literal := meta.RemovalCombos[0][0]
+	assert.Equal(t, meta.ExpressionRefs[0], literal.ExprIndex)
+	assert.False(t, literal.When)
+}
+
+func TestWhereClauseMetaAnalyzerSingleIf(t *testing.T) {
+	meta := newWhereClauseMeta("WHERE")
+	meta.EnterIf(0)
+	meta.RecordStatic("id = 1")
+	meta.ExitConditional()
+	meta.Finalize()
+
+	assert.Equal(t, StatusConditional, meta.Status)
+	require.Len(t, meta.RemovalCombos, 1)
+	require.Len(t, meta.RemovalCombos[0], 1)
+	assert.Equal(t, 0, meta.RemovalCombos[0][0].ExprIndex)
+	assert.False(t, meta.RemovalCombos[0][0].When)
+}
+
+func TestGenerateUpdateInstructionsWhereMetaAbsent(t *testing.T) {
+	sql := `UPDATE users SET status = 'inactive'`
+
+	reader := strings.NewReader(sql)
+	stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+	require.NoError(t, err)
+
+	updateStmt, ok := stmt.(*parser.UpdateStatement)
+	require.True(t, ok)
+
+	ctx := NewGenerationContext(snapsql.DialectPostgres)
+	_, _, _, err = GenerateUpdateInstructions(updateStmt, ctx)
+	require.NoError(t, err)
+
+	meta := ctx.WhereClauseMeta()
+	require.NotNil(t, meta)
+	assert.False(t, meta.Present)
+	assert.Equal(t, StatusFullScan, meta.Status)
+}
+
+func TestGenerateUpdateInstructionsWhereMetaWithElse(t *testing.T) {
+	sql := `/*# parameters: { include_where: bool } */
+UPDATE users SET status = 'inactive'
+WHERE
+/*# if include_where */
+    id = 1
+/*# else */
+    1 = 1
+/*# end */`
+
+	reader := strings.NewReader(sql)
+	stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+	require.NoError(t, err)
+
+	updateStmt, ok := stmt.(*parser.UpdateStatement)
+	require.True(t, ok)
+
+	ctx := NewGenerationContext(snapsql.DialectPostgres)
+	_, _, _, err = GenerateUpdateInstructions(updateStmt, ctx)
+	require.NoError(t, err)
+
+	meta := ctx.WhereClauseMeta()
+	require.NotNil(t, meta)
+	assert.True(t, meta.Present)
+	assert.Equal(t, StatusExists, meta.Status)
+	assert.Empty(t, meta.RemovalCombos)
+}
+
+func TestGenerateUpdateInstructionsWhereMetaWithElseIf(t *testing.T) {
+	sql := `/*# parameters: { include_primary: bool, include_secondary: bool } */
+UPDATE users SET status = 'inactive'
+WHERE
+/*# if include_primary */
+    id = 1
+/*# elseif include_secondary */
+    email = 'alt@example.com'
+/*# else */
+    1 = 1
+/*# end */`
+
+	reader := strings.NewReader(sql)
+	stmt, _, _, err := parser.ParseSQLFile(reader, nil, "", "", parser.Options{})
+	require.NoError(t, err)
+
+	updateStmt, ok := stmt.(*parser.UpdateStatement)
+	require.True(t, ok)
+
+	ctx := NewGenerationContext(snapsql.DialectPostgres)
+	_, _, _, err = GenerateUpdateInstructions(updateStmt, ctx)
+	require.NoError(t, err)
+
+	meta := ctx.WhereClauseMeta()
+	require.NotNil(t, meta)
+	assert.True(t, meta.Present)
+	assert.Equal(t, StatusExists, meta.Status)
+	assert.Empty(t, meta.RemovalCombos)
+}

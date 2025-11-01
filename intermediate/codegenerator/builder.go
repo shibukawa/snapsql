@@ -2,6 +2,7 @@ package codegenerator
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,9 +13,11 @@ import (
 
 // conditionalLevel はネストされた条件分岐のレベルを追跡する
 type conditionalLevel struct {
-	startPos  string
-	hasElse   bool
-	hasElseIf bool
+	startPos   string
+	hasElse    bool
+	hasElseIf  bool
+	exprIndex  int
+	whereConds []*WhereDynamicCondition
 }
 
 // loopLevel はネストされたループのレベルを追跡する
@@ -23,6 +26,7 @@ type loopLevel struct {
 	expression string // CEL式
 	exprIndex  int
 	envIndex   int // このループが持つ CELEnvironment のインデックス
+	whereCond  *WhereDynamicCondition
 }
 
 // InstructionBuilder は命令列を段階的に構築するビルダー
@@ -34,6 +38,7 @@ type InstructionBuilder struct {
 	envStack               []int // CELEnvironment のインデックススタック（root=0から始まる）
 	dummyValuesInitialized bool  // FunctionDefinition からのダミー値初期化済みフラグ
 	systemFieldsAdded      bool  // VALUES句でシステムフィールド値が既に追加されているかフラグ
+	whereMetaStack         []*WhereClauseMeta
 }
 
 // NewInstructionBuilder は新しい InstructionBuilder を作成する
@@ -44,6 +49,42 @@ func NewInstructionBuilder(ctx *GenerationContext) *InstructionBuilder {
 		envStack:               []int{0}, // root environment from start
 		dummyValuesInitialized: false,
 	}
+}
+
+func (b *InstructionBuilder) instructionCount() int {
+	return len(b.instructions)
+}
+
+func appendUniqueInt(values []int, value int) []int {
+	if slices.Contains(values, value) {
+		return values
+	}
+
+	return append(values, value)
+}
+
+func (b *InstructionBuilder) pushWhereMeta(meta *WhereClauseMeta) {
+	if meta == nil {
+		return
+	}
+
+	b.whereMetaStack = append(b.whereMetaStack, meta)
+}
+
+func (b *InstructionBuilder) popWhereMeta() {
+	if len(b.whereMetaStack) == 0 {
+		return
+	}
+
+	b.whereMetaStack = b.whereMetaStack[:len(b.whereMetaStack)-1]
+}
+
+func (b *InstructionBuilder) currentWhereMeta() *WhereClauseMeta {
+	if len(b.whereMetaStack) == 0 {
+		return nil
+	}
+
+	return b.whereMetaStack[len(b.whereMetaStack)-1]
 }
 
 // BeginValueGroup resets the system field insertion flag before starting a new VALUES group.
@@ -268,6 +309,10 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token, opts ...Pro
 					ExprIndex: &exprIndex,
 				})
 
+				if meta := b.currentWhereMeta(); meta != nil {
+					meta.RecordEval()
+				}
+
 				// 次のトークンがDUMMY_STARTの場合、DUMMY_ENDまでスキップ
 				// パーサーがディレクティブの後にDUMMY_START, <dummy_value>, DUMMY_ENDを挿入する
 				dummyStartIdx := -1
@@ -326,6 +371,23 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token, opts ...Pro
 					Pos:       token.Position.String(),
 					ExprIndex: &exprIndex,
 				})
+
+				if meta := b.currentWhereMeta(); meta != nil {
+					meta.Dynamic = true
+					meta.ExpressionRefs = appendUniqueInt(meta.ExpressionRefs, exprIndex)
+					whereCond := &WhereDynamicCondition{
+						ExprIndex:        exprIndex,
+						NegatedWhenEmpty: true,
+						Description:      strings.TrimSpace(token.Directive.Condition),
+					}
+					meta.DynamicConditions = append(meta.DynamicConditions, whereCond)
+
+					if currentLevel.whereConds != nil {
+						currentLevel.whereConds = append(currentLevel.whereConds, whereCond)
+					}
+
+					meta.EnterElseIf(exprIndex)
+				}
 
 				continue
 
@@ -548,9 +610,23 @@ func (b *InstructionBuilder) addElseCondition(pos *tokenizer.Position) error {
 	}
 
 	currentLevel.hasElse = true
+	if len(currentLevel.whereConds) > 0 {
+		for _, cond := range currentLevel.whereConds {
+			if cond == nil {
+				continue
+			}
+
+			cond.HasElse = true
+			cond.NegatedWhenEmpty = false
+		}
+	}
 
 	// ELSE命令を生成
 	b.addRawElseCondition(pos)
+
+	if meta := b.currentWhereMeta(); meta != nil {
+		meta.EnterElse()
+	}
 
 	return nil
 }
@@ -572,14 +648,43 @@ func (b *InstructionBuilder) addIfCondition(token tokenizer.Token) {
 		ExprIndex: &exprIndex,
 	})
 	// スタックに新しい条件レベルをプッシュ
+	meta := b.currentWhereMeta()
+
+	var whereCond *WhereDynamicCondition
+
+	if meta != nil {
+		meta.Present = true
+		meta.Dynamic = true
+		meta.ExpressionRefs = appendUniqueInt(meta.ExpressionRefs, exprIndex)
+		whereCond = &WhereDynamicCondition{
+			ExprIndex:        exprIndex,
+			NegatedWhenEmpty: true,
+			Description:      strings.TrimSpace(token.Directive.Condition),
+		}
+		meta.DynamicConditions = append(meta.DynamicConditions, whereCond)
+		meta.EnterIf(exprIndex)
+	}
+
 	b.conditionalStack = append(b.conditionalStack, conditionalLevel{
 		startPos:  token.Position.String(),
 		hasElse:   false,
 		hasElseIf: false,
+		exprIndex: exprIndex,
+		whereConds: func() []*WhereDynamicCondition {
+			if whereCond == nil {
+				return nil
+			}
+
+			return []*WhereDynamicCondition{whereCond}
+		}(),
 	})
 }
 
 func (b *InstructionBuilder) addEndCondition(pos *tokenizer.Position) {
+	if meta := b.currentWhereMeta(); meta != nil {
+		meta.ExitConditional()
+	}
+
 	b.instructions = append(b.instructions, Instruction{
 		Op:  OpEnd,
 		Pos: pos.String(),
@@ -1440,6 +1545,10 @@ func (b *InstructionBuilder) addStatic(value string, position *tokenizer.Positio
 		Pos:   position.String(),
 	}
 	b.instructions = append(b.instructions, instr)
+
+	if meta := b.currentWhereMeta(); meta != nil {
+		meta.RecordStatic(value)
+	}
 }
 
 // AddInstruction は命令を直接追加する（clause関数用のヘルパー）
@@ -1466,6 +1575,19 @@ func (b *InstructionBuilder) AddForLoopStart(elementVar, collectionVarName, pos 
 	if position, ok := parsePosition(pos); ok {
 		descriptor := b.context.LookupTypeDescriptor(pos)
 		b.context.SetExpressionMetadata(collectionExprIndex, position, descriptor)
+	}
+
+	var whereLoopCond *WhereDynamicCondition
+
+	if meta := b.currentWhereMeta(); meta != nil {
+		meta.Dynamic = true
+		meta.ExpressionRefs = appendUniqueInt(meta.ExpressionRefs, collectionExprIndex)
+		whereLoopCond = &WhereDynamicCondition{
+			ExprIndex:        collectionExprIndex,
+			NegatedWhenEmpty: true,
+			Description:      fmt.Sprintf("loop %s : %s", elementVar, collectionVarName),
+		}
+		meta.DynamicConditions = append(meta.DynamicConditions, whereLoopCond)
 	}
 
 	// Evaluate the collection to extract the first element
@@ -1512,6 +1634,7 @@ func (b *InstructionBuilder) AddForLoopStart(elementVar, collectionVarName, pos 
 		expression: collectionVarName,
 		exprIndex:  collectionExprIndex,
 		envIndex:   loopEnvIndex,
+		whereCond:  whereLoopCond,
 	})
 
 	// Push new environment - automatic environment management

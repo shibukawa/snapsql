@@ -32,6 +32,26 @@ type Generator struct {
 	hierarchicalMetas []*hierarchicalNodeMeta // internal: prepared metas for hierarchical aggregation
 }
 
+type whereClauseMetaData struct {
+	Status            string
+	RemovalCombos     [][]removalLiteralData
+	ExpressionRefs    []int
+	DynamicConditions []whereDynamicConditionData
+	RawText           string
+}
+
+type removalLiteralData struct {
+	ExprIndex int
+	When      bool
+}
+
+type whereDynamicConditionData struct {
+	ExprIndex        int
+	NegatedWhenEmpty bool
+	HasElse          bool
+	Description      string
+}
+
 // Option is a function that configures Generator
 type Option func(*Generator)
 
@@ -95,6 +115,76 @@ func New(format *intermediate.IntermediateFormat, opts ...Option) *Generator {
 	return g
 }
 
+func convertWhereMeta(meta *intermediate.WhereClauseMeta) *whereClauseMetaData {
+	if meta == nil {
+		return nil
+	}
+
+	result := &whereClauseMetaData{
+		Status:         meta.Status,
+		ExpressionRefs: append([]int(nil), meta.ExpressionRefs...),
+		RawText:        meta.RawText,
+	}
+
+	if len(meta.RemovalCombos) > 0 {
+		result.RemovalCombos = make([][]removalLiteralData, len(meta.RemovalCombos))
+		for i, combo := range meta.RemovalCombos {
+			if len(combo) == 0 {
+				result.RemovalCombos[i] = []removalLiteralData{}
+				continue
+			}
+
+			items := make([]removalLiteralData, len(combo))
+			for j, lit := range combo {
+				items[j] = removalLiteralData{
+					ExprIndex: lit.ExprIndex,
+					When:      lit.When,
+				}
+			}
+
+			result.RemovalCombos[i] = items
+		}
+	}
+
+	if len(meta.DynamicConditions) > 0 {
+		result.DynamicConditions = make([]whereDynamicConditionData, 0, len(meta.DynamicConditions))
+		for _, cond := range meta.DynamicConditions {
+			result.DynamicConditions = append(result.DynamicConditions, whereDynamicConditionData{
+				ExprIndex:        cond.ExprIndex,
+				NegatedWhenEmpty: cond.NegatedWhenEmpty,
+				HasElse:          cond.HasElse,
+				Description:      cond.Description,
+			})
+		}
+	}
+
+	return result
+}
+
+func runtimeWhereStatusLiteral(status string) string {
+	switch strings.ToLower(status) {
+	case "fullscan":
+		return "snapsqlgo.WhereClauseStatusFullScan"
+	case "exists":
+		return "snapsqlgo.WhereClauseStatusExists"
+	case "conditional":
+		return "snapsqlgo.WhereClauseStatusConditional"
+	default:
+		return fmt.Sprintf("%q", status)
+	}
+}
+
+func mutationKindFromStatementType(stmtType string) string {
+	switch strings.ToLower(stmtType) {
+	case "update":
+		return "MutationUpdate"
+	case "delete":
+		return "MutationDelete"
+	default:
+		return ""
+	}
+}
+
 // Generate generates Go code and writes it to the writer
 func (g *Generator) Generate(w io.Writer) error {
 	// Reset per-file state to avoid leaking hierarchical metas across files
@@ -129,8 +219,18 @@ func (g *Generator) Generate(w io.Writer) error {
 
 	// Process response struct
 	responseStruct, err := processResponseStruct(g.Format)
-	if err != nil && !errors.Is(err, ErrNoResponseFields) {
-		return fmt.Errorf("failed to process response struct: %w", err)
+	if err != nil {
+		if errors.Is(err, ErrNoResponseFields) {
+			if !strings.EqualFold(g.Format.ResponseAffinity, string(intermediate.ResponseAffinityNone)) && len(g.Format.Responses) > 0 {
+				return fmt.Errorf("%w: function %s requires response struct metadata; ensure table definitions exist", ErrGenerateGoCode, g.Format.FunctionName)
+			}
+		} else {
+			return fmt.Errorf("failed to process response struct: %w", err)
+		}
+	}
+
+	if responseStruct == nil && len(g.Format.Responses) > 0 && !strings.EqualFold(g.Format.ResponseAffinity, string(intermediate.ResponseAffinityNone)) {
+		return fmt.Errorf("%w: function %s requires response struct metadata; ensure table definitions exist", ErrGenerateGoCode, g.Format.FunctionName)
 	}
 
 	// Generate hierarchical structs if needed
@@ -258,6 +358,8 @@ func (g *Generator) Generate(w io.Writer) error {
 		ErrorZeroValue     string
 		IsSelectQuery      bool
 		ResponseAffinity   string
+		WhereMeta          *whereClauseMetaData
+		MutationKind       string
 	}{
 		Timestamp:          time.Now(),
 		PackageName:        g.PackageName,
@@ -288,6 +390,8 @@ func (g *Generator) Generate(w io.Writer) error {
 		ErrorZeroValue:     errorZeroValue,
 		IsSelectQuery:      isSelectQuery,
 		ResponseAffinity:   responseAffinity,
+		WhereMeta:          convertWhereMeta(g.Format.WhereClauseMeta),
+		MutationKind:       mutationKindFromStatementType(g.Format.StatementType),
 	}
 
 	if queryExecution.IsIterator && responseStruct != nil {
@@ -342,9 +446,10 @@ func (g *Generator) Generate(w io.Writer) error {
 
 	// Execute template
 	tmpl, err := template.New("go").Funcs(template.FuncMap{
-		"toLower":  strings.ToLower,
-		"backtick": func() string { return "`" },
-		"title":    cases.Title(language.English).String,
+		"toLower":                   strings.ToLower,
+		"backtick":                  func() string { return "`" },
+		"title":                     cases.Title(language.English).String,
+		"runtimeWhereStatusLiteral": runtimeWhereStatusLiteral,
 		"needStringsImport": func(isStatic bool, metas []*hierarchicalNodeMeta) bool {
 			// strings is only necessary for dynamic SQL builder (non-static).
 			// Hierarchical metas do not require strings import on their own.
@@ -718,14 +823,12 @@ func convertToGoType(snapType string) (string, error) {
 // processResponseType determines the response type based on response affinity and responses
 func processResponseType(format *intermediate.IntermediateFormat) (string, error) {
 	if len(format.Responses) == 0 {
-		switch strings.ToLower(format.ResponseAffinity) {
-		case "many":
-			return "[]map[string]any", nil
-		case "one":
-			return "map[string]any", nil
-		default:
-			// No response fields -> treat as command without RETURNING
+		affinity := strings.ToLower(format.ResponseAffinity)
+		switch affinity {
+		case "", "none":
 			return "sql.Result", nil
+		default:
+			return "", fmt.Errorf("%w: function %s requires response metadata for affinity '%s'; ensure schema definitions are available", ErrGenerateGoCode, format.FunctionName, format.ResponseAffinity)
 		}
 	}
 
@@ -1045,7 +1148,7 @@ func processImplicitParameters(format *intermediate.IntermediateFormat) ([]impli
 			case "created_by", "updated_by":
 				ptype = "string"
 			default:
-				ptype = "any"
+				return nil, fmt.Errorf("%w: implicit parameter %s has no type metadata; ensure schema information is available", ErrGenerateGoCode, param.Name)
 			}
 		}
 
@@ -1383,17 +1486,52 @@ var result {{ .ResponseType }}
 		RowLockMode:   rowLockMode,
 	}
 
-{{- if not .QueryExecution.IsIterator }}
-	logger := execCtx.QueryLogger()
-	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
-		return snapsqlgo.QueryLogMetadata{
-			FuncName:   "{{ .FunctionName }}",
-			SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
-			Dialect:    "{{ .Dialect }}",
-			QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
-			Options:    queryLogOptions,
-		}, executor
-	})
+{{- if .MutationKind }}
+	var whereMeta *snapsqlgo.WhereClauseMeta
+{{- if .WhereMeta }}
+	whereMeta = &snapsqlgo.WhereClauseMeta{
+		Status: {{ runtimeWhereStatusLiteral .WhereMeta.Status }},
+		{{- if .WhereMeta.RemovalCombos }}
+		RemovalCombos: [][]snapsqlgo.RemovalLiteral{
+			{{- range .WhereMeta.RemovalCombos }}
+			{
+				{{- range . }}
+				{ExprIndex: {{ .ExprIndex }}, When: {{ if .When }}true{{ else }}false{{ end }}},
+				{{- end }}
+			},
+			{{- end }}
+		},
+		{{- end }}
+		{{- if .WhereMeta.ExpressionRefs }}
+		ExpressionRefs: []int{ {{- range $i, $ref := .WhereMeta.ExpressionRefs }}{{ if $i }}, {{ end }}{{ $ref }}{{- end }} },
+		{{- end }}
+		{{- if .WhereMeta.DynamicConditions }}
+		DynamicConditions: []snapsqlgo.WhereDynamicCondition{
+			{{- range .WhereMeta.DynamicConditions }}
+			{
+				ExprIndex: {{ .ExprIndex }},
+				{{- if .NegatedWhenEmpty }}
+				NegatedWhenEmpty: true,
+				{{- end }}
+				{{- if .HasElse }}
+				HasElse: true,
+				{{- end }}
+				{{- if .Description }}
+				Description: {{ printf "%q" .Description }},
+				{{- end }}
+			},
+			{{- end }}
+		},
+		{{- end }}
+		{{- if .WhereMeta.RawText }}
+		RawText: {{ printf "%q" .WhereMeta.RawText }},
+		{{- end }}
+	}
+{{- end }}
+{{- end }}
+
+{{- if .SQLBuilder.HasFallbackGuard }}
+	{{ .SQLBuilder.FallbackVarName }} := false
 {{- end }}
 
 	// Build SQL
@@ -1427,6 +1565,10 @@ var result {{ .ResponseType }}
 	var builder strings.Builder
 	args := make([]any, 0)
 
+{{- if .SQLBuilder.HasFallbackGuard }}
+	{{ .SQLBuilder.FallbackVarName }} = false
+{{- end }}
+
 	{{- range .SQLBuilder.BuilderCode }}
 	{{ . }}
 	{{- end }}
@@ -1438,9 +1580,59 @@ var result {{ .ResponseType }}
 
 {{- if .QueryExecution.IsIterator }}
 	return func(yield func({{ .IteratorYieldType }}, error) bool) {
-		logger := execCtx.QueryLogger()
-		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
-			return snapsqlgo.QueryLogMetadata{
+		query, args, err := buildQueryAndArgs()
+		if err != nil {
+			_ = yield(nil, err)
+			return
+		}
+{{- if .SQLBuilder.NeedsRowLockClause }}
+	if queryLogOptions.RowLockClause != "" {
+		query += queryLogOptions.RowLockClause
+	}
+{{- end }}
+{{- if and .SQLBuilder.HasFallbackGuard .MutationKind }}
+	if whereMeta != nil {
+		whereMeta.FallbackTriggered = {{ .SQLBuilder.FallbackVarName }}
+	}
+{{- end }}
+{{- if .MutationKind }}
+	// Enforce WHERE clause guard when mutations are generated
+	if err := snapsqlgo.EnforceNonEmptyWhereClause(ctx, "{{ .FunctionName }}", snapsqlgo.{{ .MutationKind }}, whereMeta, query); err != nil {
+		_ = yield(nil, err)
+		return
+	}
+{{- end }}
+	// Handle mock execution if present
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "{{ .FunctionName }}"); mockMatched {
+		if mockErr != nil {
+			_ = yield(nil, mockErr)
+			return
+		}
+		if mockExec.Err != nil {
+			_ = yield(nil, mockExec.Err)
+			return
+		}
+
+		mapped, err := snapsqlgo.MapMockExecutionToSlice[{{ .SliceElementType }}](mockExec)
+		if err != nil {
+			_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err))
+			return
+		}
+
+		for i := range mapped {
+			item := mapped[i]
+			if !yield(&item, nil) {
+				return
+			}
+		}
+
+		return
+	}
+	// Prepare query logger
+	logger := execCtx.QueryLogger()
+	logger.SetQuery(query, args)
+	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+		return snapsqlgo.QueryLogMetadata{
 				FuncName:   "{{ .FunctionName }}",
 				SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
 				Dialect:    "{{ .Dialect }}",
@@ -1448,47 +1640,6 @@ var result {{ .ResponseType }}
 				Options:    queryLogOptions,
 			}, executor
 		})
-
-		query, args, err := buildQueryAndArgs()
-		if err != nil {
-			logger.SetErr(err)
-			_ = yield(nil, err)
-			return
-		}
-{{- if .SQLBuilder.NeedsRowLockClause }}
-		if queryLogOptions.RowLockClause != "" {
-			query += queryLogOptions.RowLockClause
-		}
-{{- end }}
-		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "{{ .FunctionName }}"); mockMatched {
-			if logger != nil {
-				logger.Disable()
-			}
-			if mockErr != nil {
-				_ = yield(nil, mockErr)
-				return
-			}
-			if mockExec.Err != nil {
-				_ = yield(nil, mockExec.Err)
-				return
-			}
-
-			mapped, err := snapsqlgo.MapMockExecutionToSlice[{{ .SliceElementType }}](mockExec)
-			if err != nil {
-				_ = yield(nil, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err))
-				return
-			}
-
-			for i := range mapped {
-				item := mapped[i]
-				if !yield(&item, nil) {
-					return
-				}
-			}
-
-			return
-		}
-		logger.SetQuery(query, args)
 		{{- range .QueryExecution.IteratorBody }}
 		{{ . }}
 		{{- end }}
@@ -1496,7 +1647,6 @@ var result {{ .ResponseType }}
 {{- else }}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
-		logger.SetErr(err)
 		return {{ .ErrorZeroValue }}, err
 	}
 {{- if .SQLBuilder.NeedsRowLockClause }}
@@ -1504,10 +1654,19 @@ var result {{ .ResponseType }}
 		query += queryLogOptions.RowLockClause
 	}
 {{- end }}
+{{- if and .SQLBuilder.HasFallbackGuard .MutationKind }}
+	if whereMeta != nil {
+		whereMeta.FallbackTriggered = {{ .SQLBuilder.FallbackVarName }}
+	}
+{{- end }}
+{{- if .MutationKind }}
+	// Enforce WHERE clause guard when mutations are generated
+	if err := snapsqlgo.EnforceNonEmptyWhereClause(ctx, "{{ .FunctionName }}", snapsqlgo.{{ .MutationKind }}, whereMeta, query); err != nil {
+		return {{ .ErrorZeroValue }}, err
+	}
+{{- end }}
+	// Handle mock execution if present
 	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "{{ .FunctionName }}"); mockMatched {
-		if logger != nil {
-			logger.Disable()
-		}
 		if mockErr != nil {
 			return {{ .ErrorZeroValue }}, mockErr
 		}
@@ -1529,47 +1688,54 @@ var result {{ .ResponseType }}
 			result = mockResult
 			return result, nil
 		}
-		if len(mockExec.ExpectedRows()) > 0 {
-			mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
-			if err != nil {
-				logger.SetErr(err)
-				return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
-			}
-			result = mapped
-		}
-		return result, nil
+            if len(mockExec.ExpectedRows()) > 0 {
+                mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
+                if err != nil {
+                    return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+                }
+                result = mapped
+            }
+            return result, nil
 {{- end }}
 {{- else if eq .ResponseAffinity "one" }}
-		mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
-		if err != nil {
-			logger.SetErr(err)
-			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
-		}
-		result = mapped
-		return result, nil
+            mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
+            if err != nil {
+                return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+            }
+            result = mapped
+            return result, nil
 {{- else if eq .ResponseAffinity "many" }}
-		mapped, err := snapsqlgo.MapMockExecutionToSlice[{{ .SliceElementType }}](mockExec)
-		if err != nil {
-			logger.SetErr(err)
-			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
-		}
-		result = mapped
-		return result, nil
+            mapped, err := snapsqlgo.MapMockExecutionToSlice[{{ .SliceElementType }}](mockExec)
+            if err != nil {
+                return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+            }
+            result = mapped
+            return result, nil
 {{- else }}
-		mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
-		if err != nil {
-			logger.SetErr(err)
-			return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
-		}
+            mapped, err := snapsqlgo.MapMockExecutionToStruct[{{ .ResponseType }}](mockExec)
+            if err != nil {
+                return {{ .ErrorZeroValue }}, fmt.Errorf("{{ .FunctionName }}: failed to map mock execution: %w", err)
+            }
 		result = mapped
 		return result, nil
 {{- end }}
 	}
+	// Prepare query logger
+	logger := execCtx.QueryLogger()
+	logger.SetQuery(query, args)
+	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+		return snapsqlgo.QueryLogMetadata{
+			FuncName:   "{{ .FunctionName }}",
+			SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
+			Dialect:    "{{ .Dialect }}",
+			QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
+			Options:    queryLogOptions,
+		}, executor
+	})
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
 		err = fmt.Errorf("{{ .FunctionName }}: failed to prepare statement: %w (query: %s)", err, query)
-		logger.SetErr(err)
 		return {{ .ErrorZeroValue }}, err
 	}
 	defer stmt.Close()

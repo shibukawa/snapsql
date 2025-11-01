@@ -172,6 +172,9 @@ const (
 	// OpLoopEnd marks the end of a loop block.
 	OpLoopEnd = "LOOP_END" // End of for loop block
 
+	// OpFallbackCondition emits a guard predicate when dynamic evaluation removes all WHERE filters.
+	OpFallbackCondition = "FALLBACK_CONDITION"
+
 	// OpIfSystemLimit conditionally emits content based on presence of system limit.
 	OpIfSystemLimit = "IF_SYSTEM_LIMIT" // Conditional based on system limit
 	// OpIfSystemOffset conditionally emits content based on presence of system offset.
@@ -191,18 +194,20 @@ const (
 
 // Instruction represents a single instruction in the instruction set
 type Instruction struct {
-	Op                  string `json:"op"`
-	Pos                 string `json:"pos,omitempty"`                   // Position "line:column" from original template
-	Value               string `json:"value,omitempty"`                 // For EMIT_STATIC
-	Param               string `json:"param,omitempty"`                 // For EMIT_PARAM (deprecated, use ExprIndex)
-	ExprIndex           *int   `json:"expr_index,omitempty"`            // Index into expressions array
-	Condition           string `json:"condition,omitempty"`             // For IF, ELSE_IF (deprecated, use ExprIndex)
-	Variable            string `json:"variable,omitempty"`              // For FOR
-	Collection          string `json:"collection,omitempty"`            // For FOR (deprecated, use CollectionExprIndex)
-	CollectionExprIndex *int   `json:"collection_expr_index,omitempty"` // Index into expressions array for collection
-	EnvIndex            *int   `json:"env_index,omitempty"`             // Environment index for LOOP_START/LOOP_END
-	DefaultValue        string `json:"default_value,omitempty"`         // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
-	SystemField         string `json:"system_field,omitempty"`          // For EMIT_SYSTEM_VALUE - system field name
+	Op                  string             `json:"op"`
+	Pos                 string             `json:"pos,omitempty"`                   // Position "line:column" from original template
+	Value               string             `json:"value,omitempty"`                 // For EMIT_STATIC
+	Param               string             `json:"param,omitempty"`                 // For EMIT_PARAM (deprecated, use ExprIndex)
+	ExprIndex           *int               `json:"expr_index,omitempty"`            // Index into expressions array
+	Condition           string             `json:"condition,omitempty"`             // For IF, ELSE_IF (deprecated, use ExprIndex)
+	Variable            string             `json:"variable,omitempty"`              // For FOR
+	Collection          string             `json:"collection,omitempty"`            // For FOR (deprecated, use CollectionExprIndex)
+	CollectionExprIndex *int               `json:"collection_expr_index,omitempty"` // Index into expressions array for collection
+	EnvIndex            *int               `json:"env_index,omitempty"`             // Environment index for LOOP_START/LOOP_END
+	DefaultValue        string             `json:"default_value,omitempty"`         // For EMIT_SYSTEM_LIMIT, EMIT_SYSTEM_OFFSET
+	SystemField         string             `json:"system_field,omitempty"`          // For EMIT_SYSTEM_VALUE - system field name
+	Critical            bool               `json:"critical,omitempty"`              // For FALLBACK_CONDITION - indicates mutation guard should trigger when emitted
+	FallbackCombos      [][]RemovalLiteral `json:"fallback_combos,omitempty"`       // For FALLBACK_CONDITION - OR-of-AND condition combos
 
 	// Database dialect fields
 	SqlFragment string   `json:"sql_fragment,omitempty"` // For EMIT_IF_DIALECT - SQL fragment to output

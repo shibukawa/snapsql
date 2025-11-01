@@ -54,6 +54,7 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	ctx.Instructions = instructions
 	ctx.CELExpressions = expressions
 	ctx.CELEnvironments = environments
+	ctx.WhereMeta = genCtx.WhereClauseMeta()
 
 	ctx.Environments = append([]string(nil), genCtx.Environments...)
 

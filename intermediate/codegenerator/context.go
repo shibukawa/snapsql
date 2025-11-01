@@ -35,6 +35,9 @@ type GenerationContext struct {
 
 	// parserstep6 から受け取った型情報マップ（"line:col" -> descriptor）
 	TypeInfoMap map[string]any
+
+	// whereMeta captures metadata about the top-level WHERE clause when applicable.
+	whereMeta *WhereClauseMeta
 }
 
 // NewGenerationContext creates a new GenerationContext with the root environment initialized.
@@ -159,6 +162,25 @@ func (ctx *GenerationContext) AddCELEnvironment(env CELEnvironment) int {
 	ctx.CELEnvironments = append(ctx.CELEnvironments, env)
 
 	return index
+}
+
+// SetWhereClauseMeta registers metadata about the statement's WHERE clause.
+func (ctx *GenerationContext) SetWhereClauseMeta(meta *WhereClauseMeta) {
+	if meta == nil {
+		ctx.whereMeta = nil
+		return
+	}
+
+	ctx.whereMeta = meta
+}
+
+// WhereClauseMeta returns metadata about the WHERE clause if one was processed.
+func (ctx *GenerationContext) WhereClauseMeta() *WhereClauseMeta {
+	if ctx.whereMeta == nil {
+		return nil
+	}
+
+	return ctx.whereMeta.clone()
 }
 
 // SetConfig sets the SnapSQL configuration for this generation context.

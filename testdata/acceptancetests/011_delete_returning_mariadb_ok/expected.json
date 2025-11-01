@@ -3,7 +3,11 @@
     {
       "index": 0,
       "additional_variables": [
-    {"name": "user_id", "type": "int", "value": 1}
+        {
+          "name": "user_id",
+          "type": "int",
+          "value": 1
+        }
       ],
       "container": "root"
     }
@@ -24,18 +28,41 @@
   "format_version": "1",
   "function_name": "delete_user_with_returning_mariadb",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "6:1", "value": "DELETE FROM users WHERE id = "},
-    {"op": "EMIT_EVAL", "pos": "7:12", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "8:0", "value": " RETURNING id, name, email"}
+    {
+      "op": "EMIT_STATIC",
+      "pos": "6:1",
+      "value": "DELETE FROM users WHERE id = "
+    },
+    {
+      "op": "EMIT_EVAL",
+      "pos": "7:12",
+      "expr_index": 0
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "8:0",
+      "value": " RETURNING id, name, email"
+    }
   ],
   "parameters": [
-    {"name": "user_id", "type": "int"}
+    {
+      "name": "user_id",
+      "type": "int"
+    }
   ],
   "response_affinity": "many",
+  "statement_type": "delete",
   "table_references": [
-    {"name": "users", "context": "main"}
+    {
+      "name": "users",
+      "context": "main"
+    }
   ],
   "warnings": [
     "type inference failed: no database schema provided"
-  ]
+  ],
+  "where_clause": {
+    "status": "exists",
+    "raw_text": "WHERE"
+  }
 }

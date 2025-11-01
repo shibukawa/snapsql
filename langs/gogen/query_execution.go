@@ -11,8 +11,13 @@ import (
 )
 
 var (
-	ErrIteratorRequiresStruct = errors.New("iterator generation requires a response struct")
+	ErrIteratorRequiresStruct  = errors.New("iterator generation requires a response struct")
+	ErrMissingResponseMetadata = errors.New("missing response metadata")
 )
+
+func missingResponseMetadataError(functionName, affinity string) error {
+	return fmt.Errorf("%w: function %s requires response metadata for affinity '%s'; ensure table definitions exist", ErrGenerateGoCode, functionName, affinity)
+}
 
 // queryExecutionData represents query execution code generation data
 type queryExecutionData struct {
@@ -56,71 +61,55 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		// Decide whether this is a simple row scan or hierarchical aggregation that requires rows loop
 		needsAggregation := false
 
-		if responseStruct != nil {
-			// Check raw responses (original column list) for hierarchical fields
-			if len(metas) > 0 {
-				needsAggregation = true
-			} else {
-				for _, r := range responseStruct.RawResponses {
-					if strings.Contains(r.Name, "__") {
-						needsAggregation = true
-						break
-					}
+		if responseStruct == nil {
+			return nil, missingResponseMetadataError(functionName, format.ResponseAffinity)
+		}
+
+		// Check raw responses (original column list) for hierarchical fields
+		if len(metas) > 0 {
+			needsAggregation = true
+		} else {
+			for _, r := range responseStruct.RawResponses {
+				if strings.Contains(r.Name, "__") {
+					needsAggregation = true
+					break
 				}
 			}
 		}
 
 		if !needsAggregation {
-			if responseStruct != nil {
-				code = append(code, "// Execute query and scan single row")
-				code = append(code, "row := stmt.QueryRowContext(ctx, args...)")
-			} else {
-				// Safety fallback: execute without scan when no response struct is available
-				code = append(code, "// Execute statement (no response struct available)")
-				if returnsSQLResult {
-					code = append(code, "execResult, err := stmt.ExecContext(ctx, args...)")
-				} else {
-					code = append(code, "_, err = stmt.ExecContext(ctx, args...)")
-				}
-
-				code = append(code, "if err != nil {")
-				code = append(code, fmt.Sprintf("    return %s, fmt.Errorf(\"%sfailed to execute statement: %%w\", err)", errorZeroValue, errorPrefix))
-
-				code = append(code, "}")
-				if returnsSQLResult {
-					code = append(code, "result = execResult")
-				}
-			}
+			code = append(code, "// Execute query and scan single row")
+			code = append(code, "row := stmt.QueryRowContext(ctx, args...)")
 		} else {
 			code = append(code, "// Execute query for hierarchical aggregation (one affinity)")
 			needsSnapsql = true // aggregation(one) uses snapsql error constants
 		}
 
-		if responseStruct != nil {
-			scanCode, err := generateScanCode(responseStruct, false, metas)
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate scan code: %w", err)
-			}
-
-			code = append(code, scanCode...)
+		scanCode, err := generateScanCode(responseStruct, false, metas)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate scan code: %w", err)
 		}
+
+		code = append(code, scanCode...)
 	case "many":
 		needsAggregation := false
 
-		if responseStruct != nil {
-			if len(metas) > 0 {
-				needsAggregation = true
-			} else {
-				for _, r := range responseStruct.RawResponses {
-					if strings.Contains(r.Name, "__") {
-						needsAggregation = true
-						break
-					}
+		if responseStruct == nil {
+			return nil, missingResponseMetadataError(functionName, format.ResponseAffinity)
+		}
+
+		if len(metas) > 0 {
+			needsAggregation = true
+		} else {
+			for _, r := range responseStruct.RawResponses {
+				if strings.Contains(r.Name, "__") {
+					needsAggregation = true
+					break
 				}
 			}
 		}
 
-		if responseStruct != nil && !needsAggregation {
+		if !needsAggregation {
 			iteratorBody, err := generateIteratorBody(responseStruct, functionName)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate iterator body: %w", err)
@@ -144,68 +133,14 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		code = append(code, "defer rows.Close()")
 		code = append(code, "")
 
-		if responseStruct != nil {
-			scanCode, err := generateScanCode(responseStruct, true, metas)
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate scan code: %w", err)
-			}
-
-			code = append(code, scanCode...)
-		} else {
-			code = append(code, "// Generic scan for any result - not implemented")
-			code = append(code, "// This would require runtime reflection or predefined column mapping")
+		scanCode, err := generateScanCode(responseStruct, true, metas)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate scan code: %w", err)
 		}
+
+		code = append(code, scanCode...)
 	default:
 		return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedResponseAffinity, format.ResponseAffinity)
-	}
-
-	// Post-process to wrap error returns when logging is enabled
-	if withLogger {
-		processed := make([]string, 0, len(code))
-		for _, line := range code {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "return ") {
-				if idx := strings.Index(line, ", fmt.Errorf"); idx != -1 {
-					indent := line[:strings.Index(line, "return")]
-					left := strings.TrimSpace(line[strings.Index(line, "return")+len("return ") : idx])
-					fmtExpr := strings.TrimSpace(line[idx+2:])
-					processed = append(processed,
-						indent+"err = "+fmtExpr,
-						indent+"logger.SetErr(err)",
-						indent+"return "+left+", err",
-					)
-
-					continue
-				}
-
-				if idx := strings.Index(line, ", snapsql."); idx != -1 {
-					indent := line[:strings.Index(line, "return")]
-					left := strings.TrimSpace(line[strings.Index(line, "return")+len("return ") : idx])
-					errExpr := strings.TrimSpace(line[idx+2:])
-					processed = append(processed,
-						indent+"err = "+errExpr,
-						indent+"logger.SetErr(err)",
-						indent+"return "+left+", err",
-					)
-
-					continue
-				}
-
-				if strings.HasSuffix(trimmed, ", err") {
-					indent := line[:strings.Index(line, "return")]
-					processed = append(processed,
-						indent+"logger.SetErr(err)",
-						indent+trimmed,
-					)
-
-					continue
-				}
-			}
-
-			processed = append(processed, line)
-		}
-
-		code = processed
 	}
 
 	return &queryExecutionData{
@@ -304,7 +239,6 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 	code = append(code, "stmt, err := executor.PrepareContext(ctx, query)")
 	code = append(code, "if err != nil {")
 	code = append(code, fmt.Sprintf("\terr = fmt.Errorf(\"%sfailed to prepare statement: %%w (query: %%s)\", err, query)", prefix))
-	code = append(code, "\tlogger.SetErr(err)")
 	code = append(code, "\t_ = yield(nil, err)")
 	code = append(code, "\treturn")
 	code = append(code, "}")
@@ -313,7 +247,6 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 	code = append(code, "rows, err := stmt.QueryContext(ctx, args...)")
 	code = append(code, "if err != nil {")
 	code = append(code, fmt.Sprintf("\terr = fmt.Errorf(\"%sfailed to execute query: %%w\", err)", prefix))
-	code = append(code, "\tlogger.SetErr(err)")
 	code = append(code, "\t_ = yield(nil, err)")
 	code = append(code, "\treturn")
 	code = append(code, "}")
@@ -329,7 +262,6 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 
 	code = append(code, "\t); err != nil {")
 	code = append(code, fmt.Sprintf("\t\terr = fmt.Errorf(\"%sfailed to scan row: %%w\", err)", prefix))
-	code = append(code, "\t\tlogger.SetErr(err)")
 	code = append(code, "\t\t_ = yield(nil, err)")
 	code = append(code, "\t\treturn")
 	code = append(code, "\t}")
@@ -340,7 +272,6 @@ func generateIteratorBody(responseStruct *responseStructData, functionName strin
 	code = append(code, "")
 	code = append(code, "if err := rows.Err(); err != nil {")
 	code = append(code, fmt.Sprintf("\terr = fmt.Errorf(\"%serror iterating rows: %%w\", err)", prefix))
-	code = append(code, "\tlogger.SetErr(err)")
 	code = append(code, "\t_ = yield(nil, err)")
 	code = append(code, "\treturn")
 	code = append(code, "}")

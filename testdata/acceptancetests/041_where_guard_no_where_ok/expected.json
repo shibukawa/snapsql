@@ -1,0 +1,66 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": [
+        {
+          "name": "status",
+          "type": "string",
+          "value": "dummy"
+        }
+      ],
+      "container": "root"
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "status",
+      "environment_index": 0,
+      "position": {
+        "line": 7,
+        "column": 14
+      },
+      "type_descriptor": "string",
+      "result_type": 1
+    }
+  ],
+  "format_version": "1",
+  "function_name": "update_accounts_no_where",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC",
+      "pos": "6:1",
+      "value": "UPDATE accounts SET status = "
+    },
+    {
+      "op": "EMIT_EVAL",
+      "pos": "7:14",
+      "expr_index": 0
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "8:0"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "status",
+      "type": "string"
+    }
+  ],
+  "response_affinity": "none",
+  "statement_type": "update",
+  "table_references": [
+    {
+      "name": "accounts",
+      "context": "main"
+    }
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ],
+  "where_clause": {
+    "status": "fullscan"
+  }
+}

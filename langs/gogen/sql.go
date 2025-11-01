@@ -23,6 +23,8 @@ type sqlBuilderData struct {
 	HasSystemArguments    bool     // true if Arguments includes system parameters
 	HasNonSystemArguments bool     // true if Arguments includes regular expressions
 	NeedsRowLockClause    bool     // true if SQL expects a runtime row-lock clause appended
+	HasFallbackGuard      bool     // true if FALLBACK_CONDITION instructions are present
+	FallbackVarName       string   // name of the boolean flag tracking fallback usage
 }
 
 // processSQLBuilderWithDialect processes instructions and generates SQL building code for a specific dialect
@@ -265,9 +267,19 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 	hasSystemArguments := false
 	condVarDeclared := false
 	evalCounter := 0
+	fallbackCounter := 0
 	needsRowLockClause := slices.ContainsFunc(instructions, func(inst codegenerator.OptimizedInstruction) bool {
 		return inst.Op == codegenerator.OpEmitSystemFor
 	})
+
+	hasFallbackGuard := slices.ContainsFunc(instructions, func(inst codegenerator.OptimizedInstruction) bool {
+		return inst.Op == codegenerator.OpFallbackCondition
+	})
+
+	fallbackGuardVar := ""
+	if hasFallbackGuard {
+		fallbackGuardVar = "fallbackGuardTriggered"
+	}
 
 	// Track control flow stack with loop variable names
 	type controlFrame struct {
@@ -517,6 +529,77 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 					code = append(code, "}")
 				}
 			}
+
+		case codegenerator.OpFallbackCondition:
+			fallbackCounter++
+			blockLines := []string{"{"}
+
+			fallbackVar := fmt.Sprintf("fallbackActive%d", fallbackCounter)
+
+			if len(inst.FallbackCombos) == 0 {
+				blockLines = append(blockLines, fallbackVar+" := true")
+			} else {
+				blockLines = append(blockLines, fallbackVar+" := false")
+
+				exprBoolVars := make(map[int]string)
+
+				for _, combo := range inst.FallbackCombos {
+					for _, literal := range combo {
+						if _, ok := exprBoolVars[literal.ExprIndex]; ok {
+							continue
+						}
+
+						exprVar := fmt.Sprintf("fallbackEval%d_%d", fallbackCounter, literal.ExprIndex)
+						blockLines = append(blockLines, fmt.Sprintf("%s, _, err := %sPrograms[%d].Eval(paramMap)", exprVar, toLowerCamel(format.FunctionName), literal.ExprIndex))
+						blockLines = append(blockLines, "if err != nil {")
+						blockLines = append(blockLines, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate condition: %%w\", err)", functionName))
+						blockLines = append(blockLines, "}")
+						boolVar := fmt.Sprintf("fallbackCond%d_%d", fallbackCounter, literal.ExprIndex)
+						blockLines = append(blockLines, fmt.Sprintf("%s := snapsqlgo.Truthy(%s)", boolVar, exprVar))
+						exprBoolVars[literal.ExprIndex] = boolVar
+					}
+				}
+
+				for comboIndex, combo := range inst.FallbackCombos {
+					comboVar := fmt.Sprintf("comboActive%d_%d", fallbackCounter, comboIndex)
+					blockLines = append(blockLines, comboVar+" := true")
+
+					for _, literal := range combo {
+						boolVar := exprBoolVars[literal.ExprIndex]
+
+						condition := boolVar
+						if !literal.When {
+							condition = "!" + condition
+						}
+
+						blockLines = append(blockLines, fmt.Sprintf("if !(%s) { %s = false }", condition, comboVar))
+					}
+
+					blockLines = append(blockLines, fmt.Sprintf("if %s { %s = true }", comboVar, fallbackVar))
+				}
+			}
+
+			fallbackValue := inst.Value
+			if fallbackValue == "" {
+				fallbackValue = "1 = 1"
+			}
+
+			blockLines = append(blockLines, fmt.Sprintf("if %s {", fallbackVar))
+			if strings.HasPrefix(fallbackValue, "WHERE") {
+				blockLines = append(blockLines, fmt.Sprintf("    builder.WriteString(%q)", fallbackValue))
+			} else {
+				blockLines = append(blockLines, "    if builder.Len() > 0 { builder.WriteString(\" \") }")
+				blockLines = append(blockLines, fmt.Sprintf("    builder.WriteString(%q)", fallbackValue))
+			}
+
+			if fallbackGuardVar != "" {
+				blockLines = append(blockLines, fmt.Sprintf("    if %s { %s = true }", fallbackVar, fallbackGuardVar))
+			}
+
+			blockLines = append(blockLines, "}")
+			blockLines = append(blockLines, "}")
+
+			code = append(code, blockLines...)
 		}
 	}
 
@@ -526,5 +609,7 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 		HasArguments:       hasArguments,
 		HasSystemArguments: hasSystemArguments,
 		NeedsRowLockClause: needsRowLockClause,
+		HasFallbackGuard:   hasFallbackGuard,
+		FallbackVarName:    fallbackGuardVar,
 	}, nil
 }
