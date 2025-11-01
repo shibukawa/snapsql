@@ -16,6 +16,8 @@ type OptimizedInstruction struct {
 	CollectionExprIndex *int
 	EnvIndex            *int
 	SystemField         string
+	Critical            bool
+	FallbackCombos      [][]RemovalLiteral
 }
 
 // OptimizeInstructions filters and optimizes instructions for a specific dialect.
@@ -138,6 +140,22 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 				SqlFragment: inst.SqlFragment,
 				Dialects:    append([]string(nil), inst.Dialects...),
 			})
+
+		case OpFallbackCondition:
+			var combos [][]RemovalLiteral
+			if len(inst.FallbackCombos) > 0 {
+				combos = make([][]RemovalLiteral, len(inst.FallbackCombos))
+				for i := range inst.FallbackCombos {
+					combos[i] = append([]RemovalLiteral(nil), inst.FallbackCombos[i]...)
+				}
+			}
+
+			result = append(result, OptimizedInstruction{
+				Op:             OpFallbackCondition,
+				Value:          inst.Value,
+				Critical:       inst.Critical,
+				FallbackCombos: combos,
+			})
 		}
 	}
 
@@ -254,7 +272,7 @@ func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) 
 func HasDynamicInstructions(instructions []OptimizedInstruction) bool {
 	for _, inst := range instructions {
 		switch inst.Op {
-		case "IF", "ELSEIF", "ELSE", "LOOP_START", "LOOP_END", OpEmitSystemFor:
+		case "IF", "ELSEIF", "ELSE", "LOOP_START", "LOOP_END", OpEmitSystemFor, OpFallbackCondition:
 			return true
 		}
 	}

@@ -321,3 +321,15 @@ func TestGenerateQueryExecutionManyIterator(t *testing.T) {
 		t.Errorf("expected iterator yield type %s, got %s", expectedYield, data.IteratorYieldType)
 	}
 }
+
+func TestProcessResponseTypeMissingMetadataErrors(t *testing.T) {
+	format := &intermediate.IntermediateFormat{
+		FunctionName:     "update_account",
+		ResponseAffinity: "many",
+		Responses:        nil,
+	}
+
+	if _, err := processResponseType(format); err == nil {
+		t.Fatalf("expected error when response metadata is missing for affinity 'many'")
+	}
+}

@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Descending order",
+    "responses": [
+      {
+        "expected": [
+          {
+            "id": 2,
+            "name": "Beta",
+            "status": "active"
+          },
+          {
+            "id": 1,
+            "name": "Alpha",
+            "status": "archived"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -126,6 +126,8 @@ type FuncConfig struct {
 	LogOutput            any
 	RuntimeLimit         *int
 	RuntimeOffset        *int
+	AllowNoWhereUpdate   bool
+	AllowNoWhereDelete   bool
 }
 
 // LogFormat defines the output format for logs
@@ -161,7 +163,10 @@ func WithConfig(ctx context.Context, funcPattern string, opts ...FuncOpt) contex
 		configMap = make(map[string]*FuncConfig)
 	}
 
-	config := &FuncConfig{}
+	config, exists := configMap[funcPattern]
+	if !exists || config == nil {
+		config = &FuncConfig{}
+	}
 
 	// Apply function options
 	for _, opt := range opts {

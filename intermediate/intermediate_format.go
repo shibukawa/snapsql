@@ -64,6 +64,29 @@ type TableReferenceInfo struct {
 	Context string `json:"context,omitempty"`
 }
 
+// WhereClauseMeta describes metadata about the statement's WHERE clause.
+type WhereClauseMeta struct {
+	Status            string                  `json:"status"`
+	RemovalCombos     [][]RemovalLiteral      `json:"removal_combos,omitempty"`
+	ExpressionRefs    []int                   `json:"expression_refs,omitempty"`
+	DynamicConditions []WhereDynamicCondition `json:"dynamic_conditions,omitempty"`
+	RawText           string                  `json:"raw_text,omitempty"`
+}
+
+// RemovalLiteral describes a single boolean requirement controlling WHERE removal.
+type RemovalLiteral struct {
+	ExprIndex int  `json:"expr_index"`
+	When      bool `json:"when"`
+}
+
+// WhereDynamicCondition captures a single condition that can remove the WHERE clause.
+type WhereDynamicCondition struct {
+	ExprIndex        int    `json:"expr_index"`
+	NegatedWhenEmpty bool   `json:"negated_when_empty,omitempty"`
+	HasElse          bool   `json:"has_else,omitempty"`
+	Description      string `json:"description,omitempty"`
+}
+
 // SystemFieldInfo represents system field configuration in intermediate format
 type SystemFieldInfo struct {
 	// Field name
@@ -142,6 +165,9 @@ type IntermediateFormat struct {
 
 	// Table references used in the query (including CTEs, subqueries, and joins)
 	TableReferences []TableReferenceInfo `json:"table_references,omitempty"`
+
+	// WhereClauseMeta stores metadata about the top-level WHERE clause (mainly for UPDATE/DELETE guards)
+	WhereClauseMeta *WhereClauseMeta `json:"where_clause,omitempty"`
 
 	// MockTestCases stores parsed test cases for mock generation / WithMock integration
 	MockTestCases []snapsql.MockTestCase `json:"test_cases,omitempty"`
@@ -225,6 +251,15 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 
 		result["cel_environments"] = celEnvironments
+	}
+
+	if f.WhereClauseMeta != nil {
+		meta, err := json.Marshal(f.WhereClauseMeta)
+		if err != nil {
+			return nil, err
+		}
+
+		result["where_clause"] = meta
 	}
 
 	if f.HasOrderedResult {

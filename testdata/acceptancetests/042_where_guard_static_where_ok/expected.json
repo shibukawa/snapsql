@@ -1,0 +1,97 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": [
+        {
+          "name": "status",
+          "type": "string",
+          "value": "dummy"
+        },
+        {
+          "name": "account_id",
+          "type": "int",
+          "value": 1
+        }
+      ],
+      "container": "root"
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "status",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 14
+      },
+      "type_descriptor": "string",
+      "result_type": 1
+    },
+    {
+      "id": "expr_002",
+      "expression": "account_id",
+      "environment_index": 0,
+      "position": {
+        "line": 9,
+        "column": 12
+      },
+      "type_descriptor": "int",
+      "result_type": 1
+    }
+  ],
+  "format_version": "1",
+  "function_name": "update_accounts_static_where",
+  "instructions": [
+    {
+      "op": "EMIT_STATIC",
+      "pos": "7:1",
+      "value": "UPDATE accounts SET status = "
+    },
+    {
+      "op": "EMIT_EVAL",
+      "pos": "8:14",
+      "expr_index": 0
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "9:0",
+      "value": " WHERE id = "
+    },
+    {
+      "op": "EMIT_EVAL",
+      "pos": "9:12",
+      "expr_index": 1
+    },
+    {
+      "op": "EMIT_STATIC",
+      "pos": "10:0"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "status",
+      "type": "string"
+    },
+    {
+      "name": "account_id",
+      "type": "int"
+    }
+  ],
+  "response_affinity": "none",
+  "statement_type": "update",
+  "table_references": [
+    {
+      "name": "accounts",
+      "context": "main"
+    }
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ],
+  "where_clause": {
+    "status": "exists",
+    "raw_text": "WHERE"
+  }
+}

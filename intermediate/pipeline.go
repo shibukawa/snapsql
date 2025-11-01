@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 	"github.com/shibukawa/snapsql/parser"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
@@ -51,6 +52,9 @@ type ProcessingContext struct {
 
 	// Table references extracted from the statement
 	TableReferences []TableReferenceInfo
+
+	// WhereMeta stores WHERE clause metadata collected during code generation.
+	WhereMeta *codegenerator.WhereClauseMeta
 
 	// Metadata
 	Description      string
@@ -128,11 +132,70 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		TableReferences:    ctx.TableReferences, // Add table references
 	}
 
+	if whereMeta := convertWhereClauseMeta(ctx.WhereMeta, ctx.Statement); whereMeta != nil {
+		result.WhereClauseMeta = whereMeta
+	}
+
 	if len(responseWarnings) > 0 {
 		result.Warnings = append(result.Warnings, responseWarnings...)
 	}
 
 	return result, nil
+}
+
+func convertWhereClauseMeta(meta *codegenerator.WhereClauseMeta, stmt parser.StatementNode) *WhereClauseMeta {
+	switch stmt.(type) {
+	case *parser.UpdateStatement, *parser.DeleteFromStatement:
+		// For mutations we always return metadata, even if WHERE is absent.
+		if meta == nil {
+			return &WhereClauseMeta{Status: codegenerator.StatusFullScan}
+		}
+	default:
+		if meta == nil {
+			return nil
+		}
+	}
+
+	result := &WhereClauseMeta{
+		Status:         meta.Status,
+		RawText:        meta.RawText,
+		ExpressionRefs: append([]int(nil), meta.ExpressionRefs...),
+	}
+	if len(meta.RemovalCombos) > 0 {
+		result.RemovalCombos = make([][]RemovalLiteral, len(meta.RemovalCombos))
+		for i, combo := range meta.RemovalCombos {
+			transcoded := make([]RemovalLiteral, len(combo))
+			for j, lit := range combo {
+				transcoded[j] = RemovalLiteral{ExprIndex: lit.ExprIndex, When: lit.When}
+			}
+
+			result.RemovalCombos[i] = transcoded
+		}
+	}
+
+	if meta.Status == codegenerator.StatusFullScan {
+		result.RawText = ""
+		result.ExpressionRefs = nil
+		result.DynamicConditions = nil
+	}
+
+	if len(meta.DynamicConditions) > 0 {
+		result.DynamicConditions = make([]WhereDynamicCondition, 0, len(meta.DynamicConditions))
+		for _, cond := range meta.DynamicConditions {
+			if cond == nil {
+				continue
+			}
+
+			result.DynamicConditions = append(result.DynamicConditions, WhereDynamicCondition{
+				ExprIndex:        cond.ExprIndex,
+				NegatedWhenEmpty: cond.NegatedWhenEmpty,
+				HasElse:          cond.HasElse,
+				Description:      cond.Description,
+			})
+		}
+	}
+
+	return result
 }
 
 // convertEnvironmentsToEnvs converts []string environments to [][]EnvVar format

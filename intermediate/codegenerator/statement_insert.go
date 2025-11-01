@@ -139,7 +139,7 @@ func GenerateInsertInstructionsWithFunctionDef(stmt parser.StatementNode, ctx *G
 		}
 
 		if insertStmt.Where != nil {
-			if err := generateWhereClause(insertStmt.Where, builder); err != nil {
+			if _, err := generateWhereClause(insertStmt.Where, builder, false); err != nil {
 				return nil, nil, nil, fmt.Errorf("failed to generate WHERE clause: %w", err)
 			}
 		}

@@ -52,10 +52,17 @@ func GenerateUpdateInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	}
 
 	// Phase 4: WHERE 句を処理（任意）
+	var whereMeta *WhereClauseMeta
+
 	if updateStmt.Where != nil {
-		if err := generateWhereClause(updateStmt.Where, builder); err != nil {
+		var err error
+
+		whereMeta, err = generateWhereClause(updateStmt.Where, builder, true)
+		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to generate WHERE clause: %w", err)
 		}
+	} else {
+		whereMeta = &WhereClauseMeta{Present: false, Status: StatusFullScan}
 	}
 
 	// Phase 5: RETURNING 句を処理（任意）
@@ -69,6 +76,8 @@ func GenerateUpdateInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	instructions := builder.Finalize()
 	celExpressions := ctx.Expressions
 	celEnvironments := builder.GetCELEnvironments()
+
+	ctx.SetWhereClauseMeta(whereMeta)
 
 	return instructions, celExpressions, celEnvironments, nil
 }

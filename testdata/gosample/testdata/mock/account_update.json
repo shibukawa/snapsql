@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Single update",
+    "parameters": {
+      "account_id": 10,
+      "status": "active"
+    },
+    "responses": [
+      {
+        "result": {
+          "rows_affected": 3,
+          "last_insert_id": 42
+        }
+      }
+    ]
+  }
+]

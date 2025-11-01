@@ -47,10 +47,17 @@ func GenerateDeleteInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	}
 
 	// Phase 3: WHERE 句を処理（任意）
+	var whereMeta *WhereClauseMeta
+
 	if deleteStmt.Where != nil {
-		if err := generateWhereClause(deleteStmt.Where, builder); err != nil {
+		var err error
+
+		whereMeta, err = generateWhereClause(deleteStmt.Where, builder, true)
+		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to generate WHERE clause: %w", err)
 		}
+	} else {
+		whereMeta = &WhereClauseMeta{Present: false, Status: StatusFullScan}
 	}
 
 	// Phase 4: RETURNING 句を処理（任意）
@@ -64,6 +71,8 @@ func GenerateDeleteInstructions(stmt parser.StatementNode, ctx *GenerationContex
 	instructions := builder.Finalize()
 	celExpressions := ctx.Expressions
 	celEnvironments := builder.GetCELEnvironments()
+
+	ctx.SetWhereClauseMeta(whereMeta)
 
 	return instructions, celExpressions, celEnvironments, nil
 }

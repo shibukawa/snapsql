@@ -381,7 +381,7 @@ WHERE active = true
 				{Op: OpEmitStatic, Value: "SELECT id, name FROM users WHERE active = true ", Pos: "2:1"},
 				// WHERE 句はない（パーサーがすでに評価済み）ので BOUNDARY は不要
 			},
-			expectedExpressions: []CELExpression{},
+			expectedExpressions: []CELExpression{{Expression: "apply_filter"}},
 		},
 		{
 			name: "nested conditionals within WHERE clause",

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Fetch account",
+    "parameters": {
+      "account_id": 10
+    },
+    "responses": [
+      {
+        "expected": [
+          {
+            "id": 10,
+            "name": "Primary",
+            "status": "active"
+          }
+        ]
+      }
+    ]
+  }
+]
