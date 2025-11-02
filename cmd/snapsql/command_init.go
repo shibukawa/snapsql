@@ -19,23 +19,11 @@ func (i *InitCmd) Run(ctx *Context) error {
 		color.Blue("Initializing SnapSQL project")
 	}
 
-	// Detect if we are inside examples/kanban (special scaffolding for sample)
-	pwd, _ := os.Getwd()
-
-	var isKanban bool
-	if strings.Contains(filepath.ToSlash(pwd), "/examples/kanban") {
-		isKanban = true
-	}
-
-	// Create project structure (kanban uses internal/query as output)
+	// Create project structure (kanban-style layout uses internal/query as output)
 	dirs := []string{
 		"queries",
 		"constants",
-	}
-	if isKanban {
-		dirs = append(dirs, filepath.Join("internal", "query"))
-	} else {
-		dirs = append(dirs, "generated")
+		filepath.Join("internal", "query"),
 	}
 
 	dirs = append(dirs, filepath.Join("testdata", "mock"))
@@ -51,14 +39,10 @@ func (i *InitCmd) Run(ctx *Context) error {
 		}
 	}
 
-	// Create sample configuration file (kanban variant if in examples/kanban)
+	// Create sample configuration file (kanban-style defaults)
 	var err error
-	if isKanban {
-		err = createKanbanConfig()
-	} else {
-		err = createSampleConfig()
-	}
 
+	err = createConfig()
 	if err != nil {
 		return fmt.Errorf("failed to create sample configuration: %w", err)
 	}
@@ -90,66 +74,9 @@ func createDir(path string) error {
 	return os.MkdirAll(path, 0755)
 }
 
-func createSampleConfig() error {
-	configContent := `# SQL dialect configuration
-dialect: "postgres"  # postgres, mysql, sqlite
-
-# Constant definition files (expandable with /*# */)
-constant_files:
-	- "./constants/database.yaml"
-	- "./constants/tables.yaml"
-
-# Generation settings
-generation:
-	input_dir: "./queries"
-	validate: true
-  
-	# Generator configurations
-	# Generators are enabled by default unless 'disabled: true' is specified
-	generators:
-		json:
-			output: "./generated"
-			preserve_hierarchy: true
-			settings:
-				pretty: true
-				include_metadata: true
-
-		mock:
-			output: "./testdata/mock"
-			preserve_hierarchy: true
-			settings:
-				embed: true
-				package: "mock"
-				filename: "mock.go"
-    
-		go:
-			output: "./internal/queries"
-			disabled: true
-			preserve_hierarchy: true
-			settings:
-				package: "queries"
-    
-		typescript:
-			output: "./src/generated"
-			disabled: true
-			preserve_hierarchy: true
-			settings:
-				types: true
-
-# Validation settings
-validation:
-	strict: false
-	rules:
-		- "no-dynamic-table-names"
-		- "require-parameter-types"
-`
-
-	return writeFile("snapsql.yaml", configContent)
-}
-
-// createKanbanConfig writes a snapsql.yaml tailored for the kanban example with Go generator
+// createConfig writes a snapsql.yaml with kanban-style defaults (sqlite + Go generator)
 // output directed to internal/query and package name `query`.
-func createKanbanConfig() error {
+func createConfig() error {
 	// Build YAML with only spaces to ensure parser compatibility
 	var b strings.Builder
 	b.WriteString("dialect: \"sqlite\"\n")
