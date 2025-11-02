@@ -104,7 +104,7 @@ func (g *GenerateCmd) Run(ctx *Context) error {
 }
 
 // generateAllLanguages generates files for all configured languages
-func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPath string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo) error {
+func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *snapsql.Config, inputPath string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo) error {
 	// Generate files for all enabled generators
 	generatedLanguages := 0
 
@@ -186,7 +186,7 @@ func (g *GenerateCmd) generateAllLanguages(ctx *Context, config *Config, inputPa
 }
 
 // generateForLanguage generates files for a specific language/generator
-func generateForLanguage(lang string, generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
+func generateForLanguage(lang string, generator snapsql.GeneratorConfig, intermediateFiles []string, ctx *Context) error {
 	switch lang {
 	case "json":
 		// JSON generation is handled in the main loop, nothing to do here
@@ -225,7 +225,7 @@ func generateForLanguage(lang string, generator GeneratorConfig, intermediateFil
 }
 
 // generateGoFiles generates Go files using the built-in generator
-func generateGoFiles(generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
+func generateGoFiles(generator snapsql.GeneratorConfig, intermediateFiles []string, ctx *Context) error {
 	// Load config to get dialect
 	config, err := LoadConfig(ctx.Config)
 	if err != nil {
@@ -299,7 +299,7 @@ func generateGoFiles(generator GeneratorConfig, intermediateFiles []string, ctx 
 	return nil
 }
 
-func generateMockFiles(generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
+func generateMockFiles(generator snapsql.GeneratorConfig, intermediateFiles []string, ctx *Context) error {
 	if len(intermediateFiles) == 0 {
 		return nil
 	}
@@ -391,7 +391,7 @@ func generateMockFiles(generator GeneratorConfig, intermediateFiles []string, ct
 }
 
 // generateWithExternalPlugin attempts to use an external generator plugin
-func generateWithExternalPlugin(lang string, generator GeneratorConfig, intermediateFiles []string, ctx *Context) error {
+func generateWithExternalPlugin(lang string, generator snapsql.GeneratorConfig, intermediateFiles []string, ctx *Context) error {
 	pluginName := "snapsql-gen-" + lang
 
 	// Verify plugin availability
@@ -490,7 +490,7 @@ func commonAncestorDir(paths []string) string {
 }
 
 // generateSpecificLanguage generates files for a specific language
-func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inputPath string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo) error {
+func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *snapsql.Config, inputPath string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo) error {
 	if ctx.Verbose {
 		color.Cyan("Using schema metadata from tbls JSON runtime")
 	}
@@ -553,7 +553,7 @@ func (g *GenerateCmd) generateSpecificLanguage(ctx *Context, config *Config, inp
 }
 
 // generateIntermediateFiles generates JSON intermediate files from SQL templates
-func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, inputPath string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo) ([]string, error) {
+func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *snapsql.Config, inputPath string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo) ([]string, error) {
 	// Determine output directory from JSON generator configuration
 	outputDir := "./generated"
 	if jsonGen, exists := config.Generation.Generators["json"]; exists && jsonGen.Output != "" {
@@ -633,7 +633,7 @@ func (g *GenerateCmd) generateIntermediateFiles(ctx *Context, config *Config, in
 }
 
 // processTemplateFile processes a single template file and generates intermediate JSON
-func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo, config *Config, ctx *Context) (string, error) {
+func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string, constantFiles []string, tableCatalog map[string]*snapsql.TableInfo, config *snapsql.Config, ctx *Context) (string, error) {
 	_ = constantFiles // Constant files are loaded through config, not directly used here
 	// Load constants
 	constants, err := g.loadConstants(config, ctx)
@@ -708,7 +708,7 @@ func (g *GenerateCmd) processTemplateFile(inputFile, outputDir, inputDir string,
 }
 
 // loadConstants loads constants from configuration and constant files
-func (g *GenerateCmd) loadConstants(config *Config, ctx *Context) (map[string]any, error) {
+func (g *GenerateCmd) loadConstants(config *snapsql.Config, ctx *Context) (map[string]any, error) {
 	_ = config // Config not currently used for constant loading
 	_ = ctx    // Context not currently used for constant loading
 	constants := make(map[string]any)

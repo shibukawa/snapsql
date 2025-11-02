@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 	"github.com/shibukawa/snapsql/query"
 )
@@ -53,7 +54,7 @@ func TestQuery_GetDatabaseConnection_FallbackToTbls(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, ".tbls.yml"), []byte(tblsContent), 0o644))
 
 	cmd := &QueryCmd{}
-	config := &Config{Query: QueryConfig{}}
+	config := &snapsql.Config{Query: snapsql.QueryConfig{}}
 
 	driver, conn, err := cmd.getDatabaseConnection(config, ctx)
 	assert.NoError(t, err)

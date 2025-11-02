@@ -18,9 +18,7 @@ var ErrConfigValidation = errors.New("configuration validation failed")
 type Config struct {
 	Dialect       string                      `yaml:"dialect"`
 	InputDir      string                      `yaml:"input_dir"` // Moved from GenerationConfig
-	Databases     map[string]Database         `yaml:"databases"`
 	ConstantFiles []string                    `yaml:"constant_files"`
-	Schema        SchemaExtractionConfig      `yaml:"schema_extraction"`
 	Generation    GenerationConfig            `yaml:"generation"`
 	Validation    ValidationConfig            `yaml:"validation"`
 	Query         QueryConfig                 `yaml:"query"`
@@ -35,19 +33,6 @@ type Database struct {
 	Connection string `yaml:"connection"`
 	Schema     string `yaml:"schema"`
 	Database   string `yaml:"database"`
-}
-
-// SchemaExtractionConfig represents schema extraction settings
-type SchemaExtractionConfig struct {
-	IncludeViews   bool          `yaml:"include_views"`
-	IncludeIndexes bool          `yaml:"include_indexes"`
-	TablePatterns  TablePatterns `yaml:"table_patterns"`
-}
-
-// TablePatterns represents table inclusion/exclusion patterns
-type TablePatterns struct {
-	Include []string `yaml:"include"`
-	Exclude []string `yaml:"exclude"`
 }
 
 // GenerationConfig represents code generation settings
@@ -71,14 +56,7 @@ func (g *GeneratorConfig) IsEnabled() bool {
 	return g.Disabled == nil || !*g.Disabled
 }
 
-// LanguageConfig represents language-specific generation settings (deprecated, kept for backward compatibility)
-type LanguageConfig struct {
-	Output          string `yaml:"output"`
-	Package         string `yaml:"package"`
-	Pretty          bool   `yaml:"pretty"`
-	IncludeMetadata bool   `yaml:"include_metadata"`
-	Types           bool   `yaml:"types"`
-}
+// LanguageConfig was removed. Use per-generator settings in GenerationConfig instead.
 
 // ValidationConfig represents validation settings
 type ValidationConfig struct {
@@ -88,15 +66,13 @@ type ValidationConfig struct {
 
 // QueryConfig represents query execution settings
 type QueryConfig struct {
-	DefaultFormat            string `yaml:"default_format"`
-	DefaultEnvironment       string `yaml:"default_environment"`
-	Timeout                  int    `yaml:"timeout"`
-	MaxRows                  int    `yaml:"max_rows"`
-	Limit                    int    `yaml:"limit"`
-	Offset                   int    `yaml:"offset"`
-	ExecuteDangerousQuery    bool   `yaml:"execute_dangerous_query"`
-	DeprecatedExplain        *bool  `yaml:"explain,omitempty"`
-	DeprecatedExplainAnalyze *bool  `yaml:"explain_analyze,omitempty"`
+	DefaultFormat         string `yaml:"default_format"`
+	DefaultEnvironment    string `yaml:"default_environment"`
+	Timeout               int    `yaml:"timeout"`
+	MaxRows               int    `yaml:"max_rows"`
+	Limit                 int    `yaml:"limit"`
+	Offset                int    `yaml:"offset"`
+	ExecuteDangerousQuery bool   `yaml:"execute_dangerous_query"`
 }
 
 // PerformanceConfig represents performance-related defaults
@@ -323,16 +299,8 @@ func getDefaultConfig() *Config {
 	return &Config{
 		Dialect:       "postgres",
 		InputDir:      "./queries", // Moved from GenerationConfig
-		Databases:     make(map[string]Database),
 		ConstantFiles: []string{},
-		Schema: SchemaExtractionConfig{
-			IncludeViews:   false,
-			IncludeIndexes: true,
-			TablePatterns: TablePatterns{
-				Include: []string{"*"},
-				Exclude: []string{"pg_*", "information_schema*", "sys_*"},
-			},
-		},
+		// schema_extraction removed
 		Generation: GenerationConfig{
 			Validate: true,
 			Generators: map[string]GeneratorConfig{
@@ -487,14 +455,7 @@ func applyDefaults(config *Config) {
 
 	config.Generation.Generators["json"] = jsonGen
 
-	// Apply default schema extraction settings
-	if len(config.Schema.TablePatterns.Include) == 0 {
-		config.Schema.TablePatterns.Include = []string{"*"}
-	}
-
-	if len(config.Schema.TablePatterns.Exclude) == 0 {
-		config.Schema.TablePatterns.Exclude = []string{"pg_*", "information_schema*", "sys_*"}
-	}
+	// schema_extraction removed
 
 	// Apply default query settings
 	if config.Query.DefaultFormat == "" {
@@ -605,15 +566,6 @@ func expandEnvVars(s string) string {
 
 // expandConfigEnvVars recursively expands environment variables in config
 func expandConfigEnvVars(config *Config) {
-	// Expand database connections
-	for name, db := range config.Databases {
-		db.Connection = expandEnvVars(db.Connection)
-		db.Driver = expandEnvVars(db.Driver)
-		db.Schema = expandEnvVars(db.Schema)
-		db.Database = expandEnvVars(db.Database)
-		config.Databases[name] = db
-	}
-
 	// Expand constant files
 	for i, file := range config.ConstantFiles {
 		config.ConstantFiles[i] = expandEnvVars(file)

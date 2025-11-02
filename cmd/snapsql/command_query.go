@@ -16,6 +16,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/explain"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/intermediate/codegenerator"
@@ -243,7 +244,7 @@ func (q *QueryCmd) loadParameters(ctx *Context) (map[string]any, error) {
 }
 
 // loadConstants loads constant files
-func (q *QueryCmd) loadConstants(config *Config, ctx *Context) (map[string]any, error) {
+func (q *QueryCmd) loadConstants(config *snapsql.Config, ctx *Context) (map[string]any, error) {
 	constants := make(map[string]any)
 
 	// Combine constant files from config and command line
@@ -282,7 +283,7 @@ func (q *QueryCmd) loadConstants(config *Config, ctx *Context) (map[string]any, 
 }
 
 // getDatabaseConnection gets database connection information
-func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, string, error) {
+func (q *QueryCmd) getDatabaseConnection(config *snapsql.Config, ctx *Context) (string, string, error) {
 	var (
 		connectionString string
 		driver           string
@@ -291,28 +292,44 @@ func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, 
 	// Get connection string from environment or direct specification
 
 	if q.Environment != "" {
-		// Get from config
-		dbConfig, exists := config.Databases[q.Environment]
-		if !exists {
-			return "", "", fmt.Errorf("%w: %s", ErrEnvironmentNotFound, q.Environment)
+		// Use tbls runtime for environment resolution (config.Databases is ignored)
+		if ctx.Verbose {
+			color.Blue("Resolving database via .tbls.yaml for environment '%s'", q.Environment)
 		}
 
-		connectionString = dbConfig.Connection
-		driver = dbConfig.Driver
+		fallback, err := resolveDatabaseFromTbls(ctx)
+		if err != nil {
+			if errors.Is(err, ErrTblsDatabaseUnavailable) {
+				return "", "", fmt.Errorf("%w: tbls config unavailable for environment %s", ErrEnvironmentNotFound, q.Environment)
+			}
+
+			return "", "", fmt.Errorf("failed to resolve database from tbls: %w", err)
+		}
+
+		connectionString = fallback.Connection
+		driver = fallback.Driver
 	} else if q.DBConnection != "" {
 		// Direct connection string
 		connectionString = q.DBConnection
 		// Try to determine driver from connection string
 		driver = determineDriver(connectionString)
 	} else if config.Query.DefaultEnvironment != "" {
-		// Try default environment from config
-		dbConfig, exists := config.Databases[config.Query.DefaultEnvironment]
-		if !exists {
-			return "", "", fmt.Errorf("%w: %s", ErrDefaultEnvironmentNotFound, config.Query.DefaultEnvironment)
+		// Resolve default environment using tbls runtime (config.Databases ignored)
+		if ctx.Verbose {
+			color.Blue("Resolving default environment '%s' via .tbls.yaml", config.Query.DefaultEnvironment)
 		}
 
-		connectionString = dbConfig.Connection
-		driver = dbConfig.Driver
+		fallback, err := resolveDatabaseFromTbls(ctx)
+		if err != nil {
+			if errors.Is(err, ErrTblsDatabaseUnavailable) {
+				return "", "", fmt.Errorf("%w: tbls config unavailable for default environment %s", ErrDefaultEnvironmentNotFound, config.Query.DefaultEnvironment)
+			}
+
+			return "", "", fmt.Errorf("failed to resolve database from tbls: %w", err)
+		}
+
+		connectionString = fallback.Connection
+		driver = fallback.Driver
 	}
 
 	if strings.TrimSpace(connectionString) == "" {

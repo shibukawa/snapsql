@@ -7,7 +7,7 @@ The database pull feature extracts schema information from existing databases (P
 ## Process Flow
 
 1. **Database Connection**
-   - Retrieve connection information from snapsql.yaml or command line arguments
+   - Retrieve connection information from `.tbls.yaml` or command line arguments (`--db` / `--url`)
    - Select appropriate driver based on database type
    - Test connection and obtain basic information (version, character set)
 
@@ -142,21 +142,13 @@ snapsql pull --database development --format per_table
 snapsql pull --database production --schemas public,auth --tables users,posts
 ```
 
-## Configuration File
-
-```yaml
-databases:
-  development:
-    driver: postgres
-    connection: "postgres://user:pass@localhost/myapp_dev"
-
 pull:
-  output_format: per_table
-  output_path: ".snapsql/schema"
-  include_views: true
-  include_indexes: true
-  include_schemas: ["public", "auth"]
-  exclude_tables: ["migrations", "temp_*"]
+## Configuration
+
+Connection information for the pull command should be provided via `.tbls.yaml` or the `--db`/`--url` flags. Pull-specific options can be supplied via CLI flags. Example usage:
+
+```bash
+snapsql pull --db "postgres://user:pass@localhost/myapp_dev" --output .snapsql/schema --include-views --include-indexes
 ```
 
 ## Security Considerations

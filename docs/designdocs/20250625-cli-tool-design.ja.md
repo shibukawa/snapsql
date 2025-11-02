@@ -273,31 +273,15 @@ snapsql query queries/cleanup.snap.sql --execute-dangerous-query
 
 ```yaml
 # SQLダイアレクト
+# SQLダイアレクト
 dialect: "postgres"  # postgres, mysql, sqlite
 
-# データベース接続
-databases:
-  development:
-    driver: "postgres"
-    connection: "postgres://user:pass@localhost/dev_db"
-    schema: "public"
-  production:
-    driver: "postgres"
-    connection: "postgres://user:pass@prod-host/prod_db"
-    schema: "public"
+# データベース接続は通常 `.tbls.yaml` か、接続が必要なコマンドでは `--db` フラグを経由して指定します。
 
 # 定数定義ファイル
 constant_files:
   - "./constants/database.yaml"
   - "./constants/tables.yaml"
-
-# スキーマ抽出設定
-schema_extraction:
-  include_views: false
-  include_indexes: true
-  table_patterns:
-    include: ["*"]
-    exclude: ["pg_*", "information_schema*", "sys_*"]
 
 # 生成設定
 generation:
@@ -339,8 +323,6 @@ query:
   default_environment: "development"
   timeout: 30
   max_rows: 1000
-  explain: false
-  explain_analyze: false
   limit: 0
   offset: 0
   execute_dangerous_query: false

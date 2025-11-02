@@ -7,7 +7,7 @@
 ## 処理フロー
 
 1. **データベース接続**
-   - snapsql.yamlまたはコマンドライン引数から接続情報を取得
+   - `.tbls.yaml` またはコマンドライン引数（`--db` / `--url`）から接続情報を取得
    - データベースタイプに応じた適切なドライバーを選択
    - 接続テストと基本情報（バージョン、文字セット）の取得
 
@@ -142,21 +142,13 @@ snapsql pull --database development --format per_table
 snapsql pull --database production --schemas public,auth --tables users,posts
 ```
 
-## 設定ファイル
-
-```yaml
-databases:
-  development:
-    driver: postgres
-    connection: "postgres://user:pass@localhost/myapp_dev"
-
 pull:
-  output_format: per_table
-  output_path: ".snapsql/schema"
-  include_views: true
-  include_indexes: true
-  include_schemas: ["public", "auth"]
-  exclude_tables: ["migrations", "temp_*"]
+## 設定
+
+Pull コマンドの接続情報は `.tbls.yaml` または `--db`/`--url` フラグで指定してください。Pull 固有のオプションは CLI フラグで与えることを想定しています。例：
+
+```bash
+snapsql pull --db "postgres://user:pass@localhost/myapp_dev" --output .snapsql/schema --include-views --include-indexes
 ```
 
 ## セキュリティ考慮事項
