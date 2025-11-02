@@ -199,31 +199,15 @@ snapsql init
 
 ```yaml
 # SQL dialect
+
 dialect: "postgres"  # postgres, mysql, sqlite
 
-# Database connections (with environment variable support)
-databases:
-  development:
-    driver: "postgres"
-    connection: "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
-    schema: "public"
-  production:
-    driver: "postgres"
-    connection: "postgres://${PROD_DB_USER}:${PROD_DB_PASS}@${PROD_DB_HOST}:${PROD_DB_PORT}/${PROD_DB_NAME}"
-    schema: "public"
+# Database connections are typically supplied via `.tbls.yaml` or the `--db` flag for commands that need a database connection.
 
 # Constant definition files
 constant_files:
   - "./constants/database.yaml"
   - "./constants/tables.yaml"
-
-# Schema extraction settings
-schema_extraction:
-  include_views: false
-  include_indexes: true
-  table_patterns:
-    include: ["*"]
-    exclude: ["pg_*", "information_schema*", "sys_*"]
 
 # Generation settings
 generation:
@@ -302,9 +286,9 @@ DB_NAME=mydb
 
 **Configuration with environment variables:**
 ```yaml
-databases:
-  development:
-    connection: "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+# Example: specify a connection string using an environment variable
+production:
+  connection: "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 ```
 
 ## File Processing
@@ -451,7 +435,7 @@ snapsql generate --lang java --validate
 - Selective processing of changed files
 
 ### Database Operations
-- Connection pooling for schema extraction
+- Connection pooling for database operations
 - Efficient metadata queries
 - Timeout handling for slow connections
 
@@ -482,7 +466,6 @@ snapsql generate --lang java --validate
 
 ### Integration Tests
 - End-to-end command execution
-- Database schema extraction
 - Multi-language code generation
 - Plugin system integration
 

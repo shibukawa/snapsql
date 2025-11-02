@@ -8,6 +8,9 @@ SnapSQL is a SQL template engine that enables dynamic SQL generation using the *
 SQL queries are not just implementation details—they are the public interface between your application and data. SnapSQL treats SQL as a first-class citizen, making queries visible, testable, and maintainable rather than hiding them behind abstraction layers. SQL itself should be properly tested and guaranteed to be of high quality.
 
 In onion architecture and clean architecture, data access and UI are represented in the same layer. While developers happily expose UI interfaces through OpenAPI, GraphQL, or gRPC specifications, they often insist on hiding database access behind repository patterns. SnapSQL challenges this inconsistency by treating your SQL queries as the explicit, documented interface to your data layer. SnapSQL doesn't hide transactions, unleashing the full power of relational databases.
+## Configuration
+
+SnapSQL uses a `snapsql.yaml` configuration file:
 
 ### Static Typing is a Communication Tool
 Types are not just for the compiler—they communicate intent and structure to developers, AI agents, and tooling ecosystems. SnapSQL generates type-safe interfaces from your SQL templates using advanced type inference from SQL schemas and database metadata, making the contract between queries and application code explicit and self-documenting.
@@ -17,11 +20,7 @@ Through if/for directive comments, a single SQL template can be flexibly adapted
 ### Runtime Should be Thin
 Heavy ORMs and query builders add unnecessary complexity and performance overhead. SnapSQL's runtime libraries are lightweight adapters that execute pre-processed templates efficiently, keeping the runtime footprint minimal while maximizing developer productivity.
 
-Smaller dependencies result in smaller program sizes and reduced security attack surfaces. The Go runtime library depends only on the standard library plus `github.com/google/cel-go` and `github.com/shopspring/decimal`, ensuring minimal external dependencies.
-
-### Mocking is Opening Pandora's Box
-Wrong mocking makes code complex, creates tight coupling, and makes refactoring difficult. It increases code written for mocks rather than for quality. Incorrect mock data accelerates the divergence between reality and implementation, hiding bugs until integration testing.
-
+ # Code generation settings
 SnapSQL enables mocking at the most decoupled point without changing production code, providing authentic mock data that never diverges from reality. This approach is inspired by Mock Service Worker and Prism Contract Testing.
 
 ## How It Works

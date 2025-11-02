@@ -11,11 +11,7 @@ type Config = snapsql.Config
 // Database is a type alias for snapsql.Database kept for CLI compatibility.
 type Database = snapsql.Database
 
-// SchemaExtractionConfig is a type alias for snapsql.SchemaExtractionConfig for legacy configs.
-type SchemaExtractionConfig = snapsql.SchemaExtractionConfig
-
-// TablePatterns is a type alias for snapsql.TablePatterns.
-type TablePatterns = snapsql.TablePatterns
+// TablePatterns was removed: schema extraction no longer supported.
 
 // GenerationConfig is a type alias for snapsql.GenerationConfig.
 type GenerationConfig = snapsql.GenerationConfig

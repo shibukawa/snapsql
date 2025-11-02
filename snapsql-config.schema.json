@@ -16,33 +16,7 @@
       "default": "./queries",
       "description": "Directory containing SQL template files (.snap.sql or .snap.md)"
     },
-    "databases": {
-      "type": "object",
-      "description": "Database connection configurations for different environments",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "driver": {
-            "type": "string",
-            "enum": ["postgres", "mysql", "sqlite3", "sqlserver"],
-            "description": "Database driver name"
-          },
-          "connection": {
-            "type": "string",
-            "description": "Database connection string (supports environment variable expansion with ${VAR})"
-          },
-          "schema": {
-            "type": "string",
-            "description": "Default schema name"
-          },
-          "database": {
-            "type": "string",
-            "description": "Database name"
-          }
-        },
-        "required": ["driver", "connection"]
-      }
-    },
+    
     "constant_files": {
       "type": "array",
       "items": {
@@ -51,43 +25,7 @@
       "default": [],
       "description": "List of YAML files containing project constants"
     },
-    "schema_extraction": {
-      "type": "object",
-      "description": "Settings for database schema extraction",
-      "properties": {
-        "include_views": {
-          "type": "boolean",
-          "default": false,
-          "description": "Include database views in schema extraction"
-        },
-        "include_indexes": {
-          "type": "boolean",
-          "default": true,
-          "description": "Include database indexes in schema extraction"
-        },
-        "table_patterns": {
-          "type": "object",
-          "properties": {
-            "include": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": ["*"],
-              "description": "Table name patterns to include (glob patterns)"
-            },
-            "exclude": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "default": ["pg_*", "information_schema*", "sys_*"],
-              "description": "Table name patterns to exclude (glob patterns)"
-            }
-          }
-        }
-      }
-    },
+    
     "generation": {
       "type": "object",
       "description": "Code generation settings",

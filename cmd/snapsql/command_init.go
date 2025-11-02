@@ -91,80 +91,60 @@ func createDir(path string) error {
 }
 
 func createSampleConfig() error {
-	configContent := `# SQL dialect configuration
+		configContent := `# SQL dialect configuration
 dialect: "postgres"  # postgres, mysql, sqlite
-
-# Database connection settings
-databases:
-  development:
-    driver: "postgres"
-    connection: "postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
-    schema: "public"
-  
-  production:
-    driver: "postgres"
-    connection: "postgres://${PROD_DB_USER}:${PROD_DB_PASS}@${PROD_DB_HOST}:${PROD_DB_PORT}/${PROD_DB_NAME}"
-    schema: "public"
 
 # Constant definition files (expandable with /*# */)
 constant_files:
-  - "./constants/database.yaml"
-  - "./constants/tables.yaml"
-
-# Schema extraction settings
-schema_extraction:
-  include_views: false
-  include_indexes: true
-  table_patterns:
-    include: ["*"]
-    exclude: ["pg_*", "information_schema*", "sys_*"]
+	- "./constants/database.yaml"
+	- "./constants/tables.yaml"
 
 # Generation settings
 generation:
-  input_dir: "./queries"
-  validate: true
+	input_dir: "./queries"
+	validate: true
   
-  # Generator configurations
-  # Generators are enabled by default unless 'disabled: true' is specified
-  generators:
-    json:
-      output: "./generated"
-      preserve_hierarchy: true
-      settings:
-        pretty: true
-        include_metadata: true
+	# Generator configurations
+	# Generators are enabled by default unless 'disabled: true' is specified
+	generators:
+		json:
+			output: "./generated"
+			preserve_hierarchy: true
+			settings:
+				pretty: true
+				include_metadata: true
 
-    mock:
-      output: "./testdata/mock"
-      preserve_hierarchy: true
-      settings:
-        embed: true
-        package: "mock"
-        filename: "mock.go"
+		mock:
+			output: "./testdata/mock"
+			preserve_hierarchy: true
+			settings:
+				embed: true
+				package: "mock"
+				filename: "mock.go"
     
-    go:
-      output: "./internal/queries"
-      disabled: true
-      preserve_hierarchy: true
-      settings:
-        package: "queries"
+		go:
+			output: "./internal/queries"
+			disabled: true
+			preserve_hierarchy: true
+			settings:
+				package: "queries"
     
-    typescript:
-      output: "./src/generated"
-      disabled: true
-      preserve_hierarchy: true
-      settings:
-        types: true
+		typescript:
+			output: "./src/generated"
+			disabled: true
+			preserve_hierarchy: true
+			settings:
+				types: true
 
 # Validation settings
 validation:
-  strict: false
-  rules:
-    - "no-dynamic-table-names"
-    - "require-parameter-types"
+	strict: false
+	rules:
+		- "no-dynamic-table-names"
+		- "require-parameter-types"
 `
 
-	return writeFile("snapsql.yaml", configContent)
+		return writeFile("snapsql.yaml", configContent)
 }
 
 // createKanbanConfig writes a snapsql.yaml tailored for the kanban example with Go generator

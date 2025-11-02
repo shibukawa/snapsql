@@ -1,25 +1,9 @@
 # SnapSQL Configuration for Testing
+databases:
 dialect: sqlite
 
 # Input directory for SQL templates
 input_dir: "./queries"
-
-# Database connections
-databases:
-  development:
-    driver: sqlite3
-    connection: "./test.db"
-    schema: main
-  
-  test:
-    driver: sqlite3
-    connection: "./test.db"
-    schema: main
-    
-  production:
-    driver: postgres
-    connection: "postgresql://user:password@localhost:5432/mydb"
-    schema: public
 
 # Code generation settings
 generation:
