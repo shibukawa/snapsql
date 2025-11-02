@@ -323,8 +323,6 @@ query:
   default_environment: "development"
   timeout: 30
   max_rows: 1000
-  explain: false
-  explain_analyze: false
   limit: 0
   offset: 0
   execute_dangerous_query: false

@@ -214,16 +214,6 @@
           "default": 1000,
           "description": "Maximum number of rows to return"
         },
-        "explain": {
-          "type": "boolean",
-          "default": false,
-          "description": "Run EXPLAIN before executing queries"
-        },
-        "explain_analyze": {
-          "type": "boolean",
-          "default": false,
-          "description": "Run EXPLAIN ANALYZE before executing queries"
-        },
         "limit": {
           "type": "integer",
           "minimum": 0,

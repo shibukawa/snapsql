@@ -91,7 +91,7 @@ func createDir(path string) error {
 }
 
 func createSampleConfig() error {
-		configContent := `# SQL dialect configuration
+	configContent := `# SQL dialect configuration
 dialect: "postgres"  # postgres, mysql, sqlite
 
 # Constant definition files (expandable with /*# */)
@@ -144,7 +144,7 @@ validation:
 		- "require-parameter-types"
 `
 
-		return writeFile("snapsql.yaml", configContent)
+	return writeFile("snapsql.yaml", configContent)
 }
 
 // createKanbanConfig writes a snapsql.yaml tailored for the kanban example with Go generator

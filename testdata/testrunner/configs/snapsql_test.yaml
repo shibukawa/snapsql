@@ -34,8 +34,6 @@ validation:
 query:
   timeout: 30
   max_rows: 10000
-  explain: false
-  explain_analyze: false
 
 # System settings
 system:

@@ -56,14 +56,7 @@ func (g *GeneratorConfig) IsEnabled() bool {
 	return g.Disabled == nil || !*g.Disabled
 }
 
-// LanguageConfig represents language-specific generation settings (deprecated, kept for backward compatibility)
-type LanguageConfig struct {
-	Output          string `yaml:"output"`
-	Package         string `yaml:"package"`
-	Pretty          bool   `yaml:"pretty"`
-	IncludeMetadata bool   `yaml:"include_metadata"`
-	Types           bool   `yaml:"types"`
-}
+// LanguageConfig was removed. Use per-generator settings in GenerationConfig instead.
 
 // ValidationConfig represents validation settings
 type ValidationConfig struct {
@@ -73,15 +66,13 @@ type ValidationConfig struct {
 
 // QueryConfig represents query execution settings
 type QueryConfig struct {
-	DefaultFormat            string `yaml:"default_format"`
-	DefaultEnvironment       string `yaml:"default_environment"`
-	Timeout                  int    `yaml:"timeout"`
-	MaxRows                  int    `yaml:"max_rows"`
-	Limit                    int    `yaml:"limit"`
-	Offset                   int    `yaml:"offset"`
-	ExecuteDangerousQuery    bool   `yaml:"execute_dangerous_query"`
-	DeprecatedExplain        *bool  `yaml:"explain,omitempty"`
-	DeprecatedExplainAnalyze *bool  `yaml:"explain_analyze,omitempty"`
+	DefaultFormat         string `yaml:"default_format"`
+	DefaultEnvironment    string `yaml:"default_environment"`
+	Timeout               int    `yaml:"timeout"`
+	MaxRows               int    `yaml:"max_rows"`
+	Limit                 int    `yaml:"limit"`
+	Offset                int    `yaml:"offset"`
+	ExecuteDangerousQuery bool   `yaml:"execute_dangerous_query"`
 }
 
 // PerformanceConfig represents performance-related defaults
