@@ -16,6 +16,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/explain"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/intermediate/codegenerator"
@@ -243,7 +244,7 @@ func (q *QueryCmd) loadParameters(ctx *Context) (map[string]any, error) {
 }
 
 // loadConstants loads constant files
-func (q *QueryCmd) loadConstants(config *Config, ctx *Context) (map[string]any, error) {
+func (q *QueryCmd) loadConstants(config *snapsql.Config, ctx *Context) (map[string]any, error) {
 	constants := make(map[string]any)
 
 	// Combine constant files from config and command line
@@ -282,7 +283,7 @@ func (q *QueryCmd) loadConstants(config *Config, ctx *Context) (map[string]any, 
 }
 
 // getDatabaseConnection gets database connection information
-func (q *QueryCmd) getDatabaseConnection(config *Config, ctx *Context) (string, string, error) {
+func (q *QueryCmd) getDatabaseConnection(config *snapsql.Config, ctx *Context) (string, string, error) {
 	var (
 		connectionString string
 		driver           string
