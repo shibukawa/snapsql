@@ -831,6 +831,33 @@ func TestDialectConversions(t *testing.T) {
 				{Op: OpEmitStatic, Value: "SELECT (id)::TEXT, (price)::DECIMAL FROM products", Pos: "1:1"},
 			},
 		},
+		{
+			category: "cast",
+			name:     "Double colon cast to CAST for MySQL",
+			sql:      "SELECT (created_at)::DATETIME FROM logs",
+			dialect:  snapsql.DialectMySQL,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CAST(created_at AS DATETIME) FROM logs", Pos: "1:1"},
+			},
+		},
+		{
+			category: "cast",
+			name:     "Double colon without parentheses to CAST",
+			sql:      "SELECT amount::DECIMAL(10,2) FROM invoices",
+			dialect:  snapsql.DialectSQLite,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CAST(amount AS DECIMAL(10,2)) FROM invoices", Pos: "1:1"},
+			},
+		},
+		{
+			category: "cast",
+			name:     "Double colon multi word type",
+			sql:      "SELECT value::DOUBLE PRECISION FROM stats",
+			dialect:  snapsql.DialectMariaDB,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CAST(value AS DOUBLE PRECISION) FROM stats", Pos: "1:1"},
+			},
+		},
 		// === DateTime Conversion ===
 		{
 			category: "datetime",
@@ -940,6 +967,33 @@ func TestDialectConversions(t *testing.T) {
 			dialect:  snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
 				{Op: OpEmitStatic, Value: "SELECT a || b, c || d FROM table1", Pos: "1:1"},
+			},
+		},
+		{
+			category: "concat",
+			name:     "Double pipe to CONCAT for MySQL",
+			sql:      "SELECT first_name || ' ' || last_name FROM users",
+			dialect:  snapsql.DialectMySQL,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CONCAT(first_name, ' ', last_name) FROM users", Pos: "1:1"},
+			},
+		},
+		{
+			category: "concat",
+			name:     "Nested pipe expressions flatten",
+			sql:      "SELECT (a || b) || c FROM items",
+			dialect:  snapsql.DialectMySQL,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CONCAT(a, b, c) FROM items", Pos: "1:1"},
+			},
+		},
+		{
+			category: "concat",
+			name:     "Pipe inside parentheses on right",
+			sql:      "SELECT col1 || (col2 || col3) AS merged FROM t",
+			dialect:  snapsql.DialectMariaDB,
+			expectedInstructions: []Instruction{
+				{Op: OpEmitStatic, Value: "SELECT CONCAT(col1, col2, col3) AS merged FROM t", Pos: "1:1"},
 			},
 		},
 	}
