@@ -20,7 +20,7 @@ var (
 type FormatCmd struct {
 	Input  string `arg:"" optional:"" help:"Input file or directory (default: stdin)"`
 	Output string `short:"o" help:"Output file (default: stdout, or overwrite input file)"`
-	Write  bool   `short:"w" help:"Write result to input file instead of stdout"`
+	Test   bool   `short:"t" long:"test" help:"Print formatted output to stdout instead of writing files (dry-run)"`
 	Check  bool   `short:"c" help:"Check if files are formatted (exit 1 if not)"`
 	Diff   bool   `short:"d" help:"Show diff instead of rewriting files"`
 }
@@ -126,7 +126,10 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 		outputFile *os.File
 	)
 
-	if cmd.Write || cmd.Output == filename {
+	// If --test is requested, always print to stdout and do not modify files.
+	if cmd.Test {
+		writer = os.Stdout
+	} else if cmd.Output == filename {
 		// Write to temporary file first
 		tempFile, err := os.CreateTemp(filepath.Dir(filename), ".snapsql-format-*")
 		if err != nil {
@@ -156,8 +159,26 @@ func (cmd *FormatCmd) formatFile(sqlFormatter *formatter.SQLFormatter, filename 
 
 		writer = outputFile
 	} else {
-		// Write to stdout
-		writer = os.Stdout
+		// Default behavior: overwrite the input file in-place. We implement this by
+		// writing to a temp file and renaming it over the original on success.
+		tempFile, err := os.CreateTemp(filepath.Dir(filename), ".snapsql-format-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temp file: %w", err)
+		}
+
+		defer func() {
+			tempFile.Close()
+
+			if err == nil {
+				// Replace original file with formatted version
+				_ = os.Rename(tempFile.Name(), filename)
+			} else {
+				// Clean up temp file on error
+				_ = os.Remove(tempFile.Name())
+			}
+		}()
+
+		writer = tempFile
 	}
 
 	return cmd.formatFromReader(sqlFormatter, file, writer, filename)
@@ -192,7 +213,7 @@ func (cmd *FormatCmd) formatDirectory(sqlFormatter *formatter.SQLFormatter, dirP
 			return nil
 		}
 
-		if !cmd.Check && !cmd.Diff {
+		if !cmd.Check && !cmd.Diff && !cmd.Test {
 			fmt.Printf("Formatted: %s\n", path)
 		}
 
@@ -285,25 +306,28 @@ For Markdown files, it formats SQL code blocks within ` + "```sql" + ` blocks wh
 preserving the rest of the Markdown content.
 
 Examples:
-  # Format a single file and print to stdout
-  snapsql format query.snap.sql
-  snapsql format README.md
+	# Format a single file and overwrite it (default)
+	snapsql format query.snap.sql
+	snapsql format README.md
 
-  # Format a file in place
-  snapsql format -w query.snap.sql
-  snapsql format -w documentation.md
+	# Print formatted output to stdout (dry-run)
+	snapsql format -t query.snap.sql
 
-  # Format all files in a directory
-  snapsql format -w ./queries/
+		# Format a file in place (default: overwrite input file)
+		snapsql format query.snap.sql
+		snapsql format documentation.md
 
-  # Check if files are properly formatted
-  snapsql format -c ./queries/
+		# Format all files in a directory (default: overwrite files)
+		snapsql format ./queries/
 
-  # Show diff of what would be changed
-  snapsql format -d query.snap.sql
+	# Check if files are properly formatted
+	snapsql format -c ./queries/
 
-  # Format from stdin
-  cat query.sql | snapsql format
+	# Show diff of what would be changed
+	snapsql format -d query.snap.sql
+
+	# Format from stdin (prints to stdout)
+	cat query.sql | snapsql format
 
 Style rules:
 - Keywords are uppercase (SELECT, FROM, WHERE, etc.)

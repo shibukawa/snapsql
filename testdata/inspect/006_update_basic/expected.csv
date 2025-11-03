@@ -1,3 +1,2 @@
-name,alias,schema,source,joinType
-orders,,,main,none
-
+name,alias,schema,source,joinType,queryName,isTable
+orders,,,main,none,,true

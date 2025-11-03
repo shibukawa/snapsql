@@ -1,7 +1,19 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "alias": "u", "source": "main", "join_type": "none" },
-    { "name": "regions", "alias": "r", "source": "join", "join_type": "cross" }
+    {
+      "name": "users",
+      "alias": "u",
+      "source": "main",
+      "join_type": "none",
+      "is_table": true
+    },
+    {
+      "name": "regions",
+      "alias": "r",
+      "source": "join",
+      "join_type": "cross",
+      "is_table": true
+    }
   ]
 }

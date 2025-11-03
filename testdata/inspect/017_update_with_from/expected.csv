@@ -1,2 +1,2 @@
-name,alias,schema,source,joinType
-users,,,main,none
+name,alias,schema,source,joinType,queryName,isTable
+users,,,main,none,,true

@@ -1,4 +1,3 @@
-name,alias,schema,source,joinType
-users,u,public,main,none
-orders,o,sales,join,inner
-
+name,alias,schema,source,joinType,queryName,isTable
+users,u,public,main,none,,true
+orders,o,sales,join,inner,,true

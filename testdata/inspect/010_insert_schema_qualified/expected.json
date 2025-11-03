@@ -1,6 +1,12 @@
 {
   "statement": "insert",
   "tables": [
-    { "name": "audit_logs", "schema": "sales", "source": "main", "join_type": "none" }
+    {
+      "name": "audit_logs",
+      "schema": "sales",
+      "source": "main",
+      "join_type": "none",
+      "is_table": true
+    }
   ]
 }

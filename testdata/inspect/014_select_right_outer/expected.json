@@ -1,7 +1,19 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "alias": "u", "source": "main", "join_type": "none" },
-    { "name": "orders", "alias": "o", "source": "join", "join_type": "right" }
+    {
+      "name": "users",
+      "alias": "u",
+      "source": "main",
+      "join_type": "none",
+      "is_table": true
+    },
+    {
+      "name": "orders",
+      "alias": "o",
+      "source": "join",
+      "join_type": "right",
+      "is_table": true
+    }
   ]
 }

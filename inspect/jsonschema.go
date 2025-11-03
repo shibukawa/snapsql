@@ -9,11 +9,13 @@ type InspectOptions struct {
 
 // TableRef describes a referenced table in the query.
 type TableRef struct {
-	Name     string `json:"name"`
-	Alias    string `json:"alias,omitempty"`
-	Schema   string `json:"schema,omitempty"`
-	Source   string `json:"source"`    // main|join|cte|subquery
-	JoinType string `json:"join_type"` // none|inner|left|right|full|cross|natural|natural_left|natural_right|natural_full|unknown
+	Name      string `json:"name"`
+	Alias     string `json:"alias,omitempty"`
+	Schema    string `json:"schema,omitempty"`
+	Source    string `json:"source"`               // main|join|cte|subquery
+	JoinType  string `json:"join_type"`            // none|inner|left|right|full|cross|natural|natural_left|natural_right|natural_full|unknown
+	QueryName string `json:"query_name,omitempty"` // CTE or subquery name if this table is inside a derived query
+	IsTable   bool   `json:"is_table"`             // true if this is a real table, false if it's a CTE/subquery reference
 }
 
 // InspectResult is the JSON-serializable output model.

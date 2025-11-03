@@ -1,7 +1,26 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "alias": "s", "source": "subquery", "join_type": "none" },
-    { "name": "orders", "alias": "o", "source": "join", "join_type": "inner" }
+    {
+      "name": "orders",
+      "alias": "o",
+      "source": "join",
+      "join_type": "inner",
+      "is_table": true
+    },
+    {
+      "name": "users",
+      "alias": "s",
+      "source": "subquery",
+      "join_type": "none",
+      "is_table": true
+    },
+    {
+      "name": "users",
+      "source": "subquery",
+      "join_type": "none",
+      "query_name": "s",
+      "is_table": true
+    }
   ]
 }
