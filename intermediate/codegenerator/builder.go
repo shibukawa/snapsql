@@ -967,8 +967,16 @@ func (b *InstructionBuilder) applyDialectConversions(tokens []tokenizer.Token) [
 
 		// CAST構文の変換: CAST(expr AS type) ⇔ (expr)::type
 		if b.shouldConvertCast(token) {
-			convertedTokens, skip := b.convertCastSyntaxInTokens(normalizedTokens, i)
+			convertedTokens, skip, leftConsumed := b.convertCastSyntaxInTokens(normalizedTokens, i)
 			if len(convertedTokens) > 0 {
+				if leftConsumed > 0 {
+					if leftConsumed > len(result) {
+						leftConsumed = len(result)
+					}
+
+					result = result[:len(result)-leftConsumed]
+				}
+
 				result = append(result, convertedTokens...)
 				i += skip
 
@@ -1012,8 +1020,16 @@ func (b *InstructionBuilder) applyDialectConversions(tokens []tokenizer.Token) [
 
 		// 文字列連結の変換: CONCAT() ⇔ ||
 		if b.shouldConvertStringConcatenation(token) {
-			convertedTokens, skip := b.convertStringConcatenationInTokens(normalizedTokens, i)
+			convertedTokens, skip, leftConsumed := b.convertStringConcatenationInTokens(normalizedTokens, i)
 			if len(convertedTokens) > 0 {
+				if leftConsumed > 0 {
+					if leftConsumed > len(result) {
+						leftConsumed = len(result)
+					}
+
+					result = result[:len(result)-leftConsumed]
+				}
+
 				result = append(result, convertedTokens...)
 				i += skip
 
@@ -1265,7 +1281,7 @@ func (b *InstructionBuilder) convertBooleanInTokens(token tokenizer.Token) *toke
 // convertStringConcatenationInTokens は文字列連結を変換
 // CONCAT() ⇔ || 演算子
 // 返り値: 変換後のトークン列, スキップするトークン数
-func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokenizer.Token, startIndex int) ([]tokenizer.Token, int) {
+func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokenizer.Token, startIndex int) ([]tokenizer.Token, int, int) {
 	token := tokens[startIndex]
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
@@ -1273,7 +1289,7 @@ func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokeniz
 	if (b.context.Dialect == snapsql.DialectPostgres || b.context.Dialect == snapsql.DialectSQLite) && upper == "CONCAT" {
 		// 次のトークンが開き括弧かチェック
 		if startIndex+1 >= len(tokens) {
-			return nil, 0
+			return nil, 0, 0
 		}
 
 		i := startIndex + 1
@@ -1283,7 +1299,7 @@ func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokeniz
 		}
 
 		if i >= len(tokens) || tokens[i].Type != tokenizer.OPENED_PARENS {
-			return nil, 0
+			return nil, 0, 0
 		}
 
 		i++ // 開き括弧をスキップ
@@ -1361,39 +1377,558 @@ func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokeniz
 
 		skipCount := i - startIndex
 
-		return result, skipCount
+		return result, skipCount, 0
 	}
 
 	// MySQL/MariaDB: a || b || c → CONCAT(a, b, c)
-	// || 演算子の場合、この時点では変換しない
-	// 理由: || は二項演算子であり、複数の || が連続する場合の処理が複雑
-	// より高度な式解析が必要
 	if (b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectMariaDB) && token.Type == tokenizer.CONCAT {
-		// 現在のバージョンでは || → CONCAT への変換は実装しない
-		// （二項演算子の解析が複雑であるため）
-		return nil, 0
+		exprStart, ok := findConcatenationExpressionStart(tokens, startIndex)
+		if !ok {
+			return nil, 0, 0
+		}
+
+		exprEnd, ok := findConcatenationExpressionEnd(tokens, startIndex)
+		if !ok || exprEnd <= exprStart {
+			return nil, 0, 0
+		}
+
+		expressionTokens := tokens[exprStart:exprEnd]
+		converted := b.convertConcatenationSequence(expressionTokens)
+
+		skipCount := max(exprEnd-startIndex-1, 0)
+
+		leftConsumed := max(startIndex-exprStart, 0)
+
+		return converted, skipCount, leftConsumed
 	}
 
-	return nil, 0
+	return nil, 0, 0
+}
+
+func findConcatenationExpressionStart(tokens []tokenizer.Token, operatorIndex int) (int, bool) {
+	if operatorIndex <= 0 {
+		return 0, true
+	}
+
+	depth := 0
+
+	for i := operatorIndex - 1; i >= 0; i-- {
+		t := tokens[i]
+		switch t.Type {
+		case tokenizer.CLOSED_PARENS:
+			depth++
+		case tokenizer.OPENED_PARENS:
+			if depth > 0 {
+				depth--
+				continue
+			}
+		default:
+			if depth == 0 && isConcatenationBoundaryToken(t) {
+				return i + 1, true
+			}
+		}
+	}
+
+	return 0, true
+}
+
+func findConcatenationExpressionEnd(tokens []tokenizer.Token, operatorIndex int) (int, bool) {
+	depth := 0
+
+	for i := operatorIndex + 1; i < len(tokens); i++ {
+		t := tokens[i]
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			depth++
+		case tokenizer.CLOSED_PARENS:
+			if depth > 0 {
+				depth--
+				continue
+			}
+		case tokenizer.CONCAT:
+			if depth == 0 {
+				continue
+			}
+		default:
+			if depth == 0 && isConcatenationBoundaryToken(t) {
+				return i, true
+			}
+		}
+	}
+
+	return len(tokens), true
+}
+
+func isConcatenationBoundaryToken(token tokenizer.Token) bool {
+	switch token.Type {
+	case tokenizer.COMMA, tokenizer.SEMICOLON, tokenizer.PLUS, tokenizer.MINUS,
+		tokenizer.MULTIPLY, tokenizer.DIVIDE, tokenizer.MODULO, tokenizer.EQUAL,
+		tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.GREATER_THAN,
+		tokenizer.LESS_EQUAL, tokenizer.GREATER_EQUAL, tokenizer.JSON_OPERATOR,
+		tokenizer.AND, tokenizer.OR, tokenizer.BETWEEN, tokenizer.LIKE,
+		tokenizer.ILIKE, tokenizer.REGEXP, tokenizer.RLIKE, tokenizer.IN,
+		tokenizer.IS, tokenizer.AS, tokenizer.SIMILAR, tokenizer.TO, tokenizer.WHEN,
+		tokenizer.THEN, tokenizer.ELSE, tokenizer.END, tokenizer.WHERE,
+		tokenizer.GROUP, tokenizer.HAVING, tokenizer.ORDER, tokenizer.LIMIT,
+		tokenizer.OFFSET, tokenizer.RETURNING, tokenizer.JOIN, tokenizer.INNER,
+		tokenizer.OUTER, tokenizer.LEFT, tokenizer.RIGHT, tokenizer.FULL,
+		tokenizer.CROSS, tokenizer.USING, tokenizer.ON, tokenizer.SELECT,
+		tokenizer.FROM, tokenizer.UPDATE, tokenizer.INSERT, tokenizer.DELETE,
+		tokenizer.SET, tokenizer.VALUES, tokenizer.WITH, tokenizer.CASE,
+		tokenizer.UNION:
+		return true
+	case tokenizer.CONCAT:
+		return false
+	default:
+		return false
+	}
+}
+
+func (b *InstructionBuilder) convertConcatenationSequence(tokens []tokenizer.Token) []tokenizer.Token {
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	leading := 0
+	for leading < len(tokens) && tokens[leading].Type == tokenizer.WHITESPACE {
+		leading++
+	}
+
+	trailing := len(tokens)
+	for trailing > leading && tokens[trailing-1].Type == tokenizer.WHITESPACE {
+		trailing--
+	}
+
+	leadingTokens := slices.Clone(tokens[:leading])
+	trailingTokens := slices.Clone(tokens[trailing:])
+	core := tokens[leading:trailing]
+
+	if len(core) == 0 {
+		result := append([]tokenizer.Token{}, leadingTokens...)
+		result = append(result, trailingTokens...)
+
+		return result
+	}
+
+	convertedCore := b.convertConcatenationCore(core)
+
+	result := append([]tokenizer.Token{}, leadingTokens...)
+	result = append(result, convertedCore...)
+	result = append(result, trailingTokens...)
+
+	return result
+}
+
+func (b *InstructionBuilder) convertConcatenationCore(tokens []tokenizer.Token) []tokenizer.Token {
+	if !containsTopLevelConcat(tokens) {
+		return b.convertConcatenationInside(tokens)
+	}
+
+	parts := splitTokensByTopLevelConcat(tokens)
+	if len(parts) < 2 {
+		return b.convertConcatenationInside(tokens)
+	}
+
+	processed := make([][]tokenizer.Token, 0, len(parts))
+	for _, part := range parts {
+		processed = append(processed, b.convertConcatenationSequence(part))
+	}
+
+	args := make([][]tokenizer.Token, 0, len(processed))
+	for _, operand := range processed {
+		trimmedOperand := trimWhitespaceTokens(operand)
+
+		if stripped, ok := stripFullyWrappedParentheses(trimmedOperand); ok {
+			stripped = trimWhitespaceTokens(stripped)
+			if nestedArgs, ok := extractConcatArguments(stripped); ok {
+				args = append(args, nestedArgs...)
+				continue
+			}
+		}
+
+		if nestedArgs, ok := extractConcatArguments(trimmedOperand); ok {
+			args = append(args, nestedArgs...)
+		} else {
+			args = append(args, trimmedOperand)
+		}
+	}
+
+	return buildConcatCallTokens(args, tokens)
+}
+
+func (b *InstructionBuilder) convertConcatenationInside(tokens []tokenizer.Token) []tokenizer.Token {
+	result := make([]tokenizer.Token, 0, len(tokens))
+
+	for i := 0; i < len(tokens); i++ {
+		t := tokens[i]
+		if t.Type == tokenizer.OPENED_PARENS {
+			closing, ok := findMatchingParen(tokens, i)
+			if !ok {
+				return slices.Clone(tokens)
+			}
+
+			inner := b.convertConcatenationSequence(tokens[i+1 : closing])
+
+			result = append(result, t)
+			result = append(result, inner...)
+			result = append(result, tokens[closing])
+			i = closing
+
+			continue
+		}
+
+		result = append(result, t)
+	}
+
+	return result
+}
+
+func containsTopLevelConcat(tokens []tokenizer.Token) bool {
+	depth := 0
+
+	for _, t := range tokens {
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			depth++
+		case tokenizer.CLOSED_PARENS:
+			if depth > 0 {
+				depth--
+			}
+		case tokenizer.CONCAT:
+			if depth == 0 {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func splitTokensByTopLevelConcat(tokens []tokenizer.Token) [][]tokenizer.Token {
+	depth := 0
+	start := 0
+	parts := make([][]tokenizer.Token, 0, 4)
+
+	for i, t := range tokens {
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			depth++
+		case tokenizer.CLOSED_PARENS:
+			if depth > 0 {
+				depth--
+			}
+		case tokenizer.CONCAT:
+			if depth == 0 {
+				parts = append(parts, tokens[start:i])
+				start = i + 1
+			}
+		}
+	}
+
+	parts = append(parts, tokens[start:])
+
+	return parts
+}
+
+func splitTokensByTopLevelComma(tokens []tokenizer.Token) [][]tokenizer.Token {
+	depth := 0
+	start := 0
+	parts := make([][]tokenizer.Token, 0, 4)
+
+	for i, t := range tokens {
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			depth++
+		case tokenizer.CLOSED_PARENS:
+			if depth > 0 {
+				depth--
+			}
+		case tokenizer.COMMA:
+			if depth == 0 {
+				parts = append(parts, tokens[start:i])
+				start = i + 1
+			}
+		}
+	}
+
+	parts = append(parts, tokens[start:])
+
+	return parts
+}
+
+func trimWhitespaceTokens(tokens []tokenizer.Token) []tokenizer.Token {
+	start := 0
+	for start < len(tokens) && tokens[start].Type == tokenizer.WHITESPACE {
+		start++
+	}
+
+	end := len(tokens)
+	for end > start && tokens[end-1].Type == tokenizer.WHITESPACE {
+		end--
+	}
+
+	return slices.Clone(tokens[start:end])
+}
+
+func extractConcatArguments(tokens []tokenizer.Token) ([][]tokenizer.Token, bool) {
+	trimmed := trimWhitespaceTokens(tokens)
+	if len(trimmed) < 3 {
+		return nil, false
+	}
+
+	first := trimmed[0]
+	if strings.ToUpper(strings.TrimSpace(first.Value)) != "CONCAT" {
+		return nil, false
+	}
+
+	idx := 1
+	for idx < len(trimmed) && trimmed[idx].Type == tokenizer.WHITESPACE {
+		idx++
+	}
+
+	if idx >= len(trimmed) || trimmed[idx].Type != tokenizer.OPENED_PARENS {
+		return nil, false
+	}
+
+	openIdx := idx
+
+	closingIdx, ok := findMatchingParen(trimmed, openIdx)
+	if !ok {
+		return nil, false
+	}
+
+	if closingIdx != len(trimmed)-1 {
+		// 閉じ括弧の後にトークンが存在する場合は CONCAT 呼び出しとはみなさない
+		return nil, false
+	}
+
+	inner := trimmed[openIdx+1 : closingIdx]
+	if len(inner) == 0 {
+		return [][]tokenizer.Token{}, true
+	}
+
+	parts := splitTokensByTopLevelComma(inner)
+
+	args := make([][]tokenizer.Token, 0, len(parts))
+	for _, part := range parts {
+		args = append(args, trimWhitespaceTokens(part))
+	}
+
+	return args, true
+}
+
+func buildConcatCallTokens(args [][]tokenizer.Token, reference []tokenizer.Token) []tokenizer.Token {
+	if len(args) == 0 {
+		return slices.Clone(reference)
+	}
+
+	pos := tokenizer.Position{}
+	if len(reference) > 0 {
+		pos = reference[0].Position
+	}
+
+	result := make([]tokenizer.Token, 0, len(args)*3+2)
+	result = append(result, tokenizer.Token{Type: tokenizer.IDENTIFIER, Value: "CONCAT", Position: pos})
+	result = append(result, tokenizer.Token{Type: tokenizer.OPENED_PARENS, Value: "(", Position: pos})
+
+	for idx, arg := range args {
+		trimmed := trimWhitespaceTokens(arg)
+
+		result = append(result, trimmed...)
+		if idx < len(args)-1 {
+			result = append(result, tokenizer.Token{Type: tokenizer.COMMA, Value: ",", Position: pos})
+			result = append(result, tokenizer.Token{Type: tokenizer.WHITESPACE, Value: " ", Position: pos})
+		}
+	}
+
+	result = append(result, tokenizer.Token{Type: tokenizer.CLOSED_PARENS, Value: ")", Position: pos})
+
+	return result
+}
+
+func findMatchingParen(tokens []tokenizer.Token, openIndex int) (int, bool) {
+	depth := 0
+
+	for i := openIndex; i < len(tokens); i++ {
+		t := tokens[i]
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			depth++
+		case tokenizer.CLOSED_PARENS:
+			depth--
+			if depth == 0 {
+				return i, true
+			}
+		}
+	}
+
+	return -1, false
+}
+
+func findCastExpressionStart(tokens []tokenizer.Token, operatorIndex int) int {
+	depth := 0
+
+	for i := operatorIndex - 1; i >= 0; i-- {
+		t := tokens[i]
+		switch t.Type {
+		case tokenizer.CLOSED_PARENS:
+			depth++
+		case tokenizer.OPENED_PARENS:
+			if depth > 0 {
+				depth--
+				continue
+			}
+		default:
+			if depth == 0 && isConcatenationBoundaryToken(t) {
+				start := i + 1
+				for start < operatorIndex && tokens[start].Type == tokenizer.WHITESPACE {
+					start++
+				}
+
+				return start
+			}
+		}
+	}
+
+	start := 0
+	for start < operatorIndex && tokens[start].Type == tokenizer.WHITESPACE {
+		start++
+	}
+
+	return start
+}
+
+func findCastTypeEnd(tokens []tokenizer.Token, operatorIndex int) int {
+	typeStart := operatorIndex + 1
+	for typeStart < len(tokens) && tokens[typeStart].Type == tokenizer.WHITESPACE {
+		typeStart++
+	}
+
+	typeDepth := 0
+
+	for i := typeStart; i < len(tokens); i++ {
+		t := tokens[i]
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			typeDepth++
+		case tokenizer.CLOSED_PARENS:
+			if typeDepth == 0 {
+				return i
+			}
+
+			typeDepth--
+		default:
+			if typeDepth == 0 && isCastTypeBoundaryToken(t) {
+				return i
+			}
+		}
+	}
+
+	return len(tokens)
+}
+
+func isCastTypeBoundaryToken(token tokenizer.Token) bool {
+	switch token.Type {
+	case tokenizer.COMMA, tokenizer.SEMICOLON, tokenizer.PLUS, tokenizer.MINUS,
+		tokenizer.MULTIPLY, tokenizer.DIVIDE, tokenizer.MODULO, tokenizer.EQUAL,
+		tokenizer.NOT_EQUAL, tokenizer.LESS_THAN, tokenizer.GREATER_THAN,
+		tokenizer.LESS_EQUAL, tokenizer.GREATER_EQUAL, tokenizer.JSON_OPERATOR,
+		tokenizer.AND, tokenizer.OR, tokenizer.BETWEEN, tokenizer.LIKE,
+		tokenizer.ILIKE, tokenizer.REGEXP, tokenizer.RLIKE, tokenizer.IN,
+		tokenizer.IS, tokenizer.AS, tokenizer.SIMILAR, tokenizer.TO, tokenizer.WHEN,
+		tokenizer.THEN, tokenizer.ELSE, tokenizer.END, tokenizer.WHERE,
+		tokenizer.GROUP, tokenizer.HAVING, tokenizer.ORDER, tokenizer.LIMIT,
+		tokenizer.OFFSET, tokenizer.RETURNING, tokenizer.JOIN, tokenizer.INNER,
+		tokenizer.OUTER, tokenizer.LEFT, tokenizer.RIGHT, tokenizer.FULL,
+		tokenizer.CROSS, tokenizer.USING, tokenizer.ON, tokenizer.SELECT,
+		tokenizer.FROM, tokenizer.UPDATE, tokenizer.INSERT, tokenizer.DELETE,
+		tokenizer.SET, tokenizer.VALUES, tokenizer.WITH, tokenizer.CASE,
+		tokenizer.UNION, tokenizer.DOUBLE_COLON:
+		return true
+	default:
+		return false
+	}
+}
+
+func stripOuterParentheses(tokens []tokenizer.Token) []tokenizer.Token {
+	if len(tokens) < 2 {
+		return tokens
+	}
+
+	if tokens[0].Type != tokenizer.OPENED_PARENS || tokens[len(tokens)-1].Type != tokenizer.CLOSED_PARENS {
+		return tokens
+	}
+
+	depth := 0
+
+	for i := range tokens {
+		t := tokens[i]
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			depth++
+		case tokenizer.CLOSED_PARENS:
+			depth--
+			if depth == 0 && i != len(tokens)-1 {
+				return tokens
+			}
+		}
+	}
+
+	if depth != 0 {
+		return tokens
+	}
+
+	return trimWhitespaceTokens(tokens[1 : len(tokens)-1])
+}
+
+func stripFullyWrappedParentheses(tokens []tokenizer.Token) ([]tokenizer.Token, bool) {
+	if len(tokens) < 2 {
+		return tokens, false
+	}
+
+	if tokens[0].Type != tokenizer.OPENED_PARENS || tokens[len(tokens)-1].Type != tokenizer.CLOSED_PARENS {
+		return tokens, false
+	}
+
+	depth := 0
+
+	for i, t := range tokens {
+		switch t.Type {
+		case tokenizer.OPENED_PARENS:
+			depth++
+		case tokenizer.CLOSED_PARENS:
+			depth--
+			if depth == 0 && i != len(tokens)-1 {
+				return tokens, false
+			}
+		}
+	}
+
+	if depth != 0 {
+		return tokens, false
+	}
+
+	return tokens[1 : len(tokens)-1], true
 }
 
 // convertCastSyntaxInTokens はCAST構文を含むトークン列を変換
 // 返り値: 変換後のトークン列, スキップするトークン数
-func (b *InstructionBuilder) convertCastSyntaxInTokens(tokens []tokenizer.Token, startIndex int) ([]tokenizer.Token, int) {
+func (b *InstructionBuilder) convertCastSyntaxInTokens(tokens []tokenizer.Token, startIndex int) ([]tokenizer.Token, int, int) {
 	token := tokens[startIndex]
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// PostgreSQL: CAST(expr AS type) → (expr)::type
 	if b.context.Dialect == snapsql.DialectPostgres && upper == "CAST" {
-		return b.convertCastToPostgres(tokens, startIndex)
+		converted, skip := b.convertCastToPostgres(tokens, startIndex)
+		return converted, skip, 0
 	}
 
 	// MySQL/SQLite/MariaDB: (expr)::type → CAST(expr AS type)
-	// 注意: "::"の前の"(expr)"は既に処理済みなので、ここでは変換をスキップ
-	// 代わりに、トークン列全体を先にスキャンして"::"を検出してから変換する必要がある
-	// 現時点では複雑すぎるため、この変換はサポートしない
+	if (b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectSQLite || b.context.Dialect == snapsql.DialectMariaDB) && token.Type == tokenizer.DOUBLE_COLON {
+		return b.convertCastFromDoubleColon(tokens, startIndex)
+	}
 
-	return nil, 0
+	return nil, 0, 0
 }
 
 // convertCastToPostgres は CAST(expr AS type) を (expr)::type に変換
@@ -1535,6 +2070,57 @@ func (b *InstructionBuilder) convertCastToPostgres(tokens []tokenizer.Token, cas
 	skipCount := i - castIndex
 
 	return result, skipCount
+}
+
+func (b *InstructionBuilder) convertCastFromDoubleColon(tokens []tokenizer.Token, doubleColonIndex int) ([]tokenizer.Token, int, int) {
+	exprStart := max(findCastExpressionStart(tokens, doubleColonIndex), 0)
+
+	exprTokens := trimWhitespaceTokens(tokens[exprStart:doubleColonIndex])
+	if len(exprTokens) == 0 {
+		return nil, 0, 0
+	}
+
+	exprTokens = stripOuterParentheses(exprTokens)
+	if len(exprTokens) == 0 {
+		return nil, 0, 0
+	}
+
+	typeEnd := findCastTypeEnd(tokens, doubleColonIndex)
+	if typeEnd <= doubleColonIndex+1 {
+		return nil, 0, 0
+	}
+
+	typeStart := doubleColonIndex + 1
+	for typeStart < typeEnd && tokens[typeStart].Type == tokenizer.WHITESPACE {
+		typeStart++
+	}
+
+	typeTrimEnd := typeEnd
+	for typeTrimEnd > typeStart && tokens[typeTrimEnd-1].Type == tokenizer.WHITESPACE {
+		typeTrimEnd--
+	}
+
+	typeTokens := trimWhitespaceTokens(tokens[typeStart:typeTrimEnd])
+	if len(typeTokens) == 0 {
+		return nil, 0, 0
+	}
+
+	pos := tokens[doubleColonIndex].Position
+	converted := make([]tokenizer.Token, 0, len(exprTokens)+len(typeTokens)+6)
+	converted = append(converted, tokenizer.Token{Type: tokenizer.CAST, Value: "CAST", Position: pos})
+	converted = append(converted, tokenizer.Token{Type: tokenizer.OPENED_PARENS, Value: "(", Position: pos})
+	converted = append(converted, exprTokens...)
+	converted = append(converted, tokenizer.Token{Type: tokenizer.WHITESPACE, Value: " ", Position: pos})
+	converted = append(converted, tokenizer.Token{Type: tokenizer.AS, Value: "AS", Position: pos})
+	converted = append(converted, tokenizer.Token{Type: tokenizer.WHITESPACE, Value: " ", Position: pos})
+	converted = append(converted, typeTokens...)
+	converted = append(converted, tokenizer.Token{Type: tokenizer.CLOSED_PARENS, Value: ")", Position: pos})
+
+	skipCount := max(typeTrimEnd-doubleColonIndex-1, 0)
+
+	leftConsumed := max(doubleColonIndex-exprStart, 0)
+
+	return converted, skipCount, leftConsumed
 }
 
 // addStatic は静的な SQL トークンを命令列に追加する
