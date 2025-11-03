@@ -194,11 +194,11 @@ type Pagination struct {
 SnapSQLはホストプログラミング言語（JavaやPythonなど）なしでユニットテストを実行します。
 
 ````markdown
-## テストケース
+## Test Cases
 
-### テスト: 基本的なユーザーリスト
+### Test: Basic user list
 
-**フィクスチャ（事前テストデータ）:**
+**Fixtures:**
 ```yaml
 # usersテーブル
 users:
@@ -212,7 +212,7 @@ departments:
   - {id: 2, name: "Design", description: "UI/UX design team"}
 ```
 
-**パラメータ:**
+**Parameters:**
 ```yaml
 project_id: 15
 include_profile: true
@@ -220,15 +220,15 @@ page_size: 3
 page: 1
 ```
 
-**期待される結果:**
+**Expected Results:**
 ```yaml
 - {id: 1, name: "John Doe", email: "john@example.com", created_at: "2024-01-15T10:30:00Z", departments__id: 1, departments__name: "Engineering"}
 - {id: 2, name: "Jane Smith", email: "jane@example.com", created_at: "2024-01-14T09:15:00Z", departments__id: 2, departments__name: "Design"}
 ```
 
-### テスト: 空の結果
+### Test: 空の結果
 
-**フィクスチャ（事前テストデータ）:**
+**Fixtures:**
 ```yaml
 # usersテーブル（非アクティブユーザーのみ）
 users:
@@ -239,13 +239,13 @@ departments:
   - {id: 1, name: "Engineering", description: "Software development team"}
 ```
 
-**パラメータ:**
+**Parameters:**
 ```yaml
 active: false
 limit: 10
 ```
 
-**期待される結果:**
+**Expected Results:**
 ```yaml
 []
 ```

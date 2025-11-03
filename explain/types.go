@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // Queryable represents the minimal query interface required by the collector.
@@ -15,7 +17,7 @@ type Queryable interface {
 type CollectorOptions struct {
 	DB      *sql.DB
 	Runner  Queryable
-	Dialect string
+	Dialect snapsql.Dialect
 	SQL     string
 	Args    []any
 	Timeout time.Duration
@@ -25,7 +27,7 @@ type CollectorOptions struct {
 
 // PlanDocument stores the raw plan output and its parsed representation.
 type PlanDocument struct {
-	Dialect  string
+	Dialect  snapsql.Dialect
 	RawJSON  []byte
 	RawText  string
 	Root     []*PlanNode

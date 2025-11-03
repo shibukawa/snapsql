@@ -16,7 +16,7 @@ var ErrConfigValidation = errors.New("configuration validation failed")
 
 // Config represents the SnapSQL configuration
 type Config struct {
-	Dialect       string                      `yaml:"dialect"`
+	Dialect       Dialect                     `yaml:"dialect"`
 	InputDir      string                      `yaml:"input_dir"` // Moved from GenerationConfig
 	ConstantFiles []string                    `yaml:"constant_files"`
 	Generation    GenerationConfig            `yaml:"generation"`
@@ -186,14 +186,14 @@ func LoadConfig(configPath string) (*Config, error) {
 // validateConfig validates the configuration for common errors and inconsistencies
 func validateConfig(config *Config) error {
 	// Validate dialect
-	validDialects := map[string]bool{
-		"postgres":  true,
-		"mysql":     true,
-		"sqlite":    true,
-		"sqlserver": true,
+	validDialects := map[Dialect]bool{
+		DialectPostgres: true,
+		DialectMySQL:    true,
+		DialectSQLite:   true,
+		DialectMariaDB:  true,
 	}
 	if config.Dialect != "" && !validDialects[config.Dialect] {
-		return fmt.Errorf("%w: invalid dialect '%s': must be one of postgres, mysql, sqlite, sqlserver", ErrConfigValidation, config.Dialect)
+		return fmt.Errorf("%w: invalid dialect '%s': must be one of postgres, mysql, sqlite, mariadb", ErrConfigValidation, config.Dialect)
 	}
 
 	// Validate generator configurations
@@ -297,7 +297,7 @@ func boolPtr(b bool) *bool {
 // getDefaultConfig returns the default configuration
 func getDefaultConfig() *Config {
 	return &Config{
-		Dialect:       "postgres",
+		Dialect:       DialectPostgres,
 		InputDir:      "./queries", // Moved from GenerationConfig
 		ConstantFiles: []string{},
 		// schema_extraction removed
@@ -401,7 +401,7 @@ func getDefaultConfig() *Config {
 // applyDefaults applies default values to missing configuration fields
 func applyDefaults(config *Config) {
 	if config.Dialect == "" {
-		config.Dialect = "postgres"
+		config.Dialect = DialectPostgres
 	}
 
 	if config.InputDir == "" {

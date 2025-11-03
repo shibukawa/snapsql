@@ -15,6 +15,7 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
 	"github.com/google/uuid"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -35,14 +36,14 @@ type SQLGenerator struct {
 	systemFields    map[string]intermediate.SystemFieldInfo
 	implicitMap     map[string]intermediate.ImplicitParameter
 	generated       map[string]any
-	dialect         string
+	dialect         snapsql.Dialect
 	celEnv          *cel.Env
 	loopBoundaries  map[int]int
 	loopBoundaryErr error
 }
 
 // NewSQLGenerator creates a new SQL generator
-func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect string) *SQLGenerator {
+func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect snapsql.Dialect) *SQLGenerator {
 	var (
 		instructions []intermediate.Instruction
 		expressions  []intermediate.CELExpression
@@ -507,14 +508,14 @@ func hasNext(val ref.Val) bool {
 	return false
 }
 
-func shouldEmitForDialect(current string, targets []string) bool {
+func shouldEmitForDialect(current snapsql.Dialect, targets []string) bool {
 	if len(targets) == 0 {
 		return true
 	}
 
-	current = strings.ToLower(strings.TrimSpace(current))
+	cur := strings.ToLower(strings.TrimSpace(string(current)))
 	for _, dialect := range targets {
-		if current == strings.ToLower(strings.TrimSpace(dialect)) {
+		if cur == strings.ToLower(strings.TrimSpace(dialect)) {
 			return true
 		}
 	}

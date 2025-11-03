@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"github.com/shibukawa/snapsql"
 	"iter"
 	"time"
 
@@ -83,14 +84,28 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+		// for mutation queries we treat this as an error.
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			var zero *BoardArchiveResult
+			return func(yield func(*BoardArchiveResult, error) bool) {
+				// yield the error to the caller and exit the iterator function
+				_ = yield(zero, rowLockErr)
+				return
+			}
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
 		RowLockClause: rowLockClause,
 		RowLockMode:   rowLockMode,
+	}
+	var whereMeta *snapsqlgo.WhereClauseMeta
+	whereMeta = &snapsqlgo.WhereClauseMeta{
+		Status:  snapsqlgo.WhereClauseStatusExists,
+		RawText: "WHERE",
 	}
 
 	// Build SQL
@@ -100,39 +115,29 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 		return query, args, nil
 	}
 	return func(yield func(*BoardArchiveResult, error) bool) {
-		logger := execCtx.QueryLogger()
-		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
-			return snapsqlgo.QueryLogMetadata{
-				FuncName:   "BoardArchive",
-				SourceFile: "query/BoardArchive",
-				Dialect:    "sqlite",
-				QueryType:  snapsqlgo.QueryLogQueryTypeExec,
-				Options:    queryLogOptions,
-			}, executor
-		})
-
 		query, args, err := buildQueryAndArgs()
 		if err != nil {
-			logger.SetErr(err)
 			_ = yield(nil, err)
 			return
 		}
-		logger.SetQuery(query, args)
+		// Enforce WHERE clause guard when mutations are generated
+		if err := snapsqlgo.EnforceNonEmptyWhereClause(ctx, "BoardArchive", snapsqlgo.MutationUpdate, whereMeta, query); err != nil {
+			_ = yield(nil, err)
+			return
+		}
+		// Handle mock execution if present
 		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "BoardArchive"); mockMatched {
 			if mockErr != nil {
-				logger.SetErr(mockErr)
 				_ = yield(nil, mockErr)
 				return
 			}
 			if mockExec.Err != nil {
-				logger.SetErr(mockExec.Err)
 				_ = yield(nil, mockExec.Err)
 				return
 			}
 
 			mapped, err := snapsqlgo.MapMockExecutionToSlice[BoardArchiveResult](mockExec)
 			if err != nil {
-				logger.SetErr(err)
 				_ = yield(nil, fmt.Errorf("BoardArchive: failed to map mock execution: %w", err))
 				return
 			}
@@ -146,10 +151,21 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 
 			return
 		}
+		// Prepare query logger
+		logger := execCtx.QueryLogger()
+		logger.SetQuery(query, args)
+		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+			return snapsqlgo.QueryLogMetadata{
+				FuncName:   "BoardArchive",
+				SourceFile: "query/BoardArchive",
+				Dialect:    string(snapsql.Dialect("sqlite")),
+				QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+				Options:    queryLogOptions,
+			}, executor
+		})
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
 			err = fmt.Errorf("BoardArchive: failed to prepare statement: %w (query: %s)", err, query)
-			logger.SetErr(err)
 			_ = yield(nil, err)
 			return
 		}
@@ -158,7 +174,6 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 		rows, err := stmt.QueryContext(ctx, args...)
 		if err != nil {
 			err = fmt.Errorf("BoardArchive: failed to execute query: %w", err)
-			logger.SetErr(err)
 			_ = yield(nil, err)
 			return
 		}
@@ -175,7 +190,6 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 				&item.UpdatedAt,
 			); err != nil {
 				err = fmt.Errorf("BoardArchive: failed to scan row: %w", err)
-				logger.SetErr(err)
 				_ = yield(nil, err)
 				return
 			}
@@ -186,7 +200,6 @@ func BoardArchive(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sn
 
 		if err := rows.Err(); err != nil {
 			err = fmt.Errorf("BoardArchive: error iterating rows: %w", err)
-			logger.SetErr(err)
 			_ = yield(nil, err)
 			return
 		}

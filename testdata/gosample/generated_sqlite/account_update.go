@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -108,7 +109,7 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
 			panic(rowLockErr)
 		}
@@ -175,7 +176,7 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "AccountUpdate",
 			SourceFile: "gosample/AccountUpdate",
-			Dialect:    "sqlite",
+			Dialect:    string(snapsql.DialectSQLite),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

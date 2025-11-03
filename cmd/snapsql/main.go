@@ -221,7 +221,7 @@ func (cmd *TestCmd) runWithSchemaDatabase(projectRoot string, config *snapsql.Co
 	}
 	defer cleanup()
 
-	config.Dialect = "sqlite"
+	config.Dialect = snapsql.DialectSQLite
 
 	if err := cmd.applySchema(ctx, db, cmd.Schema, verbose); err != nil {
 		return err
@@ -269,7 +269,7 @@ func (cmd *TestCmd) runWithTblsDatabase(projectRoot string, config *snapsql.Conf
 	}
 
 	dialect := canonicalDialectFromDriver(fallback.Driver)
-	config.Dialect = dialect
+	config.Dialect = snapsql.Dialect(dialect)
 
 	if verbose {
 		fmt.Printf("Using database configuration from tbls config (%s)\n", dialect)

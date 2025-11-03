@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -119,7 +120,7 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
 			panic(rowLockErr)
 		}
@@ -275,7 +276,7 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "UpdateAccountStatusConditional",
 			SourceFile: "gosample/UpdateAccountStatusConditional",
-			Dialect:    "sqlite",
+			Dialect:    string(snapsql.DialectSQLite),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

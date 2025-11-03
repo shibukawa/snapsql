@@ -1120,7 +1120,7 @@ func (b *InstructionBuilder) convertTimeFunctionInTokens(tokens []tokenizer.Toke
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// PostgreSQL/MySQL/MariaDB: CURRENT_TIMESTAMP → NOW()
-	if (b.context.Dialect == "postgres" || b.context.Dialect == "mysql" || b.context.Dialect == "mariadb") &&
+	if (b.context.Dialect == snapsql.DialectPostgres || b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectMariaDB) &&
 		upper == "CURRENT_TIMESTAMP" {
 		result := []tokenizer.Token{
 			{
@@ -1145,7 +1145,7 @@ func (b *InstructionBuilder) convertTimeFunctionInTokens(tokens []tokenizer.Toke
 
 	// SQLite: NOW() → CURRENT_TIMESTAMP
 	// NOW の後に ( と ) があるかチェック
-	if b.context.Dialect == "sqlite" && upper == "NOW" {
+	if b.context.Dialect == snapsql.DialectSQLite && upper == "NOW" {
 		// 次のトークンが ( かチェック
 		if startIndex+1 < len(tokens) {
 			nextToken := tokens[startIndex+1]
@@ -1270,7 +1270,7 @@ func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokeniz
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// PostgreSQL/SQLite: CONCAT(a, b, ...) → a || b || ...
-	if (b.context.Dialect == "postgres" || b.context.Dialect == "sqlite") && upper == "CONCAT" {
+	if (b.context.Dialect == snapsql.DialectPostgres || b.context.Dialect == snapsql.DialectSQLite) && upper == "CONCAT" {
 		// 次のトークンが開き括弧かチェック
 		if startIndex+1 >= len(tokens) {
 			return nil, 0
@@ -1368,7 +1368,7 @@ func (b *InstructionBuilder) convertStringConcatenationInTokens(tokens []tokeniz
 	// || 演算子の場合、この時点では変換しない
 	// 理由: || は二項演算子であり、複数の || が連続する場合の処理が複雑
 	// より高度な式解析が必要
-	if (b.context.Dialect == "mysql" || b.context.Dialect == "mariadb") && token.Type == tokenizer.CONCAT {
+	if (b.context.Dialect == snapsql.DialectMySQL || b.context.Dialect == snapsql.DialectMariaDB) && token.Type == tokenizer.CONCAT {
 		// 現在のバージョンでは || → CONCAT への変換は実装しない
 		// （二項演算子の解析が複雑であるため）
 		return nil, 0
@@ -1384,7 +1384,7 @@ func (b *InstructionBuilder) convertCastSyntaxInTokens(tokens []tokenizer.Token,
 	upper := strings.ToUpper(strings.TrimSpace(token.Value))
 
 	// PostgreSQL: CAST(expr AS type) → (expr)::type
-	if b.context.Dialect == "postgres" && upper == "CAST" {
+	if b.context.Dialect == snapsql.DialectPostgres && upper == "CAST" {
 		return b.convertCastToPostgres(tokens, startIndex)
 	}
 

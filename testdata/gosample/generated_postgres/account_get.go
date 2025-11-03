@@ -22,6 +22,7 @@ import (
 	"iter"
 
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -93,7 +94,7 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("postgres", rowLockMode)
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)
 		if rowLockErr != nil {
 			panic(rowLockErr)
 		}
@@ -161,7 +162,7 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "AccountGet",
 				SourceFile: "gosamplepg/AccountGet",
-				Dialect:    "postgres",
+				Dialect:    string(snapsql.DialectPostgres),
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor

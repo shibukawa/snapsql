@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -99,7 +100,7 @@ func TestSQLGenerator_Generate_BasicOperations(t *testing.T) {
 				Instructions:   tc.instructions,
 				CELExpressions: tc.expressions,
 			}
-			generator := NewSQLGenerator(format, "postgresql")
+			generator := NewSQLGenerator(format, snapsql.DialectPostgres)
 
 			sql, args, err := generator.Generate(tc.params)
 
@@ -188,7 +189,7 @@ func TestSQLGenerator_Generate_ConditionalOperations(t *testing.T) {
 				Instructions:   tc.instructions,
 				CELExpressions: tc.expressions,
 			}
-			generator := NewSQLGenerator(format, "postgresql")
+			generator := NewSQLGenerator(format, snapsql.DialectPostgres)
 
 			sql, args, err := generator.Generate(tc.params)
 
@@ -231,7 +232,7 @@ func TestSQLGenerator_SystemValueDefaults(t *testing.T) {
 		},
 	}
 
-	generator := NewSQLGenerator(format, "postgresql")
+	generator := NewSQLGenerator(format, snapsql.DialectPostgres)
 	params := map[string]any{}
 
 	sql, args, err := generator.Generate(params)
@@ -362,7 +363,7 @@ func TestSQLGenerator_Generate_LoopOperations(t *testing.T) {
 				CELExpressions: tc.expressions,
 			}
 
-			generator := NewSQLGenerator(format, "postgresql")
+			generator := NewSQLGenerator(format, snapsql.DialectPostgres)
 			sql, args, err := generator.Generate(tc.params)
 
 			assert.NoError(t, err)

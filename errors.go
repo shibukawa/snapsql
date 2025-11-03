@@ -171,7 +171,7 @@ var (
 	// ErrUnsupportedResponseAffinity indicates a declared response affinity is unsupported.
 	ErrUnsupportedResponseAffinity = errors.New("unsupported response affinity")
 	// ErrDialectMustBeSpecified indicates a dialect is required but missing.
-	ErrDialectMustBeSpecified = errors.New("dialect must be specified (postgres, mysql, sqlite)")
+	ErrDialectMustBeSpecified = errors.New("dialect must be specified (postgres, mysql, sqlite, mariadb)")
 
 	// ErrUnsupportedDMLStatementType indicates the DML statement type is unsupported.
 	// Type inference errors
@@ -221,9 +221,11 @@ var (
 	// ErrNoResponseFields indicates a generated query had no response fields.
 	ErrNoResponseFields = errors.New("no response fields found")
 	// ErrSchemaDirectoryNotFound indicates the ./schema directory is missing prior to generation.
-	ErrSchemaDirectoryNotFound = errors.New("schema directory not found; run 'snapsql pull' first")
+	// Note: schema files can be generated using tbls. Example:
+	//   tbls doc -o ./schema
+	ErrSchemaDirectoryNotFound = errors.New("schema directory not found; generate schema YAML files (for example with tbls: `tbls doc -o ./schema`)")
 	// ErrNoSchemaYAMLFound indicates no schema YAML files were discovered.
-	ErrNoSchemaYAMLFound = errors.New("no schema YAML files found; run 'snapsql schema pull'")
+	ErrNoSchemaYAMLFound = errors.New("no schema YAML files found; generate schema YAML with tbls (for example: `tbls doc -o ./schema`) or place schema files under ./schema")
 
 	// ErrNotFound indicates a requested entity (affinity=one) was not found.
 	ErrNotFound = errors.New("not found")

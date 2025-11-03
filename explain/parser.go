@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 var (
@@ -13,12 +15,13 @@ var (
 )
 
 // ParsePlanJSON converts the raw JSON bytes into PlanNode structures.
-func ParsePlanJSON(dialect string, data []byte) ([]*PlanNode, error) {
+func ParsePlanJSON(dialect snapsql.Dialect, data []byte) ([]*PlanNode, error) {
 	if len(data) == 0 {
 		return nil, errPlanJSONEmpty
 	}
 
-	switch strings.ToLower(dialect) {
+	d := strings.ToLower(string(dialect))
+	switch d {
 	case "postgres", "postgresql", "pgx":
 		return parsePostgresPlan(data)
 	case "mysql", "mariadb":

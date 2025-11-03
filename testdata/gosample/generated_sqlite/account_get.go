@@ -22,6 +22,7 @@ import (
 	"iter"
 
 	"github.com/google/cel-go/cel"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -92,11 +93,8 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 	}
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
-		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
-		if rowLockErr != nil {
-			panic(rowLockErr)
-		}
+		// SQLite: SELECT queries ignore row-lock clauses
+		rowLockClause, _ = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
 		RowLockClause: rowLockClause,
@@ -161,7 +159,7 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "AccountGet",
 				SourceFile: "gosample/AccountGet",
-				Dialect:    "sqlite",
+				Dialect:    string(snapsql.DialectSQLite),
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor

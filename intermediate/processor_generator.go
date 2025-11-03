@@ -76,8 +76,8 @@ func newGenerationContextFromProcessing(ctx *ProcessingContext) *codegenerator.G
 	return genCtx
 }
 
-func resolveGenerationDialect(dialect string) snapsql.Dialect {
-	switch strings.ToLower(dialect) {
+func resolveGenerationDialect(dialect snapsql.Dialect) snapsql.Dialect {
+	switch strings.ToLower(string(dialect)) {
 	case "mysql":
 		return snapsql.DialectMySQL
 	case "sqlite", "sqlite3":

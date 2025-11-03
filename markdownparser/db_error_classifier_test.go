@@ -5,9 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"strings"
+
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/shibukawa/snapsql"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -139,7 +142,7 @@ func setupSQLite(t *testing.T) (*sql.DB, func()) {
 }
 
 // setupTestTable creates a test table with various constraints
-func setupTestTable(t *testing.T, db *sql.DB, dialect string) {
+func setupTestTable(t *testing.T, db *sql.DB, dialect snapsql.Dialect) {
 	t.Helper()
 
 	// Drop table if exists
@@ -149,7 +152,7 @@ func setupTestTable(t *testing.T, db *sql.DB, dialect string) {
 	// Create users table with various constraints
 	var createUserSQL string
 
-	switch dialect {
+	switch strings.ToLower(string(dialect)) {
 	case "postgres":
 		createUserSQL = `
 			CREATE TABLE test_users (
@@ -183,7 +186,7 @@ func setupTestTable(t *testing.T, db *sql.DB, dialect string) {
 	// Create orders table for foreign key tests
 	var createOrderSQL string
 
-	switch dialect {
+	switch strings.ToLower(string(dialect)) {
 	case "postgres":
 		createOrderSQL = `
 			CREATE TABLE test_orders (
@@ -222,7 +225,7 @@ func TestClassifyDatabaseError_SQLite(t *testing.T) {
 	db, cleanup := setupSQLite(t)
 	defer cleanup()
 
-	setupTestTable(t, db, "sqlite")
+	setupTestTable(t, db, snapsql.DialectSQLite)
 
 	t.Run("unique violation", func(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM test_users")
@@ -280,7 +283,7 @@ func TestClassifyDatabaseError_PostgreSQL(t *testing.T) {
 	db, cleanup := setupPostgres(t)
 	defer cleanup()
 
-	setupTestTable(t, db, "postgres")
+	setupTestTable(t, db, snapsql.DialectPostgres)
 
 	t.Run("unique violation", func(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM test_orders")
@@ -339,7 +342,7 @@ func TestClassifyDatabaseError_MySQL(t *testing.T) {
 	db, cleanup := setupMySQL(t)
 	defer cleanup()
 
-	setupTestTable(t, db, "mysql")
+	setupTestTable(t, db, snapsql.DialectMySQL)
 
 	t.Run("unique violation", func(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM test_orders")
@@ -398,7 +401,7 @@ func TestMatchesExpectedError(t *testing.T) {
 	db, cleanup := setupSQLite(t)
 	defer cleanup()
 
-	setupTestTable(t, db, "sqlite")
+	setupTestTable(t, db, snapsql.DialectSQLite)
 
 	t.Run("match unique violation with space notation", func(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM test_users")

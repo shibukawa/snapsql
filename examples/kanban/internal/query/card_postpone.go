@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"github.com/shibukawa/snapsql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -108,25 +109,25 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+		// for mutation queries we treat this as an error.
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			// non-iterator: return the zero value result and the error
+			return result, rowLockErr
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
 		RowLockClause: rowLockClause,
 		RowLockMode:   rowLockMode,
 	}
-	logger := execCtx.QueryLogger()
-	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
-		return snapsqlgo.QueryLogMetadata{
-			FuncName:   "CardPostpone",
-			SourceFile: "query/CardPostpone",
-			Dialect:    "sqlite",
-			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
-			Options:    queryLogOptions,
-		}, executor
-	})
+	var whereMeta *snapsqlgo.WhereClauseMeta
+	whereMeta = &snapsqlgo.WhereClauseMeta{
+		Status:  snapsqlgo.WhereClauseStatusExists,
+		RawText: "WHERE",
+	}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
@@ -158,17 +159,18 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
-		logger.SetErr(err)
 		return nil, err
 	}
-	logger.SetQuery(query, args)
+	// Enforce WHERE clause guard when mutations are generated
+	if err := snapsqlgo.EnforceNonEmptyWhereClause(ctx, "CardPostpone", snapsqlgo.MutationUpdate, whereMeta, query); err != nil {
+		return nil, err
+	}
+	// Handle mock execution if present
 	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "CardPostpone"); mockMatched {
 		if mockErr != nil {
-			logger.SetErr(mockErr)
 			return nil, mockErr
 		}
 		if mockExec.Err != nil {
-			logger.SetErr(mockExec.Err)
 			return nil, mockExec.Err
 		}
 		mockResult := mockExec.SQLResult()
@@ -179,27 +181,35 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 		if len(mockExec.ExpectedRows()) > 0 {
 			mapped, err := snapsqlgo.MapMockExecutionToStruct[any](mockExec)
 			if err != nil {
-				logger.SetErr(err)
 				return nil, fmt.Errorf("CardPostpone: failed to map mock execution: %w", err)
 			}
 			result = mapped
 		}
 		return result, nil
 	}
+	// Prepare query logger
+	logger := execCtx.QueryLogger()
+	logger.SetQuery(query, args)
+	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+		return snapsqlgo.QueryLogMetadata{
+			FuncName:   "CardPostpone",
+			SourceFile: "query/CardPostpone",
+			Dialect:    string(snapsql.Dialect("sqlite")),
+			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+			Options:    queryLogOptions,
+		}, executor
+	})
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
 		err = fmt.Errorf("CardPostpone: failed to prepare statement: %w (query: %s)", err, query)
-		logger.SetErr(err)
 		return nil, err
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
 	_, err = stmt.ExecContext(ctx, args...)
 	if err != nil {
-		err = fmt.Errorf("CardPostpone: failed to execute statement: %w", err)
-		logger.SetErr(err)
-		return nil, err
+		return nil, fmt.Errorf("CardPostpone: failed to execute statement: %w", err)
 	}
 
 	return result, nil

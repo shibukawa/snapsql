@@ -3,6 +3,8 @@ package codegenerator
 import (
 	"strconv"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // OptimizedInstruction represents an optimized instruction derived from runtime generation.
@@ -21,7 +23,7 @@ type OptimizedInstruction struct {
 }
 
 // OptimizeInstructions filters and optimizes instructions for a specific dialect.
-func OptimizeInstructions(instructions []Instruction, dialect string) ([]OptimizedInstruction, error) {
+func OptimizeInstructions(instructions []Instruction, dialect snapsql.Dialect) ([]OptimizedInstruction, error) {
 	var result []OptimizedInstruction
 
 	type systemClauseState struct {
@@ -205,8 +207,8 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 	return result
 }
 
-func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) []OptimizedInstruction {
-	d := strings.ToLower(strings.TrimSpace(dialect))
+func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect snapsql.Dialect) []OptimizedInstruction {
+	d := strings.ToLower(strings.TrimSpace(string(dialect)))
 	if d != "postgres" && d != "postgresql" && d != "pgx" && d != "pg" {
 		return instructions
 	}

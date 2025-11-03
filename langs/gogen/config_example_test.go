@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -93,7 +94,7 @@ func TestConfigurationExamples(t *testing.T) {
 
 			generator := New(format,
 				WithConfig(tt.config, tt.outputPath),
-				WithDialect("postgresql"),
+				WithDialect(snapsql.DialectPostgres),
 			)
 
 			err := generator.Generate(&output)

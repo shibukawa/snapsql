@@ -35,7 +35,7 @@ func processSQLBuilderWithDialect(format *intermediate.IntermediateFormat, diale
 	}
 
 	// Use intermediate package's optimization with dialect filtering
-	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, dialect)
+	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, snapsql.Dialect(dialect))
 	if err != nil {
 		return nil, fmt.Errorf("failed to optimize instructions: %w", err)
 	}

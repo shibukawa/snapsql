@@ -1,8 +1,6 @@
 # SQL dialect configuration
 dialect: "postgres"  # postgres, mysql, sqlite
 
-databases:
-# Constant definition files (expandable with /*# */)
 constant_files:
   - "./constants/database.yaml"
   - "./constants/tables.yaml"

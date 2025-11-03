@@ -387,16 +387,16 @@ func isWordCharBeforePlaceholder(b byte) bool {
 }
 
 // getDialectFromDriver converts database driver name to dialect
-func getDialectFromDriver(driver string) string {
+func getDialectFromDriver(driver string) snapsql.Dialect {
 	switch driver {
 	case "postgres", "pgx":
-		return "postgresql"
+		return snapsql.DialectPostgres
 	case "mysql":
-		return "mysql"
+		return snapsql.DialectMySQL
 	case "sqlite3":
-		return "sqlite"
+		return snapsql.DialectSQLite
 	default:
-		return "postgresql" // default
+		return snapsql.DialectPostgres // default
 	}
 }
 

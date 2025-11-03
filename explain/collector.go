@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // Collect executes an EXPLAIN statement for the given SQL.
@@ -20,7 +22,7 @@ func Collect(ctx context.Context, opts CollectorOptions) (*PlanDocument, error) 
 
 	dialect := normalizeDialect(opts.Dialect)
 
-	query, analyze, err := buildExplainQuery(dialect, opts)
+	query, analyze, err := buildExplainQuery(opts.Dialect, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +63,7 @@ func Collect(ctx context.Context, opts CollectorOptions) (*PlanDocument, error) 
 
 	var doc PlanDocument
 
-	doc.Dialect = dialect
+	doc.Dialect = opts.Dialect
 
 	switch dialect {
 	case "postgres", "postgresql", "pgx":
@@ -105,7 +107,7 @@ func Collect(ctx context.Context, opts CollectorOptions) (*PlanDocument, error) 
 
 	// Parse plan JSON when available
 	if len(doc.RawJSON) > 0 {
-		nodes, parseErr := ParsePlanJSON(dialectAlias(dialect), doc.RawJSON)
+		nodes, parseErr := ParsePlanJSON(opts.Dialect, doc.RawJSON)
 		if parseErr != nil {
 			doc.Warnings = append(doc.Warnings, parseErr)
 		} else {
@@ -119,7 +121,9 @@ func Collect(ctx context.Context, opts CollectorOptions) (*PlanDocument, error) 
 	return &doc, nil
 }
 
-func buildExplainQuery(dialect string, opts CollectorOptions) (string, bool, error) {
+func buildExplainQuery(d snapsql.Dialect, opts CollectorOptions) (string, bool, error) {
+	dialect := normalizeDialect(d)
+
 	switch dialect {
 	case "postgres", "postgresql", "pgx":
 		analyzeFlag := "false"
@@ -187,13 +191,4 @@ func extractFirstColumn(raw []sql.RawBytes) []byte {
 	}
 	// Copy to avoid retaining reference to underlying buffer
 	return append([]byte(nil), []byte(b)...)
-}
-
-func dialectAlias(d string) string {
-	switch d {
-	case "postgresql", "pgx":
-		return "postgres"
-	default:
-		return d
-	}
 }
