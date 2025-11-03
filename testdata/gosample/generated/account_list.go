@@ -14,34 +14,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pg
+package gosample
 
 import (
 	"context"
 	"fmt"
 	"iter"
-	"time"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// BoardListResult represents the response structure for BoardList
-type BoardListResult struct {
-	ID         int        `json:"id"`
-	Name       string     `json:"name"`
-	Status     string     `json:"status"`
-	ArchivedAt *time.Time `json:"archived_at"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+// AccountListResult represents the response structure for AccountList
+type AccountListResult struct {
+	ID     int     `json:"id"`
+	Name   *string `json:"name"`
+	Status *string `json:"status"`
 }
 
-// BoardList specific CEL programs and mock path
+// AccountList specific CEL programs and mock path
 var (
-	boardListPrograms []cel.Program
+	accountListPrograms []cel.Program
 )
 
-const boardListMockPath = ""
+const accountListMockPath = ""
 
 func init() {
 
@@ -60,19 +56,17 @@ func init() {
 		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create BoardList CEL environment 0: %v", err))
+			panic(fmt.Sprintf("failed to create AccountList CEL environment 0: %v", err))
 		}
 		celEnvironments[0] = env0
 	}
 
 	// Create programs for each expression using the corresponding environment
-	boardListPrograms = make([]cel.Program, 0)
+	accountListPrograms = make([]cel.Program, 0)
 }
 
-// BoardList Fetches every board with basic metadata, ordered by most recently created first. Used for the dashboard overview.
-func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*BoardListResult, error] {
-
-	funcConfig := snapsqlgo.GetFunctionConfig(ctx, "boardList", "[]boardlistresult")
+// AccountList - []AccountListResult Affinity
+func AccountList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*AccountListResult, error] {
 
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
@@ -85,9 +79,16 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("postgres", rowLockMode)
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			var zero *AccountListResult
+			return func(yield func(*AccountListResult, error) bool) {
+				// yield the error to the caller and exit the iterator function
+				_ = yield(zero, rowLockErr)
+				return
+			}
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
@@ -97,49 +98,38 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT id, name, status, archived_at, created_at, updated_at FROM boards ORDER BY created_at DESC "
+		query := "SELECT id, name, status FROM accounts ORDER BY id DESC "
 		args := make([]any, 0)
 		return query, args, nil
 	}
-	return func(yield func(*BoardListResult, error) bool) {
-		logger := execCtx.QueryLogger()
-		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
-			return snapsqlgo.QueryLogMetadata{
-				FuncName:   "BoardList",
-				SourceFile: "pg/BoardList",
-				Dialect:    "postgres",
-				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
-				Options:    queryLogOptions,
-			}, executor
-		})
-
+	return func(yield func(*AccountListResult, error) bool) {
 		query, args, err := buildQueryAndArgs()
 		if err != nil {
-			logger.SetErr(err)
 			_ = yield(nil, err)
 			return
 		}
 		if queryLogOptions.RowLockClause != "" {
 			query += queryLogOptions.RowLockClause
 		}
-		logger.SetQuery(query, args)
-		if funcConfig != nil && len(funcConfig.MockDataNames) > 0 {
-			mockData, err := snapsqlgo.GetMockDataFromFiles(boardListMockPath, funcConfig.MockDataNames)
-			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("BoardList: failed to get mock data: %w", err))
+		// Handle mock execution if present
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "AccountList"); mockMatched {
+			if mockErr != nil {
+				_ = yield(nil, mockErr)
+				return
+			}
+			if mockExec.Err != nil {
+				_ = yield(nil, mockExec.Err)
 				return
 			}
 
-			rows, err := snapsqlgo.MapMockDataToStruct[[]BoardListResult](mockData)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[AccountListResult](mockExec)
 			if err != nil {
-				logger.SetErr(err)
-				_ = yield(nil, fmt.Errorf("BoardList: failed to map mock data to []BoardListResult struct: %w", err))
+				_ = yield(nil, fmt.Errorf("AccountList: failed to map mock execution: %w", err))
 				return
 			}
 
-			for i := range rows {
-				item := rows[i]
+			for i := range mapped {
+				item := mapped[i]
 				if !yield(&item, nil) {
 					return
 				}
@@ -147,10 +137,20 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 
 			return
 		}
+		// Prepare query logger
+		logger := execCtx.QueryLogger()
+		logger.SetQuery(query, args)
+		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+			return snapsqlgo.QueryLogMetadata{
+				FuncName:   "AccountList",
+				SourceFile: "gosample/AccountList",
+				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
+				Options:    queryLogOptions,
+			}, executor
+		})
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			err = fmt.Errorf("BoardList: failed to prepare statement: %w (query: %s)", err, query)
-			logger.SetErr(err)
+			err = fmt.Errorf("AccountList: failed to prepare statement: %w (query: %s)", err, query)
 			_ = yield(nil, err)
 			return
 		}
@@ -158,25 +158,20 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 
 		rows, err := stmt.QueryContext(ctx, args...)
 		if err != nil {
-			err = fmt.Errorf("BoardList: failed to execute query: %w", err)
-			logger.SetErr(err)
+			err = fmt.Errorf("AccountList: failed to execute query: %w", err)
 			_ = yield(nil, err)
 			return
 		}
 		defer rows.Close()
 
 		for rows.Next() {
-			item := new(BoardListResult)
+			item := new(AccountListResult)
 			if err := rows.Scan(
 				&item.ID,
 				&item.Name,
 				&item.Status,
-				&item.ArchivedAt,
-				&item.CreatedAt,
-				&item.UpdatedAt,
 			); err != nil {
-				err = fmt.Errorf("BoardList: failed to scan row: %w", err)
-				logger.SetErr(err)
+				err = fmt.Errorf("AccountList: failed to scan row: %w", err)
 				_ = yield(nil, err)
 				return
 			}
@@ -186,8 +181,7 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 		}
 
 		if err := rows.Err(); err != nil {
-			err = fmt.Errorf("BoardList: error iterating rows: %w", err)
-			logger.SetErr(err)
+			err = fmt.Errorf("AccountList: error iterating rows: %w", err)
 			_ = yield(nil, err)
 			return
 		}

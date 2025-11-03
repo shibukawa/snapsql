@@ -328,9 +328,7 @@ Dialect-specific processing is represented as dedicated instructions:
 {
   "instructions": [
     {"op": "EMIT_STATIC", "value": "SELECT ", "pos": "1:1"},
-    {"op": "EMIT_IF_DIALECT", "dialect": "postgresql", "sql_fragment": "price::DECIMAL(10,2)", "pos": "1:8"},
-    {"op": "EMIT_IF_DIALECT", "dialect": "mysql", "sql_fragment": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
-    {"op": "EMIT_IF_DIALECT", "dialect": "sqlite", "sql_fragment": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
+  {"op": "EMIT_STATIC", "value": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
     {"op": "EMIT_STATIC", "value": " FROM products", "pos": "1:25"}
   ]
 }
@@ -882,7 +880,7 @@ The instruction set is an executable representation of SQL templates. The curren
 - **BOUNDARY**: Handle trailing delimiters (comma, AND, OR)
 
 #### Dialect Support Instructions
-- **EMIT_IF_DIALECT**: Output database dialect-specific SQL fragments
+-- Dialect-specific switching instruction: Output database dialect-specific SQL fragments (the pipeline typically resolves these into final fragments)
 
 ### Instruction Examples
 
@@ -905,7 +903,7 @@ The instruction set is an executable representation of SQL templates. The curren
 {"op": "LOOP_END", "pos": "11:1"}
 {"op": "EMIT_SYSTEM_LIMIT", "default_value": "100", "pos": "12:1"}
 {"op": "EMIT_SYSTEM_OFFSET", "default_value": "0", "pos": "13:1"}
-{"op": "EMIT_IF_DIALECT", "dialect": "postgresql", "sql_fragment": "price::DECIMAL(10,2)", "pos": "14:1"}
+{"op": "EMIT_STATIC", "value": "price::DECIMAL(10,2)", "pos": "14:1"}
 ```
 
 ## Implementation Examples
@@ -1164,7 +1162,7 @@ The intermediate format includes JSON schema definition for validation:
             "enum": [
               "EMIT_STATIC", "EMIT_EVAL", "IF", "ELSE_IF", "ELSE", "END", 
               "LOOP_START", "LOOP_END", "EMIT_SYSTEM_LIMIT", "EMIT_SYSTEM_OFFSET", 
-              "EMIT_SYSTEM_VALUE", "BOUNDARY", "EMIT_IF_DIALECT"
+              "EMIT_SYSTEM_VALUE", "BOUNDARY"
             ]
           },
           "value": {"type": "string"},

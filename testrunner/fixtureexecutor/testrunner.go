@@ -49,7 +49,7 @@ type TestRunner struct {
 }
 
 // NewTestRunner creates a new test runner
-func NewTestRunner(db *sql.DB, dialect string, options *ExecutionOptions) *TestRunner {
+func NewTestRunner(db *sql.DB, dialect snapsql.Dialect, options *ExecutionOptions) *TestRunner {
 	if options == nil {
 		options = DefaultExecutionOptions()
 	}

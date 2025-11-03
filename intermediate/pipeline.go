@@ -37,8 +37,8 @@ type ProcessingContext struct {
 	TableInfo   map[string]*snapsql.TableInfo
 	TypeInfoMap map[string]any
 
-	// Selected dialect (normalized lowercase) from config; empty means default postgres
-	Dialect string
+	// Selected dialect (normalized) from config; empty means default postgres
+	Dialect snapsql.Dialect
 
 	// Processing results
 	Environments   []string
@@ -453,23 +453,23 @@ func CreateDefaultPipeline(stmt parser.StatementNode, funcDef *parser.FunctionDe
 	return pipeline
 }
 
-// normalizeDialect returns a normalized dialect string (postgres, mysql, sqlite, mariadb)
-func normalizeDialect(cfg *snapsql.Config) string {
+// normalizeDialect returns a normalized Dialect (postgres, mysql, sqlite, mariadb)
+func normalizeDialect(cfg *snapsql.Config) snapsql.Dialect {
 	if cfg == nil || cfg.Dialect == "" {
-		return "postgres"
+		return snapsql.DialectPostgres
 	}
 
-	d := strings.ToLower(cfg.Dialect)
+	d := strings.ToLower(string(cfg.Dialect))
 	switch d {
 	case "postgres", "postgresql", "pg":
-		return "postgres"
+		return snapsql.DialectPostgres
 	case "mysql":
-		return "mysql"
+		return snapsql.DialectMySQL
 	case "sqlite", "sqlite3":
-		return "sqlite"
+		return snapsql.DialectSQLite
 	case "mariadb":
-		return "mariadb"
+		return snapsql.DialectMariaDB
 	default:
-		return d
+		return snapsql.Dialect(d)
 	}
 }

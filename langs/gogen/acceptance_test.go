@@ -82,7 +82,7 @@ func TestAcceptanceGeneration(t *testing.T) {
 			// Generate Go code
 			var goCode strings.Builder
 
-			goGen := New(format, WithPackageName("generated"), WithDialect("postgresql"))
+			goGen := New(format, WithPackageName("generated"), WithDialect(snapsql.DialectPostgres))
 
 			err = goGen.Generate(&goCode)
 			if err != nil {

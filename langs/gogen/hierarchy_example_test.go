@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	snapsql "github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -59,7 +60,7 @@ func TestHierarchicalGeneration(t *testing.T) {
 
 	generator := New(format,
 		WithHierarchy(hierarchy),
-		WithDialect("postgresql"),
+		WithDialect(snapsql.DialectPostgres),
 		WithBaseImport("github.com/example/project/generated"),
 	)
 

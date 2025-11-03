@@ -31,7 +31,7 @@ var (
 type FixtureTestRunner struct {
 	projectRoot  string
 	db           *sql.DB
-	dialect      string
+	dialect      snapsql.Dialect
 	verbose      bool
 	runPattern   string
 	options      *fixtureexecutor.ExecutionOptions
@@ -56,7 +56,7 @@ type fileTestSummary struct {
 
 // NewFixtureTestRunner creates a new fixture test runner
 
-func NewFixtureTestRunner(projectRoot string, db *sql.DB, dialect string) *FixtureTestRunner {
+func NewFixtureTestRunner(projectRoot string, db *sql.DB, dialect snapsql.Dialect) *FixtureTestRunner {
 	runner := &FixtureTestRunner{
 		projectRoot:  projectRoot,
 		db:           db,

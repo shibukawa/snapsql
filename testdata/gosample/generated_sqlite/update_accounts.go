@@ -26,6 +26,11 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
+// (deprecated) UpdateAccountStatusConditionalResult_Old represents the response structure for UpdateAccountStatusConditional
+type UpdateAccountStatusConditionalResult_Old struct {
+	AffectedRows int `json:"affected_rows"`
+}
+
 // UpdateAccountStatusConditional specific CEL programs and mock path
 var (
 	updateAccountStatusConditionalPrograms []cel.Program
@@ -101,7 +106,7 @@ func init() {
 	}
 }
 
-// UpdateAccountStatusConditional - sql.Result Affinity
+// UpdateAccountStatusConditional - any Affinity
 func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBExecutor, status string, accountID int, includeFilter bool, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
 	var result sql.Result
 
@@ -119,9 +124,14 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+		// for mutation queries we treat this as an error.
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			// non-iterator: return the zero value result and the error
+			return result, rowLockErr
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
@@ -275,7 +285,6 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "UpdateAccountStatusConditional",
 			SourceFile: "gosample/UpdateAccountStatusConditional",
-			Dialect:    "sqlite",
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor
@@ -288,12 +297,10 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	execResult, err := stmt.ExecContext(ctx, args...)
+	_, err = stmt.ExecContext(ctx, args...)
 	if err != nil {
-		err = fmt.Errorf("UpdateAccountStatusConditional: failed to execute statement: %w", err)
-		return nil, err
+		return nil, fmt.Errorf("UpdateAccountStatusConditional: failed to execute statement: %w", err)
 	}
-	result = execResult
 
 	return result, nil
 }

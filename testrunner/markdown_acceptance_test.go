@@ -60,12 +60,12 @@ func TestMarkdownAcceptance(t *testing.T) {
 		}
 
 		dialect := detectDialect(filepath.Join(baseDir, name))
-		if dialect == "" {
-			dialect = "sqlite"
+		if string(dialect) == "" {
+			dialect = snapsql.Dialect("sqlite")
 		}
 		// frontmatterで dialect: "sqlite" のように引用符付きなので除去
-		dialect = strings.Trim(dialect, "\"' ")
-		groups[dialect] = append(groups[dialect], name)
+		dialectStr := strings.Trim(string(dialect), "\"' ")
+		groups[dialectStr] = append(groups[dialectStr], name)
 	}
 
 	for dialect, files := range groups {
@@ -75,7 +75,7 @@ func TestMarkdownAcceptance(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 			defer cancel()
 
-			db, cleanup := startDialectDB(ctx, t, d)
+			db, cleanup := startDialectDB(ctx, t, snapsql.Dialect(d))
 			defer cleanup()
 
 			applyInitSQL(t, db, baseDir)
@@ -104,8 +104,8 @@ func TestMarkdownAcceptance(t *testing.T) {
 						t.Fatalf("parse %s: %v", name, err)
 					}
 
-					schemaMap := loadTestSchema(t, baseDir, d)
-					exec := fr.NewExecutor(db, d, schemaMap)
+					schemaMap := loadTestSchema(t, baseDir, snapsql.Dialect(d))
+					exec := fr.NewExecutor(db, snapsql.Dialect(d), schemaMap)
 					exec.SetBaseDir(baseDir)
 
 					failedAny := false
@@ -151,10 +151,10 @@ func TestMarkdownAcceptance(t *testing.T) {
 }
 
 // startDialectDB: dialectごとに1コンテナ(or in-memory)起動
-func startDialectDB(ctx context.Context, t *testing.T, dialect string) (*sql.DB, func()) {
+func startDialectDB(ctx context.Context, t *testing.T, dialect snapsql.Dialect) (*sql.DB, func()) {
 	t.Helper()
 
-	switch strings.ToLower(dialect) {
+	switch strings.ToLower(string(dialect)) {
 	case "postgres", "postgresql":
 		cont, err := postgres.Run(ctx,
 			"postgres:18-alpine",
@@ -305,10 +305,10 @@ func splitSQLStatements(sqlText string) []string {
 }
 
 // detectDialect: 先頭frontmatterを簡易解析して dialect: を取得
-func detectDialect(path string) string {
+func detectDialect(path string) snapsql.Dialect {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return snapsql.Dialect("")
 	}
 
 	txt := string(b)
@@ -335,19 +335,19 @@ func detectDialect(path string) string {
 				v := strings.TrimSpace(parts[1])
 				v = strings.Trim(v, "\"'")
 
-				return v
+				return snapsql.Dialect(v)
 			}
 		}
 	}
 
-	return ""
+	return snapsql.Dialect("")
 }
 
 // loadTestSchema: __schema_<dialect>.yaml を読み込み tableInfo map を生成
-func loadTestSchema(t *testing.T, baseDir, dialect string) map[string]*snapsql.TableInfo {
+func loadTestSchema(t *testing.T, baseDir string, dialect snapsql.Dialect) map[string]*snapsql.TableInfo {
 	t.Helper()
 	// 今回は postgres のみ用意。存在しなければ空map
-	file := filepath.Join(baseDir, "__schema_"+dialect+".yaml")
+	file := filepath.Join(baseDir, "__schema_"+string(dialect)+".yaml")
 	if _, err := os.Stat(file); err != nil {
 		return map[string]*snapsql.TableInfo{}
 	}

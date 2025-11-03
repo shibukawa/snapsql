@@ -357,9 +357,7 @@ CREATE TABLE users (id SERIAL PRIMARY KEY)
 {
   "instructions": [
     {"op": "EMIT_STATIC", "value": "SELECT ", "pos": "1:1"},
-    {"op": "EMIT_IF_DIALECT", "dialect": "postgresql", "sql_fragment": "price::DECIMAL(10,2)", "pos": "1:8"},
-    {"op": "EMIT_IF_DIALECT", "dialect": "mysql", "sql_fragment": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
-    {"op": "EMIT_IF_DIALECT", "dialect": "sqlite", "sql_fragment": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
+  {"op": "EMIT_STATIC", "value": "CAST(price AS DECIMAL(10,2))", "pos": "1:8"},
     {"op": "EMIT_STATIC", "value": " FROM products", "pos": "1:25"}
   ]
 }
@@ -912,7 +910,7 @@ include_details: bool
 - **BOUNDARY**: 末尾区切り文字（カンマ、AND、OR）の処理
 
 #### 方言対応命令
-- **EMIT_IF_DIALECT**: データベース方言固有のSQL断片出力
+-- 方言切替用命令: データベース方言固有の SQL 断片出力を表す（現在はパイプラインで解決されることが想定される）
 
 ### 命令の例
 
@@ -935,7 +933,7 @@ include_details: bool
 {"op": "LOOP_END", "pos": "11:1"}
 {"op": "EMIT_SYSTEM_LIMIT", "default_value": "100", "pos": "12:1"}
 {"op": "EMIT_SYSTEM_OFFSET", "default_value": "0", "pos": "13:1"}
-{"op": "EMIT_IF_DIALECT", "dialect": "postgresql", "sql_fragment": "price::DECIMAL(10,2)", "pos": "14:1"}
+{"op": "EMIT_STATIC", "value": "price::DECIMAL(10,2)", "pos": "14:1"}
 ```
 
 ## 実装例
@@ -1194,7 +1192,7 @@ OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
             "enum": [
               "EMIT_STATIC", "EMIT_EVAL", "IF", "ELSE_IF", "ELSE", "END", 
               "LOOP_START", "LOOP_END", "EMIT_SYSTEM_LIMIT", "EMIT_SYSTEM_OFFSET", 
-              "EMIT_SYSTEM_VALUE", "BOUNDARY", "EMIT_IF_DIALECT"
+              "EMIT_SYSTEM_VALUE", "BOUNDARY"
             ]
           },
           "value": {"type": "string"},

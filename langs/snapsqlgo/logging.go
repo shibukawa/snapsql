@@ -57,7 +57,6 @@ type QueryLogEntry struct {
 	SourceFile string
 	SQL        string
 	Args       []any
-	Dialect    string
 	StartAt    time.Time
 	EndAt      time.Time
 	Duration   time.Duration
@@ -71,7 +70,6 @@ type QueryLogEntry struct {
 type QueryLogMetadata struct {
 	FuncName   string
 	SourceFile string
-	Dialect    string
 	QueryType  QueryLogQueryType
 	Options    QueryOptionsSnapshot
 }
@@ -147,7 +145,6 @@ func (l *QueryLogger) Write(ctx context.Context, metaProvider func() (QueryLogMe
 	entry := QueryLogEntry{
 		FuncName:   metadata.FuncName,
 		SourceFile: metadata.SourceFile,
-		Dialect:    metadata.Dialect,
 		Options:    metadata.Options,
 		StartAt:    l.startAt,
 		EndAt:      time.Now(),

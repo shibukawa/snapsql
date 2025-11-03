@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/google/cel-go/cel"
+
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -119,7 +120,7 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("postgres", rowLockMode)
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)
 		if rowLockErr != nil {
 			panic(rowLockErr)
 		}
@@ -275,9 +276,9 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "UpdateAccountStatusConditional",
 			SourceFile: "gosamplepg/UpdateAccountStatusConditional",
-			Dialect:    "postgres",
-			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
-			Options:    queryLogOptions,
+
+			QueryType: snapsqlgo.QueryLogQueryTypeExec,
+			Options:   queryLogOptions,
 		}, executor
 	})
 	// Execute query

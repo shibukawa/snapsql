@@ -63,13 +63,13 @@ type CodegenFunction struct {
 
 ### 6.2 Dialect 統合 (更新方針)
 Dialect 吸収は **intermediate パイプライン内の専用 Processor ステップ** として実行し、IR 生成完了直後に:
-1. 方言条件付きトークン/ノード (従来案の `EMIT_IF_DIALECT`) を解決し静的命令列へ畳み込み
+1. 方言条件付きトークン/ノードを解決し静的命令列へ畳み込み
 2. RETURNING / LIMIT / OFFSET / placeholder を **トークン/ノードレベル** で安全に書き換え
 3. 方言非対応機能は命令削除ではなく Feature フラグ + 警告 (将来) による顕在化を検討
 
 これにより文字列後処理 (脆弱なヒューリスティック) を排除し SQL 構造情報を保持した段階で調整可能。
 
-最終的に Adapter が受け取る `IntermediateFormat` には `EMIT_IF_DIALECT` のような命令は存在せず、純粋な静的/ループ/評価命令のみとなる。
+最終的に Adapter が受け取る `IntermediateFormat` には方言切替用の命令は存在せず、純粋な静的/ループ/評価命令のみとなる。
 
 簡易インタフェース (Executor / Generator 共有) は以下の通り:
 ```go
@@ -191,7 +191,7 @@ Draft 完。レビューコメント歓迎。修正点があれば指示くだ�
 | 項目 | 旧 | 新 |
 |------|----|----|
 | 適用タイミング | IR 生成後 外部関数 `Normalize` | IR パイプライン内 Processor (GenerateFromSQL/Markdown 内部) |
-| EMIT_IF_DIALECT 命令 | 生成され保持 | 生成段階で解決し非生成 |
+| 方言切替命令 | 生成され保持 | 生成段階で解決し非生成 |
 | RETURNING 削除 | 文字列ヒューリスティック | ノード種別検出で除去 (UPDATE/DELETE のみ) |
 | Placeholder 変換 | 文字列スキャン ('?') | トークン列再構築で確実変換 |
 | Idempotent 制御 | 呼び出し側注意 | Pipeline ステップ一回のみ |
@@ -213,19 +213,19 @@ func (p *DialectProcessor) Process(f *IntermediateFormat) error {
 }
 ```
 
-### 16.5 EMIT_IF_DIALECT 廃止理由
+### 16.5 方言命令の整理
 | 理由 | 詳細 |
 |------|------|
 | 責務分散回避 | 後段 (adapter/templates) が命令解釈を気にする必要を無くす |
 | 安全性 | 文字列操作より構造情報を利用した条件分岐が正確 |
-| テスト簡素化 | Dialect 適用後 IR golden の差分で確認可能 |
+| テスト簡素化 | 方言適用後の IR 差分で確認可能 |
 
 ### 16.6 マイグレーション計画 (追加)
 1. 既存 `dialect/normalize.go` を Deprecated コメント付与
 2. 新 `DialectProcessor` を `intermediate/pipeline.go` へ組み込み
 3. Parser で dialect 条件付き構文があればフラグ付トークン化 (なければスキップ)
 4. 既存テスト: `Normalize` 依存部を Processor 実行にリライト
-5. `EMIT_IF_DIALECT` 関連定義/テスト削除
+5. 方言切替用命令関連定義/テストの見直し
 6. 旧ファイル削除 (2～5 安定後)
 
 ### 16.7 リスク / 緩和 (更新)
@@ -236,7 +236,7 @@ func (p *DialectProcessor) Process(f *IntermediateFormat) error {
 | 既存テスト壊れ | 並行で golden 再生成スクリプト整備 |
 
 ### 16.8 まとめ (改訂)
-外部 `Normalize` 関数を廃止し、構造レベルで安全な Dialect 吸収をパイプライン内部に移行。EMIT_IF_DIALECT 命令は生成されず、IR は既に方言適用済みの最終形を一貫して提供する。
+外部 `Normalize` 関数を廃止し、構造レベルで安全な Dialect 吸収をパイプライン内部に移行。方言切替に関する処理はパイプライン内で解決され、IR は方言適用済みの最終形を一貫して提供する。
 
 ### 16.3 パイプライン (最終)
 ```

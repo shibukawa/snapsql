@@ -3,6 +3,8 @@ package codegenerator
 import (
 	"strconv"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // OptimizedInstruction represents an optimized instruction derived from runtime generation.
@@ -21,7 +23,7 @@ type OptimizedInstruction struct {
 }
 
 // OptimizeInstructions filters and optimizes instructions for a specific dialect.
-func OptimizeInstructions(instructions []Instruction, dialect string) ([]OptimizedInstruction, error) {
+func OptimizeInstructions(instructions []Instruction, dialect snapsql.Dialect) ([]OptimizedInstruction, error) {
 	var result []OptimizedInstruction
 
 	type systemClauseState struct {
@@ -134,13 +136,6 @@ func OptimizeInstructions(instructions []Instruction, dialect string) ([]Optimiz
 			result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: "?"})
 			result = append(result, OptimizedInstruction{Op: "ADD_SYSTEM_PARAM", SystemField: inst.SystemField})
 
-		case OpEmitIfDialect:
-			result = append(result, OptimizedInstruction{
-				Op:          "EMIT_IF_DIALECT",
-				SqlFragment: inst.SqlFragment,
-				Dialects:    append([]string(nil), inst.Dialects...),
-			})
-
 		case OpFallbackCondition:
 			var combos [][]RemovalLiteral
 			if len(inst.FallbackCombos) > 0 {
@@ -205,8 +200,8 @@ func MergeAdjacentStatic(instructions []OptimizedInstruction) []OptimizedInstruc
 	return result
 }
 
-func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) []OptimizedInstruction {
-	d := strings.ToLower(strings.TrimSpace(dialect))
+func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect snapsql.Dialect) []OptimizedInstruction {
+	d := strings.ToLower(strings.TrimSpace(string(dialect)))
 	if d != "postgres" && d != "postgresql" && d != "pgx" && d != "pg" {
 		return instructions
 	}
@@ -260,8 +255,6 @@ func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect string) 
 		switch instructions[i].Op {
 		case "EMIT_STATIC", "EMIT_UNLESS_BOUNDARY":
 			instructions[i].Value = convert(instructions[i].Value)
-		case "EMIT_IF_DIALECT":
-			instructions[i].SqlFragment = convert(instructions[i].SqlFragment)
 		}
 	}
 

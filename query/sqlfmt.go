@@ -3,6 +3,8 @@ package query
 import (
 	"strconv"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // FormatSQLForDriver converts placeholders for the given database driver and
@@ -15,8 +17,8 @@ func FormatSQLForDriver(sql string, driver string) string {
 // FormatSQLForDialect converts placeholders for display (dry-run use)
 // and ensures readability by adding a space after placeholders when needed.
 // Dialect: postgresql/mysql/sqlite.
-func FormatSQLForDialect(sql string, dialect string) string {
-	d := strings.ToLower(strings.TrimSpace(dialect))
+func FormatSQLForDialect(sql string, dialect snapsql.Dialect) string {
+	d := strings.ToLower(strings.TrimSpace(string(dialect)))
 	switch d {
 	case "postgres", "postgresql", "pg", "pgx":
 		var b strings.Builder

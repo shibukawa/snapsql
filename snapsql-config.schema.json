@@ -7,7 +7,7 @@
   "properties": {
     "dialect": {
       "type": "string",
-      "enum": ["postgres", "mysql", "sqlite", "sqlserver"],
+  "enum": ["postgres", "mysql", "sqlite", "mariadb"],
       "default": "postgres",
       "description": "SQL dialect to use for query generation and validation"
     },

@@ -16,7 +16,7 @@ var ErrConfigValidation = errors.New("configuration validation failed")
 
 // Config represents the SnapSQL configuration
 type Config struct {
-	Dialect       string                      `yaml:"dialect"`
+	Dialect       Dialect                     `yaml:"dialect"`
 	InputDir      string                      `yaml:"input_dir"` // Moved from GenerationConfig
 	ConstantFiles []string                    `yaml:"constant_files"`
 	Generation    GenerationConfig            `yaml:"generation"`
@@ -186,14 +186,14 @@ func LoadConfig(configPath string) (*Config, error) {
 // validateConfig validates the configuration for common errors and inconsistencies
 func validateConfig(config *Config) error {
 	// Validate dialect
-	validDialects := map[string]bool{
-		"postgres":  true,
-		"mysql":     true,
-		"sqlite":    true,
-		"sqlserver": true,
+	validDialects := map[Dialect]bool{
+		DialectPostgres: true,
+		DialectMySQL:    true,
+		DialectSQLite:   true,
+		DialectMariaDB:  true,
 	}
 	if config.Dialect != "" && !validDialects[config.Dialect] {
-		return fmt.Errorf("%w: invalid dialect '%s': must be one of postgres, mysql, sqlite, sqlserver", ErrConfigValidation, config.Dialect)
+		return fmt.Errorf("%w: invalid dialect '%s': must be one of postgres, mysql, sqlite, mariadb", ErrConfigValidation, config.Dialect)
 	}
 
 	// Validate generator configurations
@@ -297,7 +297,7 @@ func boolPtr(b bool) *bool {
 // getDefaultConfig returns the default configuration
 func getDefaultConfig() *Config {
 	return &Config{
-		Dialect:       "postgres",
+		Dialect:       DialectPostgres,
 		InputDir:      "./queries", // Moved from GenerationConfig
 		ConstantFiles: []string{},
 		// schema_extraction removed
@@ -401,7 +401,7 @@ func getDefaultConfig() *Config {
 // applyDefaults applies default values to missing configuration fields
 func applyDefaults(config *Config) {
 	if config.Dialect == "" {
-		config.Dialect = "postgres"
+		config.Dialect = DialectPostgres
 	}
 
 	if config.InputDir == "" {
@@ -479,57 +479,12 @@ func applyDefaults(config *Config) {
 		config.Tables = make(map[string]TablePerformance)
 	}
 
-	// Apply default system field settings
-	applySystemFieldDefaults(config)
-}
-
-// applySystemFieldDefaults applies default values for system field configuration
-func applySystemFieldDefaults(config *Config) {
-	// Apply default system fields if empty
-	if len(config.System.Fields) == 0 {
-		config.System.Fields = []SystemField{
-			{
-				Name:              "created_at",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Default: "NOW()",
-				},
-				OnUpdate: SystemFieldOperation{
-					Parameter: ParameterError,
-				},
-			},
-			{
-				Name:              "updated_at",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Default: "NOW()",
-				},
-				OnUpdate: SystemFieldOperation{
-					Default: "NOW()",
-				},
-			},
-			{
-				Name:              "created_by",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Parameter: ParameterImplicit,
-				},
-				OnUpdate: SystemFieldOperation{
-					Parameter: ParameterError,
-				},
-			},
-			{
-				Name:              "updated_by",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Parameter: ParameterImplicit,
-				},
-				OnUpdate: SystemFieldOperation{
-					Parameter: ParameterImplicit,
-				},
-			},
-		}
-	}
+	// NOTE: Do NOT automatically apply system field defaults when loading an
+	// existing configuration file. The initial default config returned by
+	// getDefaultConfig() contains sane system field defaults for first-time
+	// initialization. However, when a user provides a `snapsql.yaml`, we must
+	// preserve their explicit intent (including an empty `system` section).
+	// Therefore, do NOT call applySystemFieldDefaults here.
 }
 
 // loadEnvFiles loads .env files if they exist

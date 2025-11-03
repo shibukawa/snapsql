@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -67,7 +68,7 @@ func TestSystemColumnsIntegration(t *testing.T) {
 	generator := &Generator{
 		PackageName: "testgen",
 		Format:      &format,
-		Dialect:     "postgres",
+		Dialect:     snapsql.DialectPostgres,
 	}
 
 	// Generate Go code
@@ -191,7 +192,7 @@ func TestOptimizedInstructionsWithSystemColumns(t *testing.T) {
 		{Op: intermediate.OpEmitStatic, Value: ")"},
 	}
 
-	optimized, err := codegenerator.OptimizeInstructions(instructions, "postgres")
+	optimized, err := codegenerator.OptimizeInstructions(instructions, snapsql.DialectPostgres)
 	require.NoError(t, err)
 
 	// Verify optimization results based on actual output
@@ -229,15 +230,15 @@ func TestGenerateRowLockExecutionCode(t *testing.T) {
 	gen := &Generator{
 		PackageName: "rowlock",
 		Format:      format,
-		Dialect:     "postgres",
+		Dialect:     snapsql.DialectPostgres,
 	}
 
 	var output strings.Builder
 	require.NoError(t, gen.Generate(&output))
 
 	code := output.String()
-    assert.Contains(t, code, "EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeSelect, rowLockMode)")
-	assert.Contains(t, code, `rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("postgres", rowLockMode)`)
+	assert.Contains(t, code, "EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeSelect, rowLockMode)")
+	assert.Contains(t, code, `rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)`)
 	assert.Contains(t, code, "Options:    queryLogOptions")
 }
 

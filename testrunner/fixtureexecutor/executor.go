@@ -395,13 +395,13 @@ func parseBracketLiteral(raw string) ([]any, bool) {
 // Executor handles fixture data insertion and query execution
 type Executor struct {
 	db        *sql.DB
-	dialect   string
+	dialect   snapsql.Dialect
 	tableInfo map[string]*snapsql.TableInfo
 	baseDir   string
 }
 
 // NewExecutor creates a new fixture executor
-func NewExecutor(db *sql.DB, dialect string, tableInfo map[string]*snapsql.TableInfo) *Executor {
+func NewExecutor(db *sql.DB, dialect snapsql.Dialect, tableInfo map[string]*snapsql.TableInfo) *Executor {
 	return &Executor{
 		db:        db,
 		dialect:   dialect,

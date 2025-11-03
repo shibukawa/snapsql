@@ -79,7 +79,7 @@ func init() {
 	}
 }
 
-// AccountGet - []AccountGetResult Affinity
+// AccountGet - AccountGetResult Affinity
 func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID int, opts ...snapsqlgo.FuncOpt) iter.Seq2[*AccountGetResult, error] {
 
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
@@ -93,9 +93,16 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+		// for mutation queries we treat this as an error.
+		rowLockClause, _ = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			var zero *AccountGetResult
+			return func(yield func(*AccountGetResult, error) bool) {
+				_ = yield(zero, rowLockErr)
+				return
+			}
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
@@ -118,8 +125,8 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
 		return query, args, nil
 	}
-	return func(yield func(*AccountGetResult, error) bool) {
 
+	return func(yield func(*AccountGetResult, error) bool) {
 		query, args, err := buildQueryAndArgs()
 		if err != nil {
 			_ = yield(nil, err)
@@ -161,23 +168,20 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "AccountGet",
 				SourceFile: "gosample/AccountGet",
-				Dialect:    "sqlite",
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor
 		})
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			err = fmt.Errorf("AccountGet: failed to prepare statement: %w (query: %s)", err, query)
-			_ = yield(nil, err)
+			_ = yield(nil, fmt.Errorf("AccountGet: failed to prepare statement: %w (query: %s)", err, query))
 			return
 		}
 		defer stmt.Close()
 
 		rows, err := stmt.QueryContext(ctx, args...)
 		if err != nil {
-			err = fmt.Errorf("AccountGet: failed to execute query: %w", err)
-			_ = yield(nil, err)
+			_ = yield(nil, fmt.Errorf("AccountGet: failed to execute query: %w", err))
 			return
 		}
 		defer rows.Close()
@@ -189,8 +193,7 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 				&item.Name,
 				&item.Status,
 			); err != nil {
-				err = fmt.Errorf("AccountGet: failed to scan row: %w", err)
-				_ = yield(nil, err)
+				_ = yield(nil, fmt.Errorf("AccountGet: failed to scan row: %w", err))
 				return
 			}
 			if !yield(item, nil) {
@@ -199,8 +202,7 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 		}
 
 		if err := rows.Err(); err != nil {
-			err = fmt.Errorf("AccountGet: error iterating rows: %w", err)
-			_ = yield(nil, err)
+			_ = yield(nil, fmt.Errorf("AccountGet: error iterating rows: %w", err))
 			return
 		}
 	}

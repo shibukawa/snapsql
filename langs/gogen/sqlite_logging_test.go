@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"sync"
 	"testing"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/shibukawa/snapsql/examples/kanban/querylogtest"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	generator "github.com/shibukawa/snapsql/testdata/gosample/generated_sqlite"
 )
 
 type captureSink struct {
@@ -36,24 +35,20 @@ func (s *captureSink) Entries() []snapsqlgo.QueryLogEntry {
 	return out
 }
 
-func setupKanbanBoardTable(t *testing.T, db *sql.DB) {
+func setupAccountsTable(t *testing.T, db *sql.DB) {
 	t.Helper()
 
-	schema := `CREATE TABLE boards (
-        id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        status TEXT NOT NULL,
-        archived_at DATETIME,
-        created_at DATETIME NOT NULL,
-        updated_at DATETIME NOT NULL
-    );`
+	schema := `CREATE TABLE accounts (
+		id INTEGER PRIMARY KEY,
+		name TEXT,
+		status TEXT
+	);`
 	if _, err := db.Exec(schema); err != nil {
-		t.Fatalf("failed to create boards table: %v", err)
+		t.Fatalf("failed to create accounts table: %v", err)
 	}
 
-	now := time.Now()
-	if _, err := db.Exec(`INSERT INTO boards (id, name, status, archived_at, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)`, 1, "Demo Board", "active", now, now); err != nil {
-		t.Fatalf("failed to insert board: %v", err)
+	if _, err := db.Exec(`INSERT INTO accounts (id, name, status) VALUES (?, ?, ?)`, 1, "Demo Account", "active"); err != nil {
+		t.Fatalf("failed to insert account: %v", err)
 	}
 }
 
@@ -64,18 +59,27 @@ func TestGeneratedKanbanQueryLogging(t *testing.T) {
 	}
 	defer db.Close()
 
-	setupKanbanBoardTable(t, db)
+	setupAccountsTable(t, db)
 
 	sink := &captureSink{}
 	ctx := snapsqlgo.WithLogger(context.Background(), sink.asFunc())
 
-	result, err := querylogtest.BoardGet(ctx, db, 1)
-	if err != nil {
-		t.Fatalf("BoardGet returned error: %v", err)
-	}
+	seq := generator.AccountGet(ctx, db, 1)
 
-	if result.Name != "Demo Board" {
-		t.Fatalf("unexpected board name: %s", result.Name)
+	var got *generator.AccountGetResult
+
+	seq(func(res *generator.AccountGetResult, err error) bool {
+		if err != nil {
+			t.Fatalf("AccountGet returned error: %v", err)
+		}
+
+		got = res
+
+		return false
+	})
+
+	if got == nil {
+		t.Fatalf("expected AccountGet to yield a result")
 	}
 
 	entries := sink.Entries()

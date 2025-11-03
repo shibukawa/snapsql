@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 )
@@ -64,13 +65,13 @@ func TestIsDangerousQuery(t *testing.T) {
 func TestGetDialectFromDriver(t *testing.T) {
 	testCases := []struct {
 		driver   string
-		expected string
+		expected snapsql.Dialect
 	}{
-		{"postgres", "postgresql"},
-		{"pgx", "postgresql"},
-		{"mysql", "mysql"},
-		{"sqlite3", "sqlite"},
-		{"unknown", "postgresql"}, // default
+		{"postgres", snapsql.DialectPostgres},
+		{"pgx", snapsql.DialectPostgres},
+		{"mysql", snapsql.DialectMySQL},
+		{"sqlite3", snapsql.DialectSQLite},
+		{"unknown", snapsql.DialectPostgres}, // default
 	}
 
 	for _, tc := range testCases {

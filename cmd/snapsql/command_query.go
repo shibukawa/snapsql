@@ -59,7 +59,7 @@ type QueryCmd struct {
 	Offset                int      `long:"offset" help:"Offset for result set"`
 	ExecuteDangerousQuery bool     `long:"execute-dangerous-query" help:"Execute DELETE/UPDATE queries without WHERE clause (dangerous!)"`
 	DryRun                bool     `long:"dry-run" help:"Show generated SQL without executing"`
-	Dialect               string   `long:"dialect" help:"SQL dialect for dry-run or when no DB (postgresql|mysql|sqlite)"`
+	Dialect               string   `long:"dialect" help:"SQL dialect for dry-run or when no DB (postgresql|mysql|sqlite|mariadb)"`
 }
 
 // Run executes the query command
@@ -395,7 +395,7 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 		dialect = q.getDialectFromOptions(options)
 	}
 
-	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, dialect)
+	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, snapsql.Dialect(dialect))
 	if err != nil {
 		return fmt.Errorf("failed to optimize instructions: %w", err)
 	}
@@ -407,7 +407,7 @@ func (q *QueryCmd) executeDryRun(ctx *Context, params map[string]any, options qu
 	}
 
 	// Format SQL for display (shared with executor)
-	sql = query.FormatSQLForDialect(sql, dialect)
+	sql = query.FormatSQLForDialect(sql, snapsql.Dialect(dialect))
 
 	// Display results
 	if !ctx.Quiet {
@@ -707,14 +707,14 @@ func (q *QueryCmd) analyzePerformance(db *sql.DB, options query.QueryOptions, re
 
 	collector := explain.CollectorOptions{
 		Runner:  db,
-		Dialect: options.Driver,
+		Dialect: snapsql.Dialect(options.Driver),
 		SQL:     result.SQL,
 		Args:    result.Parameters,
 		Analyze: analyze,
 		Timeout: timeout,
 	}
 
-	structuredPlan := explain.SupportsStructuredPlan(options.Driver)
+	structuredPlan := explain.SupportsStructuredPlan(snapsql.Dialect(options.Driver))
 
 	doc, err := explain.Collect(ctx, collector)
 	if err != nil {

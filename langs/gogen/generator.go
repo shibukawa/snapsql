@@ -17,6 +17,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -26,7 +27,7 @@ type Generator struct {
 	OutputPath        string
 	Format            *intermediate.IntermediateFormat
 	MockPath          string
-	Dialect           string                  // Target database dialect (postgres, mysql, sqlite)
+	Dialect           snapsql.Dialect         // Target database dialect (postgres, mysql, sqlite, mariadb)
 	Hierarchy         *FileHierarchy          // File hierarchy information (optional)
 	BaseImport        string                  // Base import path for hierarchical packages
 	hierarchicalMetas []*hierarchicalNodeMeta // internal: prepared metas for hierarchical aggregation
@@ -63,7 +64,7 @@ func WithPackageName(name string) Option {
 }
 
 // WithDialect sets the target database dialect
-func WithDialect(dialect string) Option {
+func WithDialect(dialect snapsql.Dialect) Option {
 	return func(g *Generator) {
 		g.Dialect = dialect
 	}
@@ -267,7 +268,8 @@ func (g *Generator) Generate(w io.Writer) error {
 	errorZeroValue := determineErrorZeroValue(responseType)
 
 	// Process SQL builder
-	sqlBuilder, err := processSQLBuilderWithDialect(g.Format, g.Dialect, funcName)
+	// processSQLBuilderWithDialect expects a string dialect; convert here from snapsql.Dialect
+	sqlBuilder, err := processSQLBuilderWithDialect(g.Format, string(g.Dialect), funcName)
 	if err != nil {
 		return fmt.Errorf("failed to process SQL builder: %w", err)
 	}
@@ -329,7 +331,7 @@ func (g *Generator) Generate(w io.Writer) error {
 	data := struct {
 		Timestamp          time.Time
 		PackageName        string
-		Dialect            string
+		Dialect            snapsql.Dialect
 		FunctionName       string
 		LowerFuncName      string
 		Description        string
@@ -856,7 +858,9 @@ func processResponseType(format *intermediate.IntermediateFormat) (string, error
 	case "many":
 		return "[]" + structName, nil
 	case "none":
-		return "any", nil
+		// Response affinity "none" indicates a mutation/no-row response. Use
+		// sql.Result so calling code can inspect RowsAffected/LastInsertId.
+		return "sql.Result", nil
 	default:
 		return structName, nil
 	}
@@ -1316,7 +1320,7 @@ import (
 	{{- if eq .ResponseType "sql.Result" }}
 	"database/sql"
 	{{- end }}
-	{{- /* bring in snapsql root when hierarchical aggregation path or query execution requires it */}}
+	{{- /* bring in snapsql root only when hierarchical aggregation or query execution explicitly needs it */}}
 	{{- if or (gt (len .HierarchicalMetas) 0) (.QueryExecution.NeedsSnapsqlImport) }}
 	"github.com/shibukawa/snapsql"
 	{{- end }}
@@ -1454,11 +1458,22 @@ var result {{ .ResponseType }}
 // Count: {{ if .HierarchicalMetas }}{{ len .HierarchicalMetas }}{{ else }}0{{ end }}
 {{- end }}
 
-{{- if and .ImplicitParams .SQLBuilder.HasSystemArguments }}
-	// Extract implicit parameters
+{{- if .SQLBuilder.HasSystemArguments }}
+	// Extract implicit parameters (system arguments). Build specs from explicit
+	// ImplicitParams when provided by configuration; otherwise synthesize
+	// minimal specs from the SQL builder's ArgumentSystemFields. This ensures
+	// generated code that references systemValues always has a declaration,
+	// avoiding undefined identifier errors even when the user's config omitted
+	// a system section (config defaulting is handled elsewhere).
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
+		{{- if .ImplicitParams }}
 		{{- range .ImplicitParams }}
 		{Name: "{{ .Name }}", Type: "{{ .Type }}", Required: {{ .Required }}{{ if .Default }}, DefaultValue: {{ .DefaultValueLiteral }}{{ end }}},
+		{{- end }}
+		{{- else }}
+		{{- range $i, $name := $.SQLBuilder.ArgumentSystemFields }}
+		{Name: "{{ $name }}", Type: "any", Required: false},
+		{{- end }}
 		{{- end }}
 	}
 	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
@@ -1474,13 +1489,39 @@ var result {{ .ResponseType }}
 		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }}, rowLockMode)
 	}
 	rowLockClause := ""
-	if rowLockMode != snapsqlgo.RowLockNone {
-		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("{{ .Dialect }}", rowLockMode)
-		if rowLockErr != nil {
-			panic(rowLockErr)
+		if rowLockMode != snapsqlgo.RowLockNone {
+			var rowLockErr error
+			// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+			{{- if eq .Dialect "postgres" }}
+			rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)
+			{{- else if eq .Dialect "mysql" }}
+			rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseMySQL(rowLockMode)
+			{{- else if eq .Dialect "mariadb" }}
+			rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseMariaDB(rowLockMode)
+			{{- else if eq .Dialect "sqlite" }}
+			// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+			// for mutation queries we treat this as an error.
+			{{- if .IsSelectQuery }}
+			rowLockClause, _ = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
+			{{- else }}
+			rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
+			{{- end }}
+			{{- end }}
+			if rowLockErr != nil {
+				// Return error in a manner appropriate for the function kind (iterator vs normal).
+				{{- if .QueryExecution.IsIterator }}
+				var zero {{ .IteratorYieldType }}
+				return func(yield func({{ .IteratorYieldType }}, error) bool) {
+					// yield the error to the caller and exit the iterator function
+					_ = yield(zero, rowLockErr)
+					return
+				}
+				{{- else }}
+				// non-iterator: return the zero value result and the error
+				return result, rowLockErr
+				{{- end }}
+			}
 		}
-	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
 		RowLockClause: rowLockClause,
 		RowLockMode:   rowLockMode,
@@ -1635,7 +1676,6 @@ var result {{ .ResponseType }}
 		return snapsqlgo.QueryLogMetadata{
 				FuncName:   "{{ .FunctionName }}",
 				SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
-				Dialect:    "{{ .Dialect }}",
 				QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
 				Options:    queryLogOptions,
 			}, executor
@@ -1727,7 +1767,6 @@ var result {{ .ResponseType }}
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "{{ .FunctionName }}",
 			SourceFile: "{{ .PackageName }}/{{ .FunctionName }}",
-			Dialect:    "{{ .Dialect }}",
 			QueryType:  snapsqlgo.QueryLogQueryType{{ if .IsSelectQuery }}Select{{ else }}Exec{{ end }},
 			Options:    queryLogOptions,
 		}, executor

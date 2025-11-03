@@ -188,8 +188,10 @@ const (
 	// OpEmitSystemValue outputs a specific system field value.
 	OpEmitSystemValue = "EMIT_SYSTEM_VALUE" // Output system value for specific field
 
-	// OpEmitIfDialect outputs a SQL fragment if current dialect matches one of the given dialects.
-	OpEmitIfDialect = "EMIT_IF_DIALECT" // Output SQL fragment if current dialect matches
+	// SqlFragment and Dialects fields may be present in older IR payloads to
+	// carry per-dialect fragments. They are retained for compatibility with
+	// older intermediate-format payloads but are not used by newer pipeline
+	// stages which resolve dialect differences earlier.
 )
 
 // Instruction represents a single instruction in the instruction set
@@ -210,8 +212,10 @@ type Instruction struct {
 	FallbackCombos      [][]RemovalLiteral `json:"fallback_combos,omitempty"`       // For FALLBACK_CONDITION - OR-of-AND condition combos
 
 	// Database dialect fields
-	SqlFragment string   `json:"sql_fragment,omitempty"` // For EMIT_IF_DIALECT - SQL fragment to output
-	Dialects    []string `json:"dialects,omitempty"`     // For EMIT_IF_DIALECT - target database dialects
+	// SqlFragment / Dialects are retained fields for compatibility with
+	// older payloads that contained per-dialect fragments.
+	SqlFragment string   `json:"sql_fragment,omitempty"`
+	Dialects    []string `json:"dialects,omitempty"`
 }
 
 // CELExpression represents a CEL expression with its metadata

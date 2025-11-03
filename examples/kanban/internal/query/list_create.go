@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"fmt"
+
 	"time"
 
 	"github.com/google/cel-go/cel"
@@ -103,25 +104,20 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClause("sqlite", rowLockMode)
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+		// for mutation queries we treat this as an error.
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			// non-iterator: return the zero value result and the error
+			return result, rowLockErr
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
 		RowLockClause: rowLockClause,
 		RowLockMode:   rowLockMode,
 	}
-	logger := execCtx.QueryLogger()
-	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
-		return snapsqlgo.QueryLogMetadata{
-			FuncName:   "ListCreate",
-			SourceFile: "query/ListCreate",
-			Dialect:    "sqlite",
-			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
-			Options:    queryLogOptions,
-		}, executor
-	})
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
@@ -140,32 +136,38 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
-		logger.SetErr(err)
 		return result, err
 	}
-	logger.SetQuery(query, args)
+	// Handle mock execution if present
 	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "ListCreate"); mockMatched {
 		if mockErr != nil {
-			logger.SetErr(mockErr)
 			return result, mockErr
 		}
 		if mockExec.Err != nil {
-			logger.SetErr(mockExec.Err)
 			return result, mockExec.Err
 		}
 		mapped, err := snapsqlgo.MapMockExecutionToStruct[ListCreateResult](mockExec)
 		if err != nil {
-			logger.SetErr(err)
 			return result, fmt.Errorf("ListCreate: failed to map mock execution: %w", err)
 		}
 		result = mapped
 		return result, nil
 	}
+	// Prepare query logger
+	logger := execCtx.QueryLogger()
+	logger.SetQuery(query, args)
+	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
+		return snapsqlgo.QueryLogMetadata{
+			FuncName:   "ListCreate",
+			SourceFile: "query/ListCreate",
+			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+			Options:    queryLogOptions,
+		}, executor
+	})
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
 		err = fmt.Errorf("ListCreate: failed to prepare statement: %w (query: %s)", err, query)
-		logger.SetErr(err)
 		return result, err
 	}
 	defer stmt.Close()
@@ -182,9 +184,7 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 		&result.UpdatedAt,
 	)
 	if err != nil {
-		err = fmt.Errorf("failed to scan row: %w", err)
-		logger.SetErr(err)
-		return result, err
+		return result, fmt.Errorf("failed to scan row: %w", err)
 	}
 
 	return result, nil

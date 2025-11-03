@@ -1,0 +1,11 @@
+dialect: "postgres"
+input_dir: "./queries"
+
+generation:
+  validate: false
+  generators:
+    go:
+      output: "./generated_postgres"
+      disabled: false
+      settings:
+        package: "gosample"
