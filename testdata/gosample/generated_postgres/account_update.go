@@ -21,7 +21,7 @@ import (
 	"fmt"
 
 	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql"
+
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -176,9 +176,9 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "AccountUpdate",
 			SourceFile: "gosamplepg/AccountUpdate",
-			Dialect:    string(snapsql.DialectPostgres),
-			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
-			Options:    queryLogOptions,
+
+			QueryType: snapsqlgo.QueryLogQueryTypeExec,
+			Options:   queryLogOptions,
 		}, executor
 	})
 	// Execute query

@@ -186,7 +186,6 @@ func MarkAsRead(ctx context.Context, executor snapsqlgo.DBExecutor, notification
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "MarkAsRead",
 			SourceFile: "query/MarkAsRead",
-			Dialect:    string(snapsql.Dialect("postgres")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

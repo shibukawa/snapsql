@@ -19,7 +19,7 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
+
 	"iter"
 	"time"
 
@@ -204,7 +204,6 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "ListRename",
 				SourceFile: "query/ListRename",
-				Dialect:    string(snapsql.Dialect("sqlite")),
 				QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 				Options:    queryLogOptions,
 			}, executor

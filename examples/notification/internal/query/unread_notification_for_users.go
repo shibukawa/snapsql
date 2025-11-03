@@ -165,7 +165,6 @@ func UnreadNotificationForUsers(ctx context.Context, executor snapsqlgo.DBExecut
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "UnreadNotificationForUsers",
 			SourceFile: "query/UnreadNotificationForUsers",
-			Dialect:    string(snapsql.Dialect("postgres")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

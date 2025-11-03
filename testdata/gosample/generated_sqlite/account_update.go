@@ -21,10 +21,10 @@ import (
 	"fmt"
 
 	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
+// AccountUpdateResult represents the response structure for AccountUpdate
 type AccountUpdateResult struct {
 	ID     int64  `json:"id"`
 	Status string `json:"status"`
@@ -95,9 +95,6 @@ func init() {
 func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID int, status string, opts ...snapsqlgo.FuncOpt) ([]AccountUpdateResult, error) {
 	var result []AccountUpdateResult
 
-	// Hierarchical metas (for nested aggregation code generation - placeholder)
-	// Count: 0
-
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
 	if execCtx != nil {
@@ -109,9 +106,12 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+		// for mutation queries we treat this as an error.
 		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			return result, rowLockErr
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
@@ -123,6 +123,7 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 		Status:  snapsqlgo.WhereClauseStatusExists,
 		RawText: "WHERE",
 	}
+
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE accounts SET status = $1   WHERE id = $2   RETURNING id, status"
@@ -145,15 +146,17 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
 		return query, args, nil
 	}
+
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
 		return result, err
 	}
+
 	// Enforce WHERE clause guard when mutations are generated
 	if err := snapsqlgo.EnforceNonEmptyWhereClause(ctx, "AccountUpdate", snapsqlgo.MutationUpdate, whereMeta, query); err != nil {
 		return result, err
 	}
-	// Handle mock execution if present
+
 	// Handle mock execution if present
 	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "AccountUpdate"); mockMatched {
 		if mockErr != nil {
@@ -162,13 +165,20 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 		if mockExec.Err != nil {
 			return result, mockExec.Err
 		}
+
 		mapped, err := snapsqlgo.MapMockExecutionToSlice[AccountUpdateResult](mockExec)
 		if err != nil {
 			return result, fmt.Errorf("AccountUpdate: failed to map mock execution: %w", err)
 		}
-		result = mapped
+
+		for i := range mapped {
+			item := mapped[i]
+			result = append(result, item)
+		}
+
 		return result, nil
 	}
+
 	// Prepare query logger
 	logger := execCtx.QueryLogger()
 	logger.SetQuery(query, args)
@@ -176,19 +186,17 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "AccountUpdate",
 			SourceFile: "gosample/AccountUpdate",
-			Dialect:    string(snapsql.DialectSQLite),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor
 	})
-	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
 		err = fmt.Errorf("AccountUpdate: failed to prepare statement: %w (query: %s)", err, query)
 		return result, err
 	}
 	defer stmt.Close()
-	// Execute query and scan multiple rows (many affinity)
+
 	rows, err := stmt.QueryContext(ctx, args...)
 	if err != nil {
 		err = fmt.Errorf("AccountUpdate: failed to execute query: %w", err)
@@ -197,7 +205,7 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 	defer rows.Close()
 
 	for rows.Next() {
-		var item AccountUpdateResult
+		item := new(AccountUpdateResult)
 		if err := rows.Scan(
 			&item.ID,
 			&item.Status,
@@ -205,8 +213,7 @@ func AccountUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, accountID
 			err = fmt.Errorf("AccountUpdate: failed to scan row: %w", err)
 			return result, err
 		}
-
-		result = append(result, item)
+		result = append(result, *item)
 	}
 
 	if err := rows.Err(); err != nil {

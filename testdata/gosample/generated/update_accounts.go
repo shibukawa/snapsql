@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gosamplepg
+package gosample
 
 import (
 	"context"
@@ -23,9 +23,13 @@ import (
 	"strings"
 
 	"github.com/google/cel-go/cel"
-
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
+
+// UpdateAccountStatusConditionalResult represents the response structure for UpdateAccountStatusConditional
+type UpdateAccountStatusConditionalResult struct {
+	AffectedRows int `json:"affected_rows"`
+}
 
 // UpdateAccountStatusConditional specific CEL programs and mock path
 var (
@@ -120,9 +124,12 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
 		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)
 		if rowLockErr != nil {
-			panic(rowLockErr)
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			// non-iterator: return the zero value result and the error
+			return result, rowLockErr
 		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
@@ -275,10 +282,9 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "UpdateAccountStatusConditional",
-			SourceFile: "gosamplepg/UpdateAccountStatusConditional",
-
-			QueryType: snapsqlgo.QueryLogQueryTypeExec,
-			Options:   queryLogOptions,
+			SourceFile: "gosample/UpdateAccountStatusConditional",
+			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+			Options:    queryLogOptions,
 		}, executor
 	})
 	// Execute query
@@ -291,8 +297,7 @@ func UpdateAccountStatusConditional(ctx context.Context, executor snapsqlgo.DBEx
 	// Execute query (no result expected)
 	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
-		err = fmt.Errorf("UpdateAccountStatusConditional: failed to execute statement: %w", err)
-		return nil, err
+		return nil, fmt.Errorf("UpdateAccountStatusConditional: failed to execute statement: %w", err)
 	}
 	result = execResult
 

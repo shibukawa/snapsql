@@ -1,0 +1,11 @@
+dialect: "sqlite"
+input_dir: "./queries"
+
+generation:
+  validate: false
+  generators:
+    go:
+      output: "./generated_sqlite"
+      disabled: false
+      settings:
+        package: "gosample"

@@ -22,7 +22,7 @@ import (
 	"iter"
 
 	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql"
+
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -139,9 +139,9 @@ func AccountList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sna
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "AccountList",
 				SourceFile: "gosamplepg/AccountList",
-				Dialect:    string(snapsql.DialectPostgres),
-				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
-				Options:    queryLogOptions,
+
+				QueryType: snapsqlgo.QueryLogQueryTypeSelect,
+				Options:   queryLogOptions,
 			}, executor
 		})
 		stmt, err := executor.PrepareContext(ctx, query)

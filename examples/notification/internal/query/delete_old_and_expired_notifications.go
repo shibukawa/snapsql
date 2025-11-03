@@ -166,7 +166,6 @@ func DeleteOldAndExpiredNotifications(ctx context.Context, executor snapsqlgo.DB
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "DeleteOldAndExpiredNotifications",
 			SourceFile: "query/DeleteOldAndExpiredNotifications",
-			Dialect:    string(snapsql.Dialect("postgres")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

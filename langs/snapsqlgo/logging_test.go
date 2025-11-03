@@ -38,7 +38,6 @@ func TestQueryLoggerEmitsEntry(t *testing.T) {
 		return QueryLogMetadata{
 			FuncName:   "TestFunc",
 			SourceFile: "pkg/TestFunc",
-			Dialect:    "postgres",
 			QueryType:  QueryLogQueryTypeSelect,
 		}, nil
 	})
@@ -56,9 +55,10 @@ func TestQueryLoggerEmitsEntry(t *testing.T) {
 		t.Errorf("unexpected args: %#v", entry.Args)
 	}
 
-	if entry.FuncName != "TestFunc" || entry.Dialect != "postgres" {
-		t.Errorf("unexpected metadata: %+v", entry)
+	if entry.FuncName != "TestFunc" {
+		t.Errorf("unexpected metadata FuncName: %+v", entry.FuncName)
 	}
+	// Dialect was removed from log metadata; nothing to assert here.
 }
 
 func TestWithLoggerCopiesOptions(t *testing.T) {

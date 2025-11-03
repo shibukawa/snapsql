@@ -186,7 +186,6 @@ func CancelNotification(ctx context.Context, executor snapsqlgo.DBExecutor, noti
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "CancelNotification",
 			SourceFile: "query/CancelNotification",
-			Dialect:    string(snapsql.Dialect("postgres")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

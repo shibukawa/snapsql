@@ -19,7 +19,7 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
+
 	"time"
 
 	"github.com/google/cel-go/cel"
@@ -160,7 +160,6 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "ListCreate",
 			SourceFile: "query/ListCreate",
-			Dialect:    string(snapsql.Dialect("sqlite")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

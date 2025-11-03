@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
@@ -194,7 +193,6 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "CardPostpone",
 			SourceFile: "query/CardPostpone",
-			Dialect:    string(snapsql.Dialect("sqlite")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

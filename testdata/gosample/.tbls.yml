@@ -1,0 +1,12 @@
+# tbls config for gosample (SQLite)
+# Use a sqlite URL so snapsql's determineDriver can detect sqlite.
+# Path is relative to repo root when used by snapsql CLI.
+
+dsn: "sqlite:///Users/shibukawayoshiki/develop/snapsql2/testdata/gosample/gosample.sqlite"
+
+# Disable lint rules that would otherwise fail in a tiny sample
+lint:
+  requireColumnComment:
+    enabled: false
+  requireTableComment:
+    enabled: false

@@ -19,7 +19,7 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
+
 	"iter"
 	"time"
 
@@ -169,7 +169,6 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "CardCommentList",
 				SourceFile: "query/CardCommentList",
-				Dialect:    string(snapsql.Dialect("sqlite")),
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor

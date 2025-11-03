@@ -39,5 +39,4 @@ const (
 	OpEmitSystemOffset   = codegenerator.OpEmitSystemOffset
 	OpEmitSystemValue    = codegenerator.OpEmitSystemValue
 	OpEmitSystemFor      = codegenerator.OpEmitSystemFor
-	OpEmitIfDialect      = codegenerator.OpEmitIfDialect
 )

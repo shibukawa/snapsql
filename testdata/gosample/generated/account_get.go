@@ -14,34 +14,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package query
+package gosample
 
 import (
 	"context"
 	"fmt"
 
-	"time"
-
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// BoardCreateResult represents the response structure for BoardCreate
-type BoardCreateResult struct {
-	ID         int        `json:"id"`
-	Name       string     `json:"name"`
-	Status     string     `json:"status"`
-	ArchivedAt *time.Time `json:"archived_at"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+// AccountGetResult represents the response structure for AccountGet
+type AccountGetResult struct {
+	ID     int     `json:"id"`
+	Name   *string `json:"name"`
+	Status *string `json:"status"`
 }
 
-// BoardCreate specific CEL programs and mock path
+// AccountGet specific CEL programs and mock path
 var (
-	boardCreatePrograms []cel.Program
+	accountGetPrograms []cel.Program
 )
 
-const boardCreateMockPath = ""
+const accountGetMockPath = ""
 
 func init() {
 
@@ -53,9 +48,8 @@ func init() {
 		opts := []cel.EnvOption{
 			cel.Container("root"),
 		}
-		opts = append(opts, cel.Variable("name", cel.StringType))
-		opts = append(opts, cel.Variable("name", cel.StringType))
-		opts = append(opts, cel.Variable("name", cel.StringType))
+		opts = append(opts, cel.Variable("account_id", cel.IntType))
+		opts = append(opts, cel.Variable("account_id", cel.IntType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -63,40 +57,33 @@ func init() {
 		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create BoardCreate CEL environment 0: %v", err))
+			panic(fmt.Sprintf("failed to create AccountGet CEL environment 0: %v", err))
 		}
 		celEnvironments[0] = env0
 	}
 
 	// Create programs for each expression using the corresponding environment
-	boardCreatePrograms = make([]cel.Program, 1)
-	// expr_001: "name" using environment 0
+	accountGetPrograms = make([]cel.Program, 1)
+	// expr_001: "account_id" using environment 0
 	{
-		ast, issues := celEnvironments[0].Compile("name")
+		ast, issues := celEnvironments[0].Compile("account_id")
 		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "name", issues.Err()))
+			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "account_id", issues.Err()))
 		}
 		program, err := celEnvironments[0].Program(ast)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "name", err))
+			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "account_id", err))
 		}
-		boardCreatePrograms[0] = program
+		accountGetPrograms[0] = program
 	}
 }
 
-// BoardCreate Creates a new board using the provided name and returns the persisted row including timestamps.
-func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string, opts ...snapsqlgo.FuncOpt) (BoardCreateResult, error) {
-	var result BoardCreateResult
+// AccountGet - AccountGetResult Affinity
+func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID int, opts ...snapsqlgo.FuncOpt) (AccountGetResult, error) {
+	var result AccountGetResult
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
-	// Extract implicit parameters
-	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
-		{Name: "created_at", Type: "time.Time", Required: false},
-		{Name: "updated_at", Type: "time.Time", Required: false},
-	}
-	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
-	_ = systemValues // avoid unused if not referenced in args
 
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
@@ -104,15 +91,13 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 		rowLockMode = execCtx.RowLockMode()
 	}
 	if rowLockMode != snapsqlgo.RowLockNone {
-		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeExec, rowLockMode)
+		snapsqlgo.EnsureRowLockAllowed(snapsqlgo.QueryLogQueryTypeSelect, rowLockMode)
 	}
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
 		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
-		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
-		// for mutation queries we treat this as an error.
-		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)
 		if rowLockErr != nil {
 			// Return error in a manner appropriate for the function kind (iterator vs normal).
 			// non-iterator: return the zero value result and the error
@@ -126,38 +111,37 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "INSERT INTO boards (name, status, created_at, updated_at) VALUES ($1, 'active', $2, $3)\n\n RETURNING id, name, status, archived_at, created_at, updated_at"
+		query := "SELECT id, name, status FROM accounts  WHERE id = $1 "
 		args := make([]any, 0)
 		paramMap := map[string]any{
-			"name": name,
+			"account_id": accountID,
 		}
 
-		evalRes0, _, err := boardCreatePrograms[0].Eval(paramMap)
+		evalRes0, _, err := accountGetPrograms[0].Eval(paramMap)
 		if err != nil {
-			return "", nil, fmt.Errorf("BoardCreate: failed to evaluate expression: %w", err)
+			return "", nil, fmt.Errorf("AccountGet: failed to evaluate expression: %w", err)
 		}
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
-
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
-
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
 	if err != nil {
 		return result, err
 	}
+	if queryLogOptions.RowLockClause != "" {
+		query += queryLogOptions.RowLockClause
+	}
 	// Handle mock execution if present
-	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "BoardCreate"); mockMatched {
+	if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "AccountGet"); mockMatched {
 		if mockErr != nil {
 			return result, mockErr
 		}
 		if mockExec.Err != nil {
 			return result, mockExec.Err
 		}
-		mapped, err := snapsqlgo.MapMockExecutionToStruct[BoardCreateResult](mockExec)
+		mapped, err := snapsqlgo.MapMockExecutionToStruct[AccountGetResult](mockExec)
 		if err != nil {
-			return result, fmt.Errorf("BoardCreate: failed to map mock execution: %w", err)
+			return result, fmt.Errorf("AccountGet: failed to map mock execution: %w", err)
 		}
 		result = mapped
 		return result, nil
@@ -167,16 +151,16 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 	logger.SetQuery(query, args)
 	defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 		return snapsqlgo.QueryLogMetadata{
-			FuncName:   "BoardCreate",
-			SourceFile: "query/BoardCreate",
-			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
+			FuncName:   "AccountGet",
+			SourceFile: "gosample/AccountGet",
+			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 			Options:    queryLogOptions,
 		}, executor
 	})
 	// Execute query
 	stmt, err := executor.PrepareContext(ctx, query)
 	if err != nil {
-		err = fmt.Errorf("BoardCreate: failed to prepare statement: %w (query: %s)", err, query)
+		err = fmt.Errorf("AccountGet: failed to prepare statement: %w (query: %s)", err, query)
 		return result, err
 	}
 	defer stmt.Close()
@@ -186,9 +170,6 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 		&result.ID,
 		&result.Name,
 		&result.Status,
-		&result.ArchivedAt,
-		&result.CreatedAt,
-		&result.UpdatedAt,
 	)
 	if err != nil {
 		return result, fmt.Errorf("failed to scan row: %w", err)

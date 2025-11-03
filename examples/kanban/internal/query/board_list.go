@@ -19,7 +19,7 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
+
 	"iter"
 	"time"
 
@@ -148,7 +148,6 @@ func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snaps
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "BoardList",
 				SourceFile: "query/BoardList",
-				Dialect:    string(snapsql.Dialect("sqlite")),
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor

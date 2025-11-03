@@ -479,57 +479,12 @@ func applyDefaults(config *Config) {
 		config.Tables = make(map[string]TablePerformance)
 	}
 
-	// Apply default system field settings
-	applySystemFieldDefaults(config)
-}
-
-// applySystemFieldDefaults applies default values for system field configuration
-func applySystemFieldDefaults(config *Config) {
-	// Apply default system fields if empty
-	if len(config.System.Fields) == 0 {
-		config.System.Fields = []SystemField{
-			{
-				Name:              "created_at",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Default: "NOW()",
-				},
-				OnUpdate: SystemFieldOperation{
-					Parameter: ParameterError,
-				},
-			},
-			{
-				Name:              "updated_at",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Default: "NOW()",
-				},
-				OnUpdate: SystemFieldOperation{
-					Default: "NOW()",
-				},
-			},
-			{
-				Name:              "created_by",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Parameter: ParameterImplicit,
-				},
-				OnUpdate: SystemFieldOperation{
-					Parameter: ParameterError,
-				},
-			},
-			{
-				Name:              "updated_by",
-				ExcludeFromSelect: false,
-				OnInsert: SystemFieldOperation{
-					Parameter: ParameterImplicit,
-				},
-				OnUpdate: SystemFieldOperation{
-					Parameter: ParameterImplicit,
-				},
-			},
-		}
-	}
+	// NOTE: Do NOT automatically apply system field defaults when loading an
+	// existing configuration file. The initial default config returned by
+	// getDefaultConfig() contains sane system field defaults for first-time
+	// initialization. However, when a user provides a `snapsql.yaml`, we must
+	// preserve their explicit intent (including an empty `system` section).
+	// Therefore, do NOT call applySystemFieldDefaults here.
 }
 
 // loadEnvFiles loads .env files if they exist

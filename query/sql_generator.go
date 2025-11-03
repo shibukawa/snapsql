@@ -70,6 +70,10 @@ func NewSQLGenerator(format *intermediate.IntermediateFormat, dialect snapsql.Di
 		}
 	}
 
+	// (No normalization of dialect-specific instruction names is performed
+	// here. Intermediate formats are expected to be resolved by earlier
+	// pipeline processors so the generator receives final instruction streams.)
+
 	if systemFields == nil {
 		systemFields = make(map[string]intermediate.SystemFieldInfo)
 	}
@@ -377,10 +381,9 @@ func (g *SQLGenerator) processInstructions(state *generationState, params map[st
 				state.boundaryNeeded = true
 			}
 
-		case intermediate.OpEmitIfDialect:
-			if shouldEmitForDialect(g.dialect, instr.Dialects) {
-				state.appendSQL(instr.SqlFragment)
-			}
+		// OpEmitIfDialect is resolved at generator construction time; legacy
+		// IR should have been normalized to EMIT_STATIC. Runtime handling is
+		// therefore no longer necessary.
 
 		default:
 			return fmt.Errorf("%w: %s", ErrUnsupportedOperation, instr.Op)
@@ -507,22 +510,6 @@ func hasNext(val ref.Val) bool {
 
 	return false
 }
-
-func shouldEmitForDialect(current snapsql.Dialect, targets []string) bool {
-	if len(targets) == 0 {
-		return true
-	}
-
-	cur := strings.ToLower(strings.TrimSpace(string(current)))
-	for _, dialect := range targets {
-		if cur == strings.ToLower(strings.TrimSpace(dialect)) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func computeLoopBoundaries(instructions []intermediate.Instruction) (map[int]int, error) {
 	boundaries := make(map[int]int)
 	stack := make([]int, 0)

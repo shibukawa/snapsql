@@ -268,7 +268,6 @@ func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, not
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "DeliverNotification",
 			SourceFile: "query/DeliverNotification",
-			Dialect:    string(snapsql.Dialect("postgres")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

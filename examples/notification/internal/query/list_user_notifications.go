@@ -279,7 +279,6 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "ListUserNotifications",
 				SourceFile: "query/ListUserNotifications",
-				Dialect:    string(snapsql.Dialect("postgres")),
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor

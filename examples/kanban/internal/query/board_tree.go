@@ -19,8 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
 	"time"
+
+	"github.com/shibukawa/snapsql"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
@@ -344,7 +345,6 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "BoardTree",
 			SourceFile: "query/BoardTree",
-			Dialect:    string(snapsql.Dialect("sqlite")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 			Options:    queryLogOptions,
 		}, executor

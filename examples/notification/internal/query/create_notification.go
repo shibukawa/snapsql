@@ -279,7 +279,6 @@ func CreateNotification(ctx context.Context, executor snapsqlgo.DBExecutor, titl
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "CreateNotification",
 			SourceFile: "query/CreateNotification",
-			Dialect:    string(snapsql.Dialect("postgres")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

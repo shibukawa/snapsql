@@ -245,7 +245,6 @@ func UpdateNotification(ctx context.Context, executor snapsqlgo.DBExecutor, noti
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "UpdateNotification",
 				SourceFile: "query/UpdateNotification",
-				Dialect:    string(snapsql.Dialect("postgres")),
 				QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 				Options:    queryLogOptions,
 			}, executor

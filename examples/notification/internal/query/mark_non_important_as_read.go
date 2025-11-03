@@ -165,7 +165,6 @@ func MarkNonImportantAsRead(ctx context.Context, executor snapsqlgo.DBExecutor, 
 		return snapsqlgo.QueryLogMetadata{
 			FuncName:   "MarkNonImportantAsRead",
 			SourceFile: "query/MarkNonImportantAsRead",
-			Dialect:    string(snapsql.Dialect("postgres")),
 			QueryType:  snapsqlgo.QueryLogQueryTypeExec,
 			Options:    queryLogOptions,
 		}, executor

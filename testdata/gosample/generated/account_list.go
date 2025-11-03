@@ -25,19 +25,19 @@ import (
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
-// AccountGetResult represents the response structure for AccountGet
-type AccountGetResult struct {
-	ID     any  `json:"id"`
-	Name   *any `json:"name"`
-	Status *any `json:"status"`
+// AccountListResult represents the response structure for AccountList
+type AccountListResult struct {
+	ID     int     `json:"id"`
+	Name   *string `json:"name"`
+	Status *string `json:"status"`
 }
 
-// AccountGet specific CEL programs and mock path
+// AccountList specific CEL programs and mock path
 var (
-	accountGetPrograms []cel.Program
+	accountListPrograms []cel.Program
 )
 
-const accountGetMockPath = ""
+const accountListMockPath = ""
 
 func init() {
 
@@ -49,8 +49,6 @@ func init() {
 		opts := []cel.EnvOption{
 			cel.Container("root"),
 		}
-		opts = append(opts, cel.Variable("account_id", cel.IntType))
-		opts = append(opts, cel.Variable("account_id", cel.IntType))
 		opts = append(opts,
 			cel.HomogeneousAggregateLiterals(),
 			cel.EagerlyValidateDeclarations(true),
@@ -58,29 +56,17 @@ func init() {
 		)
 		env0, err := cel.NewEnv(opts...)
 		if err != nil {
-			panic(fmt.Sprintf("failed to create AccountGet CEL environment 0: %v", err))
+			panic(fmt.Sprintf("failed to create AccountList CEL environment 0: %v", err))
 		}
 		celEnvironments[0] = env0
 	}
 
 	// Create programs for each expression using the corresponding environment
-	accountGetPrograms = make([]cel.Program, 1)
-	// expr_001: "account_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("account_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "account_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "account_id", err))
-		}
-		accountGetPrograms[0] = program
-	}
+	accountListPrograms = make([]cel.Program, 0)
 }
 
-// AccountGet - AccountGetResult Affinity
-func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID int, opts ...snapsqlgo.FuncOpt) iter.Seq2[*AccountGetResult, error] {
+// AccountList - []AccountListResult Affinity
+func AccountList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*AccountListResult, error] {
 
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
@@ -94,12 +80,12 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 	if rowLockMode != snapsqlgo.RowLockNone {
 		var rowLockErr error
 		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
-		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
-		// for mutation queries we treat this as an error.
-		rowLockClause, _ = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
+		rowLockClause, rowLockErr = snapsqlgo.BuildRowLockClausePostgres(rowLockMode)
 		if rowLockErr != nil {
-			var zero *AccountGetResult
-			return func(yield func(*AccountGetResult, error) bool) {
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			var zero *AccountListResult
+			return func(yield func(*AccountListResult, error) bool) {
+				// yield the error to the caller and exit the iterator function
 				_ = yield(zero, rowLockErr)
 				return
 			}
@@ -112,21 +98,11 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		query := "SELECT id, name, status FROM accounts  WHERE id = $1 "
+		query := "SELECT id, name, status FROM accounts ORDER BY id DESC "
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"account_id": accountID,
-		}
-
-		evalRes0, _, err := accountGetPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("AccountGet: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
 		return query, args, nil
 	}
-
-	return func(yield func(*AccountGetResult, error) bool) {
+	return func(yield func(*AccountListResult, error) bool) {
 		query, args, err := buildQueryAndArgs()
 		if err != nil {
 			_ = yield(nil, err)
@@ -136,7 +112,7 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 			query += queryLogOptions.RowLockClause
 		}
 		// Handle mock execution if present
-		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "AccountGet"); mockMatched {
+		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "AccountList"); mockMatched {
 			if mockErr != nil {
 				_ = yield(nil, mockErr)
 				return
@@ -146,9 +122,9 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 				return
 			}
 
-			mapped, err := snapsqlgo.MapMockExecutionToSlice[AccountGetResult](mockExec)
+			mapped, err := snapsqlgo.MapMockExecutionToSlice[AccountListResult](mockExec)
 			if err != nil {
-				_ = yield(nil, fmt.Errorf("AccountGet: failed to map mock execution: %w", err))
+				_ = yield(nil, fmt.Errorf("AccountList: failed to map mock execution: %w", err))
 				return
 			}
 
@@ -166,34 +142,37 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 		logger.SetQuery(query, args)
 		defer logger.Write(ctx, func() (snapsqlgo.QueryLogMetadata, snapsqlgo.DBExecutor) {
 			return snapsqlgo.QueryLogMetadata{
-				FuncName:   "AccountGet",
-				SourceFile: "gosample/AccountGet",
+				FuncName:   "AccountList",
+				SourceFile: "gosample/AccountList",
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor
 		})
 		stmt, err := executor.PrepareContext(ctx, query)
 		if err != nil {
-			_ = yield(nil, fmt.Errorf("AccountGet: failed to prepare statement: %w (query: %s)", err, query))
+			err = fmt.Errorf("AccountList: failed to prepare statement: %w (query: %s)", err, query)
+			_ = yield(nil, err)
 			return
 		}
 		defer stmt.Close()
 
 		rows, err := stmt.QueryContext(ctx, args...)
 		if err != nil {
-			_ = yield(nil, fmt.Errorf("AccountGet: failed to execute query: %w", err))
+			err = fmt.Errorf("AccountList: failed to execute query: %w", err)
+			_ = yield(nil, err)
 			return
 		}
 		defer rows.Close()
 
 		for rows.Next() {
-			item := new(AccountGetResult)
+			item := new(AccountListResult)
 			if err := rows.Scan(
 				&item.ID,
 				&item.Name,
 				&item.Status,
 			); err != nil {
-				_ = yield(nil, fmt.Errorf("AccountGet: failed to scan row: %w", err))
+				err = fmt.Errorf("AccountList: failed to scan row: %w", err)
+				_ = yield(nil, err)
 				return
 			}
 			if !yield(item, nil) {
@@ -202,7 +181,8 @@ func AccountGet(ctx context.Context, executor snapsqlgo.DBExecutor, accountID in
 		}
 
 		if err := rows.Err(); err != nil {
-			_ = yield(nil, fmt.Errorf("AccountGet: error iterating rows: %w", err))
+			err = fmt.Errorf("AccountList: error iterating rows: %w", err)
+			_ = yield(nil, err)
 			return
 		}
 	}

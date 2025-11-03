@@ -22,7 +22,6 @@ import (
 	"iter"
 
 	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -79,8 +78,20 @@ func AccountList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sna
 	}
 	rowLockClause := ""
 	if rowLockMode != snapsqlgo.RowLockNone {
-		// SQLite: SELECT queries ignore row-lock clauses
+		var rowLockErr error
+		// Call dialect-specific helper generated for each target dialect to avoid runtime dialect checks.
+		// SQLite does not support row locks. For SELECT queries we silently ignore the clause;
+		// for mutation queries we treat this as an error.
 		rowLockClause, _ = snapsqlgo.BuildRowLockClauseSQLite(rowLockMode)
+		if rowLockErr != nil {
+			// Return error in a manner appropriate for the function kind (iterator vs normal).
+			var zero *AccountListResult
+			return func(yield func(*AccountListResult, error) bool) {
+				// yield the error to the caller and exit the iterator function
+				_ = yield(zero, rowLockErr)
+				return
+			}
+		}
 	}
 	queryLogOptions := snapsqlgo.QueryOptionsSnapshot{
 		RowLockClause: rowLockClause,
@@ -94,14 +105,10 @@ func AccountList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sna
 		return query, args, nil
 	}
 	return func(yield func(*AccountListResult, error) bool) {
-
 		query, args, err := buildQueryAndArgs()
 		if err != nil {
 			_ = yield(nil, err)
 			return
-		}
-		if queryLogOptions.RowLockClause != "" {
-			query += queryLogOptions.RowLockClause
 		}
 		// Handle mock execution if present
 		if mockExec, mockMatched, mockErr := snapsqlgo.MatchMock(ctx, "AccountList"); mockMatched {
@@ -136,7 +143,6 @@ func AccountList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...sna
 			return snapsqlgo.QueryLogMetadata{
 				FuncName:   "AccountList",
 				SourceFile: "gosample/AccountList",
-				Dialect:    string(snapsql.DialectSQLite),
 				QueryType:  snapsqlgo.QueryLogQueryTypeSelect,
 				Options:    queryLogOptions,
 			}, executor

@@ -136,13 +136,6 @@ func OptimizeInstructions(instructions []Instruction, dialect snapsql.Dialect) (
 			result = append(result, OptimizedInstruction{Op: "EMIT_STATIC", Value: "?"})
 			result = append(result, OptimizedInstruction{Op: "ADD_SYSTEM_PARAM", SystemField: inst.SystemField})
 
-		case OpEmitIfDialect:
-			result = append(result, OptimizedInstruction{
-				Op:          "EMIT_IF_DIALECT",
-				SqlFragment: inst.SqlFragment,
-				Dialects:    append([]string(nil), inst.Dialects...),
-			})
-
 		case OpFallbackCondition:
 			var combos [][]RemovalLiteral
 			if len(inst.FallbackCombos) > 0 {
@@ -262,8 +255,6 @@ func applyPlaceholderStyle(instructions []OptimizedInstruction, dialect snapsql.
 		switch instructions[i].Op {
 		case "EMIT_STATIC", "EMIT_UNLESS_BOUNDARY":
 			instructions[i].Value = convert(instructions[i].Value)
-		case "EMIT_IF_DIALECT":
-			instructions[i].SqlFragment = convert(instructions[i].SqlFragment)
 		}
 	}
 
