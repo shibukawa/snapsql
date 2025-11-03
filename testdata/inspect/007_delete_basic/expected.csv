@@ -1,3 +1,2 @@
-name,alias,schema,source,joinType
-sessions,,,main,none
-
+name,alias,schema,source,joinType,queryName,isTable
+sessions,,,main,none,,true

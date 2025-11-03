@@ -1,4 +1,3 @@
-name,alias,schema,source,joinType
-users,u,,main,none
-regions,r,,join,cross
-
+name,alias,schema,source,joinType,queryName,isTable
+users,u,,main,none,,true
+regions,r,,join,cross,,true

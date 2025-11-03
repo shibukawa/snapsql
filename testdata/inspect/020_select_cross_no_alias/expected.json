@@ -1,8 +1,17 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "source": "main", "join_type": "none" },
-    { "name": "regions", "source": "join", "join_type": "cross" }
+    {
+      "name": "users",
+      "source": "main",
+      "join_type": "none",
+      "is_table": true
+    },
+    {
+      "name": "regions",
+      "source": "join",
+      "join_type": "cross",
+      "is_table": true
+    }
   ]
 }
-

@@ -11,11 +11,16 @@ func TablesCSV(res InspectResult, withHeader bool) ([]byte, error) {
 	w := csv.NewWriter(buf)
 
 	if withHeader {
-		_ = w.Write([]string{"name", "alias", "schema", "source", "joinType"})
+		_ = w.Write([]string{"name", "alias", "schema", "source", "joinType", "queryName", "isTable"})
 	}
 
 	for _, t := range res.Tables {
-		_ = w.Write([]string{t.Name, t.Alias, t.Schema, t.Source, t.JoinType})
+		isTableStr := "false"
+		if t.IsTable {
+			isTableStr = "true"
+		}
+
+		_ = w.Write([]string{t.Name, t.Alias, t.Schema, t.Source, t.JoinType, t.QueryName, isTableStr})
 	}
 
 	w.Flush()

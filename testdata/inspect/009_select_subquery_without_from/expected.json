@@ -1,6 +1,12 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "alias": "u", "source": "main", "join_type": "none" }
+    {
+      "name": "users",
+      "alias": "u",
+      "source": "join",
+      "join_type": "inner",
+      "is_table": true
+    }
   ]
 }

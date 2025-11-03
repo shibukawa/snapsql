@@ -1,7 +1,21 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "alias": "u", "schema": "public", "source": "main", "join_type": "none" },
-    { "name": "orders", "alias": "o", "schema": "sales", "source": "join", "join_type": "inner" }
+    {
+      "name": "users",
+      "alias": "u",
+      "schema": "public",
+      "source": "main",
+      "join_type": "none",
+      "is_table": true
+    },
+    {
+      "name": "orders",
+      "alias": "o",
+      "schema": "sales",
+      "source": "join",
+      "join_type": "inner",
+      "is_table": true
+    }
   ]
 }

@@ -1,7 +1,26 @@
 {
   "statement": "select",
   "tables": [
-    { "name": "users", "alias": "u", "source": "main", "join_type": "none" },
-    { "name": "recent", "alias": "r", "source": "cte", "join_type": "left" }
+    {
+      "name": "users",
+      "alias": "u",
+      "source": "main",
+      "join_type": "none",
+      "is_table": true
+    },
+    {
+      "name": "recent",
+      "alias": "r",
+      "source": "join",
+      "join_type": "left",
+      "is_table": false
+    },
+    {
+      "name": "orders",
+      "source": "cte",
+      "join_type": "none",
+      "query_name": "recent",
+      "is_table": true
+    }
   ]
 }

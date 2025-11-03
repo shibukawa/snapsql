@@ -1,3 +1,4 @@
-name,alias,schema,source,joinType
-users,s,,subquery,none
-orders,o,,join,inner
+name,alias,schema,source,joinType,queryName,isTable
+orders,o,,join,inner,,true
+users,s,,subquery,none,,true
+users,,,subquery,none,s,true

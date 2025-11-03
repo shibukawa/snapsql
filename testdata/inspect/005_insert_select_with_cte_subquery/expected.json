@@ -1,7 +1,25 @@
 {
   "statement": "insert",
   "tables": [
-    { "name": "snapshots", "source": "main", "join_type": "none" },
-    { "name": "latest", "alias": "l", "source": "cte", "join_type": "none" }
+    {
+      "name": "latest",
+      "alias": "l",
+      "source": "main",
+      "join_type": "none",
+      "is_table": false
+    },
+    {
+      "name": "snapshots",
+      "source": "main",
+      "join_type": "none",
+      "is_table": true
+    },
+    {
+      "name": "orders",
+      "source": "cte",
+      "join_type": "none",
+      "query_name": "latest",
+      "is_table": true
+    }
   ]
 }

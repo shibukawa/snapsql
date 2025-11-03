@@ -504,11 +504,19 @@ func nameOrAlias(t cmn.TableReference) string { // alias if exists else name
 }
 
 func realName(t cmn.TableReference) string {
-	if t.TableName != "" {
+	// For schema-qualified tables, TableName might be "." or empty
+	// In such cases, use Name (which contains the actual table name)
+	if t.TableName != "" && t.TableName != "." {
 		return t.TableName
 	}
 
-	return t.Name
+	// Fallback to Name (which may be alias or table name)
+	if t.Name != "" && t.Name != "." {
+		return t.Name
+	}
+
+	// If both are invalid, return empty string
+	return ""
 }
 
 // GetDependencyGraph returns the built dependency graph
