@@ -112,158 +112,6 @@ func tryFullParserWithInspect(sql string, opt InspectOptions) (InspectResult, bo
 	return res, true, nil
 }
 
-// mergeWithStep7 overrides name/alias/schema with Step7 SQTableReference info while keeping
-// source/joinType determined from AST. Matching is done by alias if present, otherwise by name.
-func mergeWithStep7(base []TableRef, step7 map[string]*cmn.SQTableReference, cteNames map[string]struct{}) []TableRef {
-	// Build lookup by alias and by real name
-	byAlias := map[string]*cmn.SQTableReference{}
-	byReal := map[string]*cmn.SQTableReference{}
-	cteTargets := map[string]struct{}{}
-	subqueryTargets := map[string]struct{}{}
-
-	for name := range cteNames {
-		cteTargets[name] = struct{}{}
-	}
-
-	for _, tr := range step7 {
-		alias := ""
-		if tr.RealName != "" && tr.Name != "" && tr.RealName != tr.Name {
-			alias = tr.Name
-		}
-
-		if alias != "" {
-			byAlias[alias] = tr
-		}
-
-		key := tr.RealName
-		if key == "" {
-			key = tr.Name
-		}
-
-		if key != "" {
-			byReal[key] = tr
-		}
-
-		switch tr.Context {
-		case cmn.SQTableContextCTE:
-			if tr.QueryName != "" {
-				cteTargets[tr.QueryName] = struct{}{}
-			}
-
-			if tr.RealName != "" {
-				cteTargets[tr.RealName] = struct{}{}
-			}
-		case cmn.SQTableContextSubquery:
-			if tr.QueryName != "" {
-				subqueryTargets[tr.QueryName] = struct{}{}
-			}
-
-			if tr.RealName != "" {
-				subqueryTargets[tr.RealName] = struct{}{}
-			}
-		}
-	}
-
-	out := make([]TableRef, len(base))
-
-	for i, t := range base {
-		if tr, ok := byAlias[t.Alias]; ok && t.Alias != "" {
-			out[i] = overrideFromStep7(t, tr, cteTargets, subqueryTargets)
-			continue
-		}
-
-		if tr, ok := byReal[t.Name]; ok {
-			out[i] = overrideFromStep7(t, tr, cteTargets, subqueryTargets)
-			continue
-		}
-
-		out[i] = t
-	}
-
-	return out
-}
-
-func overrideFromStep7(t TableRef, tr *cmn.SQTableReference, cteTargets, subqueryTargets map[string]struct{}) TableRef {
-	// Keep base Name/Alias/Schema as parsed from AST to avoid inconsistencies.
-	// Prefer Step7's classification for source/join only.
-	if s := tr.Context.String(); s != "" && s != "unknown" {
-		switch s {
-		case "cte", "subquery":
-			t.Source = s
-		case "join":
-			if t.Source != "main" {
-				t.Source = s
-			}
-		default:
-			t.Source = s
-		}
-	}
-
-	if t.Source != "main" || t.JoinType != "none" {
-		t.JoinType = joinToString(tr.Join)
-	}
-
-	if tr.RealName != "" {
-		if _, ok := cteTargets[tr.RealName]; ok {
-			t.Source = "cte"
-		}
-	}
-
-	return t
-}
-
-// convertStep7ToTableRefs converts all Step7 SQTableReference entries (including CTE internals)
-// to TableRef output format. This provides complete table reference information.
-func convertStep7ToTableRefs(step7 map[string]*cmn.SQTableReference) []TableRef {
-	refs := make([]TableRef, 0, len(step7))
-
-	for _, tr := range step7 {
-		if tr == nil {
-			continue
-		}
-
-		ref := TableRef{
-			Source:   contextToSource(tr.Context),
-			JoinType: joinToString(tr.Join),
-		}
-
-		// Determine name: prefer RealName (physical table), fallback to Name (alias)
-		if tr.RealName != "" && tr.RealName != "." {
-			ref.Name = tr.RealName
-		} else if tr.Name != "" && tr.Name != "." {
-			ref.Name = tr.Name
-		}
-
-		// Skip entries with no valid name
-		if ref.Name == "" || ref.Name == "." {
-			continue
-		}
-
-		// Set alias if Name differs from RealName
-		if tr.Name != "" && tr.Name != "." && tr.Name != ref.Name {
-			ref.Alias = tr.Name
-		}
-
-		// Schema if present
-		if tr.Schema != "" {
-			ref.Schema = tr.Schema
-		}
-
-		// QueryName indicates CTE/subquery containing this reference
-		if tr.QueryName != "" {
-			ref.QueryName = tr.QueryName
-		}
-
-		refs = append(refs, ref)
-	}
-
-	// Sort for stable output: main tables first, then by QueryName, then by Name
-	// This ensures consistent ordering across runs
-	sortTableRefs(refs)
-
-	return refs
-}
-
 // mergeStep7WithAST merges Step7 table references (includes CTE internals) with AST table data
 // (has correct names for schema-qualified tables). Main query tables come from AST with Step7
 // metadata, and CTE/subquery internals come from Step7.
@@ -287,6 +135,7 @@ func mergeStep7WithAST(step7 map[string]*cmn.SQTableReference, astTables []Table
 		if tr.Name != "" && tr.Name != "." {
 			step7All[tr.Name] = tr
 		}
+
 		if tr.RealName != "" && tr.RealName != "." {
 			step7All[tr.RealName] = tr
 		}
@@ -296,6 +145,7 @@ func mergeStep7WithAST(step7 map[string]*cmn.SQTableReference, astTables []Table
 			if tr.Name != "" && tr.Name != "." {
 				step7ByAlias[tr.Name] = tr
 			}
+
 			if tr.RealName != "" && tr.RealName != "." {
 				step7ByName[tr.RealName] = tr
 			}
@@ -311,6 +161,7 @@ func mergeStep7WithAST(step7 map[string]*cmn.SQTableReference, astTables []Table
 		if astTable.Alias != "" {
 			step7Ref = step7ByAlias[astTable.Alias]
 		}
+
 		if step7Ref == nil && astTable.Name != "" {
 			step7Ref = step7ByName[astTable.Name]
 		}
@@ -329,6 +180,7 @@ func mergeStep7WithAST(step7 map[string]*cmn.SQTableReference, astTables []Table
 			if step7Ref.Context != cmn.SQTableContextMain {
 				ref.Source = contextToSource(step7Ref.Context)
 			}
+
 			ref.JoinType = joinToString(step7Ref.Join)
 
 			// Only override is_table if we didn't already determine it's a CTE
@@ -400,7 +252,7 @@ func mergeStep7WithAST(step7 map[string]*cmn.SQTableReference, astTables []Table
 func sortTableRefs(refs []TableRef) {
 	// Use a simple bubble-like approach or import "sort"
 	// For simplicity, we'll use a comparison function
-	for i := 0; i < len(refs); i++ {
+	for i := range refs {
 		for j := i + 1; j < len(refs); j++ {
 			if shouldSwap(refs[i], refs[j]) {
 				refs[i], refs[j] = refs[j], refs[i]
@@ -425,6 +277,7 @@ func shouldSwap(a, b TableRef) bool {
 			if a.Source == "main" {
 				return false
 			}
+
 			if b.Source == "main" {
 				return true
 			}
@@ -435,11 +288,13 @@ func shouldSwap(a, b TableRef) bool {
 				if a.JoinType == "none" {
 					return false
 				}
+
 				if b.JoinType == "none" {
 					return true
 				}
 			}
 		}
+
 		return a.Name > b.Name
 	}
 

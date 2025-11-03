@@ -19,6 +19,7 @@ func TablesCSV(res InspectResult, withHeader bool) ([]byte, error) {
 		if t.IsTable {
 			isTableStr = "true"
 		}
+
 		_ = w.Write([]string{t.Name, t.Alias, t.Schema, t.Source, t.JoinType, t.QueryName, isTableStr})
 	}
 
