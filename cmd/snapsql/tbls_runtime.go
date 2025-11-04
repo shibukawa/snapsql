@@ -52,7 +52,11 @@ func buildTblsOptions(ctx *Context) schemaimport.Options {
 
 	opts := schemaimport.Options{WorkingDir: baseDir, Verbose: ctx.Verbose}
 
-	if isTblsConfigPath(ctx.Config) {
+	// If an explicit tbls config path was provided via --tbls-config, prefer it.
+	if strings.TrimSpace(ctx.TblsConfig) != "" {
+		opts.TblsConfigPath = ctx.TblsConfig
+	} else if isTblsConfigPath(ctx.Config) {
+		// Backwards-compat: if the global --config happens to be a tbls config path, use it.
 		opts.TblsConfigPath = ctx.Config
 	}
 

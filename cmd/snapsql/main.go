@@ -35,20 +35,21 @@ var (
 
 // Context represents the global context for commands
 type Context struct {
-	Config  string
-	Verbose bool
-	Quiet   bool
+	Config     string
+	Verbose    bool
+	Quiet      bool
+	TblsConfig string
 }
 
 // TestCmd represents the test command
 type TestCmd struct {
-	RunPattern   string   `help:"Run only tests matching the regular expression" short:"r"`
-	Timeout      string   `help:"Test timeout duration" default:"10m"`
-	Parallel     int      `help:"Number of parallel workers" default:"0"` // 0 means use CPU count
-	FixtureOnly  bool     `help:"Execute only fixture insertion and commit (requires --run pattern)"`
-	QueryOnly    bool     `help:"Execute only queries without fixtures"`
-	Commit       bool     `help:"Commit transactions instead of rollback"`
-	Environment  string   `help:"Database environment to use from config" default:"development"`
+	RunPattern  string `help:"Run only tests matching the regular expression" short:"r"`
+	Timeout     string `help:"Test timeout duration" default:"10m"`
+	Parallel    int    `help:"Number of parallel workers" default:"0"` // 0 means use CPU count
+	FixtureOnly bool   `help:"Execute only fixture insertion and commit (requires --run pattern)"`
+	QueryOnly   bool   `help:"Execute only queries without fixtures"`
+	Commit      bool   `help:"Commit transactions instead of rollback"`
+	// Environment flag removed; tbls uses single DSN and explicit tbls config path is preferred
 	Schema       []string `help:"SQL files or directories to initialize an ephemeral database (repeatable)" short:"s"`
 	SchemaOutput string   `help:"Directory to emit schema YAML snapshots before running tests" default:"./schema"`
 	Paths        []string `arg:"" optional:"" name:"path" help:"Optional file or directory paths to limit executed tests"`
@@ -133,7 +134,7 @@ func (cmd *TestCmd) Run(ctx *Context) error {
 		fmt.Printf("Timeout: %s\n", timeout)
 		fmt.Printf("Parallel workers: %d\n", parallel)
 		fmt.Printf("Commit after test: %t\n", cmd.Commit)
-		fmt.Printf("Environment: %s\n", cmd.Environment)
+		// Environment field removed; tbls config path is used instead when needed
 
 		if cmd.RunPattern != "" {
 			fmt.Printf("Test pattern: %s\n", cmd.RunPattern)
@@ -423,18 +424,19 @@ func executeSQLFile(ctx context.Context, db *sql.DB, path string) error {
 
 // CLI represents the command-line interface
 var CLI struct {
-	Config    string       `help:"Configuration file path" default:"snapsql.yaml"`
-	Verbose   bool         `help:"Enable verbose output" short:"v"`
-	Quiet     bool         `help:"Suppress output" short:"q"`
-	Generate  GenerateCmd  `cmd:"" help:"Generate intermediate files from SQL templates"`
-	Validate  ValidateCmd  `cmd:"" help:"Validate SQL templates"`
-	Init      InitCmd      `cmd:"" help:"Initialize a new SnapSQL project"`
-	Query     QueryCmd     `cmd:"" help:"Execute SQL queries"`
-	Test      TestCmd      `cmd:"" help:"Run tests"`
-	Format    FormatCmd    `cmd:"" help:"Format SnapSQL template files"`
-	HelpTypes HelpTypesCmd `cmd:"help-types" help:"Show detailed information about supported types"`
-	Inspect   InspectCmd   `cmd:"" help:"Inspect an SQL and print JSON summary"`
-	Version   VersionCmd   `cmd:"" help:"Show version information"`
+	Config     string       `help:"Configuration file path" default:"snapsql.yaml"`
+	Verbose    bool         `help:"Enable verbose output" short:"v"`
+	Quiet      bool         `help:"Suppress output" short:"q"`
+	TblsConfig string       `help:"Path to tbls config (.tbls.yaml); overrides --config"`
+	Generate   GenerateCmd  `cmd:"" help:"Generate intermediate files from SQL templates"`
+	Validate   ValidateCmd  `cmd:"" help:"Validate SQL templates"`
+	Init       InitCmd      `cmd:"" help:"Initialize a new SnapSQL project"`
+	Query      QueryCmd     `cmd:"" help:"Execute SQL queries"`
+	Test       TestCmd      `cmd:"" help:"Run tests"`
+	Format     FormatCmd    `cmd:"" help:"Format SnapSQL template files"`
+	HelpTypes  HelpTypesCmd `cmd:"help-types" help:"Show detailed information about supported types"`
+	Inspect    InspectCmd   `cmd:"" help:"Inspect an SQL and print JSON summary"`
+	Version    VersionCmd   `cmd:"" help:"Show version information"`
 }
 
 // InspectCmd represents the inspect command
@@ -577,9 +579,10 @@ func main() {
 
 	// Create context with config path
 	appCtx := &Context{
-		Config:  CLI.Config,
-		Verbose: CLI.Verbose,
-		Quiet:   CLI.Quiet,
+		Config:     CLI.Config,
+		Verbose:    CLI.Verbose,
+		Quiet:      CLI.Quiet,
+		TblsConfig: CLI.TblsConfig,
 	}
 
 	err := ctx.Run(appCtx)

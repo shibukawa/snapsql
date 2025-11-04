@@ -44,22 +44,22 @@ var (
 
 // QueryCmd represents the query command
 type QueryCmd struct {
-	TemplateFile          string   `arg:"" help:"SQL template file (.snap.sql or .snap.md)" type:"path"`
-	ParamsFile            string   `short:"p" long:"params" help:"Parameters file (JSON/YAML)" type:"path"`
-	Param                 []string `long:"param" help:"Individual parameter (key=value format)"`
-	ConstFiles            []string `long:"const" help:"Constant definition files" type:"path"`
-	DBConnection          string   `long:"db" help:"Database connection string"`
-	Environment           string   `long:"env" help:"Environment name from config"`
-	Format                string   `long:"format" help:"Output format (table, json, csv, yaml, markdown)" default:"table"`
-	OutputFile            string   `short:"o" long:"output" help:"Output file (defaults to stdout)" type:"path"`
-	Timeout               int      `long:"timeout" help:"Query timeout in seconds" default:"30"`
-	Explain               bool     `long:"explain" help:"Show query execution plan"`
-	ExplainAnalyze        bool     `long:"explain-analyze" help:"Show detailed query execution plan with actual execution statistics"`
-	Limit                 int      `long:"limit" help:"Limit number of rows returned"`
-	Offset                int      `long:"offset" help:"Offset for result set"`
-	ExecuteDangerousQuery bool     `long:"execute-dangerous-query" help:"Execute DELETE/UPDATE queries without WHERE clause (dangerous!)"`
-	DryRun                bool     `long:"dry-run" help:"Show generated SQL without executing"`
-	Dialect               string   `long:"dialect" help:"SQL dialect for dry-run or when no DB (postgresql|mysql|sqlite|mariadb)"`
+	TemplateFile string   `arg:"" help:"SQL template file (.snap.sql or .snap.md)" type:"path"`
+	ParamsFile   string   `short:"P" long:"params" help:"Parameters file (JSON/YAML)" type:"path"`
+	Param        []string `short:"p" long:"param" help:"Individual parameter (key=value format)"`
+	ConstFiles   []string `long:"const" help:"Constant definition files" type:"path"`
+	DBConnection string   `long:"db" help:"Database connection string"`
+	// Environment flag removed; use --tbls-config to point to a tbls config if needed
+	Format                string `long:"format" help:"Output format (table, json, csv, yaml, markdown)" default:"table"`
+	OutputFile            string `short:"o" long:"output" help:"Output file (defaults to stdout)" type:"path"`
+	Timeout               int    `long:"timeout" help:"Query timeout in seconds" default:"30"`
+	Explain               bool   `long:"explain" help:"Show query execution plan"`
+	ExplainAnalyze        bool   `long:"explain-analyze" help:"Show detailed query execution plan with actual execution statistics"`
+	Limit                 int    `long:"limit" help:"Limit number of rows returned"`
+	Offset                int    `long:"offset" help:"Offset for result set"`
+	ExecuteDangerousQuery bool   `long:"execute-dangerous-query" help:"Execute DELETE/UPDATE queries without WHERE clause (dangerous!)"`
+	DryRun                bool   `long:"dry-run" help:"Show generated SQL without executing"`
+	Dialect               string `long:"dialect" help:"SQL dialect for dry-run or when no DB (postgresql|mysql|sqlite|mariadb)"`
 }
 
 // Run executes the query command
@@ -289,26 +289,9 @@ func (q *QueryCmd) getDatabaseConnection(config *snapsql.Config, ctx *Context) (
 		driver           string
 	)
 
-	// Get connection string from environment or direct specification
+	// Get connection string from direct specification or tbls runtime (via --tbls-config / --config)
 
-	if q.Environment != "" {
-		// Use tbls runtime for environment resolution (config.Databases is ignored)
-		if ctx.Verbose {
-			color.Blue("Resolving database via .tbls.yaml for environment '%s'", q.Environment)
-		}
-
-		fallback, err := resolveDatabaseFromTbls(ctx)
-		if err != nil {
-			if errors.Is(err, ErrTblsDatabaseUnavailable) {
-				return "", "", fmt.Errorf("%w: tbls config unavailable for environment %s", ErrEnvironmentNotFound, q.Environment)
-			}
-
-			return "", "", fmt.Errorf("failed to resolve database from tbls: %w", err)
-		}
-
-		connectionString = fallback.Connection
-		driver = fallback.Driver
-	} else if q.DBConnection != "" {
+	if q.DBConnection != "" {
 		// Direct connection string
 		connectionString = q.DBConnection
 		// Try to determine driver from connection string
