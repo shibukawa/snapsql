@@ -1,0 +1,24 @@
+{
+  "name": "snapsql-docs",
+  "version": "1.0.0",
+  "description": "SnapSQL Documentation",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "keywords": [
+    "snapsql",
+    "documentation"
+  ],
+  "author": "渋川よしき",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "mermaid": "^11.12.0",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17",
+    "vitepress-plugin-tabs": "^0.7.3",
+    "vue": "^3.5.22"
+  }
+}
