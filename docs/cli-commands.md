@@ -48,7 +48,6 @@ snapsql generate [options]
 
 **Options:**
 - `--output <dir>` - Output directory for generated files (default: `./generated`)
-- `--watch` - Watch for file changes and regenerate automatically
 - `--force` - Overwrite existing generated files
 
 **Example:**
@@ -59,8 +58,8 @@ snapsql generate
 # Generate with custom output directory
 snapsql generate --output ./build
 
-# Watch for changes
-snapsql generate --watch
+# Generated files
+snapsql generate
 ```
 
 ### query - Execute Query
@@ -286,8 +285,8 @@ snapsql validate --all
 ### Development Workflow
 
 ```bash
-# Watch for changes and regenerate
-snapsql generate --watch &
+# Generate intermediate files during development
+snapsql generate
 
 # Test queries as you develop
 snapsql query queries/new-query.snap.sql --dry-run --param test=true

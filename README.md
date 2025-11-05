@@ -1,5 +1,7 @@
 # SnapSQL
 
+![SnapSQL logo](docs/snapsql.logo.png)
+
 SnapSQL is a SQL template engine that enables dynamic SQL generation using the **2-way SQL format**. Write SQL templates that work as standard SQL during development while providing runtime flexibility for dynamic query construction.
 
 ## Philosophy

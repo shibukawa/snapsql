@@ -1,5 +1,7 @@
 # SnapSQL
 
+![SnapSQL logo](docs/snapsql.logo.png)
+
 SnapSQLは**2-way SQL形式**を使用した動的SQL生成を可能にするSQLテンプレートエンジンです。開発時には標準SQLとして動作し、実行時には動的なクエリ構築の柔軟性を提供するSQLテンプレートを記述できます。
 
 ## 哲学

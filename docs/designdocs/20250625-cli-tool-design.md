@@ -47,7 +47,7 @@ snapsql generate [options]
 - `--package <name>` - Package name (language-specific)
 - `--const <files>` - Constant definition files (can be specified multiple times)
 - `--validate` - Validate templates before generation
-- `--watch` - Watch for file changes and regenerate automatically
+- `--watch` - (削除) 以前に想定されていたファイル監視オプション。現在の実装ではサポートされていません。
 
 #### Built-in Generators
 
@@ -83,8 +83,7 @@ snapsql generate --const constants.yaml --const tables.yaml
 # Generate with validation
 snapsql generate --lang typescript --validate
 
-# Watch mode for development
-snapsql generate --watch
+# (注) watch モードは現在サポートされていません。必要な場合は外部のファイル監視ツールを併用してください。
 ```
 
 ### 2. validate Command
@@ -405,12 +404,9 @@ snapsql generate --lang typescript
 
 #### 3. Development Mode
 ```bash
-# Watch mode for continuous generation
-snapsql generate --watch --lang go
-
-# In another terminal, edit templates
-vim queries/users.snap.sql
-# Files are automatically regenerated
+# Continuous generation can be achieved by running `snapsql generate` repeatedly or
+# by using an external file-watch tool (e.g. entr, watchexec) to trigger generation
+snapsql generate --lang go
 ```
 
 #### 4. CI/CD Integration
@@ -429,10 +425,9 @@ snapsql generate --lang java --validate
 - Incremental generation (only changed files)
 - Efficient memory usage for large template sets
 
-### Watch Mode
-- File system event-based watching
-- Debounced regeneration
-- Selective processing of changed files
+### Watch Mode (design note)
+- Historically a watch-mode design was considered, but the option is not implemented in the current tool.
+- If continuous regeneration is required, prefer an external file-watcher to invoke `snapsql generate` on changes.
 
 ### Database Operations
 - Connection pooling for database operations
