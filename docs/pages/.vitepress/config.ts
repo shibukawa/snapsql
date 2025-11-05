@@ -30,8 +30,8 @@ export default withMermaid({
 
   // テーマ設定
   themeConfig: {
-  // small logo used in the header / navbar (absolute to base)
-  logo: `${siteBase}snapsql.small.png`,
+  // small logo used in the header / navbar (relative to base)
+  logo: 'snapsql.small.png',
     siteTitle: 'SnapSQL',
     
     // 検索設定
@@ -96,10 +96,10 @@ export default withMermaid({
 
   // Head設定
   head: [
-  // use the small PNG as favicon / header icon (absolute to base)
-  ['link', { rel: 'icon', type: 'image/png', href: `${siteBase}snapsql.small.png` }],
-  // inject hero pseudo-element background using base so CSS references resolve
-  ['style', {}, `.VPHero .main::before{background-image:url('${siteBase}snapsql.logo.png')}`],
+  // use the small PNG as favicon / header icon (relative to base)
+  ['link', { rel: 'icon', type: 'image/png', href: 'snapsql.small.png' }],
+  // inject hero pseudo-element background (relative url; VitePress will apply base)
+  ['style', {}, `.VPHero .main::before{background-image:url('snapsql.logo.png')}`],
     ['meta', { name: 'theme-color', content: '#646cff' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'ja_JP' }],
