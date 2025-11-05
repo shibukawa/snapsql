@@ -94,7 +94,7 @@ func TestValidateConfig_InvalidGeneratorType(t *testing.T) {
 
 	err := validateConfig(config)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown generator type")
+	assert.Contains(t, err.Error(), "unknown generator 'unknown_lang'")
 }
 
 func TestValidateConfig_MissingOutputWhenEnabled(t *testing.T) {

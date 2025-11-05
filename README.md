@@ -400,6 +400,12 @@ generation:
     # output: "./generated/go-models"  -> package: "models"
     # output: "./src/user-go-api"      -> package: "user" (longest part)
     
+    python:
+      output: "./generated/python"
+      enabled: false
+      package: "generated"            # Optional: package name for generated code
+      mock_path: "./testdata/mocks"   # Optional: base path for mock data files
+    
     typescript:
       output: "./src/generated"
       enabled: false
