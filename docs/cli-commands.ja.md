@@ -48,7 +48,6 @@ snapsql generate [オプション]
 
 **オプション:**
 - `--output <ディレクトリ>` - 生成ファイルの出力ディレクトリ（デフォルト: `./generated`）
-- `--watch` - ファイル変更を監視して自動再生成
 - `--force` - 既存の生成ファイルを上書き
 
 **例:**
@@ -59,8 +58,8 @@ snapsql generate
 # カスタム出力ディレクトリで生成
 snapsql generate --output ./build
 
-# 変更を監視
-snapsql generate --watch
+# 生成
+snapsql generate
 ```
 
 ### query - クエリ実行
@@ -286,8 +285,8 @@ snapsql validate --all
 ### 開発ワークフロー
 
 ```bash
-# 変更を監視して再生成
-snapsql generate --watch &
+# 中間ファイルを生成
+snapsql generate
 
 # 開発中にクエリをテスト
 snapsql query queries/new-query.snap.sql --dry-run --param test=true

@@ -46,7 +46,7 @@ snapsql generate [options]
   - サポート: `json`, `go`, `typescript`, `java`, `python`
 - `--package <n>` - パッケージ名（言語固有）
 - `--validate` - 生成前にテンプレートを検証
-- `--watch` - ファイル変更を監視して自動再生成
+- `--watch` - （削除）以前想定されていたファイル監視オプション。現在の実装ではサポートされていません。
 
 #### 内蔵ジェネレータ
 
@@ -76,8 +76,7 @@ snapsql generate --lang go --package queries
 # 検証付きで生成
 snapsql generate --lang typescript --validate
 
-# 開発用の監視モード
-snapsql generate --watch
+# （注）watch モードは現在サポートされていません。必要な場合は外部のファイル監視ツールを利用してください。
 ```
 
 ### 2. validateコマンド
@@ -443,8 +442,8 @@ snapsql generate --lang typescript
 
 #### 3. 開発モード
 ```bash
-# 継続的生成のための監視モード
-snapsql generate --watch --lang go
+# 継続的生成の例（注意）
+# watch モードは現在サポートされていません。継続的生成を行う場合は外部のファイル監視ツール（entr, watchexec など）を併用してください。
 
 # 別のターミナルでテンプレート編集
 vim queries/users.snap.sql

@@ -28,9 +28,8 @@ var (
 	ErrFixtureOnlyRequiresRunPattern            = errors.New("--fixture-only mode requires --run pattern to specify which test case to execute")
 	ErrFixtureOnlyAndQueryOnlyMutuallyExclusive = errors.New("--fixture-only and --query-only are mutually exclusive")
 	// ErrPathOutsideProjectRoot indicates a provided path escapes the project root.
-	ErrPathOutsideProjectRoot   = errors.New("path is outside the project root")
-	ErrUnsupportedPathType      = errors.New("unsupported path type")
-	ErrSchemaOutputNotDirectory = errors.New("schema output path is not a directory")
+	ErrPathOutsideProjectRoot = errors.New("path is outside the project root")
+	ErrUnsupportedPathType    = errors.New("unsupported path type")
 )
 
 // Context represents the global context for commands
@@ -50,9 +49,8 @@ type TestCmd struct {
 	QueryOnly   bool   `help:"Execute only queries without fixtures"`
 	Commit      bool   `help:"Commit transactions instead of rollback"`
 	// Environment flag removed; tbls uses single DSN and explicit tbls config path is preferred
-	Schema       []string `help:"SQL files or directories to initialize an ephemeral database (repeatable)" short:"s"`
-	SchemaOutput string   `help:"Directory to emit schema YAML snapshots before running tests" default:"./schema"`
-	Paths        []string `arg:"" optional:"" name:"path" help:"Optional file or directory paths to limit executed tests"`
+	Schema []string `help:"SQL files or directories to initialize an ephemeral database (repeatable)" short:"s"`
+	Paths  []string `arg:"" optional:"" name:"path" help:"Optional file or directory paths to limit executed tests"`
 }
 
 // Run executes the test command

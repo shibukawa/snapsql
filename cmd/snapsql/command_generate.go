@@ -29,7 +29,6 @@ type GenerateCmd struct {
 	Package  string   `help:"Package name (language-specific)"`
 	Const    []string `help:"Constant definition files"`
 	Validate bool     `help:"Validate templates before generation"`
-	Watch    bool     `help:"Watch for file changes and regenerate automatically"`
 }
 
 func (g *GenerateCmd) Run(ctx *Context) error {
