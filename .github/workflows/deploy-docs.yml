@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - feature/gh-pages
+      - feature/gh-pages*
     paths:
       - 'docs/pages/**'
       - '.github/workflows/deploy-docs.yml'
@@ -54,6 +54,8 @@ jobs:
       - name: Build with VitePress
         run: npm run build
         working-directory: docs/pages
+        env:
+          VITEPRESS_BASE: /snapsql/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

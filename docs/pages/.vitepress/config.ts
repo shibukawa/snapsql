@@ -3,7 +3,13 @@ import { tabsMarkdownPlugin } from 'vitepress-plugin-tabs'
 import { ja } from './config/ja'
 
 // https://vitepress.dev/reference/site-config
+const siteBase = ((process.env as any).VITEPRESS_BASE) || '/'
+
 export default withMermaid({
+  // Allow overriding the site `base` via environment variable so local dev can
+  // use '/' while CI/GitHub Pages build can set '/snapsql/'.
+  base: siteBase,
+
   title: "SnapSQL",
   description: "Markdownでデータベーステストを書く",
   
@@ -24,8 +30,8 @@ export default withMermaid({
 
   // テーマ設定
   themeConfig: {
-  // small logo used in the header / navbar
-  logo: '/snapsql.small.png',
+  // small logo used in the header / navbar (relative to base)
+  logo: 'snapsql.small.png',
     siteTitle: 'SnapSQL',
     
     // 検索設定
@@ -90,8 +96,10 @@ export default withMermaid({
 
   // Head設定
   head: [
-  // use the small PNG as favicon / header icon
-  ['link', { rel: 'icon', type: 'image/png', href: '/snapsql.small.png' }],
+  // use the small PNG as favicon / header icon (relative to base)
+  ['link', { rel: 'icon', type: 'image/png', href: 'snapsql.small.png' }],
+  // inject hero pseudo-element background (relative url; VitePress will apply base)
+  ['style', {}, `.VPHero .main::before{background-image:url('snapsql.logo.png')}`],
     ['meta', { name: 'theme-color', content: '#646cff' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'ja_JP' }],
