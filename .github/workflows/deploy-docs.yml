@@ -4,16 +4,16 @@ on:
   push:
     branches:
       - main
+      - feature/gh-pages
+    paths:
+      - 'docs/pages/**'
+      - '.github/workflows/deploy-docs.yml'
+  pull_request:
+    types: [closed]
     paths:
       - 'docs/pages/**'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
-
-# GitHub Pagesへのデプロイ権限
-permissions:
-  contents: read
-  pages: write
-  id-token: write
 
 # 同時実行制御：1つのデプロイのみ許可
 concurrency:
@@ -22,6 +22,8 @@ concurrency:
 
 jobs:
   build:
+    # If triggered by a pull_request closed event, only run when the PR was merged.
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -54,7 +56,7 @@ jobs:
 
   deploy:
     environment:
-      name: github-pages
+      name: pages
       url: ${{ steps.deployment.outputs.page_url }}
     needs: build
     runs-on: ubuntu-latest
