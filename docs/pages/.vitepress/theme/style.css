@@ -139,7 +139,7 @@
     transform: translateY(-50%);
     width: 320px;
     height: 320px;
-    background-image: url('/snapsql.logo.png');
+    /* background-image is injected at build time via config head style to include site base */
     background-repeat: no-repeat;
     background-size: contain;
     background-position: center;
