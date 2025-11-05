@@ -15,6 +15,12 @@ on:
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
+# GitHub Pagesへのデプロイ権限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 # 同時実行制御：1つのデプロイのみ許可
 concurrency:
   group: pages
