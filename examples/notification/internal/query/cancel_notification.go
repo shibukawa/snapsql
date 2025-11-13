@@ -18,10 +18,8 @@ package query
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"github.com/shibukawa/snapsql"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -30,70 +28,27 @@ type CancelNotificationResult struct {
 	AffectedRows int `json:"affected_rows"`
 }
 
-// CancelNotification specific CEL programs and mock path
-var (
-	cancelNotificationPrograms []cel.Program
-)
+// CancelNotificationExplangExpressions stores explang steps aligned with expression indexes.
+var CancelNotificationExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "cancel_message", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 22, Column: 22, Offset: 0, Length: 14}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "notification_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 28, Column: 12, Offset: 0, Length: 15}},
+		},
+	},
+}
 
 const cancelNotificationMockPath = ""
 
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("cancel_message", cel.StringType))
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("cancel_message", cel.StringType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CancelNotification CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	cancelNotificationPrograms = make([]cel.Program, 2)
-	// expr_001: "cancel_message" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("cancel_message")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "cancel_message", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "cancel_message", err))
-		}
-		cancelNotificationPrograms[0] = program
-	}
-	// expr_002: "notification_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("notification_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "notification_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "notification_id", err))
-		}
-		cancelNotificationPrograms[1] = program
-	}
-}
-
 // CancelNotification キャンセル可能な通知をキャンセルします。キャンセルメッセージと共に記録されます。
-func CancelNotification(ctx context.Context, executor snapsqlgo.DBExecutor, notificationID int, cancelMessage string, opts ...snapsqlgo.FuncOpt) (any, error) {
-	var result any
+func CancelNotification(ctx context.Context, executor snapsqlgo.DBExecutor, notificationID int, cancelMessage string, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
@@ -131,22 +86,8 @@ func CancelNotification(ctx context.Context, executor snapsqlgo.DBExecutor, noti
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE notifications SET cancel_message = $1, canceled_at = NOW(), updated_at = NOW()  WHERE id = $2  AND cancelable = true AND canceled_at IS NULL"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"notification_id": notificationID,
-			"cancel_message":  cancelMessage,
-		}
-
-		evalRes0, _, err := cancelNotificationPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CancelNotification: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := cancelNotificationPrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CancelNotification: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(cancelMessage))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(notificationID))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
@@ -166,16 +107,11 @@ func CancelNotification(ctx context.Context, executor snapsqlgo.DBExecutor, noti
 			return nil, mockExec.Err
 		}
 		mockResult := mockExec.SQLResult()
+		if mockResult == nil {
+			mockResult = snapsqlgo.NewMockResult(mockExec.Opt.RowsAffected, mockExec.Opt.LastInsertID)
+		}
 		if mockResult != nil {
 			result = mockResult
-			return result, nil
-		}
-		if len(mockExec.ExpectedRows()) > 0 {
-			mapped, err := snapsqlgo.MapMockExecutionToStruct[any](mockExec)
-			if err != nil {
-				return nil, fmt.Errorf("CancelNotification: failed to map mock execution: %w", err)
-			}
-			result = mapped
 		}
 		return result, nil
 	}
@@ -198,10 +134,11 @@ func CancelNotification(ctx context.Context, executor snapsqlgo.DBExecutor, noti
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("CancelNotification: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

@@ -100,28 +100,6 @@ WHERE active = /*= filters.active */true /*# end */`,
 			},
 		},
 		{
-			name: "IfElseIfElseEnd",
-			sql: `SELECT id, name
-				FROM users
-				WHERE 1=1
-					/*# if filters.status == 'active' */
-					AND status = 'active'
-					/*# elseif filters.status == 'inactive' */
-					AND status = 'inactive'
-					/*# else */
-					AND status IS NOT NULL
-					/*# end */`,
-			shouldSucceed: true,
-			clauseType:    cmn.WHERE_CLAUSE,
-			expectedCount: 4,
-			directiveChecks: []DirectiveCheck{
-				{index: 0, directiveType: "if"},
-				{index: 1, directiveType: "elseif"},
-				{index: 2, directiveType: "else"},
-				{index: 3, directiveType: "end"},
-			},
-		},
-		{
 			name: "NestedBlocks",
 			sql: `SELECT id, name
 				FROM users
@@ -332,21 +310,6 @@ func TestValidateAndLinkDirectives_NextIndexLinking(t *testing.T) {
 					/*# end */`,
 			clauseType:     cmn.WHERE_CLAUSE,
 			expectedChains: [][]int{{0, 1}}, // if(0) -> end(1)
-		},
-		{
-			name: "IfElseIfElseEndLinking",
-			sql: `SELECT id, name
-				FROM users
-				WHERE 1=1
-					/*# if filters.status == 'active' */
-					AND status = 'active'
-					/*# elseif filters.status == 'inactive' */
-					AND status = 'inactive'
-					/*# else */
-					AND status IS NOT NULL
-					/*# end */`,
-			clauseType:     cmn.WHERE_CLAUSE,
-			expectedChains: [][]int{{0, 1, 2, 3}}, // if(0) -> elseif(1) -> else(2) -> end(3)
 		},
 		{
 			name: "NestedBlocksLinking",

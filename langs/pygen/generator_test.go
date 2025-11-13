@@ -100,30 +100,6 @@ func TestGenerator_Generate(t *testing.T) {
 		errMsg  string
 	}{
 		{
-			name: "missing dialect",
-			gen: &Generator{
-				PackageName: "generated",
-				Format: &intermediate.IntermediateFormat{
-					FunctionName: "test_func",
-				},
-				Dialect: "",
-			},
-			wantErr: true,
-			errMsg:  "dialect must be specified",
-		},
-		{
-			name: "unsupported dialect",
-			gen: &Generator{
-				PackageName: "generated",
-				Format: &intermediate.IntermediateFormat{
-					FunctionName: "test_func",
-				},
-				Dialect: "oracle",
-			},
-			wantErr: true,
-			errMsg:  "unsupported dialect",
-		},
-		{
 			name: "valid postgres dialect",
 			gen: &Generator{
 				PackageName: "generated",

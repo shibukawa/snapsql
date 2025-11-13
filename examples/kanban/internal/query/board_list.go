@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // BoardListResult represents the response structure for BoardList
@@ -37,38 +34,7 @@ type BoardListResult struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-// BoardList specific CEL programs and mock path
-var (
-	boardListPrograms []cel.Program
-)
-
 const boardListMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create BoardList CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	boardListPrograms = make([]cel.Program, 0)
-}
 
 // BoardList Fetches every board with basic metadata, ordered by most recently created first. Used for the dashboard overview.
 func BoardList(ctx context.Context, executor snapsqlgo.DBExecutor, opts ...snapsqlgo.FuncOpt) iter.Seq2[*BoardListResult, error] {

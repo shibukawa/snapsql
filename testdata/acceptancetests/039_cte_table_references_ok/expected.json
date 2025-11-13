@@ -28,6 +28,7 @@
     {"name": "email", "type": "text"},
     {"name": "total", "type": "numeric", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {
       "name": "users",

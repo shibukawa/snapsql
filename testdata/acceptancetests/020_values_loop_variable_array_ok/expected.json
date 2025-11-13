@@ -5,13 +5,15 @@
       "additional_variables": [
         {
           "name": "users",
-          "type": "../testdata/acceptancetests/020_values_loop_variable_array_ok/User[]"
-        },
-        {
-          "name": "users",
-          "type": "../testdata/acceptancetests/020_values_loop_variable_array_ok/User[]",
+          "type": "array",
           "value": [
-            ""
+            {
+              "id": 1,
+              "name": "dummy",
+              "tags": [
+                "dummy"
+              ]
+            }
           ]
         }
       ],
@@ -20,9 +22,20 @@
     {
       "index": 1,
       "additional_variables": [
-        {"name": "user", "type": "any"}
+        {
+          "name": "user",
+          "type": "any",
+          "value": {
+            "id": 1,
+            "name": "dummy",
+            "tags": [
+              "dummy"
+            ]
+          }
+        }
       ],
-      "container": "for user : users"
+      "container": "loop_1",
+      "parent_index": 0
     }
   ],
   "cel_expressions": [
@@ -68,6 +81,112 @@
       "result_type": 2
     }
   ],
+  "envs": [
+    [],
+    [
+      {
+        "name": "user",
+        "type": "any"
+      }
+    ]
+  ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 7,
+        "column": 8
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "users",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 7,
+            "Column": 8,
+            "Length": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 1,
+      "position": {
+        "line": 7,
+        "column": 32
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 7,
+            "Column": 32,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "id",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 7,
+            "Column": 36,
+            "Length": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_003",
+      "environment_index": 1,
+      "position": {
+        "line": 7,
+        "column": 48
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 7,
+            "Column": 48,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "tags",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 7,
+            "Column": 52,
+            "Length": 5
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "insertUserTags",
   "instructions": [
@@ -94,6 +213,7 @@
     }
   ],
   "response_affinity": "none",
+  "statement_type": "insert",
   "table_references": [
     {"name": "user_tags", "context": "main"}
   ],

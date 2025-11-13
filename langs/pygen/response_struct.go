@@ -8,26 +8,31 @@ import (
 )
 
 // processResponseStruct processes response fields and generates dataclass data
-func processResponseStruct(format *intermediate.IntermediateFormat) (*responseStructData, error) {
+// It returns all structs (children first) plus the main struct pointer for downstream consumers.
+func processResponseStruct(format *intermediate.IntermediateFormat) ([]responseStructData, *responseStructData, error) {
 	if len(format.Responses) == 0 {
 		// No response fields - this is normal for INSERT/UPDATE/DELETE statements
-		return nil, ErrNoResponseFields
+		return nil, nil, ErrNoResponseFields
 	}
 
 	// Check for hierarchical structure
 	hierarchicalGroups, rootFields, err := detectHierarchicalStructure(format.Responses)
 	if err != nil {
-		return nil, fmt.Errorf("failed to detect hierarchical structure: %w", err)
+		return nil, nil, fmt.Errorf("failed to detect hierarchical structure: %w", err)
 	}
 
 	if len(hierarchicalGroups) > 0 {
 		// This is a hierarchical response - use hierarchical processing
-		_, mainStruct, err := generateHierarchicalStructs(format.FunctionName, hierarchicalGroups, rootFields)
+		childStructs, mainStruct, err := generateHierarchicalStructs(format.FunctionName, hierarchicalGroups, rootFields)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate hierarchical structs: %w", err)
+			return nil, nil, fmt.Errorf("failed to generate hierarchical structs: %w", err)
 		}
 
-		return mainStruct, nil
+		allStructs := make([]responseStructData, 0, len(childStructs)+1)
+		allStructs = append(allStructs, childStructs...)
+		allStructs = append(allStructs, *mainStruct)
+
+		return allStructs, mainStruct, nil
 	}
 
 	// Regular flat structure
@@ -38,7 +43,7 @@ func processResponseStruct(format *intermediate.IntermediateFormat) (*responseSt
 	for i, response := range format.Responses {
 		pyType, err := ConvertToPythonType(response.Type, response.IsNullable)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert response field %s type: %w", response.Name, err)
+			return nil, nil, fmt.Errorf("failed to convert response field %s type: %w", response.Name, err)
 		}
 
 		// Convert field name to snake_case (Python convention)
@@ -56,10 +61,34 @@ func processResponseStruct(format *intermediate.IntermediateFormat) (*responseSt
 		}
 	}
 
-	return &responseStructData{
+	fields = reorderResponseFields(fields)
+
+	mainStruct := &responseStructData{
 		ClassName: className,
 		Fields:    fields,
-	}, nil
+	}
+
+	return []responseStructData{*mainStruct}, mainStruct, nil
+}
+
+func reorderResponseFields(fields []responseFieldData) []responseFieldData {
+	if len(fields) == 0 {
+		return fields
+	}
+
+	required := make([]responseFieldData, 0, len(fields))
+	optional := make([]responseFieldData, 0)
+
+	for _, f := range fields {
+		if f.HasDefault {
+			optional = append(optional, f)
+			continue
+		}
+
+		required = append(required, f)
+	}
+
+	return append(required, optional...)
 }
 
 // generateClassName generates a Python class name from a function name

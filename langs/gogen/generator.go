@@ -191,17 +191,8 @@ func (g *Generator) Generate(w io.Writer) error {
 	// Reset per-file state to avoid leaking hierarchical metas across files
 	g.hierarchicalMetas = nil
 
-	// Process CEL environments
-	celEnvs, err := processCELEnvironments(g.Format)
-	if err != nil {
-		return fmt.Errorf("failed to process CEL environments: %w", err)
-	}
-
-	// Generate CEL programs
-	celPrograms, err := generateCELPrograms(g.Format, celEnvs)
-	if err != nil {
-		return fmt.Errorf("failed to generate CEL programs: %w", err)
-	}
+	// Build explang expressions for downstream consumers
+	explangExprs := buildExplangExpressionData(g.Format)
 
 	// Process parameters
 	parameters, structDefinitions, err := processParameters(g.Format.Parameters, g.Format.FunctionName)
@@ -336,9 +327,8 @@ func (g *Generator) Generate(w io.Writer) error {
 		LowerFuncName      string
 		Description        string
 		MockPath           string
-		CELEnvironments    []celEnvironmentData
-		CELPrograms        []celProgramData
 		Instructions       []instruction
+		ExplangExpressions []explangExpressionData
 		ResponseType       string
 		SliceElementType   string
 		FunctionReturnType string
@@ -352,8 +342,6 @@ func (g *Generator) Generate(w io.Writer) error {
 		ImplicitParams     []implicitParam
 		Imports            map[string]struct{}
 		ImportSlice        []string
-		NumCELEnvs         int
-		NumCELPrograms     int
 		HierarchicalMetas  []*hierarchicalNodeMeta
 		IteratorYieldType  string
 		DeclareResult      bool
@@ -370,20 +358,17 @@ func (g *Generator) Generate(w io.Writer) error {
 		LowerFuncName:      toLowerCamel(g.Format.FunctionName),
 		Description:        g.Format.Description,
 		MockPath:           g.MockPath,
-		CELEnvironments:    celEnvs,
-		CELPrograms:        celPrograms,
 		Parameters:         parameters,
 		ResponseType:       responseType,
 		SliceElementType:   sliceElementType,
 		ResponseStruct:     responseStruct,
 		SQLBuilder:         sqlBuilder,
 		QueryExecution:     queryExecution,
+		ExplangExpressions: explangExprs,
 		StructDefinitions:  structDefinitions,
 		TypeRegistrations:  typeRegistrations,
 		TypeDefinitions:    typeDefinitions,
 		ImplicitParams:     implicitParams,
-		NumCELEnvs:         len(g.Format.CELEnvironments),
-		NumCELPrograms:     len(g.Format.CELExpressions),
 		Imports:            make(map[string]struct{}),
 		HierarchicalMetas:  g.hierarchicalMetas,
 		FunctionReturnType: functionReturnType,
@@ -398,13 +383,6 @@ func (g *Generator) Generate(w io.Writer) error {
 
 	if queryExecution.IsIterator && responseStruct != nil {
 		data.Imports["iter"] = struct{}{}
-	}
-
-	// Collect imports from all environments
-	for _, env := range celEnvs {
-		for imp := range env.Imports {
-			data.Imports[imp] = struct{}{}
-		}
 	}
 
 	// Add time import if any implicit parameter uses time.Now() as default
@@ -1327,13 +1305,6 @@ import (
 	{{- range .ImportSlice }}
 	"{{ . }}"
 	{{- end }}
-
-	"github.com/google/cel-go/cel"
-	{{- /* types/ref are needed when type definitions exist or CreateCELOptionsWithTypes is used */}}
-	{{- if .TypeDefinitions }}
-	"github.com/google/cel-go/common/types"
-	"github.com/google/cel-go/common/types/ref"
-	{{- end }}
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 {{- range .StructDefinitions }}
@@ -1349,101 +1320,16 @@ type {{ .ResponseStruct.Name }} struct {
 }
 {{- end }}
 
-// {{ .FunctionName }} specific CEL programs and mock path
-var (
-	{{ .LowerFuncName }}Programs []cel.Program
-)
-
-const {{ .LowerFuncName }}MockPath = "{{ .MockPath }}"
-
-func init() {
-	{{- if .TypeDefinitions }}
-	// Static accessor functions for each type
-	{{- range $typeName, $fields := .TypeDefinitions }}
-	{{- range $fieldName, $fieldType := $fields }}
-{{ $typeName | toLower }}{{ $fieldName | celNameToGoName }}Accessor := func(value any) ref.Val {
-		v := value.(*{{ $typeName }})
-		return snapsqlgo.ConvertGoValueToCEL(v.{{ $fieldName | celNameToGoName }})
-	}
-	{{- end }}
-	{{- end }}
-
-	// Create type definitions for local type store
-	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
-		{{- range $typeName, $fields := .TypeDefinitions }}
-		"{{ $typeName }}": {
-			{{- range $fieldName, $fieldType := $fields }}
-			"{{ $fieldName }}": snapsqlgo.CreateFieldInfo(
-				"{{ $fieldName }}", 
-				{{ $fieldType | celTypeConvert }}, 
-				{{ $typeName | toLower }}{{ $fieldName | celNameToGoName }}Accessor,
-			),
-			{{- end }}
-		},
-		{{- end }}
-	}
-
-	// Create and set up local type store
-	registry := snapsqlgo.NewLocalTypeRegistry()
-	for typeName, fields := range typeDefinitions {
-		registry.RegisterStructWithFields(typeName, fields)
-	}
-    
-	// Set global registry for nested type resolution
-	snapsqlgo.SetGlobalRegistry(registry)
-	{{- end }}
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, {{ .NumCELEnvs }})
-	
-	{{- range .CELEnvironments }}
-	// Environment {{ .Index }} (container: {{ .Container }})
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("{{ .Container }}"),
-		}
-		{{- range .Variables }}
-		opts = append(opts, cel.Variable("{{ .Name }}", cel.{{ .CelType }}))
-		{{- end }}
-		{{- if .HasParent }}
-		env{{ .Index }}, err := celEnvironments[{{ .Parent }}].Extend(opts...)
-		{{- else }}
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		{{- if $.TypeDefinitions }}
-		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
-		{{- end }}
-		env{{ .Index }}, err := cel.NewEnv(opts...)
-		{{- end }}
-		if err != nil {
-			panic(fmt.Sprintf("failed to create {{ $.FunctionName }} CEL environment {{ .Index }}: %v", err))
-		}
-		celEnvironments[{{ .Index }}] = env{{ .Index }}
-	}
-	{{- end }}
-
-	// Create programs for each expression using the corresponding environment
-	{{ .LowerFuncName }}Programs = make([]cel.Program, {{ .NumCELPrograms }})
-	
-	{{- range .CELPrograms }}
-	// {{ .ID }}: "{{ .Expression }}" using environment {{ .EnvironmentIdx }}
-	{
-		ast, issues := celEnvironments[{{ .EnvironmentIdx }}].Compile({{ printf "%q" .Expression }})
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", {{ printf "%q" .Expression }}, issues.Err()))
-		}
-		program, err := celEnvironments[{{ .EnvironmentIdx }}].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", {{ printf "%q" .Expression }}, err))
-		}
-		{{ $.LowerFuncName }}Programs[{{ .Index }}] = program
-	}
+{{- if .ExplangExpressions }}
+// {{ .FunctionName }}ExplangExpressions stores explang steps aligned with expression indexes.
+var {{ .FunctionName }}ExplangExpressions = []snapsqlgo.ExplangExpression{
+	{{- range .ExplangExpressions }}
+	{{ .Literal }},
 	{{- end }}
 }
+{{- end }}
+
+const {{ .LowerFuncName }}MockPath = "{{ .MockPath }}"
 
 {{- if .Description }}
 // {{ .FunctionName }} {{ .Description }}
@@ -1577,32 +1463,18 @@ var result {{ .ResponseType }}
 
 	// Build SQL
 	buildQueryAndArgs := func() (string, []any, error) {
-		{{- if .SQLBuilder.IsStatic }}
-		query := {{ printf "%q" .SQLBuilder.StaticSQL }}
-		args := make([]any, 0)
-		{{- if .SQLBuilder.HasArguments }}
-		{{- if .SQLBuilder.HasNonSystemArguments }}
-		paramMap := map[string]any{
-			{{- range .Parameters }}
-			"{{ .OriginalName }}": {{ if .IsTemporal }}snapsqlgo.NormalizeNullableTimestamp({{ .Name }}){{ else }}{{ .Name }}{{ end }},
-			{{- end }}
-		}
-			{{ end }}
-			{{ range $idx, $arg := .SQLBuilder.Arguments }}
-				{{- if eq $arg -1 }}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["{{ index $.SQLBuilder.ArgumentSystemFields $idx }}"]))
-				{{ else }}
-		{{ $resVar := printf "evalRes%d" $idx }}
-		{{ $resVar }}, _, err := {{ $.LowerFuncName }}Programs[{{ $arg }}].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("{{ $.FunctionName }}: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp({{ $resVar }}))
-				{{- end }}
-			{{- end }}
+	{{- if .SQLBuilder.IsStatic }}
+	query := {{ printf "%q" .SQLBuilder.StaticSQL }}
+	args := make([]any, 0)
+	{{- if .SQLBuilder.HasArguments }}
+		{{- range .SQLBuilder.ArgumentExprs }}
+		{{- range .Lines }}
+{{ . }}
 		{{- end }}
-		return query, args, nil
-		{{- else }}
+		{{- end }}
+	{{- end }}
+	return query, args, nil
+	{{- else }}
 	var builder strings.Builder
 	args := make([]any, 0)
 

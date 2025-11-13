@@ -7,13 +7,28 @@
     {"name": "max_age", "type": "int", "value": 1},
         {
           "name": "departments",
-          "type": "string[]",
+          "type": "array",
           "value": [
             "dummy"
           ]
         },
         {
           "name": "active",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "has_min_age",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "has_max_age",
+          "type": "bool",
+          "value": true
+        },
+        {
+          "name": "has_departments",
           "type": "bool",
           "value": true
         }
@@ -32,10 +47,10 @@
   "cel_expressions": [
     {
       "id": "expr_001",
-      "expression": "min_age \u003e 0",
+      "expression": "has_min_age",
       "environment_index": 0,
       "position": {
-        "line": 13,
+        "line": 16,
         "column": 1
       },
       "type_descriptor": "bool",
@@ -46,7 +61,7 @@
       "expression": "min_age",
       "environment_index": 0,
       "position": {
-        "line": 14,
+        "line": 17,
         "column": 12
       },
       "type_descriptor": "int",
@@ -54,10 +69,10 @@
     },
     {
       "id": "expr_003",
-      "expression": "max_age \u003e 0",
+      "expression": "has_max_age",
       "environment_index": 0,
       "position": {
-        "line": 16,
+        "line": 19,
         "column": 1
       },
       "type_descriptor": "bool",
@@ -68,7 +83,7 @@
       "expression": "max_age",
       "environment_index": 0,
       "position": {
-        "line": 17,
+        "line": 20,
         "column": 12
       },
       "type_descriptor": "int",
@@ -76,10 +91,10 @@
     },
     {
       "id": "expr_005",
-      "expression": "departments.size() \u003e 0",
+      "expression": "has_departments",
       "environment_index": 0,
       "position": {
-        "line": 19,
+        "line": 22,
         "column": 1
       },
       "type_descriptor": "bool",
@@ -90,7 +105,7 @@
       "expression": "departments",
       "environment_index": 0,
       "position": {
-        "line": 20,
+        "line": 23,
         "column": 38
       },
       "type_descriptor": [
@@ -103,7 +118,7 @@
       "expression": "active",
       "environment_index": 0,
       "position": {
-        "line": 22,
+        "line": 25,
         "column": 1
       },
       "type_descriptor": "bool",
@@ -119,41 +134,204 @@
       }
     ]
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 16,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "has_min_age",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 16,
+            "Column": 1,
+            "Length": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 17,
+        "column": 12
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "min_age",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 17,
+            "Column": 12,
+            "Length": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_003",
+      "environment_index": 0,
+      "position": {
+        "line": 19,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "has_max_age",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 19,
+            "Column": 1,
+            "Length": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_004",
+      "environment_index": 0,
+      "position": {
+        "line": 20,
+        "column": 12
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "max_age",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 20,
+            "Column": 12,
+            "Length": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_005",
+      "environment_index": 0,
+      "position": {
+        "line": 22,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "has_departments",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 22,
+            "Column": 1,
+            "Length": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_006",
+      "environment_index": 0,
+      "position": {
+        "line": 23,
+        "column": 38
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "departments",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 23,
+            "Column": 38,
+            "Length": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_007",
+      "environment_index": 0,
+      "position": {
+        "line": 25,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "active",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 25,
+            "Column": 1,
+            "Length": 6
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "getFilteredData",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "10:1", "value": "SELECT id, name, age, department FROM users WHERE 1=1 "},
-    {"op": "IF", "pos": "13:1", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "14:0", "value": " AND age \u003e= "},
-    {"op": "EMIT_EVAL", "pos": "14:12", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "15:0", "value": " "},
-    {"op": "END", "pos": "15:1"},
-    {"op": "EMIT_STATIC", "pos": "16:0", "value": " "},
-    {"op": "IF", "pos": "16:1", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "17:0", "value": " AND age \u003c= "},
-    {"op": "EMIT_EVAL", "pos": "17:12", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "13:1", "value": "SELECT id, name, age, department FROM users WHERE 1=1 "},
+    {"op": "IF", "pos": "16:1", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "17:0", "value": " AND age \u003e= "},
+    {"op": "EMIT_EVAL", "pos": "17:12", "expr_index": 1},
     {"op": "EMIT_STATIC", "pos": "18:0", "value": " "},
     {"op": "END", "pos": "18:1"},
     {"op": "EMIT_STATIC", "pos": "19:0", "value": " "},
-    {"op": "IF", "pos": "19:1", "expr_index": 4},
-    {"op": "EMIT_STATIC", "pos": "20:0", "value": " AND department IN ("},
-    {"op": "EMIT_EVAL", "pos": "20:20", "expr_index": 5},
+    {"op": "IF", "pos": "19:1", "expr_index": 2},
+    {"op": "EMIT_STATIC", "pos": "20:0", "value": " AND age \u003c= "},
+    {"op": "EMIT_EVAL", "pos": "20:12", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "21:0", "value": " "},
+    {"op": "END", "pos": "21:1"},
+    {"op": "EMIT_STATIC", "pos": "22:0", "value": " "},
+    {"op": "IF", "pos": "22:1", "expr_index": 4},
+    {"op": "EMIT_STATIC", "pos": "23:0", "value": " AND department IN ("},
+    {"op": "EMIT_EVAL", "pos": "23:20", "expr_index": 5},
     {
       "op": "LOOP_START",
-      "pos": "20:38",
+      "pos": "23:38",
       "variable": "__item",
       "collection_expr_index": 5,
       "env_index": 1
     },
-    {"op": "EMIT_STATIC", "pos": "20:38", "value": "('HR', 'Engineering')"},
-    {"op": "LOOP_END", "pos": "20:58", "env_index": 0},
-    {"op": "EMIT_STATIC", "pos": "20:59", "value": ") "},
-    {"op": "END", "pos": "21:1"},
-    {"op": "EMIT_STATIC", "pos": "22:0", "value": " "},
-    {"op": "IF", "pos": "22:1", "expr_index": 6},
-    {"op": "EMIT_STATIC", "pos": "23:0", "value": " AND status = 'active' "},
+    {"op": "EMIT_STATIC", "pos": "23:38", "value": "('HR', 'Engineering')"},
+    {"op": "LOOP_END", "pos": "23:58", "env_index": 0},
+    {"op": "EMIT_STATIC", "pos": "23:59", "value": ") "},
     {"op": "END", "pos": "24:1"},
     {"op": "EMIT_STATIC", "pos": "25:0", "value": " "},
+    {"op": "IF", "pos": "25:1", "expr_index": 6},
+    {"op": "EMIT_STATIC", "pos": "26:0", "value": " AND status = 'active' "},
+    {"op": "END", "pos": "27:1"},
+    {"op": "EMIT_STATIC", "pos": "28:0", "value": " "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -171,7 +349,10 @@
       "name": "departments",
       "type": "string[]"
     },
-    {"name": "active", "type": "bool"}
+    {"name": "active", "type": "bool"},
+    {"name": "has_min_age", "type": "bool"},
+    {"name": "has_max_age", "type": "bool"},
+    {"name": "has_departments", "type": "bool"}
   ],
   "response_affinity": "many",
   "responses": [
@@ -180,6 +361,7 @@
     {"name": "age", "type": "any", "is_nullable": true},
     {"name": "department", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

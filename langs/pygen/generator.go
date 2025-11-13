@@ -69,19 +69,6 @@ func New(format *intermediate.IntermediateFormat, opts ...Option) *Generator {
 
 // Generate generates Python code and writes it to the writer
 func (g *Generator) Generate(w io.Writer) error {
-	// Validate dialect is specified
-	if g.Dialect == "" {
-		return errors.New("dialect must be specified")
-	}
-
-	// Validate supported dialects
-	switch g.Dialect {
-	case snapsql.DialectPostgres, snapsql.DialectMySQL, snapsql.DialectSQLite:
-		// Valid dialects
-	default:
-		return fmt.Errorf("unsupported dialect: %s (supported: postgres, mysql, sqlite)", g.Dialect)
-	}
-
 	// Prepare template data
 	data, err := g.prepareTemplateData()
 	if err != nil {
@@ -116,12 +103,10 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 		Timestamp:    timestamp,
 		FunctionName: g.Format.FunctionName,
 		Description:  g.Format.Description,
-		Dialect:      string(g.Dialect),
+		Dialect:      g.Dialect,
 
 		// Initialize empty slices
 		ResponseStructs: []responseStructData{},
-		CELEnvironments: []celEnvironmentData{},
-		CELPrograms:     []celProgramData{},
 		Parameters:      []parameterData{},
 		ImplicitParams:  []implicitParamData{},
 		Validations:     []validationData{},
@@ -143,26 +128,7 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 		ReturnTypeDescription: "Query result",
 	}
 
-	// Check for CEL usage
-	data.HasCEL = len(g.Format.CELEnvironments) > 0 || len(g.Format.CELExpressions) > 0
-
-	// Process CEL environments
-	if data.HasCEL {
-		celEnvs, err := processCELEnvironments(g.Format)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process CEL environments: %w", err)
-		}
-
-		data.CELEnvironments = celEnvs
-
-		// Process CEL programs
-		celProgs, err := generateCELPrograms(g.Format, celEnvs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate CEL programs: %w", err)
-		}
-
-		data.CELPrograms = celProgs
-	}
+	data.ExplangExpressions = buildExplangExpressionData(g.Format)
 
 	// Process parameters
 	params, err := g.processParameters()
@@ -186,7 +152,7 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 	data.HasValidation = len(data.Validations) > 0
 
 	// Process response structures
-	responseStruct, err := processResponseStruct(g.Format)
+	responseStructs, responseStruct, err := processResponseStruct(g.Format)
 	if err != nil {
 		// No response fields is acceptable for some statement types
 		if !errors.Is(err, ErrNoResponseFields) {
@@ -197,7 +163,7 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 		data.ReturnTypeDescription = "Number of affected rows"
 	} else {
 		// Add response struct to template data
-		data.ResponseStructs = []responseStructData{*responseStruct}
+		data.ResponseStructs = responseStructs
 
 		// Set return type based on response affinity
 		// Note: For "many" affinity, the template will wrap this in AsyncGenerator
@@ -214,7 +180,7 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 	data.SQLBuilder = *sqlBuilder
 
 	// Process query execution
-	queryExecution, err := generateQueryExecution(g.Format, responseStruct, string(g.Dialect))
+	queryExecution, err := generateQueryExecution(g.Format, responseStruct, g.Dialect)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query execution: %w", err)
 	}
@@ -234,7 +200,7 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 	}
 
 	// Process mock data
-	mockData := processMockData(g.MockPath, g.Format.FunctionName, data.ResponseAffinity, data.ReturnType, string(g.Dialect), queryType)
+	mockData := processMockData(g.MockPath, g.Format.FunctionName, data.ResponseAffinity, data.ReturnType, g.Dialect, queryType)
 	data.MockData = mockData
 	data.HasMock = mockData.HasMock
 
@@ -245,99 +211,4 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 	}
 
 	return data, nil
-}
-
-// convertToCELType converts a SnapSQL type to a CEL type name
-func convertToCELType(snapType string) string {
-	// Handle arrays
-	if before, ok := strings.CutSuffix(snapType, "[]"); ok {
-		baseType := before
-		baseCELType := convertToCELType(baseType)
-
-		return "ListType(celpy." + baseCELType + ")"
-	}
-
-	// Normalize temporal aliases
-	normalized := normalizeTemporalAlias(snapType)
-
-	switch normalized {
-	case "int", "int32", "int64":
-		return "IntType"
-	case "string":
-		return "StringType"
-	case "bool":
-		return "BoolType"
-	case "float", "float32", "float64", "double":
-		return "DoubleType"
-	case "decimal":
-		return "DoubleType"
-	case "timestamp", "datetime", "date", "time":
-		return "TimestampType"
-	case "bytes":
-		return "BytesType"
-	case "any":
-		return "AnyType"
-	default:
-		return "DynType"
-	}
-}
-
-// processCELEnvironments processes CEL environments and returns template data for Python
-func processCELEnvironments(format *intermediate.IntermediateFormat) ([]celEnvironmentData, error) {
-	envs := make([]celEnvironmentData, len(format.CELEnvironments))
-
-	for i, env := range format.CELEnvironments {
-		envData := celEnvironmentData{
-			Index:     env.Index,
-			Container: env.Container,
-			Variables: make([]celVariableData, 0),
-		}
-
-		// Set default container name if empty
-		if envData.Container == "" {
-			if env.Index == 0 {
-				envData.Container = "root"
-			} else {
-				envData.Container = fmt.Sprintf("env_%d", env.Index)
-			}
-		}
-
-		// Process variables from parameters for environment 0
-		if i == 0 {
-			for _, param := range format.Parameters {
-				envData.Variables = append(envData.Variables, celVariableData{
-					Name:    param.Name,
-					CELType: convertToCELType(param.Type),
-				})
-			}
-		}
-
-		// Process additional variables
-		for _, v := range env.AdditionalVariables {
-			envData.Variables = append(envData.Variables, celVariableData{
-				Name:    v.Name,
-				CELType: convertToCELType(v.Type),
-			})
-		}
-
-		envs[i] = envData
-	}
-
-	return envs, nil
-}
-
-// generateCELPrograms generates CEL program initialization code for Python
-func generateCELPrograms(format *intermediate.IntermediateFormat, envs []celEnvironmentData) ([]celProgramData, error) {
-	programs := make([]celProgramData, len(format.CELExpressions))
-
-	for i, expr := range format.CELExpressions {
-		program := celProgramData{
-			Index:          i,
-			Expression:     expr.Expression,
-			EnvironmentIdx: expr.EnvironmentIndex,
-		}
-		programs[i] = program
-	}
-
-	return programs, nil
 }

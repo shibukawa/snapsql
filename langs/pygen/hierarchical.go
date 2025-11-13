@@ -175,7 +175,7 @@ func generateHierarchicalStructs(functionName string, nodes map[string]*node, ro
 
 		structs = append(structs, responseStructData{
 			ClassName: className,
-			Fields:    fields,
+			Fields:    reorderResponseFields(fields),
 		})
 	}
 
@@ -214,7 +214,7 @@ func generateHierarchicalStructs(functionName string, nodes map[string]*node, ro
 
 	mainStruct := &responseStructData{
 		ClassName: mainClassName,
-		Fields:    mainFields,
+		Fields:    reorderResponseFields(mainFields),
 	}
 
 	return structs, mainStruct, nil

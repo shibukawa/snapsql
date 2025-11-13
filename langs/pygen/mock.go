@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/shibukawa/snapsql"
 )
+
+var ErrMockPathEmpty = errors.New("mock path is empty")
 
 // MockData represents mock data for a function
 type MockData struct {
@@ -23,7 +27,7 @@ type MockDataFile map[string]MockData
 // LoadMockData loads mock data from a JSON file
 func LoadMockData(mockPath string) (MockDataFile, error) {
 	if mockPath == "" {
-		return nil, errors.New("mock path is empty")
+		return nil, ErrMockPathEmpty
 	}
 
 	// Read the file
@@ -82,7 +86,7 @@ MOCK_DATA_PATH = "%s"
 }
 
 // GenerateMockExecutionCode generates Python code to execute mock data
-func GenerateMockExecutionCode(functionName string, responseAffinity string, returnType string, dialect string, queryType string) string {
+func GenerateMockExecutionCode(functionName string, responseAffinity string, returnType string, dialect snapsql.Dialect, queryType string) string {
 	code := `
     # Check for mock execution
     ctx = get_snapsql_context()
@@ -96,7 +100,7 @@ func GenerateMockExecutionCode(functionName string, responseAffinity string, ret
                     QueryLogMetadata(
                         func_name="` + functionName + `",
                         source_file="` + functionName + `",
-                        dialect="` + dialect + `",
+                        dialect="` + string(dialect) + `",
                         query_type="` + queryType + `"
                     ),
                     duration_ms=0.0,
@@ -165,7 +169,7 @@ type mockTemplateData struct {
 }
 
 // processMockData processes mock configuration and generates template data
-func processMockData(mockPath string, functionName string, responseAffinity string, returnType string, dialect string, queryType string) mockTemplateData {
+func processMockData(mockPath string, functionName string, responseAffinity string, returnType string, dialect snapsql.Dialect, queryType string) mockTemplateData {
 	if mockPath == "" {
 		return mockTemplateData{
 			HasMock: false,

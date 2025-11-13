@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -189,7 +190,7 @@ func TestAsyncGeneratorTypeAnnotation(t *testing.T) {
 	}
 
 	// Process response struct
-	responseStruct, err := processResponseStruct(format)
+	_, responseStruct, err := processResponseStruct(format)
 	if err != nil {
 		t.Fatalf("Failed to process response struct: %v", err)
 	}
@@ -241,30 +242,31 @@ func TestHierarchicalStreaming_MultipleDialects(t *testing.T) {
 		},
 	}
 
-	dialects := []string{"postgres", "mysql", "sqlite"}
+	dialects := []snapsql.Dialect{snapsql.DialectPostgres, snapsql.DialectMySQL, snapsql.DialectSQLite}
 
 	for _, dialect := range dialects {
-		t.Run(dialect, func(t *testing.T) {
-			result, err := generateQueryExecution(format, responseStruct, dialect)
+		d := dialect
+		t.Run(string(d), func(t *testing.T) {
+			result, err := generateQueryExecution(format, responseStruct, d)
 			if err != nil {
-				t.Fatalf("Unexpected error for %s: %v", dialect, err)
+				t.Fatalf("Unexpected error for %s: %v", d, err)
 			}
 
 			code := result.Code
 
 			// All dialects should use streaming pattern
 			if !strings.Contains(code, "yield current_parent") {
-				t.Errorf("%s: should yield parent objects incrementally", dialect)
+				t.Errorf("%s: should yield parent objects incrementally", d)
 			}
 
 			// All dialects should track current parent
 			if !strings.Contains(code, "current_parent = None") {
-				t.Errorf("%s: should track current parent", dialect)
+				t.Errorf("%s: should track current parent", d)
 			}
 
 			// All dialects should detect parent changes
 			if !strings.Contains(code, "if parent_key != current_parent_key:") {
-				t.Errorf("%s: should detect parent key changes", dialect)
+				t.Errorf("%s: should detect parent key changes", d)
 			}
 		})
 	}
@@ -317,5 +319,10 @@ func TestHierarchicalStreaming_ChildAggregation(t *testing.T) {
 		if !strings.Contains(code, pattern) {
 			t.Errorf("Generated code missing child aggregation pattern: %s", pattern)
 		}
+	}
+
+	requiredCommaSnippet := "            book_id=row_dict.get('book__book_id'),"
+	if !strings.Contains(code, requiredCommaSnippet) {
+		t.Errorf("Generated code should comma-separate child kwargs; missing snippet %q", requiredCommaSnippet)
 	}
 }

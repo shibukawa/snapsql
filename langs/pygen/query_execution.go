@@ -1,10 +1,11 @@
 package pygen
 
 import (
-	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -12,7 +13,7 @@ import (
 func generateQueryExecution(
 	format *intermediate.IntermediateFormat,
 	responseStruct *responseStructData,
-	dialect string,
+	dialect snapsql.Dialect,
 ) (*queryExecutionData, error) {
 	// Determine response affinity
 	affinity := strings.ToLower(format.ResponseAffinity)
@@ -28,43 +29,43 @@ func generateQueryExecution(
 	case "many":
 		return generateManyAffinityExecution(format, responseStruct, dialect)
 	default:
-		return nil, fmt.Errorf("unsupported response affinity: %s", format.ResponseAffinity)
+		panic("unsupported response affinity: " + format.ResponseAffinity)
 	}
 }
 
 // generateNoneAffinityExecution generates code for queries that don't return results (INSERT/UPDATE/DELETE)
-func generateNoneAffinityExecution(format *intermediate.IntermediateFormat, dialect string) (*queryExecutionData, error) {
-	var code []string
+func generateNoneAffinityExecution(format *intermediate.IntermediateFormat, dialect snapsql.Dialect) (*queryExecutionData, error) {
+	var code strings.Builder
 
-	code = append(code, "# Execute query (no result expected)")
+	code.WriteString("# Execute query (no result expected)\n")
 
 	switch dialect {
-	case "postgres":
-		// PostgreSQL with asyncpg
-		code = append(code, "result = await conn.execute(sql, *args)")
-		code = append(code, "# asyncpg returns status string like 'INSERT 0 1' or 'UPDATE 3'")
-		code = append(code, "# Extract the number of affected rows")
-		code = append(code, "if result.startswith('INSERT'):")
-		code = append(code, "    parts = result.split()")
-		code = append(code, "    affected_rows = int(parts[-1]) if len(parts) > 2 else 0")
-		code = append(code, "elif result.startswith('UPDATE') or result.startswith('DELETE'):")
-		code = append(code, "    parts = result.split()")
-		code = append(code, "    affected_rows = int(parts[-1]) if len(parts) > 1 else 0")
-		code = append(code, "else:")
-		code = append(code, "    affected_rows = 0")
-		code = append(code, "return affected_rows")
+	case snapsql.DialectPostgres:
+		code.WriteString(`result = await conn.execute(sql, *args)
+# asyncpg returns status string like 'INSERT 0 1' or 'UPDATE 3'
+# Extract the number of affected rows
+if result.startswith('INSERT'):
+    parts = result.split()
+    affected_rows = int(parts[-1]) if len(parts) > 2 else 0
+elif result.startswith('UPDATE') or result.startswith('DELETE'):
+    parts = result.split()
+    affected_rows = int(parts[-1]) if len(parts) > 1 else 0
+else:
+    affected_rows = 0
+return affected_rows
+`)
 
-	case "mysql", "sqlite":
-		// MySQL with aiomysql or SQLite with aiosqlite
-		code = append(code, "await cursor.execute(sql, args)")
-		code = append(code, "return cursor.rowcount")
+	case snapsql.DialectMySQL, snapsql.DialectSQLite:
+		code.WriteString(`await cursor.execute(sql, args)
+return cursor.rowcount
+`)
 
 	default:
-		return nil, fmt.Errorf("unsupported dialect: %s", dialect)
+		panic(fmt.Sprintf("unsupported dialect: %s", dialect))
 	}
 
 	return &queryExecutionData{
-		Code: strings.Join(code, "\n"),
+		Code: strings.TrimSuffix(code.String(), "\n"),
 	}, nil
 }
 
@@ -72,10 +73,10 @@ func generateNoneAffinityExecution(format *intermediate.IntermediateFormat, dial
 func generateOneAffinityExecution(
 	format *intermediate.IntermediateFormat,
 	responseStruct *responseStructData,
-	dialect string,
+	dialect snapsql.Dialect,
 ) (*queryExecutionData, error) {
 	if responseStruct == nil {
-		return nil, errors.New("response struct required for 'one' affinity")
+		panic(fmt.Sprintf("response struct missing for affinity %q", format.ResponseAffinity))
 	}
 
 	// Check if this is hierarchical structure
@@ -85,62 +86,61 @@ func generateOneAffinityExecution(
 		return generateHierarchicalOneExecution(format, responseStruct, dialect)
 	}
 
-	var code []string
+	var code strings.Builder
 
-	code = append(code, "# Execute query and fetch single row")
+	code.WriteString("# Execute query and fetch single row\n")
 
 	switch dialect {
-	case "postgres":
-		// PostgreSQL with asyncpg
-		code = append(code, "row = await conn.fetchrow(sql, *args)")
-		code = append(code, "")
-		code = append(code, "if row is None:")
-		code = append(code, "    # Build parameter dict for error message")
-		code = append(code, "    param_dict = {}")
-		code = append(code, "    # Note: args is a list, parameter names would need to be tracked separately")
-		code = append(code, "    raise NotFoundError(")
-		code = append(code, "        message=\"Record not found\",")
-		code = append(code, fmt.Sprintf("        func_name=%q,", format.FunctionName))
-		code = append(code, "        query=sql,")
-		code = append(code, "        params=param_dict")
-		code = append(code, "    )")
-		code = append(code, "")
-		code = append(code, "# Map row to dataclass")
-		code = append(code, "# asyncpg returns Record which supports dict() conversion")
-		code = append(code, fmt.Sprintf("return %s(**dict(row))", responseStruct.ClassName))
+	case snapsql.DialectPostgres:
+		code.WriteString(fmt.Sprintf(`row = await conn.fetchrow(sql, *args)
 
-	case "mysql", "sqlite":
-		// MySQL with aiomysql or SQLite with aiosqlite
-		code = append(code, "await cursor.execute(sql, args)")
-		code = append(code, "row = await cursor.fetchone()")
-		code = append(code, "")
-		code = append(code, "if row is None:")
-		code = append(code, "    # Build parameter dict for error message")
-		code = append(code, "    param_dict = {}")
-		code = append(code, "    # Note: args is a list, parameter names would need to be tracked separately")
-		code = append(code, "    raise NotFoundError(")
-		code = append(code, "        message=\"Record not found\",")
-		code = append(code, fmt.Sprintf("        func_name=%q,", format.FunctionName))
-		code = append(code, "        query=sql,")
-		code = append(code, "        params=param_dict")
-		code = append(code, "    )")
-		code = append(code, "")
+if row is None:
+    # Build parameter dict for error message
+    param_dict = {}
+    # Note: args is a list, parameter names would need to be tracked separately
+    raise NotFoundError(
+        message="Record not found",
+        func_name="%s",
+        query=sql,
+        params=param_dict
+    )
 
-		code = append(code, "# Map row to dataclass")
-		if dialect == "mysql" {
-			code = append(code, "# aiomysql with DictCursor returns dict")
-		} else {
-			code = append(code, "# aiosqlite with row_factory returns dict-like object")
+# Map row to dataclass
+# asyncpg returns Record which supports dict() conversion
+return %s(**dict(row))
+`, format.FunctionName, responseStruct.ClassName))
+
+	case snapsql.DialectMySQL, snapsql.DialectSQLite:
+		comment := "# aiomysql with DictCursor returns dict"
+		if dialect == snapsql.DialectSQLite {
+			comment = "# aiosqlite with row_factory returns dict-like object"
 		}
 
-		code = append(code, fmt.Sprintf("return %s(**row)", responseStruct.ClassName))
+		code.WriteString(fmt.Sprintf(`await cursor.execute(sql, args)
+row = await cursor.fetchone()
+
+if row is None:
+    # Build parameter dict for error message
+    param_dict = {}
+    # Note: args is a list, parameter names would need to be tracked separately
+    raise NotFoundError(
+        message="Record not found",
+        func_name="%s",
+        query=sql,
+        params=param_dict
+    )
+
+# Map row to dataclass
+%s
+return %s(**row)
+`, format.FunctionName, comment, responseStruct.ClassName))
 
 	default:
-		return nil, fmt.Errorf("unsupported dialect: %s", dialect)
+		panic("unsupported dialect: " + dialect)
 	}
 
 	return &queryExecutionData{
-		Code: strings.Join(code, "\n"),
+		Code: strings.TrimSuffix(code.String(), "\n"),
 	}, nil
 }
 
@@ -148,7 +148,7 @@ func generateOneAffinityExecution(
 func generateHierarchicalOneExecution(
 	format *intermediate.IntermediateFormat,
 	responseStruct *responseStructData,
-	dialect string,
+	dialect snapsql.Dialect,
 ) (*queryExecutionData, error) {
 	// Detect hierarchical structure
 	nodes, rootFields, err := detectHierarchicalStructure(format.Responses)
@@ -159,61 +159,62 @@ func generateHierarchicalOneExecution(
 	// Find parent key fields
 	parentKeyFields := findParentKeyFields(rootFields)
 	if len(parentKeyFields) == 0 {
-		return nil, errors.New("no parent key field found for hierarchical aggregation")
+		return nil, snapsql.ErrHierarchicalNoParentPrimaryKey
 	}
 
-	var code []string
+	var code strings.Builder
 
-	code = append(code, "# Execute query for hierarchical aggregation (one affinity)")
-	code = append(code, "# This aggregates multiple rows into a single parent object with child lists")
-	code = append(code, "")
+	code.WriteString("# Execute query for hierarchical aggregation (one affinity)\n")
+	code.WriteString("# This aggregates multiple rows into a single parent object with child lists\n\n")
 
 	// Execute query based on dialect
 	switch dialect {
-	case "postgres":
-		code = append(code, "rows = await conn.fetch(sql, *args)")
-		code = append(code, "")
-		code = append(code, "if not rows:")
-		code = append(code, "    raise NotFoundError(")
-		code = append(code, "        message=\"Record not found\",")
-		code = append(code, fmt.Sprintf("        func_name=%q,", format.FunctionName))
-		code = append(code, "        query=sql")
-		code = append(code, "    )")
-		code = append(code, "")
-		code = append(code, "# Process rows for hierarchical aggregation")
-		code = append(code, "result = None")
-		code = append(code, "")
-		code = append(code, "for row in rows:")
-		code = append(code, "    row_dict = dict(row)")
+	case snapsql.DialectPostgres:
+		code.WriteString(fmt.Sprintf(`rows = await conn.fetch(sql, *args)
 
-	case "mysql", "sqlite":
-		code = append(code, "await cursor.execute(sql, args)")
-		code = append(code, "")
-		code = append(code, "# Collect all rows first")
-		code = append(code, "rows = []")
-		code = append(code, "async for row in cursor:")
-		code = append(code, "    rows.append(row if isinstance(row, dict) else dict(row))")
-		code = append(code, "")
-		code = append(code, "if not rows:")
-		code = append(code, "    raise NotFoundError(")
-		code = append(code, "        message=\"Record not found\",")
-		code = append(code, fmt.Sprintf("        func_name=%q,", format.FunctionName))
-		code = append(code, "        query=sql")
-		code = append(code, "    )")
-		code = append(code, "")
-		code = append(code, "# Process rows for hierarchical aggregation")
-		code = append(code, "result = None")
-		code = append(code, "")
-		code = append(code, "for row_dict in rows:")
+if not rows:
+    raise NotFoundError(
+        message="Record not found",
+        func_name="%s",
+        query=sql
+    )
+
+# Process rows for hierarchical aggregation
+result = None
+
+for row in rows:
+    row_dict = dict(row)
+`, format.FunctionName))
+
+	case snapsql.DialectMySQL, snapsql.DialectSQLite:
+		code.WriteString(fmt.Sprintf(`await cursor.execute(sql, args)
+
+# Collect all rows first
+rows = []
+async for row in cursor:
+    rows.append(row if isinstance(row, dict) else dict(row))
+
+if not rows:
+    raise NotFoundError(
+        message="Record not found",
+        func_name="%s",
+        query=sql
+    )
+
+# Process rows for hierarchical aggregation
+result = None
+
+for row_dict in rows:
+`, format.FunctionName))
 
 	default:
-		return nil, fmt.Errorf("unsupported dialect: %s", dialect)
+		panic("unsupported dialect: " + dialect)
 	}
 
 	// Generate aggregation logic
-	code = append(code, "    ")
-	code = append(code, "    # Create parent object on first row")
-	code = append(code, "    if result is None:")
+	code.WriteString("    \n")
+	code.WriteString("    # Create parent object on first row\n")
+	code.WriteString("    if result is None:\n")
 
 	// Generate parent object creation with root fields
 	parentFields := make([]string, 0)
@@ -230,55 +231,17 @@ func generateHierarchicalOneExecution(
 		}
 	}
 
-	code = append(code, fmt.Sprintf("        result = %s(", responseStruct.ClassName))
-	code = append(code, strings.Join(parentFields, ",\n"))
-	code = append(code, "        )")
-	code = append(code, "    ")
-
-	// Generate child object creation and appending
-	code = append(code, "    # Add child objects if present")
-
-	// Process each top-level child group
-	for key := range nodes {
-		n := nodes[key]
-		if len(n.PathSegments) != 1 {
-			continue
-		}
-
-		childFieldName := toSnakeCase(n.PathSegments[0])
-		childClassName := generateChildClassName(responseStruct.ClassName, n.PathSegments)
-
-		// Check if child data exists
-		childCheckFields := make([]string, 0)
-		for _, f := range n.Fields {
-			childCheckFields = append(childCheckFields, fmt.Sprintf("row_dict.get('%s__%s')", n.PathSegments[0], f.JSONTag))
-		}
-
-		code = append(code, fmt.Sprintf("    if any([%s]):", strings.Join(childCheckFields, ", ")))
-
-		// Create child object
-		childFields := make([]string, 0)
-		for _, f := range n.Fields {
-			childFields = append(childFields, fmt.Sprintf("            %s=row_dict.get('%s__%s')", f.Name, n.PathSegments[0], f.JSONTag))
-		}
-
-		// Add nested children if any
-		for childKey := range n.Children {
-			nestedFieldName := toSnakeCase(childKey)
-			childFields = append(childFields, fmt.Sprintf("            %s=[]", nestedFieldName))
-		}
-
-		code = append(code, fmt.Sprintf("        child_obj = %s(", childClassName))
-		code = append(code, strings.Join(childFields, ",\n"))
-		code = append(code, "        )")
-		code = append(code, fmt.Sprintf("        result.%s.append(child_obj)", childFieldName))
-	}
-
-	code = append(code, "")
-	code = append(code, "return result")
+	code.WriteString(fmt.Sprintf("        result = %s(\n", responseStruct.ClassName))
+	code.WriteString(strings.Join(parentFields, ",\n"))
+	code.WriteString("\n        )\n")
+	code.WriteString("    \n")
+	code.WriteString("    # Add child objects if present\n")
+	buildChildObjectBlocks(&code, nodes, responseStruct, "result")
+	code.WriteByte('\n')
+	code.WriteString("return result\n")
 
 	return &queryExecutionData{
-		Code: strings.Join(code, "\n"),
+		Code: strings.TrimSuffix(code.String(), "\n"),
 	}, nil
 }
 
@@ -286,10 +249,10 @@ func generateHierarchicalOneExecution(
 func generateManyAffinityExecution(
 	format *intermediate.IntermediateFormat,
 	responseStruct *responseStructData,
-	dialect string,
+	dialect snapsql.Dialect,
 ) (*queryExecutionData, error) {
 	if responseStruct == nil {
-		return nil, errors.New("response struct required for 'many' affinity")
+		panic(fmt.Sprintf("response struct missing for affinity %q", format.ResponseAffinity))
 	}
 
 	// Check if this is hierarchical structure
@@ -299,33 +262,33 @@ func generateManyAffinityExecution(
 		return generateHierarchicalManyExecution(format, responseStruct, dialect)
 	}
 
-	var code []string
+	var code strings.Builder
 
-	code = append(code, "# Execute query and yield rows as async generator")
+	code.WriteString("# Execute query and yield rows as async generator\n")
 
 	switch dialect {
-	case "postgres":
-		// PostgreSQL with asyncpg - use async for with fetch
-		code = append(code, "rows = await conn.fetch(sql, *args)")
-		code = append(code, "")
-		code = append(code, "# Yield each row as dataclass instance")
-		code = append(code, "for row in rows:")
-		code = append(code, fmt.Sprintf("    yield %s(**dict(row))", responseStruct.ClassName))
+	case snapsql.DialectPostgres:
+		code.WriteString(fmt.Sprintf(`rows = await conn.fetch(sql, *args)
 
-	case "mysql", "sqlite":
-		// MySQL with aiomysql or SQLite with aiosqlite
-		code = append(code, "await cursor.execute(sql, args)")
-		code = append(code, "")
-		code = append(code, "# Fetch and yield rows")
-		code = append(code, "async for row in cursor:")
-		code = append(code, fmt.Sprintf("    yield %s(**row)", responseStruct.ClassName))
+# Yield each row as dataclass instance
+for row in rows:
+    yield %s(**dict(row))
+`, responseStruct.ClassName))
+
+	case snapsql.DialectMySQL, snapsql.DialectSQLite:
+		code.WriteString(fmt.Sprintf(`await cursor.execute(sql, args)
+
+# Fetch and yield rows
+async for row in cursor:
+    yield %s(**row)
+`, responseStruct.ClassName))
 
 	default:
-		return nil, fmt.Errorf("unsupported dialect: %s", dialect)
+		panic(fmt.Sprintf("unsupported dialect: %s", dialect))
 	}
 
 	return &queryExecutionData{
-		Code: strings.Join(code, "\n"),
+		Code: strings.TrimSuffix(code.String(), "\n"),
 	}, nil
 }
 
@@ -344,7 +307,7 @@ func hasHierarchicalFields(responses []intermediate.Response) bool {
 func generateHierarchicalManyExecution(
 	format *intermediate.IntermediateFormat,
 	responseStruct *responseStructData,
-	dialect string,
+	dialect snapsql.Dialect,
 ) (*queryExecutionData, error) {
 	// Detect hierarchical structure
 	nodes, rootFields, err := detectHierarchicalStructure(format.Responses)
@@ -355,48 +318,49 @@ func generateHierarchicalManyExecution(
 	// Find parent key fields (fields ending with _id or named id)
 	parentKeyFields := findParentKeyFields(rootFields)
 	if len(parentKeyFields) == 0 {
-		return nil, errors.New("no parent key field found for hierarchical aggregation")
+		return nil, snapsql.ErrHierarchicalNoParentPrimaryKey
 	}
 
-	var code []string
+	var code strings.Builder
 
-	code = append(code, "# Execute query for hierarchical aggregation")
-	code = append(code, "# This aggregates child records into parent objects")
-	code = append(code, "")
+	code.WriteString("# Execute query for hierarchical aggregation\n")
+	code.WriteString("# This aggregates child records into parent objects\n\n")
 
 	// Execute query based on dialect
 	switch dialect {
-	case "postgres":
-		code = append(code, "rows = await conn.fetch(sql, *args)")
-		code = append(code, "")
-		code = append(code, "# Process rows for hierarchical aggregation")
-		code = append(code, "current_parent = None")
-		code = append(code, "current_parent_key = None")
-		code = append(code, "")
-		code = append(code, "for row in rows:")
-		code = append(code, "    row_dict = dict(row)")
+	case snapsql.DialectPostgres:
+		code.WriteString(`rows = await conn.fetch(sql, *args)
 
-	case "mysql", "sqlite":
-		code = append(code, "await cursor.execute(sql, args)")
-		code = append(code, "")
-		code = append(code, "# Process rows for hierarchical aggregation")
-		code = append(code, "current_parent = None")
-		code = append(code, "current_parent_key = None")
-		code = append(code, "")
-		code = append(code, "async for row in cursor:")
-		code = append(code, "    row_dict = row if isinstance(row, dict) else dict(row)")
+# Process rows for hierarchical aggregation
+current_parent = None
+current_parent_key = None
+
+for row in rows:
+    row_dict = dict(row)
+`)
+
+	case snapsql.DialectMySQL, snapsql.DialectSQLite:
+		code.WriteString(`await cursor.execute(sql, args)
+
+# Process rows for hierarchical aggregation
+current_parent = None
+current_parent_key = None
+
+async for row in cursor:
+    row_dict = row if isinstance(row, dict) else dict(row)
+`)
 
 	default:
-		return nil, fmt.Errorf("unsupported dialect: %s", dialect)
+		panic(fmt.Sprintf("unsupported dialect: %s", dialect))
 	}
 
 	// Generate parent key extraction
-	code = append(code, "    ")
-	code = append(code, "    # Extract parent key")
+	code.WriteString("    \n")
+	code.WriteString("    # Extract parent key\n")
 
 	if len(parentKeyFields) == 1 {
 		keyField := parentKeyFields[0]
-		code = append(code, fmt.Sprintf("    parent_key = row_dict.get('%s')", keyField.JSONTag))
+		code.WriteString(fmt.Sprintf("    parent_key = row_dict.get('%s')\n", keyField.JSONTag))
 	} else {
 		// Composite key
 		keyParts := make([]string, len(parentKeyFields))
@@ -404,17 +368,17 @@ func generateHierarchicalManyExecution(
 			keyParts[i] = fmt.Sprintf("row_dict.get('%s')", kf.JSONTag)
 		}
 
-		code = append(code, fmt.Sprintf("    parent_key = (%s)", strings.Join(keyParts, ", ")))
+		code.WriteString(fmt.Sprintf("    parent_key = (%s)\n", strings.Join(keyParts, ", ")))
 	}
 
-	code = append(code, "    ")
-	code = append(code, "    # Check if we have a new parent")
-	code = append(code, "    if parent_key != current_parent_key:")
-	code = append(code, "        # Yield previous parent if exists")
-	code = append(code, "        if current_parent is not None:")
-	code = append(code, "            yield current_parent")
-	code = append(code, "        ")
-	code = append(code, "        # Create new parent object")
+	code.WriteString("    \n")
+	code.WriteString("    # Check if we have a new parent\n")
+	code.WriteString("    if parent_key != current_parent_key:\n")
+	code.WriteString("        # Yield previous parent if exists\n")
+	code.WriteString("        if current_parent is not None:\n")
+	code.WriteString("            yield current_parent\n")
+	code.WriteString("        \n")
+	code.WriteString("        # Create new parent object\n")
 
 	// Generate parent object creation with root fields
 	parentFields := make([]string, 0)
@@ -432,58 +396,20 @@ func generateHierarchicalManyExecution(
 		}
 	}
 
-	code = append(code, fmt.Sprintf("        current_parent = %s(", responseStruct.ClassName))
-	code = append(code, strings.Join(parentFields, ",\n"))
-	code = append(code, "        )")
-	code = append(code, "        current_parent_key = parent_key")
-	code = append(code, "    ")
-
-	// Generate child object creation and appending
-	code = append(code, "    # Add child objects if present")
-
-	// Process each top-level child group
-	for key := range nodes {
-		n := nodes[key]
-		if len(n.PathSegments) != 1 {
-			continue // Only process top-level children here
-		}
-
-		childFieldName := toSnakeCase(n.PathSegments[0])
-		childClassName := generateChildClassName(responseStruct.ClassName, n.PathSegments)
-
-		// Check if child data exists (at least one non-null field)
-		childCheckFields := make([]string, 0)
-		for _, f := range n.Fields {
-			childCheckFields = append(childCheckFields, fmt.Sprintf("row_dict.get('%s__%s')", n.PathSegments[0], f.JSONTag))
-		}
-
-		code = append(code, fmt.Sprintf("    if any([%s]):", strings.Join(childCheckFields, ", ")))
-
-		// Create child object
-		childFields := make([]string, 0)
-		for _, f := range n.Fields {
-			childFields = append(childFields, fmt.Sprintf("            %s=row_dict.get('%s__%s')", f.Name, n.PathSegments[0], f.JSONTag))
-		}
-
-		// Add nested children if any
-		for childKey := range n.Children {
-			nestedFieldName := toSnakeCase(childKey)
-			childFields = append(childFields, fmt.Sprintf("            %s=[]", nestedFieldName))
-		}
-
-		code = append(code, fmt.Sprintf("        child_obj = %s(", childClassName))
-		code = append(code, strings.Join(childFields, ",\n"))
-		code = append(code, "        )")
-		code = append(code, fmt.Sprintf("        current_parent.%s.append(child_obj)", childFieldName))
-	}
-
-	code = append(code, "")
-	code = append(code, "# Yield last parent if exists")
-	code = append(code, "if current_parent is not None:")
-	code = append(code, "    yield current_parent")
+	code.WriteString(fmt.Sprintf("        current_parent = %s(\n", responseStruct.ClassName))
+	code.WriteString(strings.Join(parentFields, ",\n"))
+	code.WriteString("\n        )\n")
+	code.WriteString("        current_parent_key = parent_key\n")
+	code.WriteString("    \n")
+	code.WriteString("    # Add child objects if present\n")
+	buildChildObjectBlocks(&code, nodes, responseStruct, "current_parent")
+	code.WriteByte('\n')
+	code.WriteString("# Yield last parent if exists\n")
+	code.WriteString("if current_parent is not None:\n")
+	code.WriteString("    yield current_parent\n")
 
 	return &queryExecutionData{
-		Code: strings.Join(code, "\n"),
+		Code: strings.TrimSuffix(code.String(), "\n"),
 	}, nil
 }
 
@@ -514,4 +440,50 @@ func generateChildClassName(parentClassName string, pathSegments []string) strin
 	}
 
 	return sb.String()
+}
+
+func buildChildObjectBlocks(sb *strings.Builder, nodes map[string]*node, responseStruct *responseStructData, parentVar string) {
+	keys := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		if len(n.PathSegments) == 1 {
+			keys = append(keys, pathKey(n.PathSegments))
+		}
+	}
+
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		n := nodes[key]
+		childFieldName := toSnakeCase(n.PathSegments[0])
+		childClassName := generateChildClassName(responseStruct.ClassName, n.PathSegments)
+
+		childCheckFields := make([]string, 0, len(n.Fields))
+		for _, f := range n.Fields {
+			childCheckFields = append(childCheckFields, fmt.Sprintf("row_dict.get('%s__%s')", n.PathSegments[0], f.JSONTag))
+		}
+
+		fmt.Fprintf(sb, "    if any([%s]):\n", strings.Join(childCheckFields, ", "))
+
+		childFields := make([]string, 0, len(n.Fields)+len(n.Children))
+		for _, f := range n.Fields {
+			childFields = append(childFields, fmt.Sprintf("            %s=row_dict.get('%s__%s')", f.Name, n.PathSegments[0], f.JSONTag))
+		}
+
+		childKeys := make([]string, 0, len(n.Children))
+		for childKey := range n.Children {
+			childKeys = append(childKeys, childKey)
+		}
+
+		sort.Strings(childKeys)
+
+		for _, childKey := range childKeys {
+			nestedFieldName := toSnakeCase(childKey)
+			childFields = append(childFields, fmt.Sprintf("            %s=[]", nestedFieldName))
+		}
+
+		fmt.Fprintf(sb, "        child_obj = %s(\n", childClassName)
+		sb.WriteString(strings.Join(childFields, ",\n"))
+		sb.WriteString("\n        )\n")
+		fmt.Fprintf(sb, "        %s.%s.append(child_obj)\n", parentVar, childFieldName)
+	}
 }

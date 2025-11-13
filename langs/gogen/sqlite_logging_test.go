@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
-	generator "github.com/shibukawa/snapsql/testdata/gosample/generated_sqlite"
+	generator "github.com/shibukawa/snapsql/testdata/appsample/generated_sqlite"
 )
 
 type captureSink struct {
@@ -64,22 +64,17 @@ func TestGeneratedKanbanQueryLogging(t *testing.T) {
 	sink := &captureSink{}
 	ctx := snapsqlgo.WithLogger(context.Background(), sink.asFunc())
 
-	seq := generator.AccountGet(ctx, db, 1)
+	got, err := generator.AccountGet(ctx, db, 1)
+	if err != nil {
+		t.Fatalf("AccountGet returned error: %v", err)
+	}
 
-	var got *generator.AccountGetResult
+	if got.ID != 1 {
+		t.Fatalf("expected ID=1, got %d", got.ID)
+	}
 
-	seq(func(res *generator.AccountGetResult, err error) bool {
-		if err != nil {
-			t.Fatalf("AccountGet returned error: %v", err)
-		}
-
-		got = res
-
-		return false
-	})
-
-	if got == nil {
-		t.Fatalf("expected AccountGet to yield a result")
+	if got.Name == nil || *got.Name != "Demo Account" {
+		t.Fatalf("expected name 'Demo Account', got %v", got.Name)
 	}
 
 	entries := sink.Entries()

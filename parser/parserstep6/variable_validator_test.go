@@ -1,6 +1,7 @@
 package parserstep6
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -163,7 +164,7 @@ func TestValidateVariableDirective(t *testing.T) {
 	tests := []struct {
 		name           string
 		token          tokenizer.Token
-		paramSchema    map[string]any
+		paramYAML      string
 		expectedErrors int
 	}{
 		{
@@ -173,12 +174,8 @@ func TestValidateVariableDirective(t *testing.T) {
 				Value:    "/*= user.name */",
 				Position: tokenizer.Position{Line: 1, Column: 1},
 			},
-			paramSchema: map[string]any{
-				"user": map[string]any{
-					"name": "John",
-				},
-			},
-			expectedErrors: 1, // 変数が見つからない場合はエラーが発生することを期待
+			paramYAML:      "  user:\n    name: string\n",
+			expectedErrors: 0,
 		},
 		{
 			name: "Invalid variable expression",
@@ -187,7 +184,7 @@ func TestValidateVariableDirective(t *testing.T) {
 				Value:    "/*= undefined.var */",
 				Position: tokenizer.Position{Line: 1, Column: 1},
 			},
-			paramSchema:    map[string]any{},
+			paramYAML:      "",
 			expectedErrors: 1,
 		},
 		{
@@ -197,23 +194,14 @@ func TestValidateVariableDirective(t *testing.T) {
 				Value:    "/*= */",
 				Position: tokenizer.Position{Line: 1, Column: 1},
 			},
-			paramSchema:    map[string]any{},
+			paramYAML:      "",
 			expectedErrors: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create namespace
-			schema := &cmn.FunctionDefinition{
-				Parameters: tt.paramSchema,
-			}
-			// Create namespaces
-			paramNs, err := cmn.NewNamespaceFromDefinition(schema)
-			if err != nil {
-				t.Fatalf("Failed to create namespace from schema: %v", err)
-			}
-			// Validate
+			paramNs := newNamespaceForTest(t, tt.paramYAML)
 			perr := &cmn.ParseError{}
 			validateVariableDirective(tt.token, paramNs, perr)
 
@@ -290,4 +278,35 @@ func TestValidateConstDirective(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newNamespaceForTest(t *testing.T, paramYAML string) *cmn.Namespace {
+	t.Helper()
+
+	var b strings.Builder
+	b.WriteString("/*#\nname: test\nfunction_name: test\n")
+
+	if paramYAML != "" {
+		b.WriteString("parameters:\n")
+		b.WriteString(paramYAML)
+	}
+
+	b.WriteString("*/\nSELECT 1")
+
+	tokens, err := tokenizer.Tokenize(b.String())
+	if err != nil {
+		t.Fatalf("tokenize failed: %v", err)
+	}
+
+	fd, err := cmn.ParseFunctionDefinitionFromSQLComment(tokens, ".", ".")
+	if err != nil {
+		t.Fatalf("parse function definition failed: %v", err)
+	}
+
+	paramNs, err := cmn.NewNamespaceFromDefinition(fd)
+	if err != nil {
+		t.Fatalf("Failed to create namespace from schema: %v", err)
+	}
+
+	return paramNs
 }

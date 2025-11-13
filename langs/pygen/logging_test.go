@@ -3,6 +3,8 @@ package pygen
 import (
 	"strings"
 	"testing"
+
+	"github.com/shibukawa/snapsql"
 )
 
 func TestGenerateQueryLoggerProtocol(t *testing.T) {
@@ -112,28 +114,28 @@ func TestUpdateSnapSQLContextForLogging(t *testing.T) {
 func TestGenerateQueryExecutionWithLogging(t *testing.T) {
 	tests := []struct {
 		name             string
-		dialect          string
+		dialect          snapsql.Dialect
 		responseAffinity string
 		functionName     string
 		queryType        string
 	}{
 		{
 			name:             "PostgreSQL SELECT with one affinity",
-			dialect:          "postgres",
+			dialect:          snapsql.DialectPostgres,
 			responseAffinity: "one",
 			functionName:     "get_user_by_id",
 			queryType:        "select",
 		},
 		{
 			name:             "MySQL INSERT with none affinity",
-			dialect:          "mysql",
+			dialect:          snapsql.DialectMySQL,
 			responseAffinity: "none",
 			functionName:     "insert_user",
 			queryType:        "insert",
 		},
 		{
 			name:             "SQLite SELECT with many affinity",
-			dialect:          "sqlite",
+			dialect:          snapsql.DialectSQLite,
 			responseAffinity: "many",
 			functionName:     "list_users",
 			queryType:        "select",
@@ -201,7 +203,7 @@ func TestGenerateQueryExecutionWithLogging(t *testing.T) {
 				t.Error("dialect not set in metadata")
 			}
 
-			if !strings.Contains(code, tt.dialect) {
+			if !strings.Contains(code, string(tt.dialect)) {
 				t.Errorf("Dialect %s not found in metadata", tt.dialect)
 			}
 
@@ -229,15 +231,15 @@ func TestGenerateQueryExecutionWithLogging(t *testing.T) {
 func TestGenerateNoneAffinityExecutionWithLogging(t *testing.T) {
 	tests := []struct {
 		name        string
-		dialect     string
+		dialect     snapsql.Dialect
 		withLogging bool
 	}{
-		{"PostgreSQL with logging", "postgres", true},
-		{"PostgreSQL without logging", "postgres", false},
-		{"MySQL with logging", "mysql", true},
-		{"MySQL without logging", "mysql", false},
-		{"SQLite with logging", "sqlite", true},
-		{"SQLite without logging", "sqlite", false},
+		{"PostgreSQL with logging", snapsql.DialectPostgres, true},
+		{"PostgreSQL without logging", snapsql.DialectPostgres, false},
+		{"MySQL with logging", snapsql.DialectMySQL, true},
+		{"MySQL without logging", snapsql.DialectMySQL, false},
+		{"SQLite with logging", snapsql.DialectSQLite, true},
+		{"SQLite without logging", snapsql.DialectSQLite, false},
 	}
 
 	for _, tt := range tests {
@@ -246,15 +248,15 @@ func TestGenerateNoneAffinityExecutionWithLogging(t *testing.T) {
 
 			// Check for dialect-specific execution
 			switch tt.dialect {
-			case "postgres":
+			case snapsql.DialectPostgres:
 				if !strings.Contains(code, "await conn.execute(sql, *args)") {
 					t.Error("PostgreSQL execute not found")
 				}
-			case "mysql":
+			case snapsql.DialectMySQL:
 				if !strings.Contains(code, "async with cursor.execute(sql, args)") {
 					t.Error("MySQL execute not found")
 				}
-			case "sqlite":
+			case snapsql.DialectSQLite:
 				if !strings.Contains(code, "async with conn.execute(sql, args)") {
 					t.Error("SQLite execute not found")
 				}
@@ -278,12 +280,12 @@ func TestGenerateNoneAffinityExecutionWithLogging(t *testing.T) {
 func TestGenerateOneAffinityExecutionWithLogging(t *testing.T) {
 	tests := []struct {
 		name        string
-		dialect     string
+		dialect     snapsql.Dialect
 		withLogging bool
 	}{
-		{"PostgreSQL with logging", "postgres", true},
-		{"MySQL with logging", "mysql", true},
-		{"SQLite with logging", "sqlite", true},
+		{"PostgreSQL with logging", snapsql.DialectPostgres, true},
+		{"MySQL with logging", snapsql.DialectMySQL, true},
+		{"SQLite with logging", snapsql.DialectSQLite, true},
 	}
 
 	for _, tt := range tests {
@@ -313,12 +315,12 @@ func TestGenerateOneAffinityExecutionWithLogging(t *testing.T) {
 func TestGenerateManyAffinityExecutionWithLogging(t *testing.T) {
 	tests := []struct {
 		name        string
-		dialect     string
+		dialect     snapsql.Dialect
 		withLogging bool
 	}{
-		{"PostgreSQL with logging", "postgres", true},
-		{"MySQL with logging", "mysql", true},
-		{"SQLite with logging", "sqlite", true},
+		{"PostgreSQL with logging", snapsql.DialectPostgres, true},
+		{"MySQL with logging", snapsql.DialectMySQL, true},
+		{"SQLite with logging", snapsql.DialectSQLite, true},
 	}
 
 	for _, tt := range tests {

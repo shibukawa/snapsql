@@ -3,26 +3,10 @@
     {
       "index": 0,
       "additional_variables": [
-        {
-          "name": "status",
-          "type": "string",
-          "value": "dummy"
-        },
-        {
-          "name": "account_id",
-          "type": "int",
-          "value": 1
-        },
-        {
-          "name": "include_optional",
-          "type": "bool",
-          "value": true
-        },
-        {
-          "name": "include_secondary",
-          "type": "bool",
-          "value": true
-        }
+    {"name": "status", "type": "string", "value": "dummy"},
+    {"name": "account_id", "type": "int", "value": 1},
+    {"name": "include_optional", "type": "bool", "value": true},
+    {"name": "include_secondary", "type": "bool", "value": true}
       ],
       "container": "root"
     }
@@ -73,107 +57,129 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 16,
+        "column": 19
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "status",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 16,
+            "Column": 19,
+            "Length": 6
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 11,
+        "column": 12
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "account_id",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 11,
+            "Column": 12,
+            "Length": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_003",
+      "environment_index": 0,
+      "position": {
+        "line": 12,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "include_optional",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 12,
+            "Column": 1,
+            "Length": 16
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_004",
+      "environment_index": 0,
+      "position": {
+        "line": 15,
+        "column": 5
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "include_secondary",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 15,
+            "Column": 5,
+            "Length": 17
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "update_accounts_nested_if",
   "instructions": [
-    {
-      "op": "EMIT_STATIC",
-      "pos": "9:1",
-      "value": "UPDATE accounts SET status = "
-    },
-    {
-      "op": "EMIT_EVAL",
-      "pos": "10:14",
-      "expr_index": 0
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "11:0",
-      "value": " WHERE id = "
-    },
-    {
-      "op": "EMIT_EVAL",
-      "pos": "11:12",
-      "expr_index": 1
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "12:0",
-      "value": " "
-    },
-    {
-      "op": "IF",
-      "pos": "12:1",
-      "expr_index": 2
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "13:0",
-      "value": " AND ( updated_at \u003e NOW() "
-    },
-    {
-      "op": "IF",
-      "pos": "15:5",
-      "expr_index": 3
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "16:0",
-      "value": " OR status = "
-    },
-    {
-      "op": "EMIT_EVAL",
-      "pos": "16:19",
-      "expr_index": 0
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "17:0",
-      "value": " "
-    },
-    {
-      "op": "END",
-      "pos": "17:5"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "18:0",
-      "value": " ) "
-    },
-    {
-      "op": "END",
-      "pos": "19:1"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "20:0"
-    }
+    {"op": "EMIT_STATIC", "pos": "9:1", "value": "UPDATE accounts SET status = "},
+    {"op": "EMIT_EVAL", "pos": "10:14", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "11:0", "value": " WHERE id = "},
+    {"op": "EMIT_EVAL", "pos": "11:12", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "12:0", "value": " "},
+    {"op": "IF", "pos": "12:1", "expr_index": 2},
+    {"op": "EMIT_STATIC", "pos": "13:0", "value": " AND ( updated_at \u003e NOW() "},
+    {"op": "IF", "pos": "15:5", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "16:0", "value": " OR status = "},
+    {"op": "EMIT_EVAL", "pos": "16:19", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "17:0", "value": " "},
+    {"op": "END", "pos": "17:5"},
+    {"op": "EMIT_STATIC", "pos": "18:0", "value": " ) "},
+    {"op": "END", "pos": "19:1"},
+    {"op": "EMIT_STATIC", "pos": "20:0"}
   ],
   "parameters": [
-    {
-      "name": "status",
-      "type": "string"
-    },
-    {
-      "name": "account_id",
-      "type": "int"
-    },
-    {
-      "name": "include_optional",
-      "type": "bool"
-    },
-    {
-      "name": "include_secondary",
-      "type": "bool"
-    }
+    {"name": "status", "type": "string"},
+    {"name": "account_id", "type": "int"},
+    {"name": "include_optional", "type": "bool"},
+    {"name": "include_secondary", "type": "bool"}
   ],
   "response_affinity": "none",
   "statement_type": "update",
   "table_references": [
-    {
-      "name": "accounts",
-      "context": "main"
-    }
+    {"name": "accounts", "context": "main"}
   ],
   "warnings": [
     "type inference failed: no database schema provided"
@@ -185,16 +191,8 @@
       3
     ],
     "dynamic_conditions": [
-      {
-        "expr_index": 2,
-        "negated_when_empty": true,
-        "description": "include_optional"
-      },
-      {
-        "expr_index": 3,
-        "negated_when_empty": true,
-        "description": "include_secondary"
-      }
+      {"expr_index": 2, "negated_when_empty": true, "description": "include_optional"},
+      {"expr_index": 3, "negated_when_empty": true, "description": "include_secondary"}
     ],
     "raw_text": "WHERE"
   }

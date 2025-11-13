@@ -3,6 +3,8 @@ package pygen
 import (
 	"fmt"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // ConvertToPythonType converts SnapSQL type to Python type hint string
@@ -102,33 +104,28 @@ func GetRequiredImports(types []string) []string {
 // PostgreSQL uses $1, $2, $3, ... format
 // MySQL uses %s format
 // SQLite uses ? format
-func GetPlaceholder(dialect string, index int) (string, error) {
+func GetPlaceholder(dialect snapsql.Dialect, index int) string {
 	switch dialect {
-	case "postgres":
+	case snapsql.DialectPostgres:
 		// PostgreSQL uses $1, $2, $3, ...
-		return fmt.Sprintf("$%d", index), nil
-	case "mysql":
+		return fmt.Sprintf("$%d", index)
+	case snapsql.DialectMySQL:
 		// MySQL uses %s for all parameters
-		return "%s", nil
-	case "sqlite":
+		return "%s"
+	case snapsql.DialectSQLite:
 		// SQLite uses ? for all parameters
-		return "?", nil
+		return "?"
 	default:
-		return "", fmt.Errorf("unsupported dialect for placeholder: %s", dialect)
+		panic(fmt.Sprintf("unsupported dialect for placeholder: %s", dialect))
 	}
 }
 
 // GetPlaceholderList returns a list of placeholders for the given dialect and count
-func GetPlaceholderList(dialect string, count int) ([]string, error) {
+func GetPlaceholderList(dialect snapsql.Dialect, count int) []string {
 	placeholders := make([]string, count)
 	for i := range count {
-		placeholder, err := GetPlaceholder(dialect, i+1)
-		if err != nil {
-			return nil, err
-		}
-
-		placeholders[i] = placeholder
+		placeholders[i] = GetPlaceholder(dialect, i+1)
 	}
 
-	return placeholders, nil
+	return placeholders
 }

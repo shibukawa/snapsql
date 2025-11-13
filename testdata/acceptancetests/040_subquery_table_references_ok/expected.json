@@ -26,6 +26,7 @@
     {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
     {"name": "name", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "sq", "context": "main"},
     {"name": "users", "table_name": "users", "query_name": "sq", "context": "subquery"}

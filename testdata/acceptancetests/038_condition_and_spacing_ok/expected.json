@@ -5,7 +5,8 @@
       "additional_variables": [
     {"name": "user_id", "type": "string", "value": "dummy"},
     {"name": "unread_only", "type": "bool", "value": true},
-    {"name": "since", "type": "string", "value": "dummy"}
+    {"name": "since", "type": "string", "value": "dummy"},
+    {"name": "has_since", "type": "bool", "value": true}
       ],
       "container": "root"
     }
@@ -16,7 +17,7 @@
       "expression": "user_id",
       "environment_index": 0,
       "position": {
-        "line": 11,
+        "line": 12,
         "column": 19
       },
       "type_descriptor": "string",
@@ -27,7 +28,7 @@
       "expression": "unread_only",
       "environment_index": 0,
       "position": {
-        "line": 12,
+        "line": 13,
         "column": 1
       },
       "type_descriptor": "bool",
@@ -35,32 +36,137 @@
     },
     {
       "id": "expr_003",
-      "expression": "since",
+      "expression": "has_since",
       "environment_index": 0,
       "position": {
         "line": 16,
+        "column": 1
+      },
+      "type_descriptor": "bool",
+      "result_type": 1
+    },
+    {
+      "id": "expr_004",
+      "expression": "since",
+      "environment_index": 0,
+      "position": {
+        "line": 17,
         "column": 20
       },
       "type_descriptor": "string",
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 12,
+        "column": 19
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user_id",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 12,
+            "Column": 19,
+            "Length": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 13,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "unread_only",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 13,
+            "Column": 1,
+            "Length": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_003",
+      "environment_index": 0,
+      "position": {
+        "line": 16,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "has_since",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 16,
+            "Column": 1,
+            "Length": 9
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_004",
+      "environment_index": 0,
+      "position": {
+        "line": 17,
+        "column": 20
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "since",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 17,
+            "Column": 20,
+            "Length": 5
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "listUserNotifications",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "9:1", "value": "SELECT n.id, n.title FROM inbox i WHERE i.user_id = "},
-    {"op": "EMIT_EVAL", "pos": "11:19", "expr_index": 0},
-    {"op": "EMIT_STATIC", "pos": "12:0", "value": " "},
-    {"op": "IF", "pos": "12:1", "expr_index": 1},
-    {"op": "EMIT_STATIC", "pos": "13:0", "value": " AND i.read_at IS NULL "},
-    {"op": "END", "pos": "14:1"},
-    {"op": "EMIT_STATIC", "pos": "15:0", "value": " "},
-    {"op": "IF", "pos": "15:1", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "16:0", "value": " AND i.created_at \u003e "},
-    {"op": "EMIT_EVAL", "pos": "16:20", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "17:0", "value": " "},
-    {"op": "END", "pos": "17:1"},
-    {"op": "EMIT_STATIC", "pos": "18:0", "value": " AND i.deleted_at IS NULL "},
+    {"op": "EMIT_STATIC", "pos": "10:1", "value": "SELECT n.id, n.title FROM inbox i WHERE i.user_id = "},
+    {"op": "EMIT_EVAL", "pos": "12:19", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "13:0", "value": " "},
+    {"op": "IF", "pos": "13:1", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "14:0", "value": " AND i.read_at IS NULL "},
+    {"op": "END", "pos": "15:1"},
+    {"op": "EMIT_STATIC", "pos": "16:0", "value": " "},
+    {"op": "IF", "pos": "16:1", "expr_index": 2},
+    {"op": "EMIT_STATIC", "pos": "17:0", "value": " AND i.created_at \u003e "},
+    {"op": "EMIT_EVAL", "pos": "17:20", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "18:0", "value": " "},
+    {"op": "END", "pos": "18:1"},
+    {"op": "EMIT_STATIC", "pos": "19:0", "value": " AND i.deleted_at IS NULL "},
     {"op": "IF_SYSTEM_LIMIT"},
     {"op": "EMIT_STATIC", "value": " LIMIT "},
     {"op": "EMIT_SYSTEM_LIMIT"},
@@ -74,13 +180,15 @@
   "parameters": [
     {"name": "user_id", "type": "string"},
     {"name": "unread_only", "type": "bool"},
-    {"name": "since", "type": "string"}
+    {"name": "since", "type": "string"},
+    {"name": "has_since", "type": "bool"}
   ],
   "response_affinity": "many",
   "responses": [
     {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
     {"name": "title", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "inbox", "alias": "i", "context": "main"}
   ],

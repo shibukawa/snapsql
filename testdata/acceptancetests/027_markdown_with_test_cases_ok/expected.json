@@ -22,6 +22,31 @@
     }
   ],
   "description": "This query finds a user by their ID.",
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 33,
+        "column": 10
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user_id",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 33,
+            "Column": 10,
+            "Length": 7
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "find_user",
   "instructions": [
@@ -47,6 +72,10 @@
     {"name": "name", "type": "any", "is_nullable": true},
     {"name": "age", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
   "test_cases": [
     {
       "name": "Test Case 1: Find existing user",
@@ -56,23 +85,15 @@
       "responses": [
         {
           "expected": [
-            {
-              "age": 30,
-              "id": 123,
-              "name": "John Doe"
-            }
+    {"age": 30, "id": 123, "name": "John Doe"}
           ],
           "tables": [
             {
-              "rows": [
-                {
-                  "age": 30,
-                  "id": 123,
-                  "name": "John Doe"
-                }
-              ],
+              "table": "",
               "strategy": "all",
-              "table": ""
+              "rows": [
+            {"age": 30, "id": 123, "name": "John Doe"}
+              ]
             }
           ]
         }
@@ -86,31 +107,20 @@
       "responses": [
         {
           "expected": [
-            {
-              "age": 25,
-              "id": 456,
-              "name": "Jane Smith"
-            }
+        {"age": 25, "id": 456, "name": "Jane Smith"}
           ],
           "tables": [
             {
-              "rows": [
-                {
-                  "age": 25,
-                  "id": 456,
-                  "name": "Jane Smith"
-                }
-              ],
+              "table": "",
               "strategy": "all",
-              "table": ""
+              "rows": [
+            {"age": 25, "id": 456, "name": "Jane Smith"}
+              ]
             }
           ]
         }
       ]
     }
-  ],
-  "table_references": [
-    {"name": "users", "context": "main"}
   ],
   "warnings": [
     "type inference failed: no database schema provided",

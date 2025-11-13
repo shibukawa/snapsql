@@ -91,23 +91,24 @@ func isMutationStatement(statementType string) bool {
 }
 
 // generateWhereGuardCode generates Python code for WHERE clause enforcement
-func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whereClauseMetaData) []string {
+func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whereClauseMetaData) string {
 	if mutationKind == "" || whereMeta == nil {
-		return nil
+		return ""
 	}
 
-	var code []string
+	var code strings.Builder
 
 	// Generate WHERE clause metadata initialization
-	code = append(code, "# WHERE clause safety check")
-	code = append(code, "where_meta = {")
-	code = append(code, fmt.Sprintf("    'status': %q,", whereMeta.Status))
+	code.WriteString("# WHERE clause safety check\n")
+	code.WriteString("where_meta = {\n")
+	code.WriteString(fmt.Sprintf("    'status': %q,\n", whereMeta.Status))
 
 	if len(whereMeta.RemovalCombos) > 0 {
-		code = append(code, "    'removal_combos': [")
+		code.WriteString("    'removal_combos': [\n")
 
 		for _, combo := range whereMeta.RemovalCombos {
 			comboStr := "["
+
 			var comboStrSb109 strings.Builder
 
 			for i, lit := range combo {
@@ -117,17 +118,19 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 
 				comboStrSb109.WriteString(fmt.Sprintf("{'expr_index': %d, 'when': %v}", lit.ExprIndex, lit.When))
 			}
+
 			comboStr += comboStrSb109.String()
 
 			comboStr += "],"
-			code = append(code, "        "+comboStr)
+			code.WriteString("        " + comboStr + "\n")
 		}
 
-		code = append(code, "    ],")
+		code.WriteString("    ],\n")
 	}
 
 	if len(whereMeta.ExpressionRefs) > 0 {
 		refsStr := "["
+
 		var refsStrSb123 strings.Builder
 
 		for i, ref := range whereMeta.ExpressionRefs {
@@ -137,14 +140,15 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 
 			refsStrSb123.WriteString(strconv.Itoa(ref))
 		}
+
 		refsStr += refsStrSb123.String()
 
 		refsStr += "]"
-		code = append(code, fmt.Sprintf("    'expression_refs': %s,", refsStr))
+		code.WriteString(fmt.Sprintf("    'expression_refs': %s,\n", refsStr))
 	}
 
 	if len(whereMeta.DynamicConditions) > 0 {
-		code = append(code, "    'dynamic_conditions': [")
+		code.WriteString("    'dynamic_conditions': [\n")
 
 		for _, cond := range whereMeta.DynamicConditions {
 			condStr := fmt.Sprintf("{'expr_index': %d, 'negated_when_empty': %v, 'has_else': %v",
@@ -154,25 +158,24 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 			}
 
 			condStr += "},"
-			code = append(code, "        "+condStr)
+			code.WriteString("        " + condStr + "\n")
 		}
 
-		code = append(code, "    ],")
+		code.WriteString("    ],\n")
 	}
 
 	if whereMeta.RawText != "" {
-		code = append(code, fmt.Sprintf("    'raw_text': %q,", whereMeta.RawText))
+		code.WriteString(fmt.Sprintf("    'raw_text': %q,\n", whereMeta.RawText))
 	}
 
-	code = append(code, "}")
-	code = append(code, "")
+	code.WriteString("}\n\n")
 
 	// Generate enforcement call
-	code = append(code, "# Enforce WHERE clause for "+strings.ToLower(mutationKind[8:]))
-	code = append(code, fmt.Sprintf("enforce_non_empty_where_clause(ctx, %q, %q, where_meta, sql)",
+	code.WriteString("# Enforce WHERE clause for " + strings.ToLower(mutationKind[8:]) + "\n")
+	code.WriteString(fmt.Sprintf("enforce_non_empty_where_clause(ctx, %q, %q, where_meta, sql)\n",
 		funcName, strings.ToLower(mutationKind[8:])))
 
-	return code
+	return strings.TrimSuffix(code.String(), "\n")
 }
 
 // describeDynamicConditions generates a description of dynamic conditions

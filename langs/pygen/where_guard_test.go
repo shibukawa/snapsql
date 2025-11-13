@@ -1,7 +1,6 @@
 package pygen
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/shibukawa/snapsql/intermediate"
@@ -233,27 +232,23 @@ func TestGenerateWhereGuardCode(t *testing.T) {
 			code := generateWhereGuardCode(tt.funcName, tt.mutationKind, tt.whereMeta)
 
 			if tt.expectCode {
-				if len(code) == 0 {
-					t.Error("expected code to be generated, got empty slice")
+				if code == "" {
+					t.Error("expected code to be generated, got empty string")
 				}
 
-				// Check for key elements in generated code
-				codeStr := joinLines(code)
-				if !contains(codeStr, "where_meta") {
+				if !contains(code, "where_meta") {
 					t.Error("expected 'where_meta' in generated code")
 				}
 
-				if !contains(codeStr, "enforce_non_empty_where_clause") {
+				if !contains(code, "enforce_non_empty_where_clause") {
 					t.Error("expected 'enforce_non_empty_where_clause' in generated code")
 				}
 
-				if !contains(codeStr, tt.funcName) {
+				if !contains(code, tt.funcName) {
 					t.Errorf("expected function name %q in generated code", tt.funcName)
 				}
-			} else {
-				if len(code) != 0 {
-					t.Errorf("expected no code, got %d lines", len(code))
-				}
+			} else if code != "" {
+				t.Errorf("expected no code, got non-empty string")
 			}
 		})
 	}
@@ -336,17 +331,6 @@ func TestDescribeDynamicConditions(t *testing.T) {
 }
 
 // Helper functions
-func joinLines(lines []string) string {
-	result := ""
-	var resultSb337 strings.Builder
-	for _, line := range lines {
-		resultSb337.WriteString(line + "\n")
-	}
-	result += resultSb337.String()
-
-	return result
-}
-
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsMiddle(s, substr)))
 }

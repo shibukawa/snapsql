@@ -19,11 +19,8 @@ package query
 import (
 	"context"
 	"fmt"
-
-	"time"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"time"
 )
 
 // CardCreateResult represents the response structure for CardCreate
@@ -37,83 +34,29 @@ type CardCreateResult struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// CardCreate specific CEL programs and mock path
-var (
-	cardCreatePrograms []cel.Program
-)
+// CardCreateExplangExpressions stores explang steps aligned with expression indexes.
+var CardCreateExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "title", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 45, Column: 5, Offset: 0, Length: 5}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "description", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 47, Column: 5, Offset: 0, Length: 11}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_003",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "position", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 49, Column: 5, Offset: 0, Length: 8}},
+		},
+	},
+}
 
 const cardCreateMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("title", cel.StringType))
-		opts = append(opts, cel.Variable("description", cel.StringType))
-		opts = append(opts, cel.Variable("position", cel.DoubleType))
-		opts = append(opts, cel.Variable("title", cel.StringType))
-		opts = append(opts, cel.Variable("description", cel.StringType))
-		opts = append(opts, cel.Variable("position", cel.DoubleType))
-		opts = append(opts, cel.Variable("title", cel.StringType))
-		opts = append(opts, cel.Variable("description", cel.StringType))
-		opts = append(opts, cel.Variable("position", cel.DoubleType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CardCreate CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	cardCreatePrograms = make([]cel.Program, 3)
-	// expr_001: "title" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("title")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "title", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "title", err))
-		}
-		cardCreatePrograms[0] = program
-	}
-	// expr_002: "description" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("description")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "description", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "description", err))
-		}
-		cardCreatePrograms[1] = program
-	}
-	// expr_003: "position" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("position")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "position", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "position", err))
-		}
-		cardCreatePrograms[2] = program
-	}
-}
 
 // CardCreate Creates a card within a list and returns the inserted row for client-side refresh.
 func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string, description string, position float64, opts ...snapsqlgo.FuncOpt) (CardCreateResult, error) {
@@ -121,7 +64,12 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
-	// Extract implicit parameters
+	// Extract implicit parameters (system arguments). Build specs from explicit
+	// ImplicitParams when provided by configuration; otherwise synthesize
+	// minimal specs from the SQL builder's ArgumentSystemFields. This ensures
+	// generated code that references systemValues always has a declaration,
+	// avoiding undefined identifier errors even when the user's config omitted
+	// a system section (config defaulting is handled elsewhere).
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false},
 		{Name: "updated_at", Type: "time.Time", Required: false},
@@ -159,33 +107,11 @@ func CardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, title string
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "INSERT INTO cards ( list_id, title, description, position , created_at, updated_at) VALUES ( (SELECT l.id FROM lists AS l JOIN boards b ON l.board_id = b.id  WHERE b.status = 'active' ORDER BY l.stage_order ASC LIMIT 1), $1, $2, $3 , $4, $5)\n\n RETURNING id, list_id, title, description, position, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"title":       title,
-			"description": description,
-			"position":    position,
-		}
-
-		evalRes0, _, err := cardCreatePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := cardCreatePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
-
-		evalRes2, _, err := cardCreatePrograms[2].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(title))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(description))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(position))
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
-
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
-
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

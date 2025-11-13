@@ -69,10 +69,10 @@ func TestGenerateDeleteInstructions(t *testing.T) {
 		},
 		{
 			name:             "delete_with_conditional_directive",
-			sql:              `/*# parameters: { department: string } */ DELETE FROM users WHERE 1=1 /*# if department */ AND department = /*= department */ 'Sales' /*# end */`,
+			sql:              `/*# parameters: { department: string, has_department: bool } */ DELETE FROM users WHERE 1=1 /*# if has_department */ AND department = /*= department */ 'Sales' /*# end */`,
 			dialect:          snapsql.DialectPostgres,
 			expectError:      false,
-			expectedCELCount: 1,
+			expectedCELCount: 2,
 			expectedEnvCount: 1,
 		},
 		{

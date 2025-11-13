@@ -1,9 +1,11 @@
 package pygen
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 )
 
@@ -371,12 +373,8 @@ func TestGenerateHierarchicalExecution_NoParentKey(t *testing.T) {
 	}
 
 	_, err := generateHierarchicalManyExecution(format, responseStruct, "postgres")
-	if err == nil {
-		t.Error("Expected error for missing parent key, got nil")
-	}
-
-	if !strings.Contains(err.Error(), "no parent key field found") {
-		t.Errorf("Expected error about missing parent key, got: %v", err)
+	if !errors.Is(err, snapsql.ErrHierarchicalNoParentPrimaryKey) {
+		t.Fatalf("expected ErrHierarchicalNoParentPrimaryKey, got: %v", err)
 	}
 }
 

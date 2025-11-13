@@ -13,7 +13,6 @@ import (
 
 	"github.com/goccy/go-yaml"
 	snapsql "github.com/shibukawa/snapsql"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"github.com/shibukawa/snapsql/markdownparser"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
@@ -24,7 +23,6 @@ var (
 	ErrInvalidParameterName    = errors.New("invalid parameter name")
 	ErrInvalidParameterValue   = errors.New("invalid parameter value for type")
 	ErrInvalidNamingConvention = errors.New("parameter name does not follow naming convention")
-	ErrDummyDataGeneration     = errors.New("failed to generate dummy data")
 	ErrParameterValidation     = errors.New("parameter validation failed")
 	ErrCommonTypeNotFound      = errors.New("common type not found")
 	ErrCommonTypeFileNotFound  = errors.New("common type file not found")
@@ -44,9 +42,8 @@ type FunctionDefinition struct {
 	ParameterOrder     []string                  `yaml:"-"`
 	RawParameters      yaml.MapSlice             `yaml:"parameters"`
 	Generators         map[string]map[string]any `yaml:"generators"`
-	dummyData          map[string]any
-	Performance        PerformanceDefinition `yaml:"performance"`
-	SlowQueryThreshold time.Duration         `yaml:"-"`
+	Performance        PerformanceDefinition     `yaml:"performance"`
+	SlowQueryThreshold time.Duration             `yaml:"-"`
 
 	// Common type related fields
 	commonTypes     map[string]map[string]map[string]any // Loaded common type definitions
@@ -269,21 +266,12 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 	// Normalize parameters and resolve common type references
 	normalized, order, original, err := f.normalizeAndResolveParameters(f.RawParameters)
 	if err != nil {
-		f.dummyData = nil
 		return fmt.Errorf("%w: %w", ErrParameterValidation, err)
 	}
 
 	f.Parameters = normalized
 	f.ParameterOrder = order
 	f.OriginalParameters = original
-
-	dummy, err := generateDummyData(f.Parameters)
-	if err != nil {
-		f.dummyData = nil
-		return fmt.Errorf("%w: %w", ErrDummyDataGeneration, err)
-	}
-
-	f.dummyData = dummy
 
 	if f.SlowQueryThreshold == 0 {
 		threshold := strings.TrimSpace(f.Performance.SlowQueryThreshold)
@@ -298,28 +286,6 @@ func (f *FunctionDefinition) Finalize(basePath string, projectRootPath string) e
 	}
 
 	return nil
-}
-
-// DummyData returns cached dummy data (call Finalize before).
-// If path is specified, traverses the dummy data by keys (and 0th element for arrays).
-func (f *FunctionDefinition) DummyData(path ...string) any {
-	var current any = f.dummyData
-	for _, p := range path {
-		switch v := current.(type) {
-		case map[string]any:
-			current = v[p]
-		case []any:
-			if len(v) > 0 {
-				current = v[0]
-			} else {
-				return nil
-			}
-		default:
-			return nil
-		}
-	}
-
-	return current
 }
 
 // normalizeTypeString handles type aliases and array notations
@@ -382,193 +348,6 @@ func inferTypeFromValue(val any) string {
 	default:
 		return "any"
 	}
-}
-
-// generateDummyData creates dummy data tree from parameter definitions
-func generateDummyData(params map[string]any) (map[string]any, error) {
-	result := make(map[string]any, len(params))
-
-	for k, v := range params {
-		switch val := v.(type) {
-		case string:
-			result[k] = generateDummyValueFromString(val)
-		case map[string]any:
-			// Check if this is a parameter definition with a "type" field
-			if typeVal, hasType := val["type"]; hasType {
-				if typeStr, ok := typeVal.(string); ok {
-					result[k] = generateDummyValueFromString(typeStr)
-				} else {
-					result[k] = generateDummyValueFromString("string")
-				}
-			} else {
-				// This is a nested object, recurse
-				d, err := generateDummyData(val)
-				if err != nil {
-					return nil, err
-				}
-
-				result[k] = d
-			}
-		case []any:
-			// Array type: [object] or [type name]
-			if len(val) == 1 {
-				switch elem := val[0].(type) {
-				case string:
-					// Check if it's a common type reference that should be kept as string
-					if strings.HasPrefix(elem, "./") {
-						// For common types, keep the reference as is for now
-						// The actual object structure should be resolved at the parameter resolution stage
-						result[k] = []any{elem}
-					} else {
-						result[k] = []any{generateDummyValueFromString(elem)}
-					}
-				case map[string]any:
-					d, err := generateDummyData(elem)
-					if err != nil {
-						return nil, err
-					}
-
-					result[k] = []any{d}
-				default:
-					result[k] = []any{elem}
-				}
-			} else {
-				result[k] = []any{}
-			}
-		default:
-			return nil, fmt.Errorf("%w: %T", snapsql.ErrUnsupportedParameterType, v)
-		}
-	}
-
-	return result, nil
-}
-
-// generateDummyValueFromString generates dummy value from string type definition
-func generateDummyValueFromString(typeStr string) any {
-	t := strings.TrimSpace(typeStr)
-	switch t {
-	case "string", "text", "varchar", "str":
-		return "dummy"
-	case "int":
-		return int64(1)
-	case "int32":
-		return int32(2)
-	case "int16":
-		return int16(3)
-	case "int8":
-		return int8(4)
-	case "float":
-		return 1.1
-	case "float32":
-		return float32(2.2)
-	case "decimal":
-		return "1.0"
-	case "bool":
-		return true
-	case "date":
-		return "2024-01-01"
-	case "datetime":
-		return "2024-01-01 00:00:00"
-	case "timestamp":
-		return "2024-01-02 00:00:00"
-	case "email":
-		return "user@example.com"
-	case "uuid":
-		return "00000000-0000-0000-0000-000000000000"
-	case "json":
-		return map[string]any{"#": "json"}
-	case "any":
-		return map[string]any{"#": "any"}
-	case "object":
-		return map[string]any{"#": "object"}
-	}
-	// Array type: int[], string[], float32[] etc.
-	if strings.HasSuffix(t, "[]") {
-		base := t[:len(t)-2]
-		return []any{generateDummyValueFromString(base)}
-	}
-	// Common Type reference: ./User, ./Product etc.
-	if strings.HasPrefix(t, "./") {
-		// For Common Types, return a placeholder string that represents the type
-		// This will be handled by the type system later
-		return t
-	}
-
-	return ""
-}
-
-// InferTypeStringFromDummyValue infers type string from a dummy value generated by generateDummyValueFromString.
-// Only primitive types, object, json, any are supported. No array support.
-func InferTypeStringFromDummyValue(val any) string {
-	switch v := val.(type) {
-	case int64:
-		if v == 1 {
-			return "int"
-		}
-	case int32:
-		if v == 2 {
-			return "int32"
-		}
-	case int16:
-		if v == 3 {
-			return "int16"
-		}
-	case int8:
-		if v == 4 {
-			return "int8"
-		}
-	case float64:
-		if v == 1.1 {
-			return "float"
-		}
-	case float32:
-		if v == float32(2.2) {
-			return "float32"
-		}
-	case bool:
-		if v {
-			return "bool"
-		}
-	case *snapsqlgo.Decimal:
-		return "decimal"
-	case string:
-		switch v {
-		case "dummy":
-			return "string"
-		case "1.0":
-			return "decimal"
-		case "2024-01-01":
-			return "date"
-		case "2024-01-01 00:00:00":
-			return "datetime"
-		case "2024-01-02 00:00:00":
-			return "timestamp"
-		case "user@example.com":
-			return "email"
-		case "00000000-0000-0000-0000-000000000000":
-			return "uuid"
-		default:
-			// Check if it's a Common Type reference
-			if strings.HasPrefix(v, "./") {
-				return v
-			}
-
-			return "string"
-		}
-	case map[string]any:
-		if tag, ok := v["#"]; ok {
-			switch tag {
-			case "json":
-				return "json"
-			case "any":
-				return "any"
-			case "object":
-				return "object"
-			}
-		}
-	}
-
-	return "any"
 }
 
 // loadCommonTypesFile loads common type definitions from _common.yaml file

@@ -3,12 +3,16 @@
     {
       "index": 0,
       "additional_variables": [
-    {"name": "user", "type": "../testdata/acceptancetests/028_insert_system_fields_explicit_ok/User"},
-    {"name": "created_at", "type": "timestamp"},
-    {"name": "updated_at", "type": "timestamp"},
-    {"name": "user", "type": "../testdata/acceptancetests/028_insert_system_fields_explicit_ok/User", "value": ""},
-    {"name": "created_at", "type": "timestamp", "value": "2024-01-02 00:00:00"},
-    {"name": "updated_at", "type": "timestamp", "value": "2024-01-02 00:00:00"}
+        {
+          "name": "user",
+          "type": "object",
+          "value": {
+            "id": 1,
+            "name": "dummy"
+          }
+        },
+    {"name": "created_at", "type": "string", "value": "2024-01-02 00:00:00"},
+    {"name": "updated_at", "type": "string", "value": "2024-01-02 00:00:00"}
       ],
       "container": "root"
     }
@@ -59,6 +63,126 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 62
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 8,
+            "Column": 62,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "id",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 8,
+            "Column": 66,
+            "Length": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 79
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 8,
+            "Column": 79,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "name",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 8,
+            "Column": 83,
+            "Length": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_003",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 103
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "created_at",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 8,
+            "Column": 103,
+            "Length": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_004",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 127
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "updated_at",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 8,
+            "Column": 127,
+            "Length": 10
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "insertUser",
   "instructions": [
@@ -78,6 +202,7 @@
     {"name": "updated_at", "type": "timestamp"}
   ],
   "response_affinity": "none",
+  "statement_type": "insert",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

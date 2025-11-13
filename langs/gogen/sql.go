@@ -9,22 +9,84 @@ import (
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
 	"github.com/shibukawa/snapsql/intermediate/codegenerator"
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // sqlBuilderData represents SQL building code generation data
 type sqlBuilderData struct {
-	IsStatic              bool     // true if SQL can be built as a static string
-	StaticSQL             string   // static SQL string if IsStatic is true
-	BuilderCode           []string // code lines for dynamic SQL building
-	HasArguments          bool     // true if the query has parameters
-	Arguments             []int    // expression indices for arguments (in order, -1 for system params)
-	ParameterNames        []string // parameter names for static SQL (legacy use)
-	ArgumentSystemFields  []string // system field names aligned with Arguments slice (empty string for non-system)
-	HasSystemArguments    bool     // true if Arguments includes system parameters
-	HasNonSystemArguments bool     // true if Arguments includes regular expressions
-	NeedsRowLockClause    bool     // true if SQL expects a runtime row-lock clause appended
-	HasFallbackGuard      bool     // true if FALLBACK_CONDITION instructions are present
-	FallbackVarName       string   // name of the boolean flag tracking fallback usage
+	IsStatic             bool     // true if SQL can be built as a static string
+	StaticSQL            string   // static SQL string if IsStatic is true
+	BuilderCode          []string // code lines for dynamic SQL building
+	HasArguments         bool     // true if the query has parameters
+	ArgumentExprs        []argumentExpr
+	ArgumentSystemFields []string // system field names aligned with argument blocks (empty string for non-system)
+	HasSystemArguments   bool     // true if Arguments includes system parameters
+	NeedsRowLockClause   bool     // true if SQL expects a runtime row-lock clause appended
+	HasFallbackGuard     bool     // true if FALLBACK_CONDITION instructions are present
+	FallbackVarName      string   // name of the boolean flag tracking fallback usage
+}
+
+type argumentExpr struct {
+	Lines []string
+}
+
+type fallbackExprPlan struct {
+	Lines   []string
+	BoolVar string
+}
+
+var _ = snapsqlgo.Truthy
+
+func indentLines(lines []string, level int) []string {
+	if level <= 0 {
+		return append([]string(nil), lines...)
+	}
+
+	prefix := strings.Repeat("\t", level)
+
+	result := make([]string, len(lines))
+	for i, line := range lines {
+		if line == "" {
+			result[i] = ""
+			continue
+		}
+
+		result[i] = prefix + line
+	}
+
+	return result
+}
+
+func buildArgumentLines(plan *renderedAccess) []string {
+	lines := make([]string, 0, len(plan.Setup)+4)
+	lines = append(lines, plan.Setup...)
+
+	appendLine := fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(%s))", plan.ValueVar)
+	if plan.ValidVar != "" {
+		lines = append(lines, fmt.Sprintf("if %s {", plan.ValidVar))
+		lines = append(lines, "\t"+appendLine)
+		lines = append(lines, "} else {")
+		lines = append(lines, "\targs = append(args, nil)")
+		lines = append(lines, "}")
+	} else {
+		lines = append(lines, appendLine)
+	}
+
+	return lines
+}
+
+func buildConditionLines(plan *renderedAccess, condVar string) []string {
+	lines := make([]string, 0, len(plan.Setup)+3)
+	lines = append(lines, plan.Setup...)
+
+	lines = append(lines, fmt.Sprintf("%s := %s", condVar, plan.ValueVar))
+	if plan.ValidVar != "" {
+		lines = append(lines, fmt.Sprintf("if !%s {", plan.ValidVar))
+		lines = append(lines, fmt.Sprintf("\t%s = nil", condVar))
+		lines = append(lines, "}")
+	}
+
+	return lines
 }
 
 // processSQLBuilderWithDialect processes instructions and generates SQL building code for a specific dialect
@@ -155,13 +217,15 @@ func isWordCharBeforePlaceholder(b byte) bool {
 // generateStaticSQLFromOptimized generates a static SQL string from optimized instructions
 func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat) (*sqlBuilderData, error) {
 	var (
-		sqlParts              []string
-		arguments             []int
-		argumentSystemFields  []string
-		hasSystemArguments    bool
-		hasNonSystemArguments bool
-		parameterIndex        = 1
+		sqlParts             []string
+		argumentExprs        []argumentExpr
+		argumentSystemFields []string
+		hasSystemArguments   bool
+		parameterIndex       = 1
 	)
+
+	scope := newExpressionScope(format.Parameters)
+	renderer := newExpressionRenderer(format, scope)
 
 	needsRowLockClause := slices.ContainsFunc(instructions, func(inst codegenerator.OptimizedInstruction) bool {
 		return inst.Op == codegenerator.OpEmitSystemFor
@@ -215,12 +279,17 @@ func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstru
 			sqlParts = append(sqlParts, padBoundaryToken(inst.Value))
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
-				arguments = append(arguments, *inst.ExprIndex)
+				plan, err := renderer.renderValue(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
+				}
+
+				argumentExprs = append(argumentExprs, argumentExpr{Lines: indentLines(buildArgumentLines(plan), 1)})
 				argumentSystemFields = append(argumentSystemFields, "")
-				hasNonSystemArguments = true
 			}
 		case "ADD_SYSTEM_PARAM":
-			arguments = append(arguments, -1) // Use -1 to indicate system parameter
+			line := fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues[%q]))", inst.SystemField)
+			argumentExprs = append(argumentExprs, argumentExpr{Lines: []string{"\t" + line}})
 			argumentSystemFields = append(argumentSystemFields, inst.SystemField)
 			hasSystemArguments = true
 		case codegenerator.OpEmitSystemFor:
@@ -230,32 +299,14 @@ func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstru
 
 	staticSQL := strings.Join(sqlParts, "")
 
-	// Convert expression indices and system fields to parameter names for static SQL
-	var parameterNames []string
-
-	for idx, exprIndex := range arguments {
-		if exprIndex == -1 {
-			if idx < len(argumentSystemFields) {
-				parameterNames = append(parameterNames, argumentSystemFields[idx])
-			}
-		} else if exprIndex < len(format.CELExpressions) {
-			expr := format.CELExpressions[exprIndex]
-			// For simple expressions that are just parameter names, use the parameter directly
-			paramName := snakeToCamelLower(expr.Expression)
-			parameterNames = append(parameterNames, paramName)
-		}
-	}
-
 	return &sqlBuilderData{
-		IsStatic:              true,
-		StaticSQL:             staticSQL,
-		HasArguments:          len(arguments) > 0,
-		Arguments:             arguments,
-		ParameterNames:        parameterNames,
-		ArgumentSystemFields:  argumentSystemFields,
-		HasSystemArguments:    hasSystemArguments,
-		HasNonSystemArguments: hasNonSystemArguments,
-		NeedsRowLockClause:    needsRowLockClause,
+		IsStatic:             true,
+		StaticSQL:            staticSQL,
+		HasArguments:         len(argumentExprs) > 0,
+		ArgumentExprs:        argumentExprs,
+		ArgumentSystemFields: argumentSystemFields,
+		HasSystemArguments:   hasSystemArguments,
+		NeedsRowLockClause:   needsRowLockClause,
 	}, nil
 }
 
@@ -263,10 +314,13 @@ func generateStaticSQLFromOptimized(instructions []codegenerator.OptimizedInstru
 func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, functionName string) (*sqlBuilderData, error) {
 	var code []string
 
+	scope := newExpressionScope(format.Parameters)
+	renderer := newExpressionRenderer(format, scope)
+
 	hasArguments := false
 	hasSystemArguments := false
-	condVarDeclared := false
-	evalCounter := 0
+	condCounter := 0
+	loopCounter := 0
 	fallbackCounter := 0
 	needsRowLockClause := slices.ContainsFunc(instructions, func(inst codegenerator.OptimizedInstruction) bool {
 		return inst.Op == codegenerator.OpEmitSystemFor
@@ -281,10 +335,12 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 		fallbackGuardVar = "fallbackGuardTriggered"
 	}
 
-	// Track control flow stack with loop variable names
+	// Track control flow stack with loop / condition metadata
 	type controlFrame struct {
-		typ     string // "if" or "for"
-		loopVar string // loop variable name (for "for" frames only)
+		typ        string // "if" or "for"
+		loopVar    string // logical loop variable name
+		loopIsLast string // Go variable name for isLast flag
+		condVar    string // Go variable name holding condition result
 	}
 
 	controlStack := []controlFrame{}
@@ -318,14 +374,6 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 	if needsBoundaryNeededVar {
 		code = append(code, "var boundaryNeeded bool")
 	}
-
-	// Add parameter map for loop variables
-	code = append(code, "paramMap := map[string]any{")
-	for _, param := range format.Parameters {
-		code = append(code, fmt.Sprintf("    %q: %s,", param.Name, snakeToCamelLower(param.Name)))
-	}
-
-	code = append(code, "}")
 
 	for i, inst := range instructions {
 		switch inst.Op {
@@ -368,16 +416,13 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil {
-				resVar := fmt.Sprintf("evalRes%d", evalCounter)
-				evalCounter++
+				plan, err := renderer.renderValue(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
+				}
 
 				code = append(code, fmt.Sprintf("// Evaluate expression %d", *inst.ExprIndex))
-				code = append(code, fmt.Sprintf("%s, _, err := %sPrograms[%d].Eval(paramMap)",
-					resVar, toLowerCamel(format.FunctionName), *inst.ExprIndex))
-				code = append(code, "if err != nil {")
-				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate expression: %%w\", err)", functionName))
-				code = append(code, "}")
-				code = append(code, fmt.Sprintf("args = append(args, snapsqlgo.NormalizeNullableTimestamp(%s))", resVar))
+				code = append(code, buildArgumentLines(plan)...)
 				hasArguments = true
 			}
 
@@ -393,20 +438,20 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 		case "EMIT_UNLESS_BOUNDARY":
 			if needsBoundaryTracking {
 				// Check if we're inside a loop
-				var loopVar string
+				var loopIsLast string
 
 				for j := len(controlStack) - 1; j >= 0; j-- {
 					if controlStack[j].typ == "for" {
-						loopVar = controlStack[j].loopVar
+						loopIsLast = controlStack[j].loopIsLast
 						break
 					}
 				}
 
-				if loopVar != "" {
+				if loopIsLast != "" {
 					// Inside a loop: emit delimiter only if NOT the last iteration
 					padded := padBoundaryToken(inst.Value)
 
-					code = append(code, fmt.Sprintf("if !%sIsLast {", loopVar))
+					code = append(code, fmt.Sprintf("if !%s {", loopIsLast))
 					code = append(code, fmt.Sprintf("    builder.WriteString(%q)", padded))
 					code = append(code, "}")
 				} else {
@@ -449,26 +494,32 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 
 		case "IF":
 			if inst.ExprIndex != nil {
-				assignOp := ":="
-				if condVarDeclared {
-					assignOp = "="
-				} else {
-					condVarDeclared = true
+				plan, err := renderer.renderValue(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
 				}
 
+				condVar := fmt.Sprintf("condValue%d", condCounter)
+				condCounter++
+
 				code = append(code, fmt.Sprintf("// IF condition: expression %d", *inst.ExprIndex))
-				code = append(code, fmt.Sprintf("condResult, _, err %s %sPrograms[%d].Eval(paramMap)",
-					assignOp, toLowerCamel(format.FunctionName), *inst.ExprIndex))
-				code = append(code, "if err != nil {")
-				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate condition: %%w\", err)", functionName))
-				code = append(code, "}")
-				code = append(code, "if snapsqlgo.Truthy(condResult) {")
-				controlStack = append(controlStack, controlFrame{typ: "if"})
+				code = append(code, buildConditionLines(plan, condVar)...)
+				code = append(code, fmt.Sprintf("if snapsqlgo.Truthy(%s) {", condVar))
+				controlStack = append(controlStack, controlFrame{typ: "if", condVar: condVar})
 			}
 
 		case "ELSEIF":
-			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "if" {
-				code = append(code, "} else if snapsqlgo.Truthy(condResult) {")
+			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "if" && inst.ExprIndex != nil {
+				plan, err := renderer.renderValue(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
+				}
+
+				condVar := fmt.Sprintf("condValue%d", condCounter)
+				condCounter++
+
+				code = append(code, buildConditionLines(plan, condVar)...)
+				code = append(code, fmt.Sprintf("} else if snapsqlgo.Truthy(%s) {", condVar))
 			}
 
 		case "ELSE":
@@ -478,42 +529,43 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 
 		case "LOOP_START":
 			if inst.CollectionExprIndex != nil {
-				code = append(code, fmt.Sprintf("// FOR loop: evaluate collection expression %d", *inst.CollectionExprIndex))
-				code = append(code, fmt.Sprintf("collectionResult%d, _, err := %sPrograms[%d].Eval(paramMap)",
-					*inst.CollectionExprIndex, toLowerCamel(format.FunctionName), *inst.CollectionExprIndex))
-				code = append(code, "if err != nil {")
-				code = append(code, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate collection: %%w\", err)", functionName))
-				code = append(code, "}")
-
-				// Use AsIterableAnyWithLast to get both the item and isLast flag for boundary tracking
-				if needsBoundaryTracking {
-					code = append(code, fmt.Sprintf("for %sLoopVar, %sIsLast := range snapsqlgo.AsIterableAnyWithLast(collectionResult%d.Value()) {",
-						inst.Variable, inst.Variable, *inst.CollectionExprIndex))
-				} else {
-					code = append(code, fmt.Sprintf("for %sLoopVar := range snapsqlgo.AsIterableAny(collectionResult%d.Value()) {",
-						inst.Variable, *inst.CollectionExprIndex))
+				plan, err := renderer.renderIterable(*inst.CollectionExprIndex)
+				if err != nil {
+					return nil, err
 				}
 
-				code = append(code, fmt.Sprintf("    paramMap[%q] = %sLoopVar", inst.Variable, inst.Variable))
+				collectionVar := fmt.Sprintf("collectionValue%d", loopCounter)
+				loopCounter++
 
-				controlStack = append(controlStack, controlFrame{typ: "for", loopVar: inst.Variable})
+				code = append(code, fmt.Sprintf("// FOR loop: evaluate collection expression %d", *inst.CollectionExprIndex))
+				code = append(code, fmt.Sprintf("var %s any", collectionVar))
+				code = append(code, plan.Setup...)
+
+				code = append(code, fmt.Sprintf("%s = %s", collectionVar, plan.ValueVar))
+				if plan.ValidVar != "" {
+					code = append(code, fmt.Sprintf("if !%s {", plan.ValidVar))
+					code = append(code, fmt.Sprintf("    %s = nil", collectionVar))
+					code = append(code, "}")
+				}
+
+				loopItemVar := scope.pushLoopVar(inst.Variable)
+
+				loopIsLastVar := ""
+				if needsBoundaryTracking {
+					loopIsLastVar = loopItemVar + "IsLast"
+					code = append(code, fmt.Sprintf("for %s, %s := range snapsqlgo.AsIterableAnyWithLast(%s) {",
+						loopItemVar, loopIsLastVar, collectionVar))
+				} else {
+					code = append(code, fmt.Sprintf("for %s := range snapsqlgo.AsIterableAny(%s) {",
+						loopItemVar, collectionVar))
+				}
+
+				controlStack = append(controlStack, controlFrame{typ: "for", loopVar: loopItemVar, loopIsLast: loopIsLastVar})
 			}
 
 		case "LOOP_END":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "for" {
-				// Find the corresponding LOOP_START to get the variable name
-				var loopVar string
-
-				for j := len(instructions) - 1; j >= 0; j-- {
-					if instructions[j].Op == "LOOP_START" && instructions[j].EnvIndex == inst.EnvIndex {
-						loopVar = instructions[j].Variable
-						break
-					}
-				}
-
-				if loopVar != "" {
-					code = append(code, fmt.Sprintf("    delete(paramMap, %q)", loopVar))
-				}
+				scope.pop()
 
 				code = append(code, "}")
 				controlStack = controlStack[:len(controlStack)-1]
@@ -536,27 +588,37 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 
 			fallbackVar := fmt.Sprintf("fallbackActive%d", fallbackCounter)
 
+			exprPlans := make(map[int]*fallbackExprPlan)
+
 			if len(inst.FallbackCombos) == 0 {
 				blockLines = append(blockLines, fallbackVar+" := true")
 			} else {
 				blockLines = append(blockLines, fallbackVar+" := false")
 
-				exprBoolVars := make(map[int]string)
-
 				for _, combo := range inst.FallbackCombos {
 					for _, literal := range combo {
-						if _, ok := exprBoolVars[literal.ExprIndex]; ok {
+						_, ok := exprPlans[literal.ExprIndex]
+						if ok {
 							continue
 						}
 
-						exprVar := fmt.Sprintf("fallbackEval%d_%d", fallbackCounter, literal.ExprIndex)
-						blockLines = append(blockLines, fmt.Sprintf("%s, _, err := %sPrograms[%d].Eval(paramMap)", exprVar, toLowerCamel(format.FunctionName), literal.ExprIndex))
-						blockLines = append(blockLines, "if err != nil {")
-						blockLines = append(blockLines, fmt.Sprintf("    return \"\", nil, fmt.Errorf(\"%s: failed to evaluate condition: %%w\", err)", functionName))
-						blockLines = append(blockLines, "}")
+						accessPlan, err := renderer.renderValue(literal.ExprIndex)
+						if err != nil {
+							return nil, err
+						}
+
+						lines := make([]string, 0, len(accessPlan.Setup)+3)
+
+						lines = append(lines, accessPlan.Setup...)
+						if accessPlan.ValidVar != "" {
+							lines = append(lines, fmt.Sprintf("if !%s { %s = nil }", accessPlan.ValidVar, accessPlan.ValueVar))
+						}
+
 						boolVar := fmt.Sprintf("fallbackCond%d_%d", fallbackCounter, literal.ExprIndex)
-						blockLines = append(blockLines, fmt.Sprintf("%s := snapsqlgo.Truthy(%s)", boolVar, exprVar))
-						exprBoolVars[literal.ExprIndex] = boolVar
+						lines = append(lines, fmt.Sprintf("%s := snapsqlgo.Truthy(%s)", boolVar, accessPlan.ValueVar))
+						plan := &fallbackExprPlan{Lines: lines, BoolVar: boolVar}
+						exprPlans[literal.ExprIndex] = plan
+						blockLines = append(blockLines, plan.Lines...)
 					}
 				}
 
@@ -565,7 +627,8 @@ func generateDynamicSQLFromOptimized(instructions []codegenerator.OptimizedInstr
 					blockLines = append(blockLines, comboVar+" := true")
 
 					for _, literal := range combo {
-						boolVar := exprBoolVars[literal.ExprIndex]
+						plan := exprPlans[literal.ExprIndex]
+						boolVar := plan.BoolVar
 
 						condition := boolVar
 						if !literal.When {

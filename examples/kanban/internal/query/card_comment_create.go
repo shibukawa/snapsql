@@ -19,11 +19,8 @@ package query
 import (
 	"context"
 	"fmt"
-
-	"time"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"time"
 )
 
 // CardCommentCreateResult represents the response structure for CardCommentCreate
@@ -34,68 +31,23 @@ type CardCommentCreateResult struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// CardCommentCreate specific CEL programs and mock path
-var (
-	cardCommentCreatePrograms []cel.Program
-)
+// CardCommentCreateExplangExpressions stores explang steps aligned with expression indexes.
+var CardCommentCreateExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "card_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 28, Column: 5, Offset: 0, Length: 7}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "body", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 30, Column: 5, Offset: 0, Length: 4}},
+		},
+	},
+}
 
 const cardCommentCreateMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("body", cel.StringType))
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("body", cel.StringType))
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("body", cel.StringType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CardCommentCreate CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	cardCommentCreatePrograms = make([]cel.Program, 2)
-	// expr_001: "card_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("card_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "card_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
-		}
-		cardCommentCreatePrograms[0] = program
-	}
-	// expr_002: "body" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("body")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "body", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "body", err))
-		}
-		cardCommentCreatePrograms[1] = program
-	}
-}
 
 // CardCommentCreate Adds a comment to a card and returns the stored row, enabling optimistic UI updates.
 func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, body string, opts ...snapsqlgo.FuncOpt) (CardCommentCreateResult, error) {
@@ -103,7 +55,12 @@ func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardI
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
-	// Extract implicit parameters
+	// Extract implicit parameters (system arguments). Build specs from explicit
+	// ImplicitParams when provided by configuration; otherwise synthesize
+	// minimal specs from the SQL builder's ArgumentSystemFields. This ensures
+	// generated code that references systemValues always has a declaration,
+	// avoiding undefined identifier errors even when the user's config omitted
+	// a system section (config defaulting is handled elsewhere).
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false},
 		{Name: "updated_at", Type: "time.Time", Required: false},
@@ -141,26 +98,10 @@ func CardCommentCreate(ctx context.Context, executor snapsqlgo.DBExecutor, cardI
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "INSERT INTO card_comments ( card_id, body , created_at, updated_at) VALUES ( $1, $2 , $3, $4)\n\n RETURNING id, card_id, body, created_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"card_id": cardID,
-			"body":    body,
-		}
-
-		evalRes0, _, err := cardCommentCreatePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCommentCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := cardCommentCreatePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCommentCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(cardID))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(body))
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
-
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
-
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

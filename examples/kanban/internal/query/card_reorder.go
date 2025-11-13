@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // CardReorderResult represents the response structure for CardReorder
@@ -38,66 +35,23 @@ type CardReorderResult struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// CardReorder specific CEL programs and mock path
-var (
-	cardReorderPrograms []cel.Program
-)
+// CardReorderExplangExpressions stores explang steps aligned with expression indexes.
+var CardReorderExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "position", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 22, Column: 16, Offset: 0, Length: 8}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "card_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 26, Column: 12, Offset: 0, Length: 7}},
+		},
+	},
+}
 
 const cardReorderMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("position", cel.DoubleType))
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("position", cel.DoubleType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CardReorder CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	cardReorderPrograms = make([]cel.Program, 2)
-	// expr_001: "position" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("position")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "position", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "position", err))
-		}
-		cardReorderPrograms[0] = program
-	}
-	// expr_002: "card_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("card_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "card_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
-		}
-		cardReorderPrograms[1] = program
-	}
-}
 
 // CardReorder Adjusts the position field of a card without changing its list, supporting intra-list reordering.
 func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, position float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardReorderResult, error] {
@@ -141,22 +95,8 @@ func CardReorder(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int,
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE cards SET position = $1, updated_at = CURRENT_TIMESTAMP  WHERE id = $2   RETURNING id, list_id, title, description, position, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"card_id":  cardID,
-			"position": position,
-		}
-
-		evalRes0, _, err := cardReorderPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardReorder: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := cardReorderPrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardReorder: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(position))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(cardID))
 		return query, args, nil
 	}
 	return func(yield func(*CardReorderResult, error) bool) {

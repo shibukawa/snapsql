@@ -19,11 +19,8 @@ package query
 import (
 	"context"
 	"fmt"
-
-	"time"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"time"
 )
 
 // BoardGetResult represents the response structure for BoardGet
@@ -36,52 +33,17 @@ type BoardGetResult struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-// BoardGet specific CEL programs and mock path
-var (
-	boardGetPrograms []cel.Program
-)
+// BoardGetExplangExpressions stores explang steps aligned with expression indexes.
+var BoardGetExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "board_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 33, Column: 12, Offset: 0, Length: 8}},
+		},
+	},
+}
 
 const boardGetMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("board_id", cel.IntType))
-		opts = append(opts, cel.Variable("board_id", cel.IntType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create BoardGet CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	boardGetPrograms = make([]cel.Program, 1)
-	// expr_001: "board_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("board_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "board_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "board_id", err))
-		}
-		boardGetPrograms[0] = program
-	}
-}
 
 // BoardGet Retrieves one board record for detail views. Returns an empty result if the board does not exist.
 func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, opts ...snapsqlgo.FuncOpt) (BoardGetResult, error) {
@@ -120,15 +82,7 @@ func BoardGet(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, o
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "SELECT id, name, status, archived_at, created_at, updated_at FROM boards  WHERE id = $1 "
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"board_id": boardID,
-		}
-
-		evalRes0, _, err := boardGetPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("BoardGet: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(boardID))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

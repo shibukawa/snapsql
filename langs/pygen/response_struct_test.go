@@ -13,13 +13,13 @@ func TestProcessResponseStruct_NoFields(t *testing.T) {
 		Responses:    []intermediate.Response{},
 	}
 
-	result, err := processResponseStruct(format)
+	structs, result, err := processResponseStruct(format)
 	if !errors.Is(err, ErrNoResponseFields) {
 		t.Errorf("Expected ErrNoResponseFields, got: %v", err)
 	}
 
-	if result != nil {
-		t.Errorf("Expected nil result, got: %+v", result)
+	if result != nil || structs != nil {
+		t.Errorf("Expected nil results, got: structs=%+v result=%+v", structs, result)
 	}
 }
 
@@ -34,9 +34,13 @@ func TestProcessResponseStruct_FlatStructure(t *testing.T) {
 		},
 	}
 
-	result, err := processResponseStruct(format)
+	structs, result, err := processResponseStruct(format)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(structs) != 1 {
+		t.Fatalf("Expected 1 struct, got %d", len(structs))
 	}
 
 	// Check class name
@@ -60,8 +64,8 @@ func TestProcessResponseStruct_FlatStructure(t *testing.T) {
 	}{
 		{0, "user_id", "int", false, ""},
 		{1, "username", "str", false, ""},
-		{2, "email", "Optional[str]", true, "None"},
-		{3, "created_at", "datetime", false, ""},
+		{2, "created_at", "datetime", false, ""},
+		{3, "email", "Optional[str]", true, "None"},
 	}
 
 	for _, tt := range tests {
@@ -114,9 +118,13 @@ func TestProcessResponseStruct_WithArrayTypes(t *testing.T) {
 		},
 	}
 
-	result, err := processResponseStruct(format)
+	structs, result, err := processResponseStruct(format)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(structs) != 1 {
+		t.Fatalf("Expected 1 struct, got %d", len(structs))
 	}
 
 	// Check field types
@@ -140,9 +148,13 @@ func TestProcessResponseStruct_WithDecimalAndDatetime(t *testing.T) {
 		},
 	}
 
-	result, err := processResponseStruct(format)
+	structs, result, err := processResponseStruct(format)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(structs) != 1 {
+		t.Fatalf("Expected 1 struct, got %d", len(structs))
 	}
 
 	// Check decimal type

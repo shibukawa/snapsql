@@ -49,6 +49,7 @@ type ProcessingContext struct {
 	// Enhanced CEL information
 	CELExpressions  []CELExpression
 	CELEnvironments []CELEnvironment
+	ExplangExprs    []ExplangExpression
 
 	// Table references extracted from the statement
 	TableReferences []TableReferenceInfo
@@ -122,6 +123,7 @@ func (p *TokenPipeline) Execute() (*IntermediateFormat, error) {
 		FunctionName:       ctx.FunctionName,
 		Parameters:         ctx.Parameters,
 		CELExpressions:     ctx.CELExpressions,
+		Expressions:        ctx.ExplangExprs,
 		CELEnvironments:    ctx.CELEnvironments,
 		Envs:               convertEnvironmentsToEnvs(ctx.Environments), // Convert environments to Envs format
 		Instructions:       ctx.Instructions,

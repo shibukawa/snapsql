@@ -3,6 +3,8 @@ package pygen
 import (
 	"fmt"
 	"strings"
+
+	"github.com/shibukawa/snapsql"
 )
 
 // QueryLogMetadata represents metadata for query logging in generated Python code
@@ -151,7 +153,7 @@ class SnapSQLContext:
 
 // generateQueryExecutionWithLogging generates query execution code with logging support
 func generateQueryExecutionWithLogging(
-	dialect string,
+	dialect snapsql.Dialect,
 	responseAffinity string,
 	functionName string,
 	queryType string,
@@ -202,7 +204,7 @@ func generateQueryExecutionWithLogging(
 }
 
 // generateNoneAffinityExecutionWithLogging generates execution code for none affinity with logging
-func generateNoneAffinityExecutionWithLogging(dialect string, withLogging bool) string {
+func generateNoneAffinityExecutionWithLogging(dialect snapsql.Dialect, withLogging bool) string {
 	indent := "        "
 	if !withLogging {
 		indent = "    "
@@ -211,7 +213,7 @@ func generateNoneAffinityExecutionWithLogging(dialect string, withLogging bool) 
 	var code strings.Builder
 
 	switch dialect {
-	case "postgres":
+	case snapsql.DialectPostgres:
 		code.WriteString(indent + "# Execute query (PostgreSQL)\n")
 		code.WriteString(indent + "result = await conn.execute(sql, *args)\n")
 
@@ -221,25 +223,27 @@ func generateNoneAffinityExecutionWithLogging(dialect string, withLogging bool) 
 
 		code.WriteString(indent + "return row_count if row_count is not None else 0\n")
 
-	case "mysql":
+	case snapsql.DialectMySQL:
 		code.WriteString(indent + "# Execute query (MySQL)\n")
 		code.WriteString(indent + "async with cursor.execute(sql, args) as cur:\n")
 		code.WriteString(indent + "    row_count = cur.rowcount\n")
 		code.WriteString(indent + "return row_count if row_count is not None else 0\n")
 
-	case "sqlite":
+	case snapsql.DialectSQLite:
 		code.WriteString(indent + "# Execute query (SQLite)\n")
 		code.WriteString(indent + "async with conn.execute(sql, args) as cur:\n")
 		code.WriteString(indent + "    row_count = cur.rowcount\n")
 		code.WriteString(indent + "await conn.commit()\n")
 		code.WriteString(indent + "return row_count if row_count is not None else 0\n")
+	default:
+		panic(fmt.Sprintf("unsupported dialect for logging: %s", dialect))
 	}
 
 	return code.String()
 }
 
 // generateOneAffinityExecutionWithLogging generates execution code for one affinity with logging
-func generateOneAffinityExecutionWithLogging(dialect string, withLogging bool) string {
+func generateOneAffinityExecutionWithLogging(dialect snapsql.Dialect, withLogging bool) string {
 	indent := "        "
 	if !withLogging {
 		indent = "    "
@@ -248,7 +252,7 @@ func generateOneAffinityExecutionWithLogging(dialect string, withLogging bool) s
 	var code strings.Builder
 
 	switch dialect {
-	case "postgres":
+	case snapsql.DialectPostgres:
 		code.WriteString(indent + "# Execute query and fetch one (PostgreSQL)\n")
 		code.WriteString(indent + "row = await conn.fetchrow(sql, *args)\n")
 		code.WriteString(indent + "if row is None:\n")
@@ -260,7 +264,7 @@ func generateOneAffinityExecutionWithLogging(dialect string, withLogging bool) s
 
 		code.WriteString(indent + "return result_class(**dict(row))\n")
 
-	case "mysql":
+	case snapsql.DialectMySQL:
 		code.WriteString(indent + "# Execute query and fetch one (MySQL)\n")
 		code.WriteString(indent + "await cursor.execute(sql, args)\n")
 		code.WriteString(indent + "row = await cursor.fetchone()\n")
@@ -273,7 +277,7 @@ func generateOneAffinityExecutionWithLogging(dialect string, withLogging bool) s
 
 		code.WriteString(indent + "return result_class(**row)\n")
 
-	case "sqlite":
+	case snapsql.DialectSQLite:
 		code.WriteString(indent + "# Execute query and fetch one (SQLite)\n")
 		code.WriteString(indent + "async with conn.execute(sql, args) as cur:\n")
 		code.WriteString(indent + "    row = await cur.fetchone()\n")
@@ -285,13 +289,15 @@ func generateOneAffinityExecutionWithLogging(dialect string, withLogging bool) s
 		}
 
 		code.WriteString(indent + "return result_class(**dict(row))\n")
+	default:
+		panic(fmt.Sprintf("unsupported dialect for logging: %s", dialect))
 	}
 
 	return code.String()
 }
 
 // generateManyAffinityExecutionWithLogging generates execution code for many affinity with logging
-func generateManyAffinityExecutionWithLogging(dialect string, withLogging bool) string {
+func generateManyAffinityExecutionWithLogging(dialect snapsql.Dialect, withLogging bool) string {
 	indent := "        "
 	if !withLogging {
 		indent = "    "
@@ -305,7 +311,7 @@ func generateManyAffinityExecutionWithLogging(dialect string, withLogging bool) 
 	}
 
 	switch dialect {
-	case "postgres":
+	case snapsql.DialectPostgres:
 		code.WriteString(indent + "# Execute query and yield rows (PostgreSQL)\n")
 		code.WriteString(indent + "async for row in conn.cursor(sql, *args):\n")
 
@@ -315,7 +321,7 @@ func generateManyAffinityExecutionWithLogging(dialect string, withLogging bool) 
 
 		code.WriteString(indent + "    yield result_class(**dict(row))\n")
 
-	case "mysql":
+	case snapsql.DialectMySQL:
 		code.WriteString(indent + "# Execute query and yield rows (MySQL)\n")
 		code.WriteString(indent + "await cursor.execute(sql, args)\n")
 		code.WriteString(indent + "while True:\n")
@@ -329,7 +335,7 @@ func generateManyAffinityExecutionWithLogging(dialect string, withLogging bool) 
 
 		code.WriteString(indent + "    yield result_class(**row)\n")
 
-	case "sqlite":
+	case snapsql.DialectSQLite:
 		code.WriteString(indent + "# Execute query and yield rows (SQLite)\n")
 		code.WriteString(indent + "async with conn.execute(sql, args) as cur:\n")
 		code.WriteString(indent + "    async for row in cur:\n")
@@ -339,6 +345,8 @@ func generateManyAffinityExecutionWithLogging(dialect string, withLogging bool) 
 		}
 
 		code.WriteString(indent + "        yield result_class(**dict(row))\n")
+	default:
+		panic(fmt.Sprintf("unsupported dialect for logging: %s", dialect))
 	}
 
 	return code.String()

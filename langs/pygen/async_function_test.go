@@ -186,29 +186,29 @@ func TestAsyncFunctionTypeHints(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		dialect string
+		dialect snapsql.Dialect
 		want    string
 	}{
 		{
 			name:    "postgres connection type",
-			dialect: "postgres",
+			dialect: snapsql.DialectPostgres,
 			want:    "conn: asyncpg.Connection,",
 		},
 		{
 			name:    "mysql cursor type",
-			dialect: "mysql",
+			dialect: snapsql.DialectMySQL,
 			want:    "cursor: Any,",
 		},
 		{
 			name:    "sqlite cursor type",
-			dialect: "sqlite",
+			dialect: snapsql.DialectSQLite,
 			want:    "cursor: Any,",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gen := New(format, WithDialect(snapsql.Dialect(tt.dialect)))
+			gen := New(format, WithDialect(tt.dialect))
 
 			var buf bytes.Buffer
 

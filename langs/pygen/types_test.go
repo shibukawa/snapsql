@@ -3,6 +3,8 @@ package pygen
 import (
 	"strings"
 	"testing"
+
+	"github.com/shibukawa/snapsql"
 )
 
 func TestConvertToPythonType_BasicTypes(t *testing.T) {
@@ -123,122 +125,102 @@ func TestConvertToPythonType_ArrayTypes(t *testing.T) {
 }
 
 func TestGetPlaceholder(t *testing.T) {
-	tests := []struct {
-		name    string
-		dialect string
-		index   int
-		want    string
-		wantErr bool
-	}{
-		// PostgreSQL placeholders
-		{name: "postgres index 1", dialect: "postgres", index: 1, want: "$1", wantErr: false},
-		{name: "postgres index 2", dialect: "postgres", index: 2, want: "$2", wantErr: false},
-		{name: "postgres index 10", dialect: "postgres", index: 10, want: "$10", wantErr: false},
+	t.Run("supported dialects", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			dialect snapsql.Dialect
+			index   int
+			want    string
+		}{
+			{name: "postgres index 1", dialect: snapsql.DialectPostgres, index: 1, want: "$1"},
+			{name: "postgres index 10", dialect: snapsql.DialectPostgres, index: 10, want: "$10"},
+			{name: "mysql index 2", dialect: snapsql.DialectMySQL, index: 2, want: "%s"},
+			{name: "sqlite index 3", dialect: snapsql.DialectSQLite, index: 3, want: "?"},
+		}
 
-		// MySQL placeholders
-		{name: "mysql index 1", dialect: "mysql", index: 1, want: "%s", wantErr: false},
-		{name: "mysql index 2", dialect: "mysql", index: 2, want: "%s", wantErr: false},
-		{name: "mysql index 10", dialect: "mysql", index: 10, want: "%s", wantErr: false},
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := GetPlaceholder(tt.dialect, tt.index); got != tt.want {
+					t.Errorf("GetPlaceholder() = %v, want %v", got, tt.want)
+				}
+			})
+		}
+	})
 
-		// SQLite placeholders
-		{name: "sqlite index 1", dialect: "sqlite", index: 1, want: "?", wantErr: false},
-		{name: "sqlite index 2", dialect: "sqlite", index: 2, want: "?", wantErr: false},
-		{name: "sqlite index 10", dialect: "sqlite", index: 10, want: "?", wantErr: false},
+	t.Run("unsupported dialect panics", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			dialect snapsql.Dialect
+		}{
+			{name: "oracle", dialect: snapsql.Dialect("oracle")},
+			{name: "empty", dialect: snapsql.Dialect("")},
+		}
 
-		// Unsupported dialect
-		{name: "unsupported dialect", dialect: "oracle", index: 1, want: "", wantErr: true},
-		{name: "empty dialect", dialect: "", index: 1, want: "", wantErr: true},
-	}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				defer func() {
+					if r := recover(); r == nil {
+						t.Fatalf("expected panic for dialect %q", tt.dialect)
+					}
+				}()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetPlaceholder(tt.dialect, tt.index)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPlaceholder() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if got != tt.want {
-				t.Errorf("GetPlaceholder() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+				_ = GetPlaceholder(tt.dialect, 1)
+			})
+		}
+	})
 }
 
 func TestGetPlaceholderList(t *testing.T) {
 	tests := []struct {
 		name    string
-		dialect string
+		dialect snapsql.Dialect
 		count   int
 		want    []string
-		wantErr bool
 	}{
-		// PostgreSQL
 		{
 			name:    "postgres 3 placeholders",
-			dialect: "postgres",
+			dialect: snapsql.DialectPostgres,
 			count:   3,
 			want:    []string{"$1", "$2", "$3"},
-			wantErr: false,
 		},
 		{
-			name:    "postgres 0 placeholders",
-			dialect: "postgres",
+			name:    "mysql 2 placeholders",
+			dialect: snapsql.DialectMySQL,
+			count:   2,
+			want:    []string{"%s", "%s"},
+		},
+		{
+			name:    "sqlite 0 placeholders",
+			dialect: snapsql.DialectSQLite,
 			count:   0,
 			want:    []string{},
-			wantErr: false,
-		},
-
-		// MySQL
-		{
-			name:    "mysql 3 placeholders",
-			dialect: "mysql",
-			count:   3,
-			want:    []string{"%s", "%s", "%s"},
-			wantErr: false,
-		},
-
-		// SQLite
-		{
-			name:    "sqlite 3 placeholders",
-			dialect: "sqlite",
-			count:   3,
-			want:    []string{"?", "?", "?"},
-			wantErr: false,
-		},
-
-		// Unsupported dialect
-		{
-			name:    "unsupported dialect",
-			dialect: "oracle",
-			count:   3,
-			want:    nil,
-			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetPlaceholderList(tt.dialect, tt.count)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPlaceholderList() error = %v, wantErr %v", err, tt.wantErr)
-				return
+			got := GetPlaceholderList(tt.dialect, tt.count)
+			if len(got) != len(tt.want) {
+				t.Fatalf("GetPlaceholderList() length = %v, want %v", len(got), len(tt.want))
 			}
 
-			if !tt.wantErr {
-				if len(got) != len(tt.want) {
-					t.Errorf("GetPlaceholderList() length = %v, want %v", len(got), len(tt.want))
-					return
-				}
-
-				for i := range got {
-					if got[i] != tt.want[i] {
-						t.Errorf("GetPlaceholderList()[%d] = %v, want %v", i, got[i], tt.want[i])
-					}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("GetPlaceholderList()[%d] = %v, want %v", i, got[i], tt.want[i])
 				}
 			}
 		})
 	}
+
+	t.Run("unsupported dialect panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatalf("expected panic for unsupported dialect")
+			}
+		}()
+
+		_ = GetPlaceholderList(snapsql.Dialect("oracle"), 1)
+	})
 }
 
 func TestGetRequiredImports(t *testing.T) {

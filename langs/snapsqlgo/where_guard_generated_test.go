@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
-	generator "github.com/shibukawa/snapsql/testdata/gosample/generated_sqlite"
+	generator "github.com/shibukawa/snapsql/testdata/appsample/generated_sqlite"
 	"github.com/stretchr/testify/require"
 )
 

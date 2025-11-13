@@ -224,14 +224,13 @@ func TestGenerateQueryExecution_InvalidAffinity(t *testing.T) {
 		ResponseAffinity: "invalid",
 	}
 
-	_, err := generateQueryExecution(format, nil, "postgres")
-	if err == nil {
-		t.Error("expected error for invalid affinity")
-	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for invalid affinity")
+		}
+	}()
 
-	if !strings.Contains(err.Error(), "unsupported response affinity") {
-		t.Errorf("unexpected error message: %v", err)
-	}
+	generateQueryExecution(format, nil, "postgres")
 }
 
 func TestGenerateQueryExecution_MissingResponseStruct(t *testing.T) {
@@ -240,12 +239,11 @@ func TestGenerateQueryExecution_MissingResponseStruct(t *testing.T) {
 		ResponseAffinity: "one",
 	}
 
-	_, err := generateQueryExecution(format, nil, "postgres")
-	if err == nil {
-		t.Error("expected error for missing response struct")
-	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic for missing response struct")
+		}
+	}()
 
-	if !strings.Contains(err.Error(), "response struct required") {
-		t.Errorf("unexpected error message: %v", err)
-	}
+	generateQueryExecution(format, nil, "postgres")
 }

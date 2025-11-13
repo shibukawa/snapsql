@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // CardCommentListResult represents the response structure for CardCommentList
@@ -35,52 +32,17 @@ type CardCommentListResult struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// CardCommentList specific CEL programs and mock path
-var (
-	cardCommentListPrograms []cel.Program
-)
+// CardCommentListExplangExpressions stores explang steps aligned with expression indexes.
+var CardCommentListExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "card_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 29, Column: 17, Offset: 0, Length: 7}},
+		},
+	},
+}
 
 const cardCommentListMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CardCommentList CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	cardCommentListPrograms = make([]cel.Program, 1)
-	// expr_001: "card_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("card_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "card_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
-		}
-		cardCommentListPrograms[0] = program
-	}
-}
 
 // CardCommentList Retrieves comments associated with a card, ordered by creation time ascending for chronological display.
 func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardCommentListResult, error] {
@@ -119,15 +81,7 @@ func CardCommentList(ctx context.Context, executor snapsqlgo.DBExecutor, cardID 
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "SELECT id, card_id, body, created_at FROM card_comments  WHERE card_id = $1  ORDER BY created_at ASC, id ASC "
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"card_id": cardID,
-		}
-
-		evalRes0, _, err := cardCommentListPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardCommentList: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(cardID))
 		return query, args, nil
 	}
 	return func(yield func(*CardCommentListResult, error) bool) {

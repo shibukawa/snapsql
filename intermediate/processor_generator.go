@@ -56,6 +56,23 @@ func (i *InstructionGenerator) Process(ctx *ProcessingContext) error {
 	ctx.CELEnvironments = environments
 	ctx.WhereMeta = genCtx.WhereClauseMeta()
 
+	stepSets, err := validateExplangExpressions(ctx.FunctionDef, expressions, ctx.CELEnvironments)
+	if err != nil {
+		return err
+	}
+
+	if len(stepSets) > 0 {
+		ctx.ExplangExprs = make([]ExplangExpression, len(expressions))
+		for i, expr := range expressions {
+			ctx.ExplangExprs[i] = ExplangExpression{
+				ID:               expr.ID,
+				EnvironmentIndex: expr.EnvironmentIndex,
+				Position:         expr.Position,
+				Steps:            stepSets[i],
+			}
+		}
+	}
+
 	ctx.Environments = append([]string(nil), genCtx.Environments...)
 
 	return nil

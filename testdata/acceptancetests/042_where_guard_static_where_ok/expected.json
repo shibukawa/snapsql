@@ -3,16 +3,8 @@
     {
       "index": 0,
       "additional_variables": [
-        {
-          "name": "status",
-          "type": "string",
-          "value": "dummy"
-        },
-        {
-          "name": "account_id",
-          "type": "int",
-          "value": 1
-        }
+    {"name": "status", "type": "string", "value": "dummy"},
+    {"name": "account_id", "type": "int", "value": 1}
       ],
       "container": "root"
     }
@@ -41,51 +33,71 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 14
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "status",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 8,
+            "Column": 14,
+            "Length": 6
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 9,
+        "column": 12
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "account_id",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 9,
+            "Column": 12,
+            "Length": 10
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "update_accounts_static_where",
   "instructions": [
-    {
-      "op": "EMIT_STATIC",
-      "pos": "7:1",
-      "value": "UPDATE accounts SET status = "
-    },
-    {
-      "op": "EMIT_EVAL",
-      "pos": "8:14",
-      "expr_index": 0
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "9:0",
-      "value": " WHERE id = "
-    },
-    {
-      "op": "EMIT_EVAL",
-      "pos": "9:12",
-      "expr_index": 1
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "10:0"
-    }
+    {"op": "EMIT_STATIC", "pos": "7:1", "value": "UPDATE accounts SET status = "},
+    {"op": "EMIT_EVAL", "pos": "8:14", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "9:0", "value": " WHERE id = "},
+    {"op": "EMIT_EVAL", "pos": "9:12", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "10:0"}
   ],
   "parameters": [
-    {
-      "name": "status",
-      "type": "string"
-    },
-    {
-      "name": "account_id",
-      "type": "int"
-    }
+    {"name": "status", "type": "string"},
+    {"name": "account_id", "type": "int"}
   ],
   "response_affinity": "none",
   "statement_type": "update",
   "table_references": [
-    {
-      "name": "accounts",
-      "context": "main"
-    }
+    {"name": "accounts", "context": "main"}
   ],
   "warnings": [
     "type inference failed: no database schema provided"

@@ -4,7 +4,16 @@
       "index": 0,
       "additional_variables": [
     {"name": "user_id", "type": "int", "value": 1},
-    {"name": "user", "type": "../testdata/acceptancetests/017_common_type_ok/User", "value": ""}
+        {
+          "name": "user",
+          "type": "object",
+          "value": {
+            "department": "./Department",
+            "email": "dummy",
+            "id": 1,
+            "name": "dummy"
+          }
+        }
       ],
       "container": "root"
     }
@@ -20,6 +29,31 @@
       },
       "type_descriptor": "int",
       "result_type": 1
+    }
+  ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 9,
+        "column": 14
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user_id",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 9,
+            "Column": 14,
+            "Length": 7
+          }
+        }
+      ]
     }
   ],
   "format_version": "1",
@@ -48,6 +82,7 @@
     {"name": "name", "type": "any", "is_nullable": true},
     {"name": "email", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "alias": "u", "context": "main"}
   ],

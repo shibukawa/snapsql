@@ -162,7 +162,7 @@ func TestResponseAffinity_Many_AsyncGenerator(t *testing.T) {
 	// Find the next function or end of file
 	nextFunc := strings.Index(code[funcStart+1:], "\nasync def ")
 
-	funcBody := ""
+	var funcBody string
 	if nextFunc == -1 {
 		funcBody = code[funcStart:]
 	} else {

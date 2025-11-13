@@ -238,9 +238,17 @@ func TestProcessResponseStruct_WithHierarchy(t *testing.T) {
 		},
 	}
 
-	result, err := processResponseStruct(format)
+	structs, result, err := processResponseStruct(format)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(structs) != 2 {
+		t.Fatalf("Expected 2 structs (child + main), got %d", len(structs))
+	}
+
+	if structs[0].ClassName != "GetBoardWithListsResultList" {
+		t.Errorf("Expected first struct to be child class, got %s", structs[0].ClassName)
 	}
 
 	// Should return main struct with hierarchical structure

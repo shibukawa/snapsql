@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/shibukawa/snapsql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -135,7 +136,7 @@ func TestGenerateMockExecutionCode(t *testing.T) {
 		functionName     string
 		responseAffinity string
 		returnType       string
-		dialect          string
+		dialect          snapsql.Dialect
 		queryType        string
 		wantContains     []string
 	}{
@@ -144,7 +145,7 @@ func TestGenerateMockExecutionCode(t *testing.T) {
 			functionName:     "delete_user",
 			responseAffinity: "none",
 			returnType:       "int",
-			dialect:          "postgres",
+			dialect:          snapsql.DialectPostgres,
 			queryType:        "delete",
 			wantContains: []string{
 				"ctx.mock_mode",
@@ -160,7 +161,7 @@ func TestGenerateMockExecutionCode(t *testing.T) {
 			functionName:     "get_user_by_id",
 			responseAffinity: "one",
 			returnType:       "GetUserByIdResult",
-			dialect:          "mysql",
+			dialect:          snapsql.DialectMySQL,
 			queryType:        "select",
 			wantContains: []string{
 				"ctx.mock_mode",
@@ -176,7 +177,7 @@ func TestGenerateMockExecutionCode(t *testing.T) {
 			functionName:     "list_users",
 			responseAffinity: "many",
 			returnType:       "ListUsersResult",
-			dialect:          "sqlite",
+			dialect:          snapsql.DialectSQLite,
 			queryType:        "select",
 			wantContains: []string{
 				"ctx.mock_mode",
@@ -215,7 +216,7 @@ func TestProcessMockData(t *testing.T) {
 		functionName     string
 		responseAffinity string
 		returnType       string
-		dialect          string
+		dialect          snapsql.Dialect
 		queryType        string
 		wantHasMock      bool
 	}{
@@ -225,7 +226,7 @@ func TestProcessMockData(t *testing.T) {
 			functionName:     "get_user",
 			responseAffinity: "one",
 			returnType:       "GetUserResult",
-			dialect:          "postgres",
+			dialect:          snapsql.DialectPostgres,
 			queryType:        "select",
 			wantHasMock:      true,
 		},
@@ -235,7 +236,7 @@ func TestProcessMockData(t *testing.T) {
 			functionName:     "get_user",
 			responseAffinity: "one",
 			returnType:       "GetUserResult",
-			dialect:          "postgres",
+			dialect:          snapsql.DialectPostgres,
 			queryType:        "select",
 			wantHasMock:      false,
 		},

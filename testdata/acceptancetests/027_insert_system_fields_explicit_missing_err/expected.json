@@ -1,0 +1,59 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": [
+    {"name": "user", "type": "../testdata/acceptancetests/027_insert_system_fields_explicit_missing_err/User"},
+    {"name": "user", "type": "../testdata/acceptancetests/027_insert_system_fields_explicit_missing_err/User", "value": ""}
+      ],
+      "container": "root"
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "user.id",
+      "environment_index": 0,
+      "position": {
+        "line": 6,
+        "column": 38
+      },
+      "type_descriptor": "int",
+      "result_type": 1
+    },
+    {
+      "id": "expr_002",
+      "expression": "user.name",
+      "environment_index": 0,
+      "position": {
+        "line": 6,
+        "column": 55
+      },
+      "type_descriptor": "string",
+      "result_type": 1
+    }
+  ],
+  "format_version": "1",
+  "function_name": "insertUser",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "6:1", "value": "INSERT INTO users (id, name, created_at, updated_at) VALUES ("},
+    {"op": "EMIT_EVAL", "pos": "6:38", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "6:53", "value": ", "},
+    {"op": "EMIT_EVAL", "pos": "6:55", "expr_index": 1},
+    {"op": "EMIT_STATIC", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "\u003cnil\u003e", "system_field": "created_at"},
+    {"op": "EMIT_STATIC", "value": ", "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "\u003cnil\u003e", "system_field": "updated_at"},
+    {"op": "EMIT_STATIC", "pos": "6:77", "value": ")"}
+  ],
+  "parameters": [
+    {"name": "user", "type": "../testdata/acceptancetests/027_insert_system_fields_explicit_missing_err/User"}
+  ],
+  "response_affinity": "none",
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ]
+}

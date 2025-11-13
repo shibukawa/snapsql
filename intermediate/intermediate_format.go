@@ -145,8 +145,11 @@ type IntermediateFormat struct {
 	// Instruction sequence
 	Instructions []Instruction `json:"instructions"`
 
-	// Enhanced CEL expressions with metadata
+	// Enhanced CEL expressions with metadata (legacy)
 	CELExpressions []CELExpression `json:"cel_expressions"`
+
+	// Explang expressions (flattened steps) aligned with CELExpressions by index.
+	Expressions []ExplangExpression `json:"expressions,omitempty"`
 
 	// CEL environments with variable definitions
 	CELEnvironments []CELEnvironment `json:"cel_environments"`
@@ -241,6 +244,16 @@ func (f *IntermediateFormat) MarshalJSON() ([]byte, error) {
 		}
 
 		result["cel_expressions"] = celExpressions
+	}
+
+	// Custom marshal for Explang expressions
+	if len(f.Expressions) > 0 {
+		exprs, err := marshalCompact(f.Expressions)
+		if err != nil {
+			return nil, err
+		}
+
+		result["expressions"] = exprs
 	}
 
 	// Custom marshal for CELEnvironments

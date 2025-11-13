@@ -3,16 +3,8 @@
     {
       "index": 0,
       "additional_variables": [
-        {
-          "name": "status",
-          "type": "string",
-          "value": "dummy"
-        },
-        {
-          "name": "include_filter",
-          "type": "bool",
-          "value": true
-        }
+    {"name": "status", "type": "string", "value": "dummy"},
+    {"name": "include_filter", "type": "bool", "value": true}
       ],
       "container": "root"
     }
@@ -41,53 +33,66 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 9,
+        "column": 41
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "status",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 9,
+            "Column": 41,
+            "Length": 6
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 9,
+        "column": 7
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "include_filter",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 9,
+            "Column": 7,
+            "Length": 14
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "update_accounts_where_inline",
   "instructions": [
-    {
-      "op": "EMIT_STATIC",
-      "pos": "7:1",
-      "value": "UPDATE accounts SET status = "
-    },
-    {
-      "op": "EMIT_EVAL",
-      "pos": "8:14",
-      "expr_index": 0
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "9:0",
-      "value": " WHERE "
-    },
-    {
-      "op": "IF",
-      "pos": "9:7",
-      "expr_index": 1
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "9:31",
-      "value": " status = "
-    },
-    {
-      "op": "EMIT_EVAL",
-      "pos": "9:41",
-      "expr_index": 0
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "9:62",
-      "value": " "
-    },
-    {
-      "op": "END",
-      "pos": "9:63"
-    },
-    {
-      "op": "EMIT_STATIC",
-      "pos": "10:0",
-      "value": " "
-    },
+    {"op": "EMIT_STATIC", "pos": "7:1", "value": "UPDATE accounts SET status = "},
+    {"op": "EMIT_EVAL", "pos": "8:14", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "9:0", "value": " WHERE "},
+    {"op": "IF", "pos": "9:7", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "9:31", "value": " status = "},
+    {"op": "EMIT_EVAL", "pos": "9:41", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "9:62", "value": " "},
+    {"op": "END", "pos": "9:63"},
+    {"op": "EMIT_STATIC", "pos": "10:0", "value": " "},
     {
       "op": "FALLBACK_CONDITION",
       "pos": "10:0",
@@ -95,31 +100,19 @@
       "critical": true,
       "fallback_combos": [
         [
-          {
-            "expr_index": 1,
-            "when": false
-          }
+    {"expr_index": 1, "when": false}
         ]
       ]
     }
   ],
   "parameters": [
-    {
-      "name": "status",
-      "type": "string"
-    },
-    {
-      "name": "include_filter",
-      "type": "bool"
-    }
+    {"name": "status", "type": "string"},
+    {"name": "include_filter", "type": "bool"}
   ],
   "response_affinity": "none",
   "statement_type": "update",
   "table_references": [
-    {
-      "name": "accounts",
-      "context": "main"
-    }
+    {"name": "accounts", "context": "main"}
   ],
   "warnings": [
     "type inference failed: no database schema provided"
@@ -138,11 +131,7 @@
       1
     ],
     "dynamic_conditions": [
-      {
-        "expr_index": 1,
-        "negated_when_empty": true,
-        "description": "include_filter"
-      }
+      {"expr_index": 1, "negated_when_empty": true, "description": "include_filter"}
     ],
     "raw_text": "WHERE"
   }

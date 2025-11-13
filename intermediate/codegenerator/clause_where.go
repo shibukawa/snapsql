@@ -24,6 +24,12 @@ func generateWhereClause(clause *parser.WhereClause, builder *InstructionBuilder
 	if cond := strings.TrimSpace(clause.IfCondition()); cond != "" {
 		envIndex := builder.getCurrentEnvironmentIndex()
 		clauseExprIndex = builder.context.AddExpression(cond, envIndex)
+
+		if tokens := clause.RawTokens(); len(tokens) > 0 {
+			start := tokens[0].Position
+			builder.context.SetExpressionMetadata(clauseExprIndex, Position{Line: start.Line, Column: start.Column}, nil)
+		}
+
 		hasClauseCondition = true
 		meta.Dynamic = true
 		meta.ExpressionRefs = appendUniqueInt(meta.ExpressionRefs, clauseExprIndex)

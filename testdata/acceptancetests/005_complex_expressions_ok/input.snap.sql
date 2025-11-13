@@ -7,22 +7,23 @@ parameters:
   display_name: bool
   start_date: string
   end_date: string
-  sort_field: string
-  sort_direction: string
-  page_size: int
-  page: int
+  display_value: string
+  has_date_range: bool
+  has_order_clause: bool
+  page_size_value: int
+  page_offset_value: int
 */
 SELECT 
   id, 
   name,
-  /*= display_name ? username : "Anonymous" */
+  /*= display_value */ display_name
 FROM users
 WHERE 
-  /*# if start_date != "" && end_date != "" */
+  /*# if has_date_range */
   created_at BETWEEN /*= start_date */'2023-01-01' AND /*= end_date */'2023-12-31'
   /*# end */
-  /*# if sort_field != "" */
-ORDER BY /*= sort_field + " " + (sort_direction != "" ? sort_direction : "ASC") */name
+  /*# if has_order_clause */
+ORDER BY username
   /*# end */
-LIMIT /*= page_size != 0 ? page_size : 10 */10
-OFFSET /*= page > 0 ? (page - 1) * page_size : 0 */0
+LIMIT /*= page_size_value */10
+OFFSET /*= page_offset_value */0
