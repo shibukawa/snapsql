@@ -5,13 +5,9 @@
       "additional_variables": [
         {
           "name": "users",
-          "type": "../testdata/acceptancetests/024_values_object_array_expansion_ok/User[]"
-        },
-        {
-          "name": "users",
-          "type": "../testdata/acceptancetests/024_values_object_array_expansion_ok/User[]",
+          "type": "array",
           "value": [
-            ""
+    {"email": "dummy", "id": 1, "name": "dummy"}
           ]
         }
       ],
@@ -33,6 +29,31 @@
       "result_type": 4
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 6,
+        "column": 45
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "users",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 6,
+            "Column": 45,
+            "Length": 5
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "insertUsers",
   "instructions": [
@@ -47,6 +68,7 @@
     }
   ],
   "response_affinity": "none",
+  "statement_type": "insert",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

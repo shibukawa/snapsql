@@ -19,11 +19,8 @@ package query
 import (
 	"context"
 	"fmt"
-
-	"time"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"time"
 )
 
 // BoardCreateResult represents the response structure for BoardCreate
@@ -36,53 +33,17 @@ type BoardCreateResult struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-// BoardCreate specific CEL programs and mock path
-var (
-	boardCreatePrograms []cel.Program
-)
+// BoardCreateExplangExpressions stores explang steps aligned with expression indexes.
+var BoardCreateExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "name", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 19, Column: 9, Offset: 0, Length: 4}},
+		},
+	},
+}
 
 const boardCreateMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("name", cel.StringType))
-		opts = append(opts, cel.Variable("name", cel.StringType))
-		opts = append(opts, cel.Variable("name", cel.StringType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create BoardCreate CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	boardCreatePrograms = make([]cel.Program, 1)
-	// expr_001: "name" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("name")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "name", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "name", err))
-		}
-		boardCreatePrograms[0] = program
-	}
-}
 
 // BoardCreate Creates a new board using the provided name and returns the persisted row including timestamps.
 func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string, opts ...snapsqlgo.FuncOpt) (BoardCreateResult, error) {
@@ -90,7 +51,12 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
-	// Extract implicit parameters
+	// Extract implicit parameters (system arguments). Build specs from explicit
+	// ImplicitParams when provided by configuration; otherwise synthesize
+	// minimal specs from the SQL builder's ArgumentSystemFields. This ensures
+	// generated code that references systemValues always has a declaration,
+	// avoiding undefined identifier errors even when the user's config omitted
+	// a system section (config defaulting is handled elsewhere).
 	implicitSpecs := []snapsqlgo.ImplicitParamSpec{
 		{Name: "created_at", Type: "time.Time", Required: false},
 		{Name: "updated_at", Type: "time.Time", Required: false},
@@ -128,19 +94,9 @@ func BoardCreate(ctx context.Context, executor snapsqlgo.DBExecutor, name string
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "INSERT INTO boards (name, status, created_at, updated_at) VALUES ($1, 'active', $2, $3)\n\n RETURNING id, name, status, archived_at, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"name": name,
-		}
-
-		evalRes0, _, err := boardCreatePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("BoardCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(name))
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["created_at"]))
-
 		args = append(args, snapsqlgo.NormalizeNullableTimestamp(systemValues["updated_at"]))
-
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

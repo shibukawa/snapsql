@@ -11,13 +11,8 @@ import (
 )
 
 var (
-	ErrIteratorRequiresStruct  = errors.New("iterator generation requires a response struct")
-	ErrMissingResponseMetadata = errors.New("missing response metadata")
+	ErrIteratorRequiresStruct = errors.New("iterator generation requires a response struct")
 )
-
-func missingResponseMetadataError(functionName, affinity string) error {
-	return fmt.Errorf("%w: function %s requires response metadata for affinity '%s'; ensure table definitions exist", ErrGenerateGoCode, functionName, affinity)
-}
 
 // queryExecutionData represents query execution code generation data
 type queryExecutionData struct {
@@ -62,7 +57,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		needsAggregation := false
 
 		if responseStruct == nil {
-			return nil, missingResponseMetadataError(functionName, format.ResponseAffinity)
+			panic(fmt.Sprintf("response metadata missing: function=%s affinity=%s", functionName, format.ResponseAffinity))
 		}
 
 		// Check raw responses (original column list) for hierarchical fields
@@ -95,7 +90,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 		needsAggregation := false
 
 		if responseStruct == nil {
-			return nil, missingResponseMetadataError(functionName, format.ResponseAffinity)
+			panic(fmt.Sprintf("response metadata missing: function=%s affinity=%s", functionName, format.ResponseAffinity))
 		}
 
 		if len(metas) > 0 {
@@ -140,7 +135,7 @@ func generateQueryExecution(format *intermediate.IntermediateFormat, responseStr
 
 		code = append(code, scanCode...)
 	default:
-		return nil, fmt.Errorf("%w: %s", snapsql.ErrUnsupportedResponseAffinity, format.ResponseAffinity)
+		panic("unsupported response affinity: " + format.ResponseAffinity)
 	}
 
 	return &queryExecutionData{

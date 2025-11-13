@@ -6,17 +6,20 @@ parameters:
   max_age: int
   departments: string[]
   active: bool
+  has_min_age: bool
+  has_max_age: bool
+  has_departments: bool
 */
 SELECT id, name, age, department 
 FROM users
 WHERE 1=1
-/*# if min_age > 0 */
+/*# if has_min_age */
 AND age >= /*= min_age */18
 /*# end */
-/*# if max_age > 0 */
+/*# if has_max_age */
 AND age <= /*= max_age */65
 /*# end */
-/*# if departments.size() > 0 */
+/*# if has_departments */
 AND department IN (/*= departments */('HR', 'Engineering'))
 /*# end */
 /*# if active */

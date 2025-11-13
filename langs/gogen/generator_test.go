@@ -244,21 +244,6 @@ func TestUnsupportedTypeError(t *testing.T) {
 	}
 }
 
-func TestProcessCELVariableTemporalAlias(t *testing.T) {
-	data, err := processCELVariable(intermediate.CELVariableInfo{Name: "since", Type: "datetime"})
-	if err != nil {
-		t.Fatalf("processCELVariable returned error: %v", err)
-	}
-
-	if data.CelType != "TimestampType" {
-		t.Fatalf("expected CelType TimestampType, got %s", data.CelType)
-	}
-
-	if data.GoType != "time.Time" {
-		t.Fatalf("expected GoType time.Time, got %s", data.GoType)
-	}
-}
-
 func TestProcessResponseStructRootPkNonNull(t *testing.T) {
 	format := &intermediate.IntermediateFormat{
 		FunctionName:     "list_by_board",

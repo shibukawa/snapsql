@@ -4,8 +4,8 @@
       "index": 0,
       "additional_variables": [
     {"name": "min_age", "type": "int", "value": 1},
-    {"name": "page_size", "type": "int", "value": 1},
-    {"name": "page", "type": "int", "value": 1}
+    {"name": "page_limit", "type": "int", "value": 1},
+    {"name": "page_offset", "type": "int", "value": 1}
       ],
       "container": "root"
     }
@@ -24,7 +24,7 @@
     },
     {
       "id": "expr_002",
-      "expression": "page_size != 0 ? page_size : 10",
+      "expression": "page_limit",
       "environment_index": 0,
       "position": {
         "line": 16,
@@ -35,14 +35,85 @@
     },
     {
       "id": "expr_003",
-      "expression": "page \u003e 0 ? (page - 1) * page_size : 0",
+      "expression": "page_offset",
       "environment_index": 0,
       "position": {
         "line": 17,
         "column": 8
       },
-      "type_descriptor": "any",
+      "type_descriptor": "int",
       "result_type": 1
+    }
+  ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 15,
+        "column": 12
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "min_age",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 15,
+            "Column": 12,
+            "Length": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 16,
+        "column": 7
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "page_limit",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 16,
+            "Column": 7,
+            "Length": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_003",
+      "environment_index": 0,
+      "position": {
+        "line": 17,
+        "column": 8
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "page_offset",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 17,
+            "Column": 8,
+            "Length": 11
+          }
+        }
+      ]
     }
   ],
   "format_version": "1",
@@ -67,8 +138,8 @@
   ],
   "parameters": [
     {"name": "min_age", "type": "int"},
-    {"name": "page_size", "type": "int"},
-    {"name": "page", "type": "int"}
+    {"name": "page_limit", "type": "int"},
+    {"name": "page_offset", "type": "int"}
   ],
   "response_affinity": "many",
   "responses": [
@@ -76,6 +147,7 @@
     {"name": "name", "type": "any", "is_nullable": true},
     {"name": "age", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

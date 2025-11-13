@@ -5,7 +5,16 @@
       "additional_variables": [
         {
           "name": "departments",
-          "type": "[{ ... }]"
+          "type": "array",
+          "value": [
+            {
+              "department_code": "dummy",
+              "department_name": "dummy",
+              "sub_departments": [
+    {"id": "dummy", "identifier": "dummy", "name": "dummy"}
+              ]
+            }
+          ]
         }
       ],
       "container": "root"
@@ -13,16 +22,36 @@
     {
       "index": 1,
       "additional_variables": [
-        {"name": "dept", "type": "any"}
+        {
+          "name": "dept",
+          "type": "any",
+          "value": {
+            "department_code": "dummy",
+            "department_name": "dummy",
+            "sub_departments": [
+        {"id": "dummy", "identifier": "dummy", "name": "dummy"}
+            ]
+          }
+        }
       ],
-      "container": "for dept : departments"
+      "container": "loop_1",
+      "parent_index": 0
     },
     {
       "index": 2,
       "additional_variables": [
-        {"name": "sub", "type": "any"}
+        {
+          "name": "sub",
+          "type": "any",
+          "value": {
+            "id": "dummy",
+            "identifier": "dummy",
+            "name": "dummy"
+          }
+        }
       ],
-      "container": "for sub : dept.sub_departments"
+      "container": "loop_2",
+      "parent_index": 1
     }
   ],
   "cel_expressions": [
@@ -31,14 +60,14 @@
       "expression": "departments",
       "environment_index": 0,
       "position": {
-        "line": 16,
+        "line": 17,
         "column": 1
       },
       "type_descriptor": {
         "department_code": "string",
         "department_name": "string",
         "sub_departments": [
-    {"id": "string", "name": "string"}
+    {"id": "string", "identifier": "string", "name": "string"}
         ]
       },
       "result_type": 3
@@ -46,23 +75,24 @@
     {
       "id": "expr_002",
       "expression": "dept.sub_departments",
-      "environment_index": 0,
+      "environment_index": 1,
       "position": {
-        "line": 17,
+        "line": 18,
         "column": 5
       },
       "type_descriptor": {
         "id": "string",
+        "identifier": "string",
         "name": "string"
       },
       "result_type": 3
     },
     {
       "id": "expr_003",
-      "expression": "dept.department_code + \"-\" + sub.id",
+      "expression": "sub.identifier",
       "environment_index": 2,
       "position": {
-        "line": 18,
+        "line": 19,
         "column": 6
       },
       "type_descriptor": "string",
@@ -73,8 +103,8 @@
       "expression": "sub.name",
       "environment_index": 2,
       "position": {
-        "line": 18,
-        "column": 57
+        "line": 19,
+        "column": 36
       },
       "type_descriptor": "string",
       "result_type": 1
@@ -84,8 +114,8 @@
       "expression": "dept.department_code",
       "environment_index": 2,
       "position": {
-        "line": 18,
-        "column": 94
+        "line": 19,
+        "column": 73
       },
       "type_descriptor": "string",
       "result_type": 1
@@ -95,50 +125,275 @@
       "expression": "dept.department_name",
       "environment_index": 2,
       "position": {
-        "line": 18,
-        "column": 126
+        "line": 19,
+        "column": 105
       },
       "type_descriptor": "string",
       "result_type": 1
     }
   ],
+  "envs": [
+    [],
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      }
+    ],
+    [
+      {
+        "name": "dept",
+        "type": "any"
+      },
+      {
+        "name": "sub",
+        "type": "any"
+      }
+    ]
+  ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 17,
+        "column": 1
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "departments",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 17,
+            "Column": 1,
+            "Length": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 1,
+      "position": {
+        "line": 18,
+        "column": 5
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "dept",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 18,
+            "Column": 5,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "sub_departments",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 18,
+            "Column": 9,
+            "Length": 16
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_003",
+      "environment_index": 2,
+      "position": {
+        "line": 19,
+        "column": 6
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "sub",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 19,
+            "Column": 6,
+            "Length": 3
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "identifier",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 3,
+            "Line": 19,
+            "Column": 9,
+            "Length": 11
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_004",
+      "environment_index": 2,
+      "position": {
+        "line": 19,
+        "column": 36
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "sub",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 19,
+            "Column": 36,
+            "Length": 3
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "name",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 3,
+            "Line": 19,
+            "Column": 39,
+            "Length": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_005",
+      "environment_index": 2,
+      "position": {
+        "line": 19,
+        "column": 73
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "dept",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 19,
+            "Column": 73,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "department_code",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 19,
+            "Column": 77,
+            "Length": 16
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_006",
+      "environment_index": 2,
+      "position": {
+        "line": 19,
+        "column": 105
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "dept",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 19,
+            "Column": 105,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "department_name",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 19,
+            "Column": 109,
+            "Length": 16
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "insert_all_sub_departments",
   "instructions": [
-    {"op": "EMIT_STATIC", "pos": "14:1", "value": "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES "},
+    {"op": "EMIT_STATIC", "pos": "15:1", "value": "INSERT INTO sub_departments (id, name, department_code, department_name) VALUES "},
     {
       "op": "LOOP_START",
-      "pos": "16:1",
+      "pos": "17:1",
       "variable": "dept",
       "collection_expr_index": 0,
       "env_index": 1
     },
-    {"op": "EMIT_STATIC", "pos": "17:0", "value": " "},
+    {"op": "EMIT_STATIC", "pos": "18:0", "value": " "},
     {
       "op": "LOOP_START",
-      "pos": "17:5",
+      "pos": "18:5",
       "variable": "sub",
       "collection_expr_index": 1,
       "env_index": 2
     },
-    {"op": "EMIT_STATIC", "pos": "18:0", "value": " ("},
-    {"op": "EMIT_EVAL", "pos": "18:6", "expr_index": 2},
-    {"op": "EMIT_STATIC", "pos": "18:55", "value": ", "},
-    {"op": "EMIT_EVAL", "pos": "18:57", "expr_index": 3},
-    {"op": "EMIT_STATIC", "pos": "18:92", "value": ", "},
-    {"op": "EMIT_EVAL", "pos": "18:94", "expr_index": 4},
-    {"op": "EMIT_STATIC", "pos": "18:124", "value": ", "},
-    {"op": "EMIT_EVAL", "pos": "18:126", "expr_index": 5},
-    {"op": "EMIT_STATIC", "pos": "18:166", "value": ")\n    "},
-    {"op": "LOOP_END", "pos": "18:166", "env_index": 1},
-    {"op": "EMIT_STATIC", "pos": "20:0", "value": "\n"},
-    {"op": "LOOP_END", "pos": "18:166", "env_index": 0},
-    {"op": "EMIT_STATIC", "pos": "21:0"}
+    {"op": "EMIT_STATIC", "pos": "19:0", "value": " ("},
+    {"op": "EMIT_EVAL", "pos": "19:6", "expr_index": 2},
+    {"op": "EMIT_STATIC", "pos": "19:34", "value": ", "},
+    {"op": "EMIT_EVAL", "pos": "19:36", "expr_index": 3},
+    {"op": "EMIT_STATIC", "pos": "19:71", "value": ", "},
+    {"op": "EMIT_EVAL", "pos": "19:73", "expr_index": 4},
+    {"op": "EMIT_STATIC", "pos": "19:103", "value": ", "},
+    {"op": "EMIT_EVAL", "pos": "19:105", "expr_index": 5},
+    {"op": "EMIT_STATIC", "pos": "19:145", "value": ")\n    "},
+    {"op": "LOOP_END", "pos": "19:145", "env_index": 1},
+    {"op": "EMIT_STATIC", "pos": "21:0", "value": "\n"},
+    {"op": "LOOP_END", "pos": "19:145", "env_index": 0},
+    {"op": "EMIT_STATIC", "pos": "22:0"}
   ],
   "parameters": [
     {"name": "departments", "type": "any"}
   ],
   "response_affinity": "none",
+  "statement_type": "insert",
   "table_references": [
     {"name": "sub_departments", "context": "main"}
   ],

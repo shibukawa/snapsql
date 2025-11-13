@@ -19,13 +19,10 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"strings"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // ListUserNotificationsResult represents the response structure for ListUserNotifications
@@ -43,83 +40,38 @@ type ListUserNotificationsResult struct {
 	DeliveredAt *time.Time `json:"delivered_at"`
 }
 
-// ListUserNotifications specific CEL programs and mock path
-var (
-	listUserNotificationsPrograms []cel.Program
-)
+// ListUserNotificationsExplangExpressions stores explang steps aligned with expression indexes.
+var ListUserNotificationsExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "user_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 48, Column: 19, Offset: 0, Length: 7}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "unread_only", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 50, Column: 5, Offset: 0, Length: 11}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_003",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "has_since", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 56, Column: 5, Offset: 0, Length: 9}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_004",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "since", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 58, Column: 24, Offset: 0, Length: 5}},
+		},
+	},
+}
 
 const listUserNotificationsMockPath = ""
 
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("user_id", cel.StringType))
-		opts = append(opts, cel.Variable("unread_only", cel.BoolType))
-		opts = append(opts, cel.Variable("since", cel.TimestampType))
-		opts = append(opts, cel.Variable("user_id", cel.StringType))
-		opts = append(opts, cel.Variable("unread_only", cel.BoolType))
-		opts = append(opts, cel.Variable("since", cel.TimestampType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create ListUserNotifications CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	listUserNotificationsPrograms = make([]cel.Program, 3)
-	// expr_001: "user_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("user_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
-		}
-		listUserNotificationsPrograms[0] = program
-	}
-	// expr_002: "unread_only" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("unread_only")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "unread_only", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "unread_only", err))
-		}
-		listUserNotificationsPrograms[1] = program
-	}
-	// expr_003: "since" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("since")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "since", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "since", err))
-		}
-		listUserNotificationsPrograms[2] = program
-	}
-}
-
 // ListUserNotifications ユーザーの受信箱にある通知一覧を取得します。未読/既読、重要度、有効期限でフィルタリングでき、ページネーションに対応しています。キャンセルされた通知は除外されます。
-func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, userID string, unreadOnly bool, since time.Time, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListUserNotificationsResult, error] {
+func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, userID string, unreadOnly bool, since time.Time, hasSince bool, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListUserNotificationsResult, error] {
 
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
@@ -153,11 +105,6 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 	buildQueryAndArgs := func() (string, []any, error) {
 		var builder strings.Builder
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"user_id":     userID,
-			"unread_only": unreadOnly,
-			"since":       since,
-		}
 		{ // append static fragment
 			_frag := "SELECT n.id, n.title, n.body, n.icon_url, n.important, n.cancelable, n.expires_at, n.created_at, n.updated_at, i.read_at, i.created_at as delivered_at FROM inbox i JOIN notifications n ON i.notification_id = n.id  WHERE i.user_id = $1"
 			if builder.Len() > 0 {
@@ -166,11 +113,7 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 			builder.WriteString(_frag)
 		}
 		// Evaluate expression 0
-		evalRes0, _, err := listUserNotificationsPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListUserNotifications: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(userID))
 		{ // append static fragment
 			_frag := " "
 			if builder.Len() > 0 {
@@ -179,11 +122,8 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 			builder.WriteString(_frag)
 		}
 		// IF condition: expression 1
-		condResult, _, err := listUserNotificationsPrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListUserNotifications: failed to evaluate condition: %w", err)
-		}
-		if snapsqlgo.Truthy(condResult) {
+		condValue0 := unreadOnly
+		if snapsqlgo.Truthy(condValue0) {
 			{ // append static fragment
 				_frag := " AND i.read_at IS NULL "
 				if builder.Len() > 0 {
@@ -200,11 +140,8 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 			builder.WriteString(_frag)
 		}
 		// IF condition: expression 2
-		condResult, _, err = listUserNotificationsPrograms[2].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListUserNotifications: failed to evaluate condition: %w", err)
-		}
-		if snapsqlgo.Truthy(condResult) {
+		condValue1 := hasSince
+		if snapsqlgo.Truthy(condValue1) {
 			{ // append static fragment
 				_frag := " AND i.updated_at > $2"
 				if builder.Len() > 0 {
@@ -212,12 +149,8 @@ func ListUserNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, u
 				}
 				builder.WriteString(_frag)
 			}
-			// Evaluate expression 2
-			evalRes1, _, err := listUserNotificationsPrograms[2].Eval(paramMap)
-			if err != nil {
-				return "", nil, fmt.Errorf("ListUserNotifications: failed to evaluate expression: %w", err)
-			}
-			args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+			// Evaluate expression 3
+			args = append(args, snapsqlgo.NormalizeNullableTimestamp(since))
 			{ // append static fragment
 				_frag := " "
 				if builder.Len() > 0 {

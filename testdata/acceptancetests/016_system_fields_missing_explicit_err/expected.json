@@ -1,0 +1,58 @@
+{
+  "cel_environments": [
+    {
+      "index": 0,
+      "additional_variables": [
+    {"name": "name", "type": "string", "value": "dummy"},
+    {"name": "email", "type": "string", "value": "dummy"}
+      ],
+      "container": "root"
+    }
+  ],
+  "cel_expressions": [
+    {
+      "id": "expr_001",
+      "expression": "name",
+      "environment_index": 0,
+      "position": {
+        "line": 7,
+        "column": 25
+      },
+      "type_descriptor": "string",
+      "result_type": 1
+    },
+    {
+      "id": "expr_002",
+      "expression": "email",
+      "environment_index": 0,
+      "position": {
+        "line": 7,
+        "column": 56
+      },
+      "type_descriptor": "string",
+      "result_type": 1
+    }
+  ],
+  "format_version": "1",
+  "function_name": "updateUserWithoutLockNo",
+  "instructions": [
+    {"op": "EMIT_STATIC", "pos": "7:1", "value": "UPDATE users SET name = "},
+    {"op": "EMIT_EVAL", "pos": "7:25", "expr_index": 0},
+    {"op": "EMIT_STATIC", "pos": "7:46", "value": ", email = "},
+    {"op": "EMIT_EVAL", "pos": "7:56", "expr_index": 1},
+    {"op": "EMIT_STATIC", "pos": "7:86", "value": ", lock_no = "},
+    {"op": "EMIT_SYSTEM_VALUE", "default_value": "\u003cnil\u003e", "system_field": "lock_no"},
+    {"op": "EMIT_STATIC", "pos": "7:87", "value": "WHERE id = 1"}
+  ],
+  "parameters": [
+    {"name": "name", "type": "string"},
+    {"name": "email", "type": "string"}
+  ],
+  "response_affinity": "none",
+  "table_references": [
+    {"name": "users", "context": "main"}
+  ],
+  "warnings": [
+    "type inference failed: no database schema provided"
+  ]
+}

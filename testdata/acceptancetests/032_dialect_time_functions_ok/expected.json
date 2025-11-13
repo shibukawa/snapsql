@@ -28,6 +28,7 @@
     {"name": "current_time_now", "type": "any", "is_nullable": true},
     {"name": "current_time_standard", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

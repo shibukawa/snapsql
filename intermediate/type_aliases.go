@@ -1,6 +1,9 @@
 package intermediate
 
-import "github.com/shibukawa/snapsql/intermediate/codegenerator"
+import (
+	"github.com/shibukawa/snapsql/explang"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
+)
 
 // Type aliases for backward compatibility
 // これらの型は codegenerator パッケージに移動されましたが、
@@ -20,6 +23,21 @@ type CELVariableInfo = codegenerator.CELVariableInfo
 
 // Position is an alias for codegenerator.Position
 type Position = codegenerator.Position
+
+// Expressions is an alias for explang.Step
+type Expressions = explang.Step
+
+// ExpressionKind is an alias for explang.StepKind
+type ExpressionKind = explang.StepKind
+
+const (
+	// StepIdentifier re-exports explang.StepIdentifier for intermediate consumers.
+	StepIdentifier ExpressionKind = explang.StepIdentifier
+	// StepMember re-exports explang.StepMember for intermediate consumers.
+	StepMember ExpressionKind = explang.StepMember
+	// StepIndex re-exports explang.StepIndex for intermediate consumers.
+	StepIndex ExpressionKind = explang.StepIndex
+)
 
 // Op constants (re-exported from codegenerator)
 const (

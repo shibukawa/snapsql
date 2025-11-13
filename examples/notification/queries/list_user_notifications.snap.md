@@ -10,6 +10,7 @@
 user_id: string
 unread_only: bool
 since: datetime
+has_since: bool
 ```
 
 ## SQL
@@ -33,7 +34,7 @@ WHERE i.user_id = /*= user_id */'EMP001'
     /*# if unread_only */
     AND i.read_at IS NULL
     /*# end */
-    /*# if since */
+    /*# if has_since */
     AND i.updated_at > /*= since */'2025-01-01 00:00:00'
     /*# end */
     AND n.canceled_at IS NULL
@@ -64,6 +65,7 @@ inbox:
 user_id: "EMP001"
 unread_only: false
 since: null
+has_since: false
 ```
 
 **Expected Results:**
@@ -109,6 +111,7 @@ inbox:
 user_id: "EMP001"
 unread_only: true
 since: null
+has_since: false
 ```
 
 **Expected Results:**
@@ -146,6 +149,7 @@ inbox:
 user_id: "EMP002"
 unread_only: false
 since: "2025-10-01 12:00:00"
+has_since: true
 ```
 
 **Expected Results:**

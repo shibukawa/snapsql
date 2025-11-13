@@ -19,11 +19,8 @@ package query
 import (
 	"context"
 	"fmt"
-
-	"time"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"time"
 )
 
 // ListCreateResult represents the response structure for ListCreate
@@ -38,53 +35,17 @@ type ListCreateResult struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// ListCreate specific CEL programs and mock path
-var (
-	listCreatePrograms []cel.Program
-)
+// ListCreateExplangExpressions stores explang steps aligned with expression indexes.
+var ListCreateExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "board_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 31, Column: 3, Offset: 0, Length: 8}},
+		},
+	},
+}
 
 const listCreateMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("board_id", cel.IntType))
-		opts = append(opts, cel.Variable("board_id", cel.IntType))
-		opts = append(opts, cel.Variable("board_id", cel.IntType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create ListCreate CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	listCreatePrograms = make([]cel.Program, 1)
-	// expr_001: "board_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("board_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "board_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "board_id", err))
-		}
-		listCreatePrograms[0] = program
-	}
-}
 
 // ListCreate Creates lists for the specified board by duplicating all active entries from list_templates.
 func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, opts ...snapsqlgo.FuncOpt) (ListCreateResult, error) {
@@ -123,15 +84,7 @@ func ListCreate(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int,
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "INSERT INTO lists ( board_id, name, stage_order, position , created_at, updated_at) SELECT $1  AS board_id, lt.name, lt.stage_order AS stage_order, CAST(lt.stage_order AS REAL) AS position , CURRENT_TIMESTAMP AS created_at, CURRENT_TIMESTAMP AS updated_at FROM list_templates AS lt  WHERE lt.is_active = 1 ORDER BY lt.stage_order  RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"board_id": boardID,
-		}
-
-		evalRes0, _, err := listCreatePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListCreate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(boardID))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

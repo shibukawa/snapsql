@@ -19,14 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/shibukawa/snapsql"
-
-	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/common/types"
-	"github.com/google/cel-go/common/types/ref"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
+	"time"
 )
 
 type BoardTreeResultListsCards struct {
@@ -61,215 +56,17 @@ type BoardTreeResult struct {
 	Lists      []*BoardTreeResultLists `json:"lists"`
 }
 
-// BoardTree specific CEL programs and mock path
-var (
-	boardTreePrograms []cel.Program
-)
+// BoardTreeExplangExpressions stores explang steps aligned with expression indexes.
+var BoardTreeExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "board_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 67, Column: 14, Offset: 0, Length: 8}},
+		},
+	},
+}
 
 const boardTreeMockPath = ""
-
-func init() {
-	// Static accessor functions for each type
-	boardtreeresultlistsBoardIDAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.BoardID)
-	}
-	boardtreeresultlistsCardsAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.Cards)
-	}
-	boardtreeresultlistsCreatedAtAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.CreatedAt)
-	}
-	boardtreeresultlistsIDAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.ID)
-	}
-	boardtreeresultlistsIsArchivedAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.IsArchived)
-	}
-	boardtreeresultlistsNameAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.Name)
-	}
-	boardtreeresultlistsPositionAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.Position)
-	}
-	boardtreeresultlistsStageOrderAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.StageOrder)
-	}
-	boardtreeresultlistsUpdatedAtAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultLists)
-		return snapsqlgo.ConvertGoValueToCEL(v.UpdatedAt)
-	}
-	boardtreeresultlistscardsCreatedAtAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultListsCards)
-		return snapsqlgo.ConvertGoValueToCEL(v.CreatedAt)
-	}
-	boardtreeresultlistscardsDescriptionAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultListsCards)
-		return snapsqlgo.ConvertGoValueToCEL(v.Description)
-	}
-	boardtreeresultlistscardsIDAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultListsCards)
-		return snapsqlgo.ConvertGoValueToCEL(v.ID)
-	}
-	boardtreeresultlistscardsListIDAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultListsCards)
-		return snapsqlgo.ConvertGoValueToCEL(v.ListID)
-	}
-	boardtreeresultlistscardsPositionAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultListsCards)
-		return snapsqlgo.ConvertGoValueToCEL(v.Position)
-	}
-	boardtreeresultlistscardsTitleAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultListsCards)
-		return snapsqlgo.ConvertGoValueToCEL(v.Title)
-	}
-	boardtreeresultlistscardsUpdatedAtAccessor := func(value any) ref.Val {
-		v := value.(*BoardTreeResultListsCards)
-		return snapsqlgo.ConvertGoValueToCEL(v.UpdatedAt)
-	}
-
-	// Create type definitions for local type store
-	typeDefinitions := map[string]map[string]snapsqlgo.FieldInfo{
-		"BoardTreeResultLists": {
-			"board_id": snapsqlgo.CreateFieldInfo(
-				"board_id",
-				types.IntType,
-				boardtreeresultlistsBoardIDAccessor,
-			),
-			"cards": snapsqlgo.CreateFieldInfo(
-				"cards",
-				types.NewListType(types.NewObjectType("BoardTreeResultListsCards")),
-				boardtreeresultlistsCardsAccessor,
-			),
-			"created_at": snapsqlgo.CreateFieldInfo(
-				"created_at",
-				types.TimestampType,
-				boardtreeresultlistsCreatedAtAccessor,
-			),
-			"id": snapsqlgo.CreateFieldInfo(
-				"id",
-				types.IntType,
-				boardtreeresultlistsIDAccessor,
-			),
-			"is_archived": snapsqlgo.CreateFieldInfo(
-				"is_archived",
-				types.IntType,
-				boardtreeresultlistsIsArchivedAccessor,
-			),
-			"name": snapsqlgo.CreateFieldInfo(
-				"name",
-				types.StringType,
-				boardtreeresultlistsNameAccessor,
-			),
-			"position": snapsqlgo.CreateFieldInfo(
-				"position",
-				types.DoubleType,
-				boardtreeresultlistsPositionAccessor,
-			),
-			"stage_order": snapsqlgo.CreateFieldInfo(
-				"stage_order",
-				types.IntType,
-				boardtreeresultlistsStageOrderAccessor,
-			),
-			"updated_at": snapsqlgo.CreateFieldInfo(
-				"updated_at",
-				types.TimestampType,
-				boardtreeresultlistsUpdatedAtAccessor,
-			),
-		},
-		"BoardTreeResultListsCards": {
-			"created_at": snapsqlgo.CreateFieldInfo(
-				"created_at",
-				types.TimestampType,
-				boardtreeresultlistscardsCreatedAtAccessor,
-			),
-			"description": snapsqlgo.CreateFieldInfo(
-				"description",
-				types.StringType,
-				boardtreeresultlistscardsDescriptionAccessor,
-			),
-			"id": snapsqlgo.CreateFieldInfo(
-				"id",
-				types.IntType,
-				boardtreeresultlistscardsIDAccessor,
-			),
-			"list_id": snapsqlgo.CreateFieldInfo(
-				"list_id",
-				types.IntType,
-				boardtreeresultlistscardsListIDAccessor,
-			),
-			"position": snapsqlgo.CreateFieldInfo(
-				"position",
-				types.DoubleType,
-				boardtreeresultlistscardsPositionAccessor,
-			),
-			"title": snapsqlgo.CreateFieldInfo(
-				"title",
-				types.StringType,
-				boardtreeresultlistscardsTitleAccessor,
-			),
-			"updated_at": snapsqlgo.CreateFieldInfo(
-				"updated_at",
-				types.TimestampType,
-				boardtreeresultlistscardsUpdatedAtAccessor,
-			),
-		},
-	}
-
-	// Create and set up local type store
-	registry := snapsqlgo.NewLocalTypeRegistry()
-	for typeName, fields := range typeDefinitions {
-		registry.RegisterStructWithFields(typeName, fields)
-	}
-
-	// Set global registry for nested type resolution
-	snapsqlgo.SetGlobalRegistry(registry)
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("board_id", cel.IntType))
-		opts = append(opts, cel.Variable("board_id", cel.IntType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		opts = append(opts, snapsqlgo.CreateCELOptionsWithTypes(typeDefinitions)...)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create BoardTree CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	boardTreePrograms = make([]cel.Program, 1)
-	// expr_001: "board_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("board_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "board_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "board_id", err))
-		}
-		boardTreePrograms[0] = program
-	}
-}
 
 // BoardTree Returns a denormalised tree of a board, including all non-archived lists and their cards. Nested column aliases follow the SnapSQL hierarchy convention.
 func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, opts ...snapsqlgo.FuncOpt) (BoardTreeResult, error) {
@@ -308,15 +105,7 @@ func BoardTree(ctx context.Context, executor snapsqlgo.DBExecutor, boardID int, 
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "SELECT b.id, b.name, b.status, b.archived_at, b.created_at, b.updated_at, l.id AS lists__id, l.board_id AS lists__board_id, l.name AS lists__name, l.stage_order AS lists__stage_order, l.position AS lists__position, l.is_archived AS lists__is_archived, l.created_at AS lists__created_at, l.updated_at AS lists__updated_at, c.id AS lists__cards__id, c.list_id AS lists__cards__list_id, c.title AS lists__cards__title, c.description AS lists__cards__description, c.position AS lists__cards__position, c.created_at AS lists__cards__created_at, c.updated_at AS lists__cards__updated_at FROM boards b LEFT JOIN lists l ON l.board_id = b.id AND l.is_archived = 0 LEFT JOIN cards c ON c.list_id = l.id  WHERE b.id = $1  ORDER BY l.stage_order ASC, l.position ASC, c.position ASC "
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"board_id": boardID,
-		}
-
-		evalRes0, _, err := boardTreePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("BoardTree: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(boardID))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()

@@ -18,10 +18,8 @@ package query
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"github.com/shibukawa/snapsql"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -30,56 +28,21 @@ type UnreadNotificationForUsersResult struct {
 	AffectedRows int `json:"affected_rows"`
 }
 
-// UnreadNotificationForUsers specific CEL programs and mock path
-var (
-	unreadNotificationForUsersPrograms []cel.Program
-)
+// UnreadNotificationForUsersExplangExpressions stores explang steps aligned with expression indexes.
+var UnreadNotificationForUsersExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "notification_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 23, Column: 25, Offset: 0, Length: 15}},
+		},
+	},
+}
 
 const unreadNotificationForUsersMockPath = ""
 
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create UnreadNotificationForUsers CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	unreadNotificationForUsersPrograms = make([]cel.Program, 1)
-	// expr_001: "notification_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("notification_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "notification_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "notification_id", err))
-		}
-		unreadNotificationForUsersPrograms[0] = program
-	}
-}
-
 // UnreadNotificationForUsers 通知が更新された際に、その通知を持つすべてのユーザーの既読状態をクリアします。
-func UnreadNotificationForUsers(ctx context.Context, executor snapsqlgo.DBExecutor, notificationID int, opts ...snapsqlgo.FuncOpt) (any, error) {
-	var result any
+func UnreadNotificationForUsers(ctx context.Context, executor snapsqlgo.DBExecutor, notificationID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
@@ -117,15 +80,7 @@ func UnreadNotificationForUsers(ctx context.Context, executor snapsqlgo.DBExecut
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE inbox SET read_at = NULL, updated_at = NOW()  WHERE notification_id = $1"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"notification_id": notificationID,
-		}
-
-		evalRes0, _, err := unreadNotificationForUsersPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("UnreadNotificationForUsers: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(notificationID))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
@@ -145,16 +100,11 @@ func UnreadNotificationForUsers(ctx context.Context, executor snapsqlgo.DBExecut
 			return nil, mockExec.Err
 		}
 		mockResult := mockExec.SQLResult()
+		if mockResult == nil {
+			mockResult = snapsqlgo.NewMockResult(mockExec.Opt.RowsAffected, mockExec.Opt.LastInsertID)
+		}
 		if mockResult != nil {
 			result = mockResult
-			return result, nil
-		}
-		if len(mockExec.ExpectedRows()) > 0 {
-			mapped, err := snapsqlgo.MapMockExecutionToStruct[any](mockExec)
-			if err != nil {
-				return nil, fmt.Errorf("UnreadNotificationForUsers: failed to map mock execution: %w", err)
-			}
-			result = mapped
 		}
 		return result, nil
 	}
@@ -177,10 +127,11 @@ func UnreadNotificationForUsers(ctx context.Context, executor snapsqlgo.DBExecut
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("UnreadNotificationForUsers: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

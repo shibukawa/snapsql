@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // ListReorderResult represents the response structure for ListReorder
@@ -39,66 +36,23 @@ type ListReorderResult struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// ListReorder specific CEL programs and mock path
-var (
-	listReorderPrograms []cel.Program
-)
+// ListReorderExplangExpressions stores explang steps aligned with expression indexes.
+var ListReorderExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "position", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 22, Column: 16, Offset: 0, Length: 8}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "list_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 26, Column: 12, Offset: 0, Length: 7}},
+		},
+	},
+}
 
 const listReorderMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("list_id", cel.IntType))
-		opts = append(opts, cel.Variable("position", cel.DoubleType))
-		opts = append(opts, cel.Variable("list_id", cel.IntType))
-		opts = append(opts, cel.Variable("position", cel.DoubleType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create ListReorder CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	listReorderPrograms = make([]cel.Program, 2)
-	// expr_001: "position" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("position")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "position", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "position", err))
-		}
-		listReorderPrograms[0] = program
-	}
-	// expr_002: "list_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("list_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "list_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "list_id", err))
-		}
-		listReorderPrograms[1] = program
-	}
-}
 
 // ListReorder Adjusts the position value of a list to support drag and drop operations.
 func ListReorder(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, position float64, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListReorderResult, error] {
@@ -142,22 +96,8 @@ func ListReorder(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE lists SET position = $1, updated_at = CURRENT_TIMESTAMP  WHERE id = $2   RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"list_id":  listID,
-			"position": position,
-		}
-
-		evalRes0, _, err := listReorderPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListReorder: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := listReorderPrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListReorder: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(position))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(listID))
 		return query, args, nil
 	}
 	return func(yield func(*ListReorderResult, error) bool) {

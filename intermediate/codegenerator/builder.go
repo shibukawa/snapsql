@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
 
@@ -450,40 +451,7 @@ func (b *InstructionBuilder) ProcessTokens(tokens []tokenizer.Token, opts ...Pro
 				variable := strings.TrimSpace(parts[0])
 				expression := strings.TrimSpace(parts[1])
 
-				// CEL式をコンテキストに追加 (root environment)
-				exprIndex := b.context.AddExpression(expression, 0)
-				b.annotateExpression(exprIndex, token, nil)
-
-				// ループ変数の CEL 環境を作成
-				loopEnvIndex := b.context.AddCELEnvironment(CELEnvironment{
-					AdditionalVariables: []CELVariableInfo{
-						{
-							Name: variable,
-							Type: "any", // ループ変数は初期段階では any 型
-						},
-					},
-					Container: fmt.Sprintf("for %s : %s", variable, expression),
-				})
-
-				// ループスタックにプッシュ
-				b.loopStack = append(b.loopStack, loopLevel{
-					startPos:   token.Position.String(),
-					expression: expression,
-					exprIndex:  exprIndex,
-					envIndex:   loopEnvIndex,
-				})
-
-				// 環境スタックに新しい環境をプッシュ
-				b.pushEnvironment(loopEnvIndex)
-
-				// LOOP_START命令を生成（EnvIndex はループ環境のインデックス）
-				b.instructions = append(b.instructions, Instruction{
-					Op:                  OpLoopStart,
-					Variable:            variable,
-					CollectionExprIndex: &exprIndex,
-					EnvIndex:            &loopEnvIndex,
-					Pos:                 token.Position.String(),
-				})
+				b.AddForLoopStart(variable, expression, token.Position.String())
 
 				continue
 
@@ -2668,94 +2636,59 @@ func (b *InstructionBuilder) initializeDummyValuesFromFunctionDefinition() {
 
 	rootEnv := &b.context.CELEnvironments[0]
 
-	// FunctionDefinition の各パラメータについてダミー値を生成
+	placeholders := make(map[string]any)
+
+	if len(funcDef.Parameters) > 0 {
+		if generated, err := parsercommon.GeneratePlaceholderData(funcDef.Parameters); err == nil {
+			placeholders = generated
+		}
+	}
+
 	for _, paramName := range funcDef.ParameterOrder {
-		paramValue, exists := funcDef.OriginalParameters[paramName]
-		if !exists {
+		value := placeholders[paramName]
+		if value == nil {
+			value = b.generatePlaceholderFromDefinition(funcDef.Parameters[paramName])
+		}
+
+		if value == nil {
 			continue
 		}
 
-		// パラメータの型文字列を取得
-		var typeStr string
-
-		switch v := paramValue.(type) {
-		case string:
-			typeStr = v
-		case map[string]any:
-			// 型情報を含むオブジェクト
-			if t, ok := v["type"]; ok {
-				if typeVal, ok := t.(string); ok {
-					typeStr = typeVal
-				}
-			}
+		typeStr := parsercommon.InferTypeStringFromDummyValue(value)
+		if typeStr == "" {
+			typeStr = parsercommon.InferTypeStringFromActualValue(value)
 		}
 
 		if typeStr == "" {
-			continue
+			typeStr = "any"
 		}
 
-		// ダミー値を生成
-		dummyValue := b.generateDummyValueFromType(typeStr)
-
-		// CEL 環境に変数を追加
-		varInfo := CELVariableInfo{
+		rootEnv.AdditionalVariables = append(rootEnv.AdditionalVariables, CELVariableInfo{
 			Name:  paramName,
 			Type:  typeStr,
-			Value: dummyValue,
-		}
-		rootEnv.AdditionalVariables = append(rootEnv.AdditionalVariables, varInfo)
+			Value: value,
+		})
 	}
 
-	// 初期化完了フラグを設定
 	b.dummyValuesInitialized = true
 }
 
-// generateDummyValueFromType は型文字列からダミー値を生成する
-func (b *InstructionBuilder) generateDummyValueFromType(typeStr string) any {
-	t := strings.ToLower(strings.TrimSpace(typeStr))
-
-	switch t {
-	case "string", "text", "varchar", "str":
-		return "dummy"
-	case "int":
-		return int64(1)
-	case "int32":
-		return int32(2)
-	case "int16":
-		return int16(3)
-	case "int8":
-		return int8(4)
-	case "float":
-		return 1.1
-	case "float32":
-		return float32(2.2)
-	case "decimal":
-		return "1.0"
-	case "bool":
-		return true
-	case "date":
-		return "2024-01-01"
-	case "datetime":
-		return "2024-01-01 00:00:00"
-	case "timestamp":
-		return "2024-01-02 00:00:00"
-	case "email":
-		return "user@example.com"
-	case "uuid":
-		return "00000000-0000-0000-0000-000000000000"
-	case "json":
-		return map[string]any{"#": "json"}
-	case "any":
-		return map[string]any{"#": "any"}
-	case "object":
-		return map[string]any{"#": "object"}
+func (b *InstructionBuilder) generatePlaceholderFromDefinition(def any) any {
+	if def == nil {
+		return nil
 	}
 
-	// リスト型: int[], string[] 等
-	if len(t) > 2 && t[len(t)-2:] == "[]" {
-		baseType := t[:len(t)-2]
-		return []any{b.generateDummyValueFromType(baseType)}
+	single := map[string]any{"__tmp": def}
+
+	placeholder, err := parsercommon.GeneratePlaceholderData(single)
+	if err != nil {
+		return nil
 	}
 
-	return ""
+	value, ok := placeholder["__tmp"]
+	if !ok {
+		return nil
+	}
+
+	return value
 }

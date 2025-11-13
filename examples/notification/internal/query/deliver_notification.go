@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"strings"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // DeliverNotificationResult represents the response structure for DeliverNotification
@@ -35,93 +32,29 @@ type DeliverNotificationResult struct {
 	CreatedAt      *time.Time `json:"created_at"`
 }
 
-// DeliverNotification specific CEL programs and mock path
-var (
-	deliverNotificationPrograms []cel.Program
-)
+// DeliverNotificationExplangExpressions stores explang steps aligned with expression indexes.
+var DeliverNotificationExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "user_ids", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 26, Column: 1, Offset: 0, Length: 8}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "notification_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 30, Column: 9, Offset: 0, Length: 15}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_003",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "user_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 32, Column: 9, Offset: 0, Length: 7}},
+		},
+	},
+}
 
 const deliverNotificationMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 2)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("user_ids", cel.ListType(cel.StringType)))
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("user_ids", cel.ListType(cel.StringType)))
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("user_ids", cel.ListType(cel.StringType)))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create DeliverNotification CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-	// Environment 1 (container: for user_id : user_ids)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("for user_id : user_ids"),
-		}
-		opts = append(opts, cel.Variable("user_id", cel.AnyType))
-		env1, err := celEnvironments[0].Extend(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create DeliverNotification CEL environment 1: %v", err))
-		}
-		celEnvironments[1] = env1
-	}
-
-	// Create programs for each expression using the corresponding environment
-	deliverNotificationPrograms = make([]cel.Program, 3)
-	// expr_001: "user_ids" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("user_ids")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_ids", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_ids", err))
-		}
-		deliverNotificationPrograms[0] = program
-	}
-	// expr_002: "notification_id" using environment 1
-	{
-		ast, issues := celEnvironments[1].Compile("notification_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "notification_id", issues.Err()))
-		}
-		program, err := celEnvironments[1].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "notification_id", err))
-		}
-		deliverNotificationPrograms[1] = program
-	}
-	// expr_003: "user_id" using environment 1
-	{
-		ast, issues := celEnvironments[1].Compile("user_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "user_id", issues.Err()))
-		}
-		program, err := celEnvironments[1].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "user_id", err))
-		}
-		deliverNotificationPrograms[2] = program
-	}
-}
 
 // DeliverNotification 特定の通知を複数のユーザーの受信箱に一括配信します。既に配信済みのユーザーには何もしません。
 func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, notificationID int, userIds []string, opts ...snapsqlgo.FuncOpt) (DeliverNotificationResult, error) {
@@ -129,6 +62,15 @@ func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, not
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
+	// Extract implicit parameters (system arguments). Build specs from explicit
+	// ImplicitParams when provided by configuration; otherwise synthesize
+	// minimal specs from the SQL builder's ArgumentSystemFields. This ensures
+	// generated code that references systemValues always has a declaration,
+	// avoiding undefined identifier errors even when the user's config omitted
+	// a system section (config defaulting is handled elsewhere).
+	implicitSpecs := []snapsqlgo.ImplicitParamSpec{}
+	systemValues := snapsqlgo.ExtractImplicitParams(ctx, implicitSpecs)
+	_ = systemValues // avoid unused if not referenced in args
 
 	execCtx := snapsqlgo.ExtractExecutionContext(ctx)
 	rowLockMode := snapsqlgo.RowLockNone
@@ -158,10 +100,6 @@ func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, not
 	buildQueryAndArgs := func() (string, []any, error) {
 		var builder strings.Builder
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"notification_id": notificationID,
-			"user_ids":        userIds,
-		}
 		{ // append static fragment
 			_frag := "INSERT INTO inbox ( notification_id, user_id , created_at, updated_at) VALUES "
 			if builder.Len() > 0 {
@@ -170,12 +108,9 @@ func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, not
 			builder.WriteString(_frag)
 		}
 		// FOR loop: evaluate collection expression 0
-		collectionResult0, _, err := deliverNotificationPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("DeliverNotification: failed to evaluate collection: %w", err)
-		}
-		for user_idLoopVar, user_idIsLast := range snapsqlgo.AsIterableAnyWithLast(collectionResult0.Value()) {
-			paramMap["user_id"] = user_idLoopVar
+		var collectionValue0 any
+		collectionValue0 = userIds
+		for userIDLoopItem, userIDLoopItemIsLast := range snapsqlgo.AsIterableAnyWithLast(collectionValue0) {
 			{ // append static fragment
 				_frag := " ( $1"
 				if builder.Len() > 0 {
@@ -184,11 +119,7 @@ func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, not
 				builder.WriteString(_frag)
 			}
 			// Evaluate expression 1
-			evalRes0, _, err := deliverNotificationPrograms[1].Eval(paramMap)
-			if err != nil {
-				return "", nil, fmt.Errorf("DeliverNotification: failed to evaluate expression: %w", err)
-			}
-			args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+			args = append(args, snapsqlgo.NormalizeNullableTimestamp(notificationID))
 			{ // append static fragment
 				_frag := ", $2"
 				if builder.Len() > 0 {
@@ -197,11 +128,7 @@ func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, not
 				builder.WriteString(_frag)
 			}
 			// Evaluate expression 2
-			evalRes1, _, err := deliverNotificationPrograms[2].Eval(paramMap)
-			if err != nil {
-				return "", nil, fmt.Errorf("DeliverNotification: failed to evaluate expression: %w", err)
-			}
-			args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+			args = append(args, snapsqlgo.NormalizeNullableTimestamp(userIDLoopItem))
 			{ // append static fragment
 				_frag := " , $3"
 				if builder.Len() > 0 {
@@ -227,7 +154,7 @@ func DeliverNotification(ctx context.Context, executor snapsqlgo.DBExecutor, not
 				}
 				builder.WriteString(_frag)
 			}
-			if !user_idIsLast {
+			if !userIDLoopItemIsLast {
 				builder.WriteString(", ")
 			}
 		}

@@ -3,8 +3,6 @@
     {
       "index": 0,
       "additional_variables": [
-    {"name": "name", "type": "string"},
-    {"name": "email", "type": "string"},
     {"name": "name", "type": "string", "value": "dummy"},
     {"name": "email", "type": "string", "value": "dummy"}
       ],
@@ -35,6 +33,54 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 7,
+        "column": 41
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "name",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 7,
+            "Column": 41,
+            "Length": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 7,
+        "column": 64
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "email",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 7,
+            "Column": 64,
+            "Length": 5
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "insertUser",
   "instructions": [
@@ -59,6 +105,7 @@
     {"name": "email", "type": "string"}
   ],
   "response_affinity": "none",
+  "statement_type": "insert",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

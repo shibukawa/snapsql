@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // CardUpdateResult represents the response structure for CardUpdate
@@ -38,80 +35,29 @@ type CardUpdateResult struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// CardUpdate specific CEL programs and mock path
-var (
-	cardUpdatePrograms []cel.Program
-)
+// CardUpdateExplangExpressions stores explang steps aligned with expression indexes.
+var CardUpdateExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "title", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 23, Column: 13, Offset: 0, Length: 5}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "description", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 25, Column: 19, Offset: 0, Length: 11}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_003",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "card_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 29, Column: 12, Offset: 0, Length: 7}},
+		},
+	},
+}
 
 const cardUpdateMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("title", cel.StringType))
-		opts = append(opts, cel.Variable("description", cel.StringType))
-		opts = append(opts, cel.Variable("card_id", cel.IntType))
-		opts = append(opts, cel.Variable("title", cel.StringType))
-		opts = append(opts, cel.Variable("description", cel.StringType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CardUpdate CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	cardUpdatePrograms = make([]cel.Program, 3)
-	// expr_001: "title" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("title")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "title", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "title", err))
-		}
-		cardUpdatePrograms[0] = program
-	}
-	// expr_002: "description" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("description")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "description", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "description", err))
-		}
-		cardUpdatePrograms[1] = program
-	}
-	// expr_003: "card_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("card_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "card_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "card_id", err))
-		}
-		cardUpdatePrograms[2] = program
-	}
-}
 
 // CardUpdate Updates the title and description of a card and refreshes its timestamp.
 func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, title string, description string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*CardUpdateResult, error] {
@@ -155,29 +101,9 @@ func CardUpdate(ctx context.Context, executor snapsqlgo.DBExecutor, cardID int, 
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE cards SET title = $1, description = $2, updated_at = CURRENT_TIMESTAMP  WHERE id = $3   RETURNING id, list_id, title, description, position, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"card_id":     cardID,
-			"title":       title,
-			"description": description,
-		}
-
-		evalRes0, _, err := cardUpdatePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := cardUpdatePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
-
-		evalRes2, _, err := cardUpdatePrograms[2].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardUpdate: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(title))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(description))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(cardID))
 		return query, args, nil
 	}
 	return func(yield func(*CardUpdateResult, error) bool) {

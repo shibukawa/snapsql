@@ -33,6 +33,54 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 14,
+        "column": 12
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "min_age",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 14,
+            "Column": 12,
+            "Length": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 15,
+        "column": 16
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "max_age",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 15,
+            "Column": 16,
+            "Length": 7
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "get_users_with_limit_offset",
   "instructions": [
@@ -64,6 +112,7 @@
     {"name": "name", "type": "any", "is_nullable": true},
     {"name": "age", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

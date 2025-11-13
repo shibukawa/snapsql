@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"time"
 
@@ -183,6 +184,29 @@ func LoadConfig(configPath string) (*Config, error) {
 	return &config, nil
 }
 
+// isValidGenerator checks if a generator name is valid (built-in or has external command)
+func isValidGenerator(name string) bool {
+	// Built-in generators
+	builtInGenerators := map[string]bool{
+		"json":       true,
+		"go":         true,
+		"typescript": true,
+		"mock":       true,
+		"python":     true, // Python generator is now built-in
+	}
+
+	if builtInGenerators[name] {
+		return true
+	}
+
+	// Check if external generator command exists in PATH
+	// Format: snapsql-gen-[name]
+	cmdName := "snapsql-gen-" + name
+	_, err := exec.LookPath(cmdName)
+
+	return err == nil
+}
+
 // validateConfig validates the configuration for common errors and inconsistencies
 func validateConfig(config *Config) error {
 	// Validate dialect
@@ -203,15 +227,9 @@ func validateConfig(config *Config) error {
 			return fmt.Errorf("%w: generator '%s': output path is required when enabled", ErrConfigValidation, name)
 		}
 
-		// Validate known generator types
-		validGenerators := map[string]bool{
-			"json":       true,
-			"go":         true,
-			"typescript": true,
-			"mock":       true,
-		}
-		if !validGenerators[name] {
-			return fmt.Errorf("%w: unknown generator type '%s': must be one of json, go, mock, typescript", ErrConfigValidation, name)
+		// Validate generator is either built-in or has external command available
+		if !isValidGenerator(name) {
+			return fmt.Errorf("%w: unknown generator '%s': must be a built-in generator (json, go, typescript, mock, python) or have 'snapsql-gen-%s' command in PATH", ErrConfigValidation, name, name)
 		}
 	}
 
@@ -327,6 +345,14 @@ func getDefaultConfig() *Config {
 					PreserveHierarchy: true,
 					Settings: map[string]any{
 						"types": true,
+					},
+				},
+				"python": {
+					Output:            "./generated",
+					Disabled:          boolPtr(true), // Disabled by default
+					PreserveHierarchy: true,
+					Settings: map[string]any{
+						"package": "generated",
 					},
 				},
 			},

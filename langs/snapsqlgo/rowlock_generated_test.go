@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	snapsqlgo "github.com/shibukawa/snapsql/langs/snapsqlgo"
-	samplepg "github.com/shibukawa/snapsql/testdata/gosample/generated_postgres"
-	samplesqlite "github.com/shibukawa/snapsql/testdata/gosample/generated_sqlite"
+	samplepg "github.com/shibukawa/snapsql/testdata/appsample/generated_postgres"
+	samplesqlite "github.com/shibukawa/snapsql/testdata/appsample/generated_sqlite"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,8 +57,7 @@ func TestSQLiteGeneratedSelectRecordsRowLockMode(t *testing.T) {
 	ctx := snapsqlgo.WithLogger(context.Background(), sink.logger())
 	ctx = snapsqlgo.WithRowLock(ctx)
 
-	seq := samplesqlite.AccountGet(ctx, failingExecutor{}, 1)
-	seq(func(*samplesqlite.AccountGetResult, error) bool { return false })
+	_, _ = samplesqlite.AccountGet(ctx, failingExecutor{}, 1)
 
 	entries := sink.snapshot()
 	require.Len(t, entries, 1)
@@ -76,7 +75,7 @@ func TestSQLiteGeneratedUpdatePanicsWithRowLock(t *testing.T) {
 	require.Equal(t, snapsqlgo.RowLockForUpdate, ec.RowLockMode())
 
 	require.Panics(t, func() {
-		_, _ = samplesqlite.AccountUpdate(ctx, failingExecutor{}, 1, "status")
+		samplesqlite.AccountUpdate(ctx, failingExecutor{}, 1, "status")
 	})
 }
 
@@ -101,8 +100,7 @@ func TestPostgresGeneratedSelectRowLockModes(t *testing.T) {
 			require.NotNil(t, ec)
 			require.Equal(t, tc.mode, ec.RowLockMode())
 
-			seq := samplepg.AccountGet(ctx, failingExecutor{}, 1)
-			seq(func(*samplepg.AccountGetResult, error) bool { return false })
+			samplepg.AccountGet(ctx, failingExecutor{}, 1)
 
 			entries := sink.snapshot()
 			require.Len(t, entries, 1)

@@ -21,6 +21,31 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 13,
+        "column": 10
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user_id",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 13,
+            "Column": 10,
+            "Length": 7
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "find_user",
   "instructions": [
@@ -45,6 +70,7 @@
     {"name": "name", "type": "any", "is_nullable": true},
     {"name": "age", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

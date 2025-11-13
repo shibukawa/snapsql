@@ -3,8 +3,14 @@
     {
       "index": 0,
       "additional_variables": [
-    {"name": "user", "type": "../testdata/acceptancetests/026_insert_system_fields_implicit_ok/User"},
-    {"name": "user", "type": "../testdata/acceptancetests/026_insert_system_fields_implicit_ok/User", "value": ""}
+        {
+          "name": "user",
+          "type": "object",
+          "value": {
+            "id": 1,
+            "name": "dummy"
+          }
+        }
       ],
       "container": "root"
     }
@@ -33,6 +39,80 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 6,
+        "column": 38
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 6,
+            "Column": 38,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "id",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 6,
+            "Column": 42,
+            "Length": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 6,
+        "column": 55
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 6,
+            "Column": 55,
+            "Length": 4
+          }
+        },
+        {
+          "Kind": 1,
+          "Identifier": "",
+          "Property": "name",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 4,
+            "Line": 6,
+            "Column": 59,
+            "Length": 5
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "insertUser",
   "instructions": [
@@ -50,6 +130,7 @@
     {"name": "user", "type": "../testdata/acceptancetests/026_insert_system_fields_implicit_ok/User"}
   ],
   "response_affinity": "none",
+  "statement_type": "insert",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

@@ -5,7 +5,7 @@
       "additional_variables": [
         {
           "name": "department_ids",
-          "type": "int[]",
+          "type": "array",
           "value": [
             1
           ]
@@ -27,6 +27,31 @@
         "int"
       ],
       "result_type": 2
+    }
+  ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 6,
+        "column": 52
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "department_ids",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 6,
+            "Column": 52,
+            "Length": 14
+          }
+        }
+      ]
     }
   ],
   "format_version": "1",
@@ -56,6 +81,7 @@
     {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1},
     {"name": "name", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

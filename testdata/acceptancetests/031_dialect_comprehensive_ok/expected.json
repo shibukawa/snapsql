@@ -21,6 +21,31 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 35,
+        "column": 12
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user_id",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 35,
+            "Column": 12,
+            "Length": 7
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "get_comprehensive_dialect_test",
   "instructions": [
@@ -59,6 +84,7 @@
     {"name": "nested_cast_time", "type": "any", "is_nullable": true},
     {"name": "field_16", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

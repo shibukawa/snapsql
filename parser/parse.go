@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"path/filepath"
 	"strings"
 
@@ -421,29 +420,14 @@ func ParseMarkdownFile(doc *markdownparser.SnapSQLDocument, basePath string, pro
 		return nil, nil, functionDef, fmt.Errorf("failed to finalize function definition: %w", err)
 	}
 
-	// Merge constants with dummy data from function definition
-	mergedConstants := make(map[string]any)
-
-	maps.Copy(mergedConstants, constants)
-	// Add dummy data (dummy data takes precedence if constants is nil or doesn't contain the key)
-	if dummyDataAny := functionDef.DummyData(); dummyDataAny != nil {
-		if dummyData, ok := dummyDataAny.(map[string]any); ok {
-			for k, v := range dummyData {
-				if _, exists := mergedConstants[k]; !exists {
-					mergedConstants[k] = v
-				}
-			}
-		}
-	}
-
 	// Tokenize the SQL content with line offset from markdown
 	tokens, err := tokenizer.Tokenize(doc.SQL, doc.SQLStartLine)
 	if err != nil {
 		return nil, nil, functionDef, fmt.Errorf("tokenization failed: %w", err)
 	}
 
-	// Parse the tokens with merged constants
-	stmt, typeInfo, err := RawParse(tokens, functionDef, mergedConstants, opts)
+	// Parse the tokens with provided constants
+	stmt, typeInfo, err := RawParse(tokens, functionDef, constants, opts)
 
 	return stmt, typeInfo, functionDef, err
 }

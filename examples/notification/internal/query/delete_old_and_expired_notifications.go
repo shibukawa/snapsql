@@ -18,11 +18,8 @@ package query
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"github.com/shibukawa/snapsql"
-	"time"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -31,56 +28,21 @@ type DeleteOldAndExpiredNotificationsResult struct {
 	AffectedRows int `json:"affected_rows"`
 }
 
-// DeleteOldAndExpiredNotifications specific CEL programs and mock path
-var (
-	deleteOldAndExpiredNotificationsPrograms []cel.Program
-)
+// DeleteOldAndExpiredNotificationsExplangExpressions stores explang steps aligned with expression indexes.
+var DeleteOldAndExpiredNotificationsExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "before", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 23, Column: 20, Offset: 0, Length: 6}},
+		},
+	},
+}
 
 const deleteOldAndExpiredNotificationsMockPath = ""
 
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("before", cel.TimestampType))
-		opts = append(opts, cel.Variable("before", cel.TimestampType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create DeleteOldAndExpiredNotifications CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	deleteOldAndExpiredNotificationsPrograms = make([]cel.Program, 1)
-	// expr_001: "before" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("before")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "before", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "before", err))
-		}
-		deleteOldAndExpiredNotificationsPrograms[0] = program
-	}
-}
-
 // DeleteOldAndExpiredNotifications 古い通知と有効期限切れの通知を削除します。バッチ処理でのデータクリーンアップ用です。指定日時以前に作成された通知有効期限（expires_at）を過ぎた通知 どちらかの条件に該当する通知とその受信箱データを削除します。
-func DeleteOldAndExpiredNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, before time.Time, opts ...snapsqlgo.FuncOpt) (any, error) {
-	var result any
+func DeleteOldAndExpiredNotifications(ctx context.Context, executor snapsqlgo.DBExecutor, before time.Time, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
@@ -118,15 +80,7 @@ func DeleteOldAndExpiredNotifications(ctx context.Context, executor snapsqlgo.DB
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "DELETE FROM notifications  WHERE created_at < $1  OR (expires_at IS NOT NULL AND expires_at <= NOW())"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"before": snapsqlgo.NormalizeNullableTimestamp(before),
-		}
-
-		evalRes0, _, err := deleteOldAndExpiredNotificationsPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("DeleteOldAndExpiredNotifications: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(before))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
@@ -146,16 +100,11 @@ func DeleteOldAndExpiredNotifications(ctx context.Context, executor snapsqlgo.DB
 			return nil, mockExec.Err
 		}
 		mockResult := mockExec.SQLResult()
+		if mockResult == nil {
+			mockResult = snapsqlgo.NewMockResult(mockExec.Opt.RowsAffected, mockExec.Opt.LastInsertID)
+		}
 		if mockResult != nil {
 			result = mockResult
-			return result, nil
-		}
-		if len(mockExec.ExpectedRows()) > 0 {
-			mapped, err := snapsqlgo.MapMockExecutionToStruct[any](mockExec)
-			if err != nil {
-				return nil, fmt.Errorf("DeleteOldAndExpiredNotifications: failed to map mock execution: %w", err)
-			}
-			result = mapped
 		}
 		return result, nil
 	}
@@ -178,10 +127,11 @@ func DeleteOldAndExpiredNotifications(ctx context.Context, executor snapsqlgo.DB
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("DeleteOldAndExpiredNotifications: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

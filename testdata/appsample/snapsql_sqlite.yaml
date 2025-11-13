@@ -1,0 +1,16 @@
+dialect: "sqlite"
+input_dir: "./queries"
+
+generation:
+  validate: false
+  generators:
+    go:
+      output: "./generated_sqlite"
+      disabled: false
+      settings:
+        package: "appsample"
+    python:
+      output: "./generated_python"
+      disabled: false
+      settings:
+        package: "appsample"

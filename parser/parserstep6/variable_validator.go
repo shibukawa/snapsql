@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/shibukawa/snapsql/explang"
 	cmn "github.com/shibukawa/snapsql/parser/parsercommon"
 	"github.com/shibukawa/snapsql/tokenizer"
 )
@@ -482,13 +483,23 @@ func validateVariableDirective(token tokenizer.Token, paramNs *cmn.Namespace, pe
 		return "SYSTEM_VALUE_" + strings.TrimSpace(expression), "string", true
 	}
 
-	// Validate the expression using parameter CEL
-	if value, valueType, err := paramNs.Eval(expression); err != nil {
-		perr.Add(fmt.Errorf("undefined variable in expression '%s': %w at %s", expression, err, token.Position.String()))
+	steps, ok := parseAndValidateExpression(expression, token, paramNs, perr)
+	if !ok {
 		return nil, "", false
-	} else {
-		return value, valueType, true
 	}
+
+	value, err := evaluateStepsWithValues(steps, paramNs.CurrentValues())
+	if err != nil {
+		perr.Add(fmt.Errorf("%w at %s: %s", cmn.ErrInvalidForSnapSQL, token.Position.String(), err.Error()))
+		return nil, "", false
+	}
+
+	valueType := cmn.InferTypeStringFromDummyValue(value)
+	if valueType == "" {
+		valueType = inferTypeFromValue(value)
+	}
+
+	return value, valueType, true
 }
 
 // validateConstDirective validates a const directive
@@ -509,34 +520,34 @@ func validateConstDirective(token tokenizer.Token, constNs *cmn.Namespace, perr 
 
 // validateIfDirective validates an if directive
 func validateIfDirective(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) bool {
-	condition := token.Directive.Condition
-	if condition == "" {
-		perr.Add(fmt.Errorf("%w at %s: if directive missing condition", cmn.ErrInvalidForSnapSQL, token.Position.String()))
-		return false
-	}
-
-	// Try to evaluate with parameter namespace first
-	_, _, err := paramNs.Eval(condition)
-	if err != nil {
-		perr.Add(fmt.Errorf("invalid condition in if directive '%s': %w at %s", condition, err, token.Position.String()))
-		return false
-	}
-
-	return true
+	return validateConditionalDirective(token, "if", paramNs, perr)
 }
 
 // validateElseIfDirective validates an elseif directive
 func validateElseIfDirective(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.Namespace, perr *cmn.ParseError) bool {
-	condition := token.Directive.Condition
+	return validateConditionalDirective(token, "elseif", paramNs, perr)
+}
+
+func validateConditionalDirective(token tokenizer.Token, clause string, paramNs *cmn.Namespace, perr *cmn.ParseError) bool {
+	condition := strings.TrimSpace(token.Directive.Condition)
 	if condition == "" {
-		perr.Add(fmt.Errorf("%w at %s: elseif directive missing condition", cmn.ErrInvalidForSnapSQL, token.Position.String()))
+		perr.Add(fmt.Errorf("%w at %s: %s directive missing condition", cmn.ErrInvalidForSnapSQL, token.Position.String(), clause))
 		return false
 	}
 
-	// Try to evaluate with parameter namespace first
-	_, _, err := paramNs.Eval(condition)
+	steps, ok := parseAndValidateExpression(condition, token, paramNs, perr)
+	if !ok {
+		return false
+	}
+
+	value, err := evaluateStepsWithValues(steps, paramNs.CurrentValues())
 	if err != nil {
-		perr.Add(fmt.Errorf("invalid condition in elseif directive '%s': %w at %s", condition, err, token.Position.String()))
+		perr.Add(fmt.Errorf("%w at %s: %w", cmn.ErrInvalidForSnapSQL, token.Position.String(), err))
+		return false
+	}
+
+	if _, ok := value.(bool); !ok {
+		perr.Add(fmt.Errorf("%w at %s: %s condition must evaluate to boolean", cmn.ErrInvalidForSnapSQL, token.Position.String(), clause))
 		return false
 	}
 
@@ -557,15 +568,17 @@ func processForLoop(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.
 	itemName := strings.TrimSpace(parts[0])
 	itemsExpr := strings.TrimSpace(parts[1])
 
-	// Try to evaluate the items expression with parameter namespace first
-	itemsValue, _, err := paramNs.Eval(itemsExpr)
-	if err != nil {
-		// If evaluation fails (e.g., expression not found), use empty array
-		// EnterLoop will create a dummy value for type inference
-		itemsValue = []any{}
+	steps, ok := parseAndValidateExpression(itemsExpr, token, paramNs, perr)
+	if !ok {
+		return false, nil
 	}
 
-	// Enter the loop with the first item (if available)
+	itemsValue, err := evaluateStepsWithValues(steps, paramNs.CurrentValues())
+	if err != nil {
+		perr.Add(fmt.Errorf("%w at %s: %s", cmn.ErrInvalidForSnapSQL, token.Position.String(), err.Error()))
+		return false, nil
+	}
+
 	items, ok := itemsValue.([]any)
 	if !ok {
 		perr.Add(fmt.Errorf("%w at %s: items expression '%s' must evaluate to a list", cmn.ErrInvalidForSnapSQL, token.Position.String(), itemsExpr))
@@ -580,15 +593,14 @@ func processForLoop(token tokenizer.Token, paramNs *cmn.Namespace, constNs *cmn.
 
 	var itemDescriptor any
 
-	itemType, _ := paramNs.GetLoopVariableType(itemName)
+	currentVal := paramNs.CurrentValues()[itemName]
 
-	if value, valueType, evalErr := paramNs.Eval(itemName); evalErr == nil {
-		itemDescriptor = buildTypeDescriptor(value, valueType)
-	} else if len(items) > 0 {
-		itemDescriptor = buildTypeDescriptor(items[0], itemType)
-	} else {
-		itemDescriptor = buildTypeDescriptor(nil, itemType)
+	valueType := cmn.InferTypeStringFromDummyValue(currentVal)
+	if valueType == "" {
+		valueType = inferTypeFromValue(currentVal)
 	}
+
+	itemDescriptor = buildTypeDescriptor(currentVal, valueType)
 
 	return true, itemDescriptor
 }
@@ -600,6 +612,226 @@ func extractExpressionFromDirective(value string, prefix string, suffix string) 
 	}
 
 	return strings.TrimSpace(value[len(prefix) : len(value)-len(suffix)])
+}
+
+func expressionStartPosition(token tokenizer.Token, expr string) (int, int) {
+	line := token.Position.Line
+	column := token.Position.Column
+
+	idx := strings.Index(token.Value, expr)
+	if idx < 0 {
+		return line, column
+	}
+
+	for _, r := range token.Value[:idx] {
+		if r == '\n' {
+			line++
+			column = 1
+		} else {
+			column++
+		}
+	}
+
+	return line, column
+}
+
+func evaluateStepsWithValues(steps []explang.Step, values map[string]any) (any, error) {
+	if len(steps) == 0 {
+		return nil, fmt.Errorf("%w: empty explang expression", cmn.ErrInvalidForSnapSQL)
+	}
+
+	if values == nil {
+		return nil, fmt.Errorf("%w: parameter values not initialized", cmn.ErrInvalidForSnapSQL)
+	}
+
+	var current any
+
+	path := ""
+
+	for _, step := range steps {
+		switch step.Kind {
+		case explang.StepIdentifier:
+			val, ok := values[step.Identifier]
+			if !ok {
+				return nil, fmt.Errorf("%w: dummy value for parameter %q not found", cmn.ErrInvalidForSnapSQL, step.Identifier)
+			}
+
+			current = val
+			path = step.Identifier
+		case explang.StepMember:
+			if current == nil {
+				if step.Safe {
+					continue
+				}
+
+				return nil, fmt.Errorf("%w: nil encountered before accessing member %q", cmn.ErrInvalidForSnapSQL, step.Property)
+			}
+
+			obj, ok := current.(map[string]any)
+			if !ok {
+				if step.Safe {
+					current = nil
+					continue
+				}
+
+				return nil, fmt.Errorf("%w: value for %q is not an object", cmn.ErrInvalidForSnapSQL, path)
+			}
+
+			val, ok := obj[step.Property]
+			if !ok {
+				if step.Safe {
+					current = nil
+					continue
+				}
+
+				return nil, fmt.Errorf("%w: field %q missing in dummy data for %q", cmn.ErrInvalidForSnapSQL, step.Property, path)
+			}
+
+			current = val
+			path = appendPathSegment(path, step.Property)
+		case explang.StepIndex:
+			if current == nil {
+				if step.Safe {
+					continue
+				}
+
+				return nil, fmt.Errorf("%w: nil encountered before indexing %q", cmn.ErrInvalidForSnapSQL, path)
+			}
+
+			arr, ok := current.([]any)
+			if !ok {
+				if step.Safe {
+					current = nil
+					continue
+				}
+
+				return nil, fmt.Errorf("%w: value for %q is not an array", cmn.ErrInvalidForSnapSQL, path)
+			}
+
+			if len(arr) == 0 {
+				current = nil
+				continue
+			}
+
+			idx := step.Index
+			if idx < 0 || idx >= len(arr) {
+				idx = 0
+			}
+
+			current = arr[idx]
+			path = fmt.Sprintf("%s[%d]", path, step.Index)
+		}
+	}
+
+	return current, nil
+}
+
+func additionalRootDefinitions(paramNs *cmn.Namespace) map[string]any {
+	if paramNs == nil {
+		return nil
+	}
+
+	values := paramNs.CurrentValues()
+	if len(values) == 0 {
+		return nil
+	}
+
+	params := paramNs.ParameterSchema()
+	extras := make(map[string]any)
+
+	for name, val := range values {
+		if params != nil {
+			if _, ok := params[name]; ok {
+				continue
+			}
+		}
+
+		extras[name] = buildDefinitionFromValue(val)
+	}
+
+	if len(extras) == 0 {
+		return nil
+	}
+
+	return extras
+}
+
+func buildDefinitionFromValue(val any) any {
+	switch v := val.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for k, child := range v {
+			result[k] = buildDefinitionFromValue(child)
+		}
+
+		return result
+	case []any:
+		if len(v) == 0 {
+			return []any{}
+		}
+
+		return []any{buildDefinitionFromValue(v[0])}
+	default:
+		t := cmn.InferTypeStringFromDummyValue(v)
+		if t == "" {
+			t = inferTypeFromValue(v)
+		}
+
+		if t == "" {
+			t = "any"
+		}
+
+		return t
+	}
+}
+
+func parseAndValidateExpression(expr string, token tokenizer.Token, paramNs *cmn.Namespace, perr *cmn.ParseError) ([]explang.Step, bool) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		perr.Add(fmt.Errorf("%w at %s: empty expression", cmn.ErrInvalidForSnapSQL, token.Position.String()))
+		return nil, false
+	}
+
+	line, column := expressionStartPosition(token, expr)
+
+	steps, err := explang.ParseSteps(expr, line, column)
+	if err != nil {
+		perr.Add(fmt.Errorf("%w: %w", cmn.ErrInvalidForSnapSQL, err))
+		return nil, false
+	}
+
+	var schema map[string]any
+	if base := paramNs.ParameterSchema(); base != nil {
+		schema = maps.Clone(base)
+	} else {
+		schema = make(map[string]any)
+	}
+
+	extraRoots := additionalRootDefinitions(paramNs)
+
+	var validatorOpts *explang.ValidatorOptions
+	if len(extraRoots) > 0 {
+		validatorOpts = &explang.ValidatorOptions{AdditionalRoots: extraRoots}
+	}
+
+	valErrs := explang.ValidateStepsAgainstParameters(steps, schema, validatorOpts)
+	if len(valErrs) > 0 {
+		for _, ve := range valErrs {
+			perr.Add(fmt.Errorf("%w at line %d column %d: %s", cmn.ErrInvalidForSnapSQL, ve.Step.Pos.Line, ve.Step.Pos.Column, ve.Message))
+		}
+
+		return nil, false
+	}
+
+	return steps, true
+}
+
+func appendPathSegment(base, property string) string {
+	if base == "" {
+		return property
+	}
+
+	return base + "." + property
 }
 
 // tokenInsertion はトークンの挿入情報を表します

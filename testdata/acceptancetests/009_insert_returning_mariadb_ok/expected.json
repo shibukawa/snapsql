@@ -3,8 +3,6 @@
     {
       "index": 0,
       "additional_variables": [
-    {"name": "user_name", "type": "string"},
-    {"name": "user_email", "type": "string"},
     {"name": "user_name", "type": "string", "value": "dummy"},
     {"name": "user_email", "type": "string", "value": "dummy"}
       ],
@@ -35,6 +33,54 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 9
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user_name",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 8,
+            "Column": 9,
+            "Length": 9
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 8,
+        "column": 37
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "user_email",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 8,
+            "Column": 37,
+            "Length": 10
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "insert_user_with_returning_mariadb",
   "instructions": [
@@ -49,6 +95,7 @@
     {"name": "user_email", "type": "string"}
   ],
   "response_affinity": "one",
+  "statement_type": "insert",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

@@ -85,7 +85,13 @@ func TestLoopEndCommaHandling(t *testing.T) {
 	}{
 		{
 			name: "loop with trailing comma",
-			sql: `INSERT INTO tags (tag)
+			sql: `/*#
+function_name: loop_with_trailing_comma
+parameters:
+  tags:
+    - string
+*/
+INSERT INTO tags (tag)
 VALUES /*# for tag : tags */(/*= tag */), /*# end */`,
 			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
@@ -100,7 +106,15 @@ VALUES /*# for tag : tags */(/*= tag */), /*# end */`,
 		},
 		{
 			name: "nested loops with trailing comma",
-			sql: `INSERT INTO user_details (user_id, tag) 
+			sql: `/*#
+function_name: nested_loop_with_trailing_comma
+parameters:
+  users:
+    - id: int
+      tags:
+        - string
+*/
+INSERT INTO user_details (user_id, tag) 
 VALUES 
   /*# for user : users */
     /*# for tag : user.tags */(/*= user.id */, /*= tag */), /*# end */
@@ -124,7 +138,13 @@ VALUES
 		},
 		{
 			name: "loop with AND delimiter",
-			sql: `SELECT id FROM users 
+			sql: `/*#
+function_name: loop_with_and_delimiter
+parameters:
+  conditions:
+    - string
+*/
+SELECT id FROM users 
 WHERE status = 'active' AND /*# for cond : conditions *//*= cond */ AND /*# end */status = 'verified'`,
 			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
@@ -138,7 +158,13 @@ WHERE status = 'active' AND /*# for cond : conditions *//*= cond */ AND /*# end 
 		},
 		{
 			name: "loop with OR delimiter",
-			sql: `SELECT id FROM users 
+			sql: `/*#
+function_name: loop_with_or_delimiter
+parameters:
+  statuses:
+    - string
+*/
+SELECT id FROM users 
 WHERE status = 'pending' OR /*# for status : statuses */status = '/*= status */' OR /*# end */false`,
 			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
@@ -226,7 +252,13 @@ func TestLoopEndBoundaryInsertion(t *testing.T) {
 	}{
 		{
 			name: "loop at end of clause - expects BOUNDARY after LOOP_END",
-			sql: `INSERT INTO tags (tag)
+			sql: `/*#
+function_name: loop_end_boundary
+parameters:
+  tags:
+    - string
+*/
+INSERT INTO tags (tag)
 VALUES /*# for tag : tags */(/*= tag */), /*# end */`,
 			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{
@@ -242,7 +274,13 @@ VALUES /*# for tag : tags */(/*= tag */), /*# end */`,
 		},
 		{
 			name: "loop followed by static text - no BOUNDARY",
-			sql: `INSERT INTO tags (tag)
+			sql: `/*#
+function_name: loop_end_boundary_followed_by_static
+parameters:
+  tags:
+    - string
+*/
+INSERT INTO tags (tag)
 VALUES /*# for tag : tags */(/*= tag */), /*# end */ ON CONFLICT DO NOTHING`,
 			dialect: snapsql.DialectPostgres,
 			expectedInstructions: []Instruction{

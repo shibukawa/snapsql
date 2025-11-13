@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-	"github.com/shibukawa/snapsql"
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // UpdateNotificationResult represents the response structure for UpdateNotification
@@ -40,94 +37,35 @@ type UpdateNotificationResult struct {
 	UpdatedAt  *time.Time `json:"updated_at"`
 }
 
-// UpdateNotification specific CEL programs and mock path
-var (
-	updateNotificationPrograms []cel.Program
-)
+// UpdateNotificationExplangExpressions stores explang steps aligned with expression indexes.
+var UpdateNotificationExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "title", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 24, Column: 13, Offset: 0, Length: 5}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "body", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 26, Column: 12, Offset: 0, Length: 4}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_003",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "important", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 28, Column: 17, Offset: 0, Length: 9}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_004",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "notification_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 32, Column: 12, Offset: 0, Length: 15}},
+		},
+	},
+}
 
 const updateNotificationMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("title", cel.StringType))
-		opts = append(opts, cel.Variable("body", cel.StringType))
-		opts = append(opts, cel.Variable("important", cel.BoolType))
-		opts = append(opts, cel.Variable("notification_id", cel.IntType))
-		opts = append(opts, cel.Variable("title", cel.StringType))
-		opts = append(opts, cel.Variable("body", cel.StringType))
-		opts = append(opts, cel.Variable("important", cel.BoolType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create UpdateNotification CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	updateNotificationPrograms = make([]cel.Program, 4)
-	// expr_001: "title" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("title")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "title", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "title", err))
-		}
-		updateNotificationPrograms[0] = program
-	}
-	// expr_002: "body" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("body")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "body", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "body", err))
-		}
-		updateNotificationPrograms[1] = program
-	}
-	// expr_003: "important" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("important")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "important", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "important", err))
-		}
-		updateNotificationPrograms[2] = program
-	}
-	// expr_004: "notification_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("notification_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "notification_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "notification_id", err))
-		}
-		updateNotificationPrograms[3] = program
-	}
-}
 
 // UpdateNotification 通知のタイトル、本文、重要度フラグを更新します。
 func UpdateNotification(ctx context.Context, executor snapsqlgo.DBExecutor, notificationID int, title string, body string, important bool, opts ...snapsqlgo.FuncOpt) iter.Seq2[*UpdateNotificationResult, error] {
@@ -169,36 +107,10 @@ func UpdateNotification(ctx context.Context, executor snapsqlgo.DBExecutor, noti
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE notifications SET title = $1, body = $2, important = $3, updated_at = NOW()  WHERE id = $4   RETURNING id, title, body, important, cancelable, icon_url, expires_at, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"notification_id": notificationID,
-			"title":           title,
-			"body":            body,
-			"important":       important,
-		}
-
-		evalRes0, _, err := updateNotificationPrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("UpdateNotification: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := updateNotificationPrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("UpdateNotification: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
-
-		evalRes2, _, err := updateNotificationPrograms[2].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("UpdateNotification: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
-
-		evalRes3, _, err := updateNotificationPrograms[3].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("UpdateNotification: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes3))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(title))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(body))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(important))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(notificationID))
 		return query, args, nil
 	}
 	return func(yield func(*UpdateNotificationResult, error) bool) {

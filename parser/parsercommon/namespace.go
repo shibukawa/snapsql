@@ -26,6 +26,24 @@ type Namespace struct {
 	currentValues map[string]any
 }
 
+// ParameterSchema returns the normalized parameter map associated with this namespace.
+func (ns *Namespace) ParameterSchema() map[string]any {
+	if ns == nil || ns.fd == nil {
+		return nil
+	}
+
+	return ns.fd.Parameters
+}
+
+// CurrentValues exposes the current value frame (including loop variables) for evaluation.
+func (ns *Namespace) CurrentValues() map[string]any {
+	if ns == nil {
+		return nil
+	}
+
+	return ns.currentValues
+}
+
 func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 	var vars []*decls.VariableDecl
 
@@ -50,15 +68,15 @@ func NewNamespaceFromDefinition(fd *FunctionDefinition) (*Namespace, error) {
 		return nil, err
 	}
 
-	dummyData, ok := fd.DummyData().(map[string]any)
-	if !ok {
-		dummyData = make(map[string]any)
+	placeholderValues, err := GeneratePlaceholderData(fd.Parameters)
+	if err != nil {
+		return nil, err
 	}
 
 	result := &Namespace{
 		fd:            fd,
 		currentEnv:    current,
-		currentValues: dummyData,
+		currentValues: placeholderValues,
 	}
 
 	return result, nil

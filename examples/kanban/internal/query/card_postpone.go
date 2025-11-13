@@ -18,9 +18,8 @@ package query
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-
-	"github.com/google/cel-go/cel"
 	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
@@ -29,70 +28,27 @@ type CardPostponeResult struct {
 	AffectedRows int `json:"affected_rows"`
 }
 
-// CardPostpone specific CEL programs and mock path
-var (
-	cardPostponePrograms []cel.Program
-)
+// CardPostponeExplangExpressions stores explang steps aligned with expression indexes.
+var CardPostponeExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "src_board_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 54, Column: 30, Offset: 0, Length: 12}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "dst_board_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 40, Column: 26, Offset: 0, Length: 12}},
+		},
+	},
+}
 
 const cardPostponeMockPath = ""
 
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("src_board_id", cel.IntType))
-		opts = append(opts, cel.Variable("dst_board_id", cel.IntType))
-		opts = append(opts, cel.Variable("src_board_id", cel.IntType))
-		opts = append(opts, cel.Variable("dst_board_id", cel.IntType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CardPostpone CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	cardPostponePrograms = make([]cel.Program, 2)
-	// expr_001: "src_board_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("src_board_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "src_board_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "src_board_id", err))
-		}
-		cardPostponePrograms[0] = program
-	}
-	// expr_002: "dst_board_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("dst_board_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "dst_board_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "dst_board_id", err))
-		}
-		cardPostponePrograms[1] = program
-	}
-}
-
 // CardPostpone Moves all unfinished cards from a source board to the corresponding lists of a destination board created from templates. The destination list is chosen by matching stage_order; lists in the terminal stage (the maximum stage_order on the source board) retain their cards.
-func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID int, dstBoardID int, opts ...snapsqlgo.FuncOpt) (any, error) {
-	var result any
+func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID int, dstBoardID int, opts ...snapsqlgo.FuncOpt) (sql.Result, error) {
+	var result sql.Result
 
 	// Hierarchical metas (for nested aggregation code generation - placeholder)
 	// Count: 0
@@ -132,28 +88,9 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "WITH done_stage AS ( SELECT stage_order AS stage_limit FROM lists  WHERE board_id = $1  ORDER BY stage_order DESC, id DESC LIMIT 1 ), new_list AS ( SELECT id AS new_list_id FROM lists  WHERE board_id = $2  ORDER BY stage_order ASC, id ASC LIMIT 1 ), undone_lists AS ( SELECT old.id AS old_list_id FROM lists AS old  WHERE old.board_id = $3  AND old.stage_order < ( SELECT stage_limit FROM done_stage ) )UPDATE cards SET list_id = (SELECT new_list_id FROM new_list), updated_at = CURRENT_TIMESTAMP  WHERE list_id IN ( SELECT old_list_id FROM undone_lists )"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"src_board_id": srcBoardID,
-			"dst_board_id": dstBoardID,
-		}
-
-		evalRes0, _, err := cardPostponePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardPostpone: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := cardPostponePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardPostpone: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
-
-		evalRes2, _, err := cardPostponePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("CardPostpone: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes2))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(srcBoardID))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(dstBoardID))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(srcBoardID))
 		return query, args, nil
 	}
 	query, args, err := buildQueryAndArgs()
@@ -173,16 +110,11 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 			return nil, mockExec.Err
 		}
 		mockResult := mockExec.SQLResult()
+		if mockResult == nil {
+			mockResult = snapsqlgo.NewMockResult(mockExec.Opt.RowsAffected, mockExec.Opt.LastInsertID)
+		}
 		if mockResult != nil {
 			result = mockResult
-			return result, nil
-		}
-		if len(mockExec.ExpectedRows()) > 0 {
-			mapped, err := snapsqlgo.MapMockExecutionToStruct[any](mockExec)
-			if err != nil {
-				return nil, fmt.Errorf("CardPostpone: failed to map mock execution: %w", err)
-			}
-			result = mapped
 		}
 		return result, nil
 	}
@@ -205,10 +137,11 @@ func CardPostpone(ctx context.Context, executor snapsqlgo.DBExecutor, srcBoardID
 	}
 	defer stmt.Close()
 	// Execute query (no result expected)
-	_, err = stmt.ExecContext(ctx, args...)
+	execResult, err := stmt.ExecContext(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("CardPostpone: failed to execute statement: %w", err)
 	}
+	result = execResult
 
 	return result, nil
 }

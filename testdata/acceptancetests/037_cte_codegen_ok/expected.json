@@ -25,6 +25,7 @@
   "responses": [
     {"name": "id", "type": "any", "is_nullable": true, "hierarchy_key_level": 1}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "pending", "context": "main"},
     {"name": "cards", "query_name": "pending", "context": "cte"}

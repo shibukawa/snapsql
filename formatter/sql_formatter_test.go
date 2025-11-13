@@ -305,24 +305,3 @@ func countLeadingSpaces(s string) int {
 
 	return count
 }
-
-func BenchmarkSQLFormatter_Format(t *testing.B) {
-	formatter := NewSQLFormatter()
-
-	complexSQL := `/*#
-function_name: complex_query
-parameters:
-  user_id: int
-  include_profile: bool
-  start_date: string
-  end_date: string
-*/
-select u.id,u.name,u.email /*# if include_profile */ ,p.bio,p.avatar_url /*# end */ from users u /*# if include_profile */ left join profiles p on u.id=p.user_id /*# end */ where u.id=/*= user_id */ /*# if start_date != "" && end_date != "" */ and u.created_at between /*= start_date */ and /*= end_date */ /*# end */ order by u.created_at desc limit 100`
-
-	for t.Loop() {
-		_, err := formatter.Format(complexSQL)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}

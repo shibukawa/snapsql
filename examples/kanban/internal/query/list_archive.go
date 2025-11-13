@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // ListArchiveResult represents the response structure for ListArchive
@@ -39,66 +36,23 @@ type ListArchiveResult struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// ListArchive specific CEL programs and mock path
-var (
-	listArchivePrograms []cel.Program
-)
+// ListArchiveExplangExpressions stores explang steps aligned with expression indexes.
+var ListArchiveExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "is_archived", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 22, Column: 19, Offset: 0, Length: 11}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "list_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 26, Column: 12, Offset: 0, Length: 7}},
+		},
+	},
+}
 
 const listArchiveMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("list_id", cel.IntType))
-		opts = append(opts, cel.Variable("is_archived", cel.BoolType))
-		opts = append(opts, cel.Variable("list_id", cel.IntType))
-		opts = append(opts, cel.Variable("is_archived", cel.BoolType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create ListArchive CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	listArchivePrograms = make([]cel.Program, 2)
-	// expr_001: "is_archived" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("is_archived")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "is_archived", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "is_archived", err))
-		}
-		listArchivePrograms[0] = program
-	}
-	// expr_002: "list_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("list_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "list_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "list_id", err))
-		}
-		listArchivePrograms[1] = program
-	}
-}
 
 // ListArchive Sets the archive flag on a list, keeping other attributes intact.
 func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, isArchived bool, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListArchiveResult, error] {
@@ -142,22 +96,8 @@ func ListArchive(ctx context.Context, executor snapsqlgo.DBExecutor, listID int,
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE lists SET is_archived = $1, updated_at = CURRENT_TIMESTAMP  WHERE id = $2   RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"list_id":     listID,
-			"is_archived": isArchived,
-		}
-
-		evalRes0, _, err := listArchivePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListArchive: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := listArchivePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListArchive: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(isArchived))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(listID))
 		return query, args, nil
 	}
 	return func(yield func(*ListArchiveResult, error) bool) {

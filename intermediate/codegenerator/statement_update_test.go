@@ -80,10 +80,10 @@ func TestGenerateUpdateInstructions(t *testing.T) {
 		},
 		{
 			name:             "update_with_conditional_directive",
-			sql:              `/*# parameters: { status: string, reason: string } */ UPDATE users SET status = /*= status */ 'inactive', updated_at = CURRENT_TIMESTAMP /*# if reason */ , inactive_reason = /*= reason */ 'manual' /*# end */ WHERE id = 123`,
+			sql:              `/*# parameters: { status: string, reason: string, has_reason: bool } */ UPDATE users SET status = /*= status */ 'inactive', updated_at = CURRENT_TIMESTAMP /*# if has_reason */ , inactive_reason = /*= reason */ 'manual' /*# end */ WHERE id = 123`,
 			dialect:          snapsql.DialectPostgres,
 			expectError:      false,
-			expectedCELCount: 2,
+			expectedCELCount: 3,
 			expectedEnvCount: 1,
 		},
 		{

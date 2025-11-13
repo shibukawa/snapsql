@@ -19,12 +19,9 @@ package query
 import (
 	"context"
 	"fmt"
-
+	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 	"iter"
 	"time"
-
-	"github.com/google/cel-go/cel"
-	"github.com/shibukawa/snapsql/langs/snapsqlgo"
 )
 
 // ListRenameResult represents the response structure for ListRename
@@ -39,66 +36,23 @@ type ListRenameResult struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// ListRename specific CEL programs and mock path
-var (
-	listRenamePrograms []cel.Program
-)
+// ListRenameExplangExpressions stores explang steps aligned with expression indexes.
+var ListRenameExplangExpressions = []snapsqlgo.ExplangExpression{
+	snapsqlgo.ExplangExpression{
+		ID: "expr_001",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "name", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 22, Column: 12, Offset: 0, Length: 4}},
+		},
+	},
+	snapsqlgo.ExplangExpression{
+		ID: "expr_002",
+		Expressions: []snapsqlgo.Expression{
+			{Kind: snapsqlgo.ExpressionIdentifier, Identifier: "list_id", Property: "", Index: 0, Safe: false, Position: snapsqlgo.ExpPosition{Line: 26, Column: 12, Offset: 0, Length: 7}},
+		},
+	},
+}
 
 const listRenameMockPath = ""
-
-func init() {
-
-	// CEL environments based on intermediate format
-	celEnvironments := make([]*cel.Env, 1)
-	// Environment 0 (container: root)
-	{
-		// Build CEL env options
-		opts := []cel.EnvOption{
-			cel.Container("root"),
-		}
-		opts = append(opts, cel.Variable("list_id", cel.IntType))
-		opts = append(opts, cel.Variable("name", cel.StringType))
-		opts = append(opts, cel.Variable("list_id", cel.IntType))
-		opts = append(opts, cel.Variable("name", cel.StringType))
-		opts = append(opts,
-			cel.HomogeneousAggregateLiterals(),
-			cel.EagerlyValidateDeclarations(true),
-			snapsqlgo.DecimalLibrary,
-		)
-		env0, err := cel.NewEnv(opts...)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create ListRename CEL environment 0: %v", err))
-		}
-		celEnvironments[0] = env0
-	}
-
-	// Create programs for each expression using the corresponding environment
-	listRenamePrograms = make([]cel.Program, 2)
-	// expr_001: "name" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("name")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "name", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "name", err))
-		}
-		listRenamePrograms[0] = program
-	}
-	// expr_002: "list_id" using environment 0
-	{
-		ast, issues := celEnvironments[0].Compile("list_id")
-		if issues != nil && issues.Err() != nil {
-			panic(fmt.Sprintf("failed to compile CEL expression %q: %v", "list_id", issues.Err()))
-		}
-		program, err := celEnvironments[0].Program(ast)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create CEL program for %q: %v", "list_id", err))
-		}
-		listRenamePrograms[1] = program
-	}
-}
 
 // ListRename Renames a list and updates its timestamp for optimistic concurrency.
 func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, name string, opts ...snapsqlgo.FuncOpt) iter.Seq2[*ListRenameResult, error] {
@@ -142,22 +96,8 @@ func ListRename(ctx context.Context, executor snapsqlgo.DBExecutor, listID int, 
 	buildQueryAndArgs := func() (string, []any, error) {
 		query := "UPDATE lists SET name = $1, updated_at = CURRENT_TIMESTAMP  WHERE id = $2   RETURNING id, board_id, name, stage_order, position, is_archived, created_at, updated_at"
 		args := make([]any, 0)
-		paramMap := map[string]any{
-			"list_id": listID,
-			"name":    name,
-		}
-
-		evalRes0, _, err := listRenamePrograms[0].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes0))
-
-		evalRes1, _, err := listRenamePrograms[1].Eval(paramMap)
-		if err != nil {
-			return "", nil, fmt.Errorf("ListRename: failed to evaluate expression: %w", err)
-		}
-		args = append(args, snapsqlgo.NormalizeNullableTimestamp(evalRes1))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(name))
+		args = append(args, snapsqlgo.NormalizeNullableTimestamp(listID))
 		return query, args, nil
 	}
 	return func(yield func(*ListRenameResult, error) bool) {

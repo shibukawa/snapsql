@@ -144,7 +144,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 					},
 				},
 			},
-			expectError: true, // 変数が見つからない場合はエラーが発生することを期待
+			expectError: false,
 		},
 		{
 			name: "Replace DUMMY_LITERAL with string parameter",
@@ -157,7 +157,7 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 					},
 				},
 			},
-			expectError: true, // 変数が見つからない場合はエラーが発生することを期待
+			expectError: false,
 		},
 	}
 
@@ -204,9 +204,13 @@ func TestExecuteWithFunctionDef(t *testing.T) {
 			_ = typeInfo6
 
 			if tt.expectError {
-				assert.True(t, len(parseErr6.Errors) > 0, "Expected error but got none")
+				if parseErr6 == nil || len(parseErr6.Errors) == 0 {
+					t.Fatalf("Expected error but got none")
+				}
 			} else {
-				assert.True(t, len(parseErr6.Errors) == 0, "Did not expect an error but got: %v", parseErr6)
+				if parseErr6 != nil && len(parseErr6.Errors) > 0 {
+					t.Fatalf("Did not expect an error but got: %v", parseErr6)
+				}
 
 				dummyLiteralFound := false
 

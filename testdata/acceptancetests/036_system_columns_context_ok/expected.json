@@ -3,8 +3,6 @@
     {
       "index": 0,
       "additional_variables": [
-    {"name": "name", "type": "string"},
-    {"name": "email", "type": "string"},
     {"name": "name", "type": "string", "value": "dummy"},
     {"name": "email", "type": "string", "value": "dummy"}
       ],
@@ -36,6 +34,54 @@
     }
   ],
   "description": "Create a new user with automatic system column handling via context.",
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 18,
+        "column": 41
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "name",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 18,
+            "Column": 41,
+            "Length": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "expr_002",
+      "environment_index": 0,
+      "position": {
+        "line": 18,
+        "column": 60
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "email",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 18,
+            "Column": 60,
+            "Length": 5
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "input",
   "instructions": [
@@ -58,6 +104,7 @@
     {"name": "email", "type": "string"}
   ],
   "response_affinity": "none",
+  "statement_type": "insert",
   "table_references": [
     {"name": "users", "context": "main"}
   ],

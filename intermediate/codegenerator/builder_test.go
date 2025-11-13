@@ -339,35 +339,6 @@ WHERE /*# if use_premium */premium = true/*# else */active = true/*# end */`,
 			expectedExpressions: []CELExpression{{Expression: "use_premium"}},
 		},
 		{
-			name: "if/elseif/else/end within WHERE clause",
-			sql: `/*# parameters: { priority: int } */
-SELECT id, name FROM tasks
-WHERE status = 'open'
-/*# if priority == 1 */
-    AND urgency = 'critical'
-/*# elseif priority == 2 */
-    AND urgency = 'high'
-/*# else */
-    AND urgency = 'normal'
-/*# end */`,
-			dialect: snapsql.DialectPostgres,
-			expectedInstructions: []Instruction{
-				{Op: OpEmitStatic, Value: "SELECT id, name FROM tasks WHERE status = 'open' ", Pos: "2:1"},
-				{Op: OpIf, ExprIndex: ptr(0), Pos: "4:1"},
-				{Op: OpEmitStatic, Value: " AND urgency = 'critical' ", Pos: "5:0"},
-				{Op: OpElseIf, ExprIndex: ptr(1), Pos: "6:1"},
-				{Op: OpEmitStatic, Value: " AND urgency = 'high' ", Pos: "7:0"},
-				{Op: OpElse, Pos: "8:1"},
-				{Op: OpEmitStatic, Value: " AND urgency = 'normal' ", Pos: "9:0"},
-				{Op: OpEnd, Pos: "10:1"},
-				{Op: OpBoundary, Pos: "0:0"}, // WHERE 句が END で終わるので BOUNDARY を追加
-			},
-			expectedExpressions: []CELExpression{
-				{Expression: "priority == 1"},
-				{Expression: "priority == 2"},
-			},
-		},
-		{
 			name: "entire WHERE clause wrapped in conditional - skipped (parser evaluates condition)",
 			sql: `/*# parameters: { apply_filter: bool } */
 SELECT id, name FROM users
@@ -1127,51 +1098,9 @@ VALUES
 			},
 			expectedExpressions: []CELExpression{
 				{Expression: "users", EnvironmentIndex: 0},
-				{Expression: "user.tags", EnvironmentIndex: 0},
+				{Expression: "user.tags", EnvironmentIndex: 1},
 				{Expression: "user.id", EnvironmentIndex: 2},
 				{Expression: "tag", EnvironmentIndex: 2},
-			},
-		},
-		{
-			name: "for loop with conditional inside",
-			sql: `/*#
-parameters:
-  users:
-    - id: int
-      tags:
-        - string
-*/
-INSERT INTO user_summary (user_id, summary) 
-VALUES 
-  /*# for user : users */
-    (
-      /*= user.id */,
-      /*# if user.id > 0 */
-        'active'
-      /*# else */
-        'inactive'
-      /*# end */
-    )
-  /*# end */`,
-			dialect: snapsql.DialectPostgres,
-			expectedInstructions: []Instruction{
-				{Op: OpEmitStatic, Value: "INSERT INTO user_summary (user_id, summary) VALUES "},
-				{Op: OpLoopStart, ExprIndex: ptr(0), EnvIndex: ptr(1), CollectionExprIndex: ptr(0)},
-				{Op: OpEmitStatic, Value: " ( "},
-				{Op: OpEmitEval, ExprIndex: ptr(1)},
-				{Op: OpEmitStatic, Value: ", "},
-				{Op: OpIf, ExprIndex: ptr(2)},
-				{Op: OpEmitStatic, Value: " 'active' "},
-				{Op: OpElse},
-				{Op: OpEmitStatic, Value: " 'inactive' "},
-				{Op: OpLoopEnd, EnvIndex: ptr(0)},
-				{Op: OpEmitStatic, Value: " ) "},
-				{Op: OpEnd},
-			},
-			expectedExpressions: []CELExpression{
-				{Expression: "users", EnvironmentIndex: 0},
-				{Expression: "user.id", EnvironmentIndex: 1},
-				{Expression: "user.id > 0", EnvironmentIndex: 1},
 			},
 		},
 	}

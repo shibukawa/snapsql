@@ -21,6 +21,31 @@
       "result_type": 1
     }
   ],
+  "expressions": [
+    {
+      "id": "expr_001",
+      "environment_index": 0,
+      "position": {
+        "line": 15,
+        "column": 22
+      },
+      "steps": [
+        {
+          "Kind": 0,
+          "Identifier": "department",
+          "Property": "",
+          "Index": 0,
+          "Safe": false,
+          "Pos": {
+            "Offset": 0,
+            "Line": 15,
+            "Column": 22,
+            "Length": 10
+          }
+        }
+      ]
+    }
+  ],
   "format_version": "1",
   "function_name": "get_users_with_jobs",
   "instructions": [
@@ -49,6 +74,7 @@
     {"name": "jobs__title", "type": "any", "is_nullable": true},
     {"name": "jobs__company", "type": "any", "is_nullable": true}
   ],
+  "statement_type": "select",
   "table_references": [
     {"name": "users", "alias": "u", "context": "main"},
     {"name": "jobs", "alias": "j", "context": "join"}

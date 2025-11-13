@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	snapsqlgo "github.com/shibukawa/snapsql/langs/snapsqlgo"
-	generator "github.com/shibukawa/snapsql/testdata/gosample/generated_sqlite"
+	generator "github.com/shibukawa/snapsql/testdata/appsample/generated_sqlite"
 )
 
 type noopExecutor struct {
@@ -94,23 +94,13 @@ func TestWithMockProviderAccountGet(t *testing.T) {
 	ctx, err := snapsqlgo.WithMockProvider(context.Background(), "AccountGet", provider, snapsqlgo.MockOpt{Name: "Fetch account"})
 	require.NoError(t, err)
 
-	seq := generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
-
-	var captured []generator.AccountGetResult
-
-	seq(func(res *generator.AccountGetResult, err error) bool {
-		require.NoError(t, err)
-		require.NotNil(t, res)
-		captured = append(captured, *res)
-
-		return false
-	})
-
-	require.Len(t, captured, 1)
-
-	if id, ok := captured[0].ID.(float64); ok {
-		require.Equal(t, float64(10), id)
-	}
+	result, err := generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
+	require.NoError(t, err)
+	require.Equal(t, 10, result.ID)
+	require.NotNil(t, result.Name)
+	require.Equal(t, "Primary", *result.Name)
+	require.NotNil(t, result.Status)
+	require.Equal(t, "active", *result.Status)
 }
 
 func TestWithMockProviderAccountUpdate(t *testing.T) {
@@ -118,17 +108,37 @@ func TestWithMockProviderAccountUpdate(t *testing.T) {
 	ctx, err := snapsqlgo.WithMockProvider(context.Background(), "AccountUpdate", provider, snapsqlgo.MockOpt{Name: "Update returning", NoRepeat: true})
 	require.NoError(t, err)
 
-	rows, err := generator.AccountUpdate(ctx, noopExecutor{TB: t}, 1, "archived")
-	require.NoError(t, err)
-	require.Len(t, rows, 2)
+	iterator := generator.AccountUpdate(ctx, noopExecutor{TB: t}, 1, "archived")
 
-	require.Equal(t, int64(1), rows[0].ID)
-	require.Equal(t, "archived", rows[0].Status)
-	require.Equal(t, int64(2), rows[1].ID)
-	require.Equal(t, "active", rows[1].Status)
+	var captured []generator.AccountUpdateResult
 
-	_, err = generator.AccountUpdate(ctx, noopExecutor{TB: t}, 1, "archived")
-	require.ErrorIs(t, err, snapsqlgo.ErrMockSequenceDepleted)
+	iterator(func(res *generator.AccountUpdateResult, err error) bool {
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		captured = append(captured, *res)
+
+		return true
+	})
+
+	require.Len(t, captured, 2)
+	require.Equal(t, 1, captured[0].ID)
+	require.NotNil(t, captured[0].Status)
+	require.Equal(t, "archived", *captured[0].Status)
+	require.Equal(t, 2, captured[1].ID)
+	require.NotNil(t, captured[1].Status)
+	require.Equal(t, "active", *captured[1].Status)
+
+	iterator = generator.AccountUpdate(ctx, noopExecutor{TB: t}, 1, "archived")
+	called := false
+
+	iterator(func(res *generator.AccountUpdateResult, err error) bool {
+		called = true
+
+		require.ErrorIs(t, err, snapsqlgo.ErrMockSequenceDepleted)
+
+		return false
+	})
+	require.True(t, called)
 }
 
 func TestWithMockOptionErrorAndNoRepeat(t *testing.T) {
@@ -141,17 +151,11 @@ func TestWithMockOptionErrorAndNoRepeat(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	seq := generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
-	seq(func(res *generator.AccountGetResult, err error) bool {
-		require.ErrorIs(t, err, boom)
-		return false
-	})
+	_, err = generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
+	require.ErrorIs(t, err, boom)
 
-	seq = generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
-	seq(func(res *generator.AccountGetResult, err error) bool {
-		require.ErrorIs(t, err, snapsqlgo.ErrMockSequenceDepleted)
-		return false
-	})
+	_, err = generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
+	require.ErrorIs(t, err, snapsqlgo.ErrMockSequenceDepleted)
 }
 
 func TestWithMockRowsAffectedResult(t *testing.T) {
@@ -197,20 +201,16 @@ func TestWithMockIteratorSequence(t *testing.T) {
 	})
 
 	require.Len(t, captured, 2)
-
-	if id, ok := captured[0].ID.(float64); ok {
-		require.Equal(t, float64(2), id)
-	}
-
-	if captured[0].Name != nil {
-		if name, ok := (*captured[0].Name).(string); ok {
-			require.Equal(t, "Beta", name)
-		}
-	}
-
-	if id, ok := captured[1].ID.(float64); ok {
-		require.Equal(t, float64(1), id)
-	}
+	require.Equal(t, 2, captured[0].ID)
+	require.NotNil(t, captured[0].Name)
+	require.Equal(t, "Beta", *captured[0].Name)
+	require.NotNil(t, captured[0].Status)
+	require.Equal(t, "active", *captured[0].Status)
+	require.Equal(t, 1, captured[1].ID)
+	require.NotNil(t, captured[1].Name)
+	require.Equal(t, "Alpha", *captured[1].Name)
+	require.NotNil(t, captured[1].Status)
+	require.Equal(t, "archived", *captured[1].Status)
 
 	iterator = generator.AccountList(ctx, noopExecutor{TB: t})
 
@@ -224,7 +224,7 @@ func TestWithMockIteratorSequence(t *testing.T) {
 }
 
 func TestFilesystemMockProvider(t *testing.T) {
-	startDir, err := filepath.Abs(filepath.Join("..", "..", "testdata", "gosample"))
+	startDir, err := filepath.Abs(filepath.Join("..", "..", "testdata", "appsample"))
 	require.NoError(t, err)
 	require.DirExists(t, filepath.Join(startDir, "testdata", "mock"))
 	provider, err := snapsqlgo.NewFilesystemMockProvider(startDir)
@@ -233,18 +233,9 @@ func TestFilesystemMockProvider(t *testing.T) {
 	ctx, err := snapsqlgo.WithMockProvider(context.Background(), "AccountGet", provider, snapsqlgo.MockOpt{Name: "Fetch account"})
 	require.NoError(t, err)
 
-	seq := generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
-	count := 0
-
-	seq(func(res *generator.AccountGetResult, err error) bool {
-		require.NoError(t, err)
-		require.NotNil(t, res)
-
-		count++
-
-		return false
-	})
-	require.Equal(t, 1, count)
+	result, err := generator.AccountGet(ctx, noopExecutor{TB: t}, 10)
+	require.NoError(t, err)
+	require.Equal(t, 10, result.ID)
 }
 
 func ptrInt64(v int64) *int64 {

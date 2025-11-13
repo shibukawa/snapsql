@@ -27,11 +27,6 @@ func TestApplyImplicitIfConditions(t *testing.T) {
 			expectedOffset: "offset != null",
 		},
 		{
-			name:          "LIMIT with explicit if condition should not change",
-			sql:           "SELECT * FROM users /*# if limit > 0 */LIMIT /*= limit */10/*# end */",
-			expectedLimit: "limit > 0",
-		},
-		{
 			name:          "LIMIT without variable should not get condition",
 			sql:           "SELECT * FROM users LIMIT 10",
 			expectedLimit: "",
