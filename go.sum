@@ -184,8 +184,8 @@ github.com/tenntenn/golden v0.5.5 h1:3LPemp4rZUIYeh0MTgIn8nzbY8EKVu0Kyb7AOBM016g
 github.com/tenntenn/golden v0.5.5/go.mod h1:zPPkSkshkDGyYIFOIRkyydYQB4XErvg+Uufi0Q9H5qE=
 github.com/testcontainers/testcontainers-go v0.40.0 h1:pSdJYLOVgLE8YdUY2FHQ1Fxu+aMnb6JfVz1mxk7OeMU=
 github.com/testcontainers/testcontainers-go v0.40.0/go.mod h1:FSXV5KQtX2HAMlm7U3APNyLkkap35zNLxukw9oBi/MY=
-github.com/testcontainers/testcontainers-go/modules/mysql v0.39.0 h1:8iJ4itSuiSpPLevQ+fM6cR+9k74YSOM1glKI4XFF+Qw=
-github.com/testcontainers/testcontainers-go/modules/mysql v0.39.0/go.mod h1:EKJcSWfogRdiBc5kvar1tumSx7MImmkQ0RDvU0HZQZM=
+github.com/testcontainers/testcontainers-go/modules/mysql v0.40.0 h1:P9Txfy5Jothx2wFdcus0QoSmX/PKSIXZxrTbZPVJswA=
+github.com/testcontainers/testcontainers-go/modules/mysql v0.40.0/go.mod h1:oZPHHqJqXG7FD8OB/yWH7gLnDvZUlFHAVJNrGftL+eg=
 github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0 h1:s2bIayFXlbDFexo96y+htn7FzuhpXLYJNnIuglNKqOk=
 github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0/go.mod h1:h+u/2KoREGTnTl9UwrQ/g+XhasAT8E6dClclAADeXoQ=
 github.com/tklauser/go-sysconf v0.3.12 h1:0QaGUFOdQaIVdPgfITYzaTegZvdCjmYO52cSFAEVmqU=
