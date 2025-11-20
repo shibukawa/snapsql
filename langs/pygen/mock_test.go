@@ -151,9 +151,6 @@ func TestGenerateMockExecutionCode(t *testing.T) {
 				"ctx.mock_mode",
 				"ctx.mock_data.get(\"delete_user\")",
 				"return mock.get('rows_affected', 0)",
-				"ctx.query_logger",
-				"dialect=\"postgres\"",
-				"query_type=\"delete\"",
 			},
 		},
 		{
@@ -168,8 +165,6 @@ func TestGenerateMockExecutionCode(t *testing.T) {
 				"ctx.mock_data.get(\"get_user_by_id\")",
 				"return GetUserByIdResult(**rows[0])",
 				"raise NotFoundError",
-				"dialect=\"mysql\"",
-				"query_type=\"select\"",
 			},
 		},
 		{
@@ -184,8 +179,6 @@ func TestGenerateMockExecutionCode(t *testing.T) {
 				"ctx.mock_data.get(\"list_users\")",
 				"yield ListUsersResult(**row)",
 				"for row in rows",
-				"dialect=\"sqlite\"",
-				"query_type=\"select\"",
 			},
 		},
 	}

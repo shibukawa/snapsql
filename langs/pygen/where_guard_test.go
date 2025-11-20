@@ -1,6 +1,7 @@
 package pygen
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/shibukawa/snapsql/intermediate"
@@ -101,6 +102,7 @@ func TestConvertWhereMeta(t *testing.T) {
 
 			if result == nil {
 				t.Fatalf("expected non-nil result")
+				return
 			}
 
 			if result.Status != tt.expected.Status {
@@ -169,86 +171,89 @@ func TestIsMutationStatement(t *testing.T) {
 }
 
 func TestGenerateWhereGuardCode(t *testing.T) {
+	expressions := []intermediate.CELExpression{
+		{Expression: "include_identifier_filter"},
+		{Expression: "prefer_name_filter"},
+	}
+
 	tests := []struct {
-		name         string
-		funcName     string
-		mutationKind string
-		whereMeta    *whereClauseMetaData
-		expectCode   bool
+		name        string
+		whereMeta   *whereClauseMetaData
+		expect      []string
+		expectEmpty bool
 	}{
 		{
-			name:         "no mutation kind",
-			funcName:     "get_users",
-			mutationKind: "",
-			whereMeta:    nil,
-			expectCode:   false,
+			name:        "nil metadata",
+			whereMeta:   nil,
+			expectEmpty: true,
 		},
 		{
-			name:         "no where meta",
-			funcName:     "update_user",
-			mutationKind: "MutationUpdate",
-			whereMeta:    nil,
-			expectCode:   false,
-		},
-		{
-			name:         "fullscan status",
-			funcName:     "update_user",
-			mutationKind: "MutationUpdate",
+			name: "fullscan status",
 			whereMeta: &whereClauseMetaData{
 				Status: "fullscan",
 			},
-			expectCode: true,
-		},
-		{
-			name:         "exists status",
-			funcName:     "delete_user",
-			mutationKind: "MutationDelete",
-			whereMeta: &whereClauseMetaData{
-				Status: "exists",
+			expect: []string{
+				"# WHERE clause guard for delete",
+				"if True:",
+				"if not ctx.allow_unsafe_mutations:",
+				"UnsafeQueryError",
 			},
-			expectCode: true,
 		},
 		{
-			name:         "conditional with dynamic conditions",
-			funcName:     "update_user",
-			mutationKind: "MutationUpdate",
+			name: "dynamic conditional guard",
 			whereMeta: &whereClauseMetaData{
 				Status: "conditional",
 				DynamicConditions: []whereDynamicConditionData{
 					{
 						ExprIndex:        0,
 						NegatedWhenEmpty: true,
-						HasElse:          false,
-						Description:      "user_id filter",
+						Description:      "include_identifier_filter",
 					},
 				},
 			},
-			expectCode: true,
+			expect: []string{
+				"not (include_identifier_filter)",
+				"UnsafeQueryError",
+			},
+		},
+		{
+			name: "removal combo guard",
+			whereMeta: &whereClauseMetaData{
+				Status: "conditional",
+				RemovalCombos: [][]removalLiteralData{
+					{
+						{ExprIndex: 0, When: false},
+						{ExprIndex: 1, When: true},
+					},
+				},
+			},
+			expect: []string{
+				"if not (include_identifier_filter) and prefer_name_filter:",
+				"raise UnsafeQueryError",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			code := generateWhereGuardCode(tt.funcName, tt.mutationKind, tt.whereMeta)
+			code := generateWhereGuardCode("AccountDelete", "MutationDelete", tt.whereMeta, expressions)
 
-			if tt.expectCode {
-				if code == "" {
-					t.Error("expected code to be generated, got empty string")
+			if tt.expectEmpty {
+				if code != "" {
+					t.Errorf("expected empty guard, got %q", code)
 				}
 
-				if !contains(code, "where_meta") {
-					t.Error("expected 'where_meta' in generated code")
-				}
+				return
+			}
 
-				if !contains(code, "enforce_non_empty_where_clause") {
-					t.Error("expected 'enforce_non_empty_where_clause' in generated code")
-				}
+			if code == "" {
+				t.Fatalf("expected guard code, got empty string")
+			}
 
-				if !contains(code, tt.funcName) {
-					t.Errorf("expected function name %q in generated code", tt.funcName)
+			for _, substr := range tt.expect {
+				if !strings.Contains(code, substr) {
+					t.Errorf("expected guard to contain %q, got %q", substr, code)
 				}
-			} else if code != "" {
-				t.Errorf("expected no code, got non-empty string")
 			}
 		})
 	}
@@ -328,19 +333,4 @@ func TestDescribeDynamicConditions(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper functions
-func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || containsMiddle(s, substr)))
-}
-
-func containsMiddle(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-
-	return false
 }

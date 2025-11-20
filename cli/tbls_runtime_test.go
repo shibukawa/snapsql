@@ -39,6 +39,7 @@ func TestResolveDatabaseFromTblsSuccess(t *testing.T) {
 
 	if db == nil {
 		t.Fatalf("expected database config")
+		return
 	}
 
 	assert.Equal(t, "pgx", db.Driver)

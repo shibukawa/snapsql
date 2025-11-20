@@ -1,0 +1,146 @@
+{
+  "user_create": {
+    "rows": [
+      {
+        "user_id": 1,
+        "username": "alice",
+        "email": "alice@example.com",
+        "full_name": "Alice Smith",
+        "bio": "Software engineer",
+        "created_at": "2025-01-01T10:00:00Z",
+        "updated_at": "2025-01-01T10:00:00Z"
+      }
+    ]
+  },
+  "user_get": {
+    "rows": [
+      {
+        "user_id": 1,
+        "username": "alice",
+        "email": "alice@example.com",
+        "full_name": "Alice Smith",
+        "bio": "Software engineer",
+        "created_at": "2025-01-01T10:00:00Z",
+        "updated_at": "2025-01-01T10:00:00Z"
+      }
+    ]
+  },
+  "user_list": {
+    "rows": [
+      {
+        "user_id": 1,
+        "username": "alice",
+        "email": "alice@example.com",
+        "full_name": "Alice Smith",
+        "bio": "Software engineer",
+        "created_at": "2025-01-01T10:00:00Z",
+        "updated_at": "2025-01-01T10:00:00Z"
+      },
+      {
+        "user_id": 2,
+        "username": "bob",
+        "email": "bob@example.com",
+        "full_name": "Bob Johnson",
+        "bio": "Designer",
+        "created_at": "2025-01-02T10:00:00Z",
+        "updated_at": "2025-01-02T10:00:00Z"
+      }
+    ]
+  },
+  "post_create": {
+    "rows": [
+      {
+        "post_id": 1,
+        "title": "My First Post",
+        "content": "This is my first blog post!",
+        "author_id": 1,
+        "published": true,
+        "view_count": 0,
+        "created_at": "2025-01-03T10:00:00Z",
+        "updated_at": "2025-01-03T10:00:00Z",
+        "created_by": 1,
+        "updated_by": null
+      }
+    ]
+  },
+  "post_get": {
+    "rows": [
+      {
+        "post_id": 1,
+        "title": "My First Post",
+        "content": "This is my first blog post!",
+        "author_id": 1,
+        "published": true,
+        "view_count": 10,
+        "created_at": "2025-01-03T10:00:00Z",
+        "updated_at": "2025-01-03T10:00:00Z",
+        "author__username": "alice",
+        "author__full_name": "Alice Smith"
+      }
+    ]
+  },
+  "post_list": {
+    "rows": [
+      {
+        "post_id": 1,
+        "title": "My First Post",
+        "content": "This is my first blog post!",
+        "author_id": 1,
+        "published": true,
+        "view_count": 10,
+        "created_at": "2025-01-03T10:00:00Z",
+        "updated_at": "2025-01-03T10:00:00Z",
+        "author__username": "alice",
+        "author__full_name": "Alice Smith"
+      },
+      {
+        "post_id": 2,
+        "title": "Second Post",
+        "content": "Another great post!",
+        "author_id": 2,
+        "published": true,
+        "view_count": 5,
+        "created_at": "2025-01-04T10:00:00Z",
+        "updated_at": "2025-01-04T10:00:00Z",
+        "author__username": "bob",
+        "author__full_name": "Bob Johnson"
+      }
+    ]
+  },
+  "comment_create": {
+    "rows": [
+      {
+        "comment_id": 1,
+        "post_id": 1,
+        "author_id": 2,
+        "content": "Great post!",
+        "created_at": "2025-01-05T10:00:00Z",
+        "updated_at": "2025-01-05T10:00:00Z"
+      }
+    ]
+  },
+  "comment_list_by_post": {
+    "rows": [
+      {
+        "comment_id": 1,
+        "post_id": 1,
+        "author_id": 2,
+        "content": "Great post!",
+        "created_at": "2025-01-05T10:00:00Z",
+        "updated_at": "2025-01-05T10:00:00Z",
+        "author__username": "bob",
+        "author__full_name": "Bob Johnson"
+      },
+      {
+        "comment_id": 2,
+        "post_id": 1,
+        "author_id": 1,
+        "content": "Thanks!",
+        "created_at": "2025-01-05T11:00:00Z",
+        "updated_at": "2025-01-05T11:00:00Z",
+        "author__username": "alice",
+        "author__full_name": "Alice Smith"
+      }
+    ]
+  }
+}

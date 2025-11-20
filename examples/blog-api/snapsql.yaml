@@ -1,0 +1,61 @@
+# SnapSQL Configuration for Blog API
+# This configuration uses the new generator format
+
+# Database dialect
+dialect: postgres
+
+# Input directory for query files
+input_dir: "queries"
+
+# Code generation settings
+generation:
+  validate: true
+  generators:
+    # Python generator configuration
+    python:
+      output: "dataaccess"
+      disabled: false
+      preserve_hierarchy: false
+      settings:
+        package: "dataaccess"
+    
+    # JSON generator (disabled by default)
+    json:
+      output: "generated/intermediate"
+      disabled: true
+      preserve_hierarchy: true
+
+# System field configuration
+system:
+  fields:
+    - name: created_at
+      type: timestamp
+      exclude_from_select: false
+      on_insert:
+        default: "CURRENT_TIMESTAMP"
+      on_update:
+        parameter: error
+    
+    - name: updated_at
+      type: timestamp
+      exclude_from_select: false
+      on_insert:
+        default: "CURRENT_TIMESTAMP"
+      on_update:
+        default: "CURRENT_TIMESTAMP"
+    
+    - name: created_by
+      type: int
+      exclude_from_select: false
+      on_insert:
+        parameter: implicit
+      on_update:
+        parameter: error
+    
+    - name: updated_by
+      type: int
+      exclude_from_select: false
+      on_insert:
+        parameter: implicit
+      on_update:
+        parameter: implicit

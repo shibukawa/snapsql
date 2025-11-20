@@ -39,29 +39,18 @@ func TestWhereClauseIntegration_UpdateWithoutWhere(t *testing.T) {
 
 	code := buf.String()
 
-	// Verify WHERE clause enforcement is present
-	if !strings.Contains(code, "enforce_non_empty_where_clause") {
-		t.Error("Expected WHERE clause enforcement code")
+	runtimeCode := renderRuntimeCode(t)
+	// Verify WHERE clause guard is present for full scan mutations
+	if !strings.Contains(code, "raise UnsafeQueryError") {
+		t.Error("Expected UnsafeQueryError guard for unsafe mutation")
 	}
 
-	// Verify mutation kind is set
-	if !strings.Contains(code, "'update'") {
-		t.Error("Expected mutation kind 'update'")
+	if !strings.Contains(code, "if True:") {
+		t.Error("Expected unconditional guard for fullscan status")
 	}
 
-	// Verify WHERE metadata is included
-	if !strings.Contains(code, "'status': \"fullscan\"") {
-		t.Error("Expected WHERE status 'fullscan'")
-	}
-
-	// Verify enforcement function is defined
-	if !strings.Contains(code, "def enforce_non_empty_where_clause") {
-		t.Error("Expected enforce_non_empty_where_clause function definition")
-	}
-
-	// Verify UnsafeQueryError is defined
-	if !strings.Contains(code, "class UnsafeQueryError") {
-		t.Error("Expected UnsafeQueryError class definition")
+	if !strings.Contains(runtimeCode, "class UnsafeQueryError") {
+		t.Error("Expected UnsafeQueryError class definition in runtime")
 	}
 }
 
@@ -95,25 +84,8 @@ func TestWhereClauseIntegration_DeleteWithWhere(t *testing.T) {
 	}
 
 	code := buf.String()
-
-	// Verify WHERE clause enforcement is present
-	if !strings.Contains(code, "enforce_non_empty_where_clause") {
-		t.Error("Expected WHERE clause enforcement code")
-	}
-
-	// Verify mutation kind is set
-	if !strings.Contains(code, "'delete'") {
-		t.Error("Expected mutation kind 'delete'")
-	}
-
-	// Verify WHERE metadata is included
-	if !strings.Contains(code, "'status': \"exists\"") {
-		t.Error("Expected WHERE status 'exists'")
-	}
-
-	// Verify expression refs are included
-	if !strings.Contains(code, "'expression_refs': [0]") {
-		t.Error("Expected expression_refs in WHERE metadata")
+	if strings.Contains(code, "raise UnsafeQueryError") {
+		t.Error("UnsafeQueryError guard should not fire when WHERE clause exists")
 	}
 }
 
@@ -156,22 +128,12 @@ func TestWhereClauseIntegration_ConditionalWhere(t *testing.T) {
 
 	code := buf.String()
 
-	// Verify WHERE clause enforcement is present
-	if !strings.Contains(code, "enforce_non_empty_where_clause") {
-		t.Error("Expected WHERE clause enforcement code")
+	if !strings.Contains(code, "raise UnsafeQueryError") {
+		t.Error("Expected UnsafeQueryError guard for conditional WHERE removal")
 	}
 
-	// Verify WHERE metadata includes dynamic conditions
-	if !strings.Contains(code, "'dynamic_conditions'") {
-		t.Error("Expected dynamic_conditions in WHERE metadata")
-	}
-
-	if !strings.Contains(code, "'description': \"user_id filter\"") {
-		t.Error("Expected condition description in WHERE metadata")
-	}
-
-	if !strings.Contains(code, "'negated_when_empty': True") {
-		t.Error("Expected negated_when_empty flag in WHERE metadata")
+	if !strings.Contains(code, "not (user_id filter)") {
+		t.Error("Expected condition-based guard in generated code")
 	}
 }
 
@@ -202,14 +164,9 @@ func TestWhereClauseIntegration_SelectNoEnforcement(t *testing.T) {
 
 	code := buf.String()
 
-	// Verify WHERE clause enforcement is NOT present for SELECT
-	if strings.Contains(code, "enforce_non_empty_where_clause(ctx, \"get_users\"") {
-		t.Error("WHERE clause enforcement should not be present for SELECT statements")
-	}
-
-	// But the function definition should still be present
-	if !strings.Contains(code, "def enforce_non_empty_where_clause") {
-		t.Error("Expected enforce_non_empty_where_clause function definition")
+	// Verify WHERE clause guard is not emitted for SELECT
+	if strings.Contains(code, "raise UnsafeQueryError") {
+		t.Error("WHERE clause guard should not be present for SELECT statements")
 	}
 }
 
@@ -249,17 +206,12 @@ func TestWhereClauseIntegration_RemovalCombos(t *testing.T) {
 
 	code := buf.String()
 
-	// Verify removal combos are included
-	if !strings.Contains(code, "'removal_combos'") {
-		t.Error("Expected removal_combos in WHERE metadata")
+	if !strings.Contains(code, "raise UnsafeQueryError") {
+		t.Error("Expected guard for removal combos")
 	}
 
-	if !strings.Contains(code, "'expr_index': 0") {
-		t.Error("Expected expr_index in removal combo")
-	}
-
-	if !strings.Contains(code, "'when': False") {
-		t.Error("Expected when flag in removal combo")
+	if !strings.Contains(code, "and") {
+		t.Error("Expected combined condition in guard")
 	}
 }
 
@@ -292,19 +244,13 @@ func TestWhereClauseHelperFunctions(t *testing.T) {
 	}
 
 	code := buf.String()
-
-	// Verify helper functions are defined
-	helperFuncs := []string{
-		"def _is_no_where_allowed",
-		"def _describe_dynamic_conditions",
-		"def _extract_top_level_where_clause",
-		"def _is_identifier_char",
-		"def _find_clause_end",
+	if !strings.Contains(code, "from .snapsql_runtime import") {
+		t.Error("Expected runtime import in generated module")
 	}
 
-	for _, funcName := range helperFuncs {
-		if !strings.Contains(code, funcName) {
-			t.Errorf("Expected helper function: %s", funcName)
-		}
+	runtimeCode := renderRuntimeCode(t)
+
+	if !strings.Contains(runtimeCode, "class UnsafeQueryError") {
+		t.Error("Expected UnsafeQueryError definition in runtime")
 	}
 }

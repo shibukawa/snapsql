@@ -19,7 +19,7 @@ CREATE TABLE accounts (
 
 | Name | Type | Default | Nullable | Children | Parents | Comment |
 | ---- | ---- | ------- | -------- | -------- | ------- | ------- |
-| id | INTEGER |  | true |  |  |  |
+| id | INTEGER |  | true | [posts](posts.md) |  |  |
 | name | TEXT |  | true |  |  |  |
 | status | TEXT |  | true |  |  |  |
 

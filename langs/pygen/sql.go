@@ -10,26 +10,26 @@ import (
 	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 )
 
-// processSQLBuilder processes instructions and generates SQL building code for Python
 func processSQLBuilder(format *intermediate.IntermediateFormat, dialect snapsql.Dialect) (*sqlBuilderData, error) {
-	optimizedInstructions, err := codegenerator.OptimizeInstructions(format.Instructions, dialect)
+	optimized, err := codegenerator.OptimizeInstructions(format.Instructions, dialect)
 	if err != nil {
 		return nil, fmt.Errorf("failed to optimize instructions: %w", err)
 	}
 
-	needsDynamic := codegenerator.HasDynamicInstructions(optimizedInstructions)
-	if !needsDynamic {
-		return generateStaticSQL(optimizedInstructions, format, dialect)
+	scope := newExpressionScope(format)
+	renderer := newPythonExpressionRenderer(format, scope)
+
+	if !codegenerator.HasDynamicInstructions(optimized) {
+		return generateStaticSQL(optimized, format, dialect, renderer)
 	}
 
-	return generateDynamicSQL(optimizedInstructions, format, dialect)
+	return generateDynamicSQL(optimized, format, dialect, renderer, scope)
 }
 
-func generateStaticSQL(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, dialect snapsql.Dialect) (*sqlBuilderData, error) {
+func generateStaticSQL(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, dialect snapsql.Dialect, renderer *pythonExpressionRenderer) (*sqlBuilderData, error) {
 	var (
 		sqlBuilder strings.Builder
 		arguments  []string
-		needsMap   bool
 	)
 
 	for _, inst := range instructions {
@@ -38,15 +38,23 @@ func generateStaticSQL(instructions []codegenerator.OptimizedInstruction, format
 			sqlBuilder.WriteString(inst.Value)
 		case "EMIT_EVAL":
 			if inst.ExprIndex != nil && hasExplangExpression(format, *inst.ExprIndex) {
+				valueExpr, err := renderer.render(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
+				}
+
 				sqlBuilder.WriteString("?")
 
-				arguments = append(arguments, fmt.Sprintf("_eval_explang_expression(%d, param_map)", *inst.ExprIndex))
-				needsMap = true
+				arguments = append(arguments, valueExpr)
 			}
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil && hasExplangExpression(format, *inst.ExprIndex) {
-				arguments = append(arguments, fmt.Sprintf("_eval_explang_expression(%d, param_map)", *inst.ExprIndex))
-				needsMap = true
+				valueExpr, err := renderer.render(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
+				}
+
+				arguments = append(arguments, valueExpr)
 			}
 		case "ADD_SYSTEM_PARAM":
 			arguments = append(arguments, inst.SystemField)
@@ -57,10 +65,9 @@ func generateStaticSQL(instructions []codegenerator.OptimizedInstruction, format
 	staticSQL := convertPlaceholders(sqlBuilder.String(), dialect)
 
 	return &sqlBuilderData{
-		IsStatic:      true,
-		StaticSQL:     staticSQL,
-		Args:          arguments,
-		NeedsParamMap: needsMap,
+		IsStatic:  true,
+		StaticSQL: staticSQL,
+		Args:      arguments,
 	}, nil
 }
 
@@ -85,35 +92,19 @@ func convertPlaceholders(sql string, dialect snapsql.Dialect) string {
 	return result.String()
 }
 
-func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, dialect snapsql.Dialect) (*sqlBuilderData, error) {
+func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, format *intermediate.IntermediateFormat, dialect snapsql.Dialect, renderer *pythonExpressionRenderer, scope *expressionScope) (*sqlBuilderData, error) {
 	var code strings.Builder
 
 	code.WriteString("# Build SQL dynamically\n")
 	code.WriteString("sql_parts = []\n")
 	code.WriteString("args = []\n")
 
-	if len(format.Parameters) > 0 {
-		code.WriteString("param_map = {\n")
-
-		for _, param := range format.Parameters {
-			paramName := pythonIdentifier(param.Name)
-
-			code.WriteString("    ")
-			code.WriteString(fmt.Sprintf("'%s': %s,\n", param.Name, paramName))
-		}
-
-		code.WriteString("}\n")
-	} else {
-		code.WriteString("param_map = {}\n")
-	}
-
 	type controlFrame struct {
 		typ     string
 		loopVar string
 	}
 
-	var controlStack []controlFrame
-
+	controlStack := []controlFrame{}
 	indentLevel := 0
 	paramIndex := 1
 
@@ -123,12 +114,10 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 			value := inst.Value
 
 			placeholderCount := strings.Count(value, "?")
-			if placeholderCount > 0 {
-				for range placeholderCount {
-					placeholder := GetPlaceholder(dialect, paramIndex)
-					value = strings.Replace(value, "?", placeholder, 1)
-					paramIndex++
-				}
+			for range placeholderCount {
+				placeholder := GetPlaceholder(dialect, paramIndex)
+				value = strings.Replace(value, "?", placeholder, 1)
+				paramIndex++
 			}
 
 			if indentLevel > 0 {
@@ -139,6 +128,11 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 
 		case "EMIT_EVAL":
 			if inst.ExprIndex != nil && hasExplangExpression(format, *inst.ExprIndex) {
+				exprStr, err := renderer.render(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
+				}
+
 				placeholder := GetPlaceholder(dialect, paramIndex)
 
 				if indentLevel > 0 {
@@ -151,18 +145,23 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 					code.WriteString(strings.Repeat("    ", indentLevel))
 				}
 
-				code.WriteString(fmt.Sprintf("args.append(_eval_explang_expression(%d, param_map))\n", *inst.ExprIndex))
+				code.WriteString(fmt.Sprintf("args.append(%s)\n", exprStr))
 
 				paramIndex++
 			}
 
 		case "ADD_PARAM":
 			if inst.ExprIndex != nil && hasExplangExpression(format, *inst.ExprIndex) {
+				exprStr, err := renderer.render(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
+				}
+
 				if indentLevel > 0 {
 					code.WriteString(strings.Repeat("    ", indentLevel))
 				}
 
-				code.WriteString(fmt.Sprintf("args.append(_eval_explang_expression(%d, param_map))\n", *inst.ExprIndex))
+				code.WriteString(fmt.Sprintf("args.append(%s)\n", exprStr))
 			}
 
 		case "ADD_SYSTEM_PARAM":
@@ -174,17 +173,14 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 
 		case "IF":
 			if inst.ExprIndex != nil && hasExplangExpression(format, *inst.ExprIndex) {
-				if indentLevel > 0 {
-					code.WriteString(strings.Repeat("    ", indentLevel))
+				exprStr, err := renderer.render(*inst.ExprIndex)
+				if err != nil {
+					return nil, err
 				}
 
-				code.WriteString(fmt.Sprintf("cond_value = _eval_explang_expression(%d, param_map)\n", *inst.ExprIndex))
-
-				if indentLevel > 0 {
-					code.WriteString(strings.Repeat("    ", indentLevel))
-				}
-
-				code.WriteString("if _truthy(cond_value):\n")
+				indent := strings.Repeat("    ", indentLevel)
+				code.WriteString(fmt.Sprintf("%scond_value = %s\n", indent, exprStr))
+				code.WriteString(indent + "if cond_value:\n")
 
 				controlStack = append(controlStack, controlFrame{typ: "if"})
 				indentLevel++
@@ -193,18 +189,16 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 		case "ELSEIF":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "if" {
 				indentLevel--
-				if indentLevel > 0 {
-					code.WriteString(strings.Repeat("    ", indentLevel))
-				}
 
 				if inst.ExprIndex != nil && hasExplangExpression(format, *inst.ExprIndex) {
-					code.WriteString(fmt.Sprintf("cond_value = _eval_explang_expression(%d, param_map)\n", *inst.ExprIndex))
-
-					if indentLevel > 0 {
-						code.WriteString(strings.Repeat("    ", indentLevel))
+					exprStr, err := renderer.render(*inst.ExprIndex)
+					if err != nil {
+						return nil, err
 					}
 
-					code.WriteString("elif _truthy(cond_value):\n")
+					indent := strings.Repeat("    ", indentLevel)
+					code.WriteString(fmt.Sprintf("%scond_value = %s\n", indent, exprStr))
+					code.WriteString(indent + "elif cond_value:\n")
 				}
 
 				indentLevel++
@@ -213,10 +207,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 		case "ELSE":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "if" {
 				indentLevel--
-				if indentLevel > 0 {
-					code.WriteString(strings.Repeat("    ", indentLevel))
-				}
-
+				code.WriteString(strings.Repeat("    ", indentLevel))
 				code.WriteString("else:\n")
 
 				indentLevel++
@@ -230,39 +221,34 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 
 		case "LOOP_START":
 			if inst.CollectionExprIndex != nil && hasExplangExpression(format, *inst.CollectionExprIndex) {
+				exprStr, err := renderer.render(*inst.CollectionExprIndex)
+				if err != nil {
+					return nil, err
+				}
+
 				loopVar := pythonIdentifier(inst.Variable)
 				collectionVar := loopVar + "_collection"
+				iterableVar := loopVar + "_iterable"
 
-				if indentLevel > 0 {
-					code.WriteString(strings.Repeat("    ", indentLevel))
-				}
-
-				code.WriteString(fmt.Sprintf("%s = _eval_explang_expression(%d, param_map)\n", collectionVar, *inst.CollectionExprIndex))
-
-				if indentLevel > 0 {
-					code.WriteString(strings.Repeat("    ", indentLevel))
-				}
-
-				code.WriteString(fmt.Sprintf("for %s in _as_iterable(%s):\n", loopVar, collectionVar))
-				code.WriteString(strings.Repeat("    ", indentLevel+1))
-				code.WriteString(fmt.Sprintf("param_map['%s'] = %s\n", inst.Variable, loopVar))
+				indent := strings.Repeat("    ", indentLevel)
+				code.WriteString(fmt.Sprintf("%s%s = %s\n", indent, collectionVar, exprStr))
+				code.WriteString(fmt.Sprintf("%sif %s is None:\n", indent, collectionVar))
+				code.WriteString(fmt.Sprintf("%s    %s = []\n", indent, iterableVar))
+				code.WriteString(fmt.Sprintf("%selif isinstance(%s, (list, tuple)):\n", indent, collectionVar))
+				code.WriteString(fmt.Sprintf("%s    %s = list(%s)\n", indent, iterableVar, collectionVar))
+				code.WriteString(indent + "else:\n")
+				code.WriteString(fmt.Sprintf("%s    %s = [%s]\n", indent, iterableVar, collectionVar))
+				code.WriteString(fmt.Sprintf("%sfor %s in %s:\n", indent, loopVar, iterableVar))
+				scope.pushSingle(inst.Variable, loopVar)
 				controlStack = append(controlStack, controlFrame{typ: "for", loopVar: inst.Variable})
 				indentLevel++
 			}
 
 		case "LOOP_END":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "for" {
+				scope.pop()
+
 				indentLevel--
-
-				frame := controlStack[len(controlStack)-1]
-				if frame.loopVar != "" {
-					if indentLevel > 0 {
-						code.WriteString(strings.Repeat("    ", indentLevel))
-					}
-
-					code.WriteString(fmt.Sprintf("param_map.pop('%s', None)\n", frame.loopVar))
-				}
-
 				controlStack = controlStack[:len(controlStack)-1]
 			}
 

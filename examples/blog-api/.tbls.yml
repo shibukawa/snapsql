@@ -1,0 +1,50 @@
+# tbls configuration for Blog API database schema
+
+# Database connection
+dsn: postgres://bloguser:blogpass@localhost:5432/blogdb?sslmode=disable
+
+# Comments
+comments:
+  - table: users
+    tableComment: User accounts for the blog system
+    columnComments:
+      user_id: Unique identifier for the user
+      username: Unique username for login
+      email: User's email address
+      full_name: User's full display name
+      bio: User's biography or description
+      created_at: Timestamp when the user was created
+      updated_at: Timestamp when the user was last updated
+
+  - table: posts
+    tableComment: Blog posts created by users
+    columnComments:
+      post_id: Unique identifier for the post
+      title: Post title
+      content: Post content (markdown or plain text)
+      author_id: Foreign key to users table
+      published: Whether the post is published or draft
+      view_count: Number of times the post has been viewed
+      created_at: Timestamp when the post was created
+      updated_at: Timestamp when the post was last updated
+      created_by: User ID who created the post
+      updated_by: User ID who last updated the post
+
+  - table: comments
+    tableComment: Comments on blog posts
+    columnComments:
+      comment_id: Unique identifier for the comment
+      post_id: Foreign key to posts table
+      author_id: Foreign key to users table
+      content: Comment content
+      created_at: Timestamp when the comment was created
+      updated_at: Timestamp when the comment was last updated
+
+# ER diagram settings
+er:
+  format: svg
+  distance: 1
+  
+# Exclude tables (if any)
+# exclude:
+#   - table_name_to_exclude

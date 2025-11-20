@@ -51,24 +51,27 @@ func TestErrorClassesInGeneratedCode(t *testing.T) {
 	require.NoError(t, err)
 
 	code := buf.String()
+	runtimeCode := renderRuntimeCode(t)
 
-	// Verify error class definitions exist
-	assert.Contains(t, code, "class SnapSQLError(Exception):", "should define SnapSQLError base class")
-	assert.Contains(t, code, "class NotFoundError(SnapSQLError):", "should define NotFoundError")
-	assert.Contains(t, code, "class ValidationError(SnapSQLError):", "should define ValidationError")
-	assert.Contains(t, code, "class DatabaseError(SnapSQLError):", "should define DatabaseError")
-	assert.Contains(t, code, "class UnsafeQueryError(SnapSQLError):", "should define UnsafeQueryError")
+	assert.Contains(t, code, "from .snapsql_runtime import (", "module should import runtime helpers")
+
+	// Verify error class definitions exist in runtime
+	assert.Contains(t, runtimeCode, "class SnapSQLError(Exception):", "should define SnapSQLError base class")
+	assert.Contains(t, runtimeCode, "class NotFoundError(SnapSQLError):", "should define NotFoundError")
+	assert.Contains(t, runtimeCode, "class ValidationError(SnapSQLError):", "should define ValidationError")
+	assert.Contains(t, runtimeCode, "class DatabaseError(SnapSQLError):", "should define DatabaseError")
+	assert.Contains(t, runtimeCode, "class UnsafeQueryError(SnapSQLError):", "should define UnsafeQueryError")
 
 	// Verify error classes have enhanced constructors
-	assert.Contains(t, code, "def __init__(self, message: str, func_name: Optional[str] = None", "SnapSQLError should have enhanced constructor")
-	assert.Contains(t, code, "query: Optional[str] = None", "SnapSQLError should accept query parameter")
-	assert.Contains(t, code, "params: Optional[Dict[str, Any]] = None", "SnapSQLError should accept params parameter")
+	assert.Contains(t, runtimeCode, "def __init__(self, message: str, func_name: Optional[str] = None", "SnapSQLError should have enhanced constructor")
+	assert.Contains(t, runtimeCode, "query: Optional[str] = None", "SnapSQLError should accept query parameter")
+	assert.Contains(t, runtimeCode, "params: Optional[Dict[str, Any]] = None", "SnapSQLError should accept params parameter")
 
 	// Verify error formatting method
-	assert.Contains(t, code, "def _format_message(self) -> str:", "should have _format_message method")
-	assert.Contains(t, code, "Function: {self.func_name}", "should format function name in error")
-	assert.Contains(t, code, "Query: {query_preview}", "should format query in error")
-	assert.Contains(t, code, "Parameters: {param_str}", "should format parameters in error")
+	assert.Contains(t, runtimeCode, "def _format_message(self) -> str:", "should have _format_message method")
+	assert.Contains(t, runtimeCode, "Function: {self.func_name}", "should format function name in error")
+	assert.Contains(t, runtimeCode, "Query: {query_preview}", "should format query in error")
+	assert.Contains(t, runtimeCode, "Parameters: {param_str}", "should format parameters in error")
 }
 
 func TestNotFoundErrorWithContext(t *testing.T) {
@@ -238,28 +241,28 @@ func TestErrorMessageFormatting(t *testing.T) {
 	err := gen.Generate(&buf)
 	require.NoError(t, err)
 
-	code := buf.String()
+	runtimeCode := renderRuntimeCode(t)
 
 	// Verify error formatting includes all context
 	t.Run("SnapSQLError base class formatting", func(t *testing.T) {
-		assert.Contains(t, code, "def _format_message(self) -> str:", "should have formatting method")
-		assert.Contains(t, code, "parts = [self.message]", "should start with message")
-		assert.Contains(t, code, "if self.func_name:", "should check for function name")
-		assert.Contains(t, code, "if self.query:", "should check for query")
-		assert.Contains(t, code, "if self.params:", "should check for parameters")
-		assert.Contains(t, code, `parts.append(f"Function: {self.func_name}")`, "should append function name")
-		assert.Contains(t, code, `parts.append(f"Query: {query_preview}")`, "should append query")
-		assert.Contains(t, code, `parts.append(f"Parameters: {param_str}")`, "should append parameters")
+		assert.Contains(t, runtimeCode, "def _format_message(self) -> str:", "should have formatting method")
+		assert.Contains(t, runtimeCode, "parts = [self.message]", "should start with message")
+		assert.Contains(t, runtimeCode, "if self.func_name:", "should check for function name")
+		assert.Contains(t, runtimeCode, "if self.query:", "should check for query")
+		assert.Contains(t, runtimeCode, "if self.params:", "should check for parameters")
+		assert.Contains(t, runtimeCode, `parts.append(f"Function: {self.func_name}")`, "should append function name")
+		assert.Contains(t, runtimeCode, `parts.append(f"Query: {query_preview}")`, "should append query")
+		assert.Contains(t, runtimeCode, `parts.append(f"Parameters: {param_str}")`, "should append parameters")
 	})
 
 	t.Run("Query truncation for long queries", func(t *testing.T) {
-		assert.Contains(t, code, "query_preview = self.query[:200]", "should truncate long queries")
-		assert.Contains(t, code, `+ "..." if len(self.query) > 200`, "should add ellipsis for truncated queries")
+		assert.Contains(t, runtimeCode, "query_preview = self.query[:200]", "should truncate long queries")
+		assert.Contains(t, runtimeCode, `+ "..." if len(self.query) > 200`, "should add ellipsis for truncated queries")
 	})
 
 	t.Run("Parameter formatting", func(t *testing.T) {
-		assert.Contains(t, code, `param_str = ", ".join(f"{k}={repr(v)}" for k, v in self.params.items())`, "should format parameters")
-		assert.Contains(t, code, "if len(param_str) > 200:", "should truncate long parameter strings")
+		assert.Contains(t, runtimeCode, `param_str = ", ".join(f"{k}={repr(v)}" for k, v in self.params.items())`, "should format parameters")
+		assert.Contains(t, runtimeCode, "if len(param_str) > 200:", "should truncate long parameter strings")
 	})
 }
 
@@ -296,12 +299,13 @@ func TestUnsafeQueryErrorContext(t *testing.T) {
 
 	code := buf.String()
 
-	// Verify UnsafeQueryError is raised with context
-	assert.Contains(t, code, "enforce_non_empty_where_clause", "should call WHERE clause enforcement")
-	assert.Contains(t, code, "class UnsafeQueryError(SnapSQLError):", "should define UnsafeQueryError")
+	// Verify UnsafeQueryError guard is emitted for unsafe mutation
+	assert.Contains(t, code, "UnsafeQueryError", "should reference the unsafe guard")
+	assert.Contains(t, code, "if True:", "guard should be unconditional for fullscan")
 
-	// Verify UnsafeQueryError has mutation_kind parameter
-	assert.Contains(t, code, "mutation_kind: Optional[str] = None", "UnsafeQueryError should accept mutation_kind")
+	runtimeCode := renderRuntimeCode(t)
+	assert.Contains(t, runtimeCode, "class UnsafeQueryError(SnapSQLError):", "should define UnsafeQueryError")
+	assert.Contains(t, runtimeCode, "mutation_kind: Optional[str] = None", "UnsafeQueryError should accept mutation_kind")
 }
 
 func TestAllErrorTypesHaveProperInheritance(t *testing.T) {
@@ -328,6 +332,8 @@ func TestAllErrorTypesHaveProperInheritance(t *testing.T) {
 	require.NoError(t, err)
 
 	code := buf.String()
+	assert.Contains(t, code, "from .snapsql_runtime import (", "module should import runtime helpers")
+	runtimeCode := renderRuntimeCode(t)
 
 	// Verify all error types inherit from SnapSQLError
 	errorTypes := []string{
@@ -341,16 +347,16 @@ func TestAllErrorTypesHaveProperInheritance(t *testing.T) {
 		t.Run(errorType, func(t *testing.T) {
 			// Check class definition
 			classDefPattern := "class " + errorType + "(SnapSQLError):"
-			assert.Contains(t, code, classDefPattern, errorType+" should inherit from SnapSQLError")
+			assert.Contains(t, runtimeCode, classDefPattern, errorType+" should inherit from SnapSQLError")
 
 			// Check __init__ method exists
 			initPattern := "def __init__(self"
 			// Find the error class and verify it has __init__
-			classStart := strings.Index(code, classDefPattern)
+			classStart := strings.Index(runtimeCode, classDefPattern)
 			require.Greater(t, classStart, -1, "should find "+errorType+" class definition")
 
 			// Look for __init__ after class definition (within next 500 chars)
-			classSection := code[classStart : classStart+500]
+			classSection := runtimeCode[classStart : classStart+500]
 			assert.Contains(t, classSection, initPattern, errorType+" should have __init__ method")
 		})
 	}

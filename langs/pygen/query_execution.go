@@ -56,7 +56,10 @@ return affected_rows
 `)
 
 	case snapsql.DialectMySQL, snapsql.DialectSQLite:
-		code.WriteString(`await cursor.execute(sql, args)
+		code.WriteString(`if isinstance(cursor, aiosqlite.Connection):
+    cursor = await cursor.execute(sql, args)
+else:
+    await cursor.execute(sql, args)
 return cursor.rowcount
 `)
 
@@ -65,7 +68,8 @@ return cursor.rowcount
 	}
 
 	return &queryExecutionData{
-		Code: strings.TrimSuffix(code.String(), "\n"),
+		Code:              strings.TrimSuffix(code.String(), "\n"),
+		UsesNotFoundError: true,
 	}, nil
 }
 
@@ -116,7 +120,12 @@ return %s(**dict(row))
 			comment = "# aiosqlite with row_factory returns dict-like object"
 		}
 
-		code.WriteString(fmt.Sprintf(`await cursor.execute(sql, args)
+		if dialect == snapsql.DialectSQLite {
+			code.WriteString(fmt.Sprintf(`if isinstance(cursor, aiosqlite.Connection):
+    cursor = await cursor.execute(sql, args)
+else:
+    await cursor.execute(sql, args)
+
 row = await cursor.fetchone()
 
 if row is None:
@@ -134,13 +143,34 @@ if row is None:
 %s
 return %s(**row)
 `, format.FunctionName, comment, responseStruct.ClassName))
+		} else {
+			code.WriteString(fmt.Sprintf(`await cursor.execute(sql, args)
+row = await cursor.fetchone()
+
+if row is None:
+    # Build parameter dict for error message
+    param_dict = {}
+    # Note: args is a list, parameter names would need to be tracked separately
+    raise NotFoundError(
+        message="Record not found",
+        func_name="%s",
+        query=sql,
+        params=param_dict
+    )
+
+# Map row to dataclass
+%s
+return %s(**row)
+`, format.FunctionName, comment, responseStruct.ClassName))
+		}
 
 	default:
 		panic("unsupported dialect: " + dialect)
 	}
 
 	return &queryExecutionData{
-		Code: strings.TrimSuffix(code.String(), "\n"),
+		Code:              strings.TrimSuffix(code.String(), "\n"),
+		UsesNotFoundError: true,
 	}, nil
 }
 
@@ -187,7 +217,11 @@ for row in rows:
 `, format.FunctionName))
 
 	case snapsql.DialectMySQL, snapsql.DialectSQLite:
-		code.WriteString(fmt.Sprintf(`await cursor.execute(sql, args)
+		if dialect == snapsql.DialectSQLite {
+			code.WriteString(fmt.Sprintf(`if isinstance(cursor, aiosqlite.Connection):
+    cursor = await cursor.execute(sql, args)
+else:
+    await cursor.execute(sql, args)
 
 # Collect all rows first
 rows = []
@@ -206,6 +240,27 @@ result = None
 
 for row_dict in rows:
 `, format.FunctionName))
+		} else {
+			code.WriteString(fmt.Sprintf(`await cursor.execute(sql, args)
+
+# Collect all rows first
+rows = []
+async for row in cursor:
+    rows.append(row if isinstance(row, dict) else dict(row))
+
+if not rows:
+    raise NotFoundError(
+        message="Record not found",
+        func_name="%s",
+        query=sql
+    )
+
+# Process rows for hierarchical aggregation
+result = None
+
+for row_dict in rows:
+`, format.FunctionName))
+		}
 
 	default:
 		panic("unsupported dialect: " + dialect)
@@ -241,7 +296,8 @@ for row_dict in rows:
 	code.WriteString("return result\n")
 
 	return &queryExecutionData{
-		Code: strings.TrimSuffix(code.String(), "\n"),
+		Code:              strings.TrimSuffix(code.String(), "\n"),
+		UsesNotFoundError: false,
 	}, nil
 }
 
@@ -288,7 +344,8 @@ async for row in cursor:
 	}
 
 	return &queryExecutionData{
-		Code: strings.TrimSuffix(code.String(), "\n"),
+		Code:              strings.TrimSuffix(code.String(), "\n"),
+		UsesNotFoundError: false,
 	}, nil
 }
 
@@ -340,7 +397,11 @@ for row in rows:
 `)
 
 	case snapsql.DialectMySQL, snapsql.DialectSQLite:
-		code.WriteString(`await cursor.execute(sql, args)
+		if dialect == snapsql.DialectSQLite {
+			code.WriteString(`if isinstance(cursor, aiosqlite.Connection):
+    cursor = await cursor.execute(sql, args)
+else:
+    await cursor.execute(sql, args)
 
 # Process rows for hierarchical aggregation
 current_parent = None
@@ -349,6 +410,17 @@ current_parent_key = None
 async for row in cursor:
     row_dict = row if isinstance(row, dict) else dict(row)
 `)
+		} else {
+			code.WriteString(`await cursor.execute(sql, args)
+
+# Process rows for hierarchical aggregation
+current_parent = None
+current_parent_key = None
+
+async for row in cursor:
+    row_dict = row if isinstance(row, dict) else dict(row)
+`)
+		}
 
 	default:
 		panic(fmt.Sprintf("unsupported dialect: %s", dialect))
@@ -409,7 +481,8 @@ async for row in cursor:
 	code.WriteString("    yield current_parent\n")
 
 	return &queryExecutionData{
-		Code: strings.TrimSuffix(code.String(), "\n"),
+		Code:              strings.TrimSuffix(code.String(), "\n"),
+		UsesNotFoundError: true,
 	}, nil
 }
 

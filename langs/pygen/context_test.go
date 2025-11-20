@@ -10,21 +10,7 @@ import (
 )
 
 func TestSnapSQLContextDataclass(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify SnapSQLContext dataclass structure
 	expectedStrings := []string{
@@ -36,6 +22,7 @@ func TestSnapSQLContextDataclass(t *testing.T) {
 		"mock_mode: bool = False",
 		"mock_data: Optional[Dict[str, Any]] = None",
 		"row_lock_mode: str = \"none\"",
+		"allow_unsafe_mutations: bool = False",
 		"def __post_init__(self):",
 		"if self.system_values is None:",
 		"self.system_values = {}",
@@ -49,21 +36,7 @@ func TestSnapSQLContextDataclass(t *testing.T) {
 }
 
 func TestSnapSQLContextMethods(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify SnapSQLContext methods
 	expectedMethods := []string{
@@ -81,21 +54,7 @@ func TestSnapSQLContextMethods(t *testing.T) {
 }
 
 func TestContextVarInitialization(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify contextvars initialization
 	expectedStrings := []string{
@@ -112,21 +71,7 @@ func TestContextVarInitialization(t *testing.T) {
 }
 
 func TestGetSnapSQLContextHelper(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify get_snapsql_context() helper function
 	expectedStrings := []string{
@@ -146,22 +91,45 @@ func TestGetSnapSQLContextHelper(t *testing.T) {
 	}
 }
 
+func TestContextHelperFunctions(t *testing.T) {
+	output := renderRuntimeCode(t)
+
+	expectedHelpers := []string{
+		"def set_system_value",
+		"def update_system_values",
+		"def set_row_lock_mode",
+		"def set_mock_mode",
+		"def allow_unsafe_queries",
+		"def set_query_logger",
+		"def enable_query_logging",
+	}
+
+	for _, helper := range expectedHelpers {
+		if !strings.Contains(output, helper) {
+			t.Errorf("Generate() output missing runtime helper: %q", helper)
+		}
+	}
+}
+
+func TestRuntimeRowLockHelpers(t *testing.T) {
+	output := renderRuntimeCode(t)
+
+	expected := []string{
+		"ROW_LOCK_NONE = \"none\"",
+		"ensure_row_lock_allowed",
+		"build_row_lock_clause_postgres",
+		"RowLockError",
+	}
+
+	for _, want := range expected {
+		if !strings.Contains(output, want) {
+			t.Errorf("Generate() output missing row lock helper: %q", want)
+		}
+	}
+}
+
 func TestContextSystemValues(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify system_values field is properly defined
 	if !strings.Contains(output, "system_values: Dict[str, Any]") {
@@ -175,21 +143,7 @@ func TestContextSystemValues(t *testing.T) {
 }
 
 func TestContextQueryLogging(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify query logging fields
 	expectedFields := []string{
@@ -205,21 +159,7 @@ func TestContextQueryLogging(t *testing.T) {
 }
 
 func TestContextMockMode(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify mock mode fields
 	expectedFields := []string{
@@ -235,21 +175,7 @@ func TestContextMockMode(t *testing.T) {
 }
 
 func TestContextRowLocking(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify row locking field
 	if !strings.Contains(output, `row_lock_mode: str = "none"`) {
@@ -258,21 +184,7 @@ func TestContextRowLocking(t *testing.T) {
 }
 
 func TestContextDocstring(t *testing.T) {
-	format := &intermediate.IntermediateFormat{
-		FunctionName: "TestFunc",
-		Description:  "Test function",
-	}
-
-	gen := New(format, WithDialect(snapsql.DialectPostgres))
-
-	var buf bytes.Buffer
-
-	err := gen.Generate(&buf)
-	if err != nil {
-		t.Fatalf("Generate() error = %v", err)
-	}
-
-	output := buf.String()
+	output := renderRuntimeCode(t)
 
 	// Verify docstrings are present
 	expectedDocstrings := []string{
@@ -290,7 +202,7 @@ func TestContextDocstring(t *testing.T) {
 }
 
 func TestContextIntegration(t *testing.T) {
-	// Test that context management is properly integrated into the template
+	// Ensure that runtime import and remaining sections are present
 	format := &intermediate.IntermediateFormat{
 		FunctionName: "TestFunc",
 		Description:  "Test function",
@@ -307,19 +219,8 @@ func TestContextIntegration(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify the order of sections
-	contextIdx := strings.Index(output, "# Context Management")
-	errorIdx := strings.Index(output, "# Error Classes")
 	responseIdx := strings.Index(output, "# Response Structures")
 	functionIdx := strings.Index(output, "# Generated Functions")
-
-	if contextIdx == -1 {
-		t.Error("Generate() output missing Context Management section")
-	}
-
-	if errorIdx == -1 {
-		t.Error("Generate() output missing Error Classes section")
-	}
 
 	if responseIdx == -1 {
 		t.Error("Generate() output missing Response Structures section")
@@ -327,15 +228,6 @@ func TestContextIntegration(t *testing.T) {
 
 	if functionIdx == -1 {
 		t.Error("Generate() output missing Generated Functions section")
-	}
-
-	// Verify sections are in correct order
-	if contextIdx > errorIdx {
-		t.Error("Context Management should come before Error Classes")
-	}
-
-	if errorIdx > responseIdx {
-		t.Error("Error Classes should come before Response Structures")
 	}
 
 	if responseIdx > functionIdx {

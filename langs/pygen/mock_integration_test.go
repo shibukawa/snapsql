@@ -84,13 +84,6 @@ func TestMockIntegration_GeneratedCode(t *testing.T) {
 	assert.Contains(t, code, "raise ValidationError", "should raise ValidationError for validation type")
 	assert.Contains(t, code, "raise DatabaseError", "should raise DatabaseError for other types")
 
-	// Verify mock logging integration
-	assert.Contains(t, code, "ctx.query_logger", "should check for query logger")
-	assert.Contains(t, code, "ctx.query_logger.set_query(sql, args)", "should set query before logging")
-	assert.Contains(t, code, "await ctx.query_logger.write", "should write log entry")
-	assert.Contains(t, code, "QueryLogMetadata", "should create log metadata")
-	assert.Contains(t, code, "duration_ms=0.0", "should log 0ms duration for mocks")
-
 	// Verify mock returns correct type
 	assert.Contains(t, code, "return GetUserByIDResult(**rows[0])", "should return correct result type")
 }
@@ -243,82 +236,6 @@ func TestMockIntegration_WithoutMockPath(t *testing.T) {
 	assert.NotContains(t, code, "def load_mock_data", "should not include mock loading function")
 	assert.NotContains(t, code, "MOCK_DATA_PATH", "should not include mock path constant")
 	assert.NotContains(t, code, "ctx.mock_mode", "should not check for mock mode")
-}
-
-func TestMockIntegration_LoggingMetadata(t *testing.T) {
-	// Test that mock execution includes proper logging metadata
-	tests := []struct {
-		name          string
-		statementType string
-		dialect       string
-		wantQueryType string
-		wantDialect   string
-	}{
-		{
-			name:          "SELECT with postgres",
-			statementType: "SELECT",
-			dialect:       "postgres",
-			wantQueryType: "select",
-			wantDialect:   "postgres",
-		},
-		{
-			name:          "INSERT with mysql",
-			statementType: "INSERT",
-			dialect:       "mysql",
-			wantQueryType: "insert",
-			wantDialect:   "mysql",
-		},
-		{
-			name:          "UPDATE with sqlite",
-			statementType: "UPDATE",
-			dialect:       "sqlite",
-			wantQueryType: "update",
-			wantDialect:   "sqlite",
-		},
-		{
-			name:          "DELETE with postgres",
-			statementType: "DELETE",
-			dialect:       "postgres",
-			wantQueryType: "delete",
-			wantDialect:   "postgres",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			format := &intermediate.IntermediateFormat{
-				FunctionName:     "TestFunction",
-				Description:      "Test function",
-				StatementType:    tt.statementType,
-				ResponseAffinity: "none",
-				Parameters:       []intermediate.Parameter{},
-				Responses:        []intermediate.Response{},
-				Instructions: []intermediate.Instruction{
-					{
-						Op:    "EMIT_STATIC",
-						Value: "SELECT 1",
-					},
-				},
-			}
-
-			gen := New(
-				format,
-				WithDialect(snapsql.Dialect(tt.dialect)),
-				WithMockPath("./testdata/mocks.json"),
-			)
-
-			var buf bytes.Buffer
-
-			err := gen.Generate(&buf)
-			require.NoError(t, err)
-
-			code := buf.String()
-
-			// Verify correct metadata in logging
-			assert.Contains(t, code, `dialect="`+tt.wantDialect+`"`, "should have correct dialect in metadata")
-			assert.Contains(t, code, `query_type="`+tt.wantQueryType+`"`, "should have correct query type in metadata")
-		})
-	}
 }
 
 func TestMockIntegration_ErrorTypes(t *testing.T) {

@@ -738,6 +738,7 @@ func TestCTERawTokensIncludesBody(t *testing.T) {
 	cte := stmt.CTE()
 	if cte == nil {
 		t.Fatalf("expected statement to include CTE")
+		return
 	}
 
 	rawTokens := cte.RawTokens()

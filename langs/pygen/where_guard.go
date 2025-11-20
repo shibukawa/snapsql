@@ -2,7 +2,6 @@ package pygen
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/shibukawa/snapsql/intermediate"
@@ -91,91 +90,137 @@ func isMutationStatement(statementType string) bool {
 }
 
 // generateWhereGuardCode generates Python code for WHERE clause enforcement
-func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whereClauseMetaData) string {
+func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whereClauseMetaData, expressions []intermediate.CELExpression) string {
 	if mutationKind == "" || whereMeta == nil {
 		return ""
 	}
 
-	var code strings.Builder
+	operation := mutationKindToLower(mutationKind)
+	if operation == "" {
+		return ""
+	}
 
-	// Generate WHERE clause metadata initialization
-	code.WriteString("# WHERE clause safety check\n")
-	code.WriteString("where_meta = {\n")
-	code.WriteString(fmt.Sprintf("    'status': %q,\n", whereMeta.Status))
+	var guardBuilder strings.Builder
 
-	if len(whereMeta.RemovalCombos) > 0 {
-		code.WriteString("    'removal_combos': [\n")
+	seen := make(map[string]struct{})
+	guardCount := 0
 
-		for _, combo := range whereMeta.RemovalCombos {
-			comboStr := "["
-
-			var comboStrSb109 strings.Builder
-
-			for i, lit := range combo {
-				if i > 0 {
-					comboStrSb109.WriteString(", ")
-				}
-
-				comboStrSb109.WriteString(fmt.Sprintf("{'expr_index': %d, 'when': %v}", lit.ExprIndex, lit.When))
-			}
-
-			comboStr += comboStrSb109.String()
-
-			comboStr += "],"
-			code.WriteString("        " + comboStr + "\n")
+	addGuard := func(condition, hint string) {
+		condition = strings.TrimSpace(condition)
+		if condition == "" {
+			return
 		}
 
-		code.WriteString("    ],\n")
-	}
-
-	if len(whereMeta.ExpressionRefs) > 0 {
-		refsStr := "["
-
-		var refsStrSb123 strings.Builder
-
-		for i, ref := range whereMeta.ExpressionRefs {
-			if i > 0 {
-				refsStrSb123.WriteString(", ")
-			}
-
-			refsStrSb123.WriteString(strconv.Itoa(ref))
+		if _, ok := seen[condition]; ok {
+			return
 		}
 
-		refsStr += refsStrSb123.String()
+		seen[condition] = struct{}{}
 
-		refsStr += "]"
-		code.WriteString(fmt.Sprintf("    'expression_refs': %s,\n", refsStr))
-	}
-
-	if len(whereMeta.DynamicConditions) > 0 {
-		code.WriteString("    'dynamic_conditions': [\n")
-
-		for _, cond := range whereMeta.DynamicConditions {
-			condStr := fmt.Sprintf("{'expr_index': %d, 'negated_when_empty': %v, 'has_else': %v",
-				cond.ExprIndex, cond.NegatedWhenEmpty, cond.HasElse)
-			if cond.Description != "" {
-				condStr += fmt.Sprintf(", 'description': %q", cond.Description)
-			}
-
-			condStr += "},"
-			code.WriteString("        " + condStr + "\n")
+		if guardCount == 0 {
+			guardBuilder.WriteString("    # WHERE clause guard for " + operation + "\n")
 		}
 
-		code.WriteString("    ],\n")
+		if hint == "" {
+			hint = condition
+		}
+
+		guardBuilder.WriteString(fmt.Sprintf("    if %s:\n", condition))
+		guardBuilder.WriteString("        raise UnsafeQueryError(\n")
+		guardBuilder.WriteString(fmt.Sprintf("            message=%q,\n",
+			fmt.Sprintf("%s %s attempted without WHERE clause (%s)",
+				strings.ToUpper(operation),
+				funcName,
+				hint)))
+		guardBuilder.WriteString(fmt.Sprintf("            func_name=%q,\n", funcName))
+		guardBuilder.WriteString("            query=sql,\n")
+		guardBuilder.WriteString(fmt.Sprintf("            mutation_kind=%q\n", operation))
+		guardBuilder.WriteString("        )\n\n")
+
+		guardCount++
 	}
 
-	if whereMeta.RawText != "" {
-		code.WriteString(fmt.Sprintf("    'raw_text': %q,\n", whereMeta.RawText))
+	if strings.EqualFold(whereMeta.Status, "fullscan") {
+		addGuard("True", "template omits WHERE clause")
 	}
 
-	code.WriteString("}\n\n")
+	for _, cond := range whereMeta.DynamicConditions {
+		if cond.HasElse {
+			continue
+		}
 
-	// Generate enforcement call
-	code.WriteString("# Enforce WHERE clause for " + strings.ToLower(mutationKind[8:]) + "\n")
-	code.WriteString(fmt.Sprintf("enforce_non_empty_where_clause(ctx, %q, %q, where_meta, sql)\n",
-		funcName, strings.ToLower(mutationKind[8:])))
+		expr := cond.Description
+		if expr == "" {
+			expr = expressionString(cond.ExprIndex, expressions)
+		}
 
-	return strings.TrimSuffix(code.String(), "\n")
+		if expr == "" {
+			continue
+		}
+
+		condition := expr
+		if cond.NegatedWhenEmpty {
+			condition = fmt.Sprintf("not (%s)", expr)
+		}
+
+		addGuard(condition, expr)
+	}
+
+	for _, combo := range whereMeta.RemovalCombos {
+		if len(combo) == 0 {
+			addGuard("True", "WHERE clause removed")
+			continue
+		}
+
+		var (
+			parts []string
+			hints []string
+		)
+
+		for _, literal := range combo {
+			expr := expressionString(literal.ExprIndex, expressions)
+			if expr == "" {
+				expr = fmt.Sprintf("expr[%d]", literal.ExprIndex)
+			}
+
+			part := expr
+			if !literal.When {
+				part = fmt.Sprintf("not (%s)", expr)
+			}
+
+			parts = append(parts, part)
+			hints = append(hints, fmt.Sprintf("%s=%v", expr, literal.When))
+		}
+
+		if len(parts) == 0 {
+			continue
+		}
+
+		addGuard(strings.Join(parts, " and "), strings.Join(hints, " and "))
+	}
+
+	if guardCount == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString("ctx = get_snapsql_context()\n")
+	builder.WriteString("if not ctx.allow_unsafe_mutations:\n")
+	builder.WriteString(guardBuilder.String())
+
+	return strings.TrimRight(builder.String(), "\n") + "\n"
+}
+
+func expressionString(exprIndex int, expressions []intermediate.CELExpression) string {
+	if expressions == nil {
+		return ""
+	}
+
+	if exprIndex < 0 || exprIndex >= len(expressions) {
+		return ""
+	}
+
+	return expressions[exprIndex].Expression
 }
 
 // describeDynamicConditions generates a description of dynamic conditions
