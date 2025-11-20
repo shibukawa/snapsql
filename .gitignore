@@ -16,3 +16,8 @@ examples/notification/.gocache/
 # Ignore generated Go files produced by acceptance tests
 testdata/acceptancetests/*/generated
 
+__pycache__
+.cache
+.gocache
+.gomodcache
+.serena

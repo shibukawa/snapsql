@@ -87,7 +87,6 @@ func TestWhereClauseIntegration_DeleteWithWhere(t *testing.T) {
 	if strings.Contains(code, "raise UnsafeQueryError") {
 		t.Error("UnsafeQueryError guard should not fire when WHERE clause exists")
 	}
-
 }
 
 func TestWhereClauseIntegration_ConditionalWhere(t *testing.T) {

@@ -78,6 +78,7 @@ func TestPythonExpressionRenderer(t *testing.T) {
 				if err == nil {
 					t.Fatalf("render(%d) expected error, got nil", tt.index)
 				}
+
 				return
 			}
 

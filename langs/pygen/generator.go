@@ -210,6 +210,7 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 	// Configure logging and row lock metadata
 	data.QueryType = queryType
 	data.EnableQueryLogging = g.EnableQueryLogging
+
 	data.NeedsRowLockClause = hasEmitSystemFor(g.Format.Instructions)
 	if data.NeedsRowLockClause {
 		data.RowLockBuilderCall = g.rowLockBuilderCall()
@@ -239,9 +240,11 @@ func (g *Generator) buildRuntimeImports(data *templateData) []string {
 		if name == "" {
 			return
 		}
+
 		if _, ok := seen[name]; ok {
 			return
 		}
+
 		seen[name] = struct{}{}
 		imports = append(imports, name)
 	}
@@ -269,6 +272,7 @@ func (g *Generator) buildRuntimeImports(data *templateData) []string {
 	if data.NeedsRowLockClause {
 		add("ROW_LOCK_NONE")
 		add("ensure_row_lock_allowed")
+
 		builder := g.rowLockBuilderName()
 		if builder != "" {
 			add(builder)
@@ -284,6 +288,7 @@ func hasEmitSystemFor(instructions []intermediate.Instruction) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -304,7 +309,8 @@ func (g *Generator) rowLockBuilderName() string {
 
 func (g *Generator) rowLockBuilderCall() string {
 	if name := g.rowLockBuilderName(); name != "" {
-		return fmt.Sprintf("%s(ctx.row_lock_mode)", name)
+		return name + "(ctx.row_lock_mode)"
 	}
+
 	return ""
 }

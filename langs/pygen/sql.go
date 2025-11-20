@@ -44,6 +44,7 @@ func generateStaticSQL(instructions []codegenerator.OptimizedInstruction, format
 				}
 
 				sqlBuilder.WriteString("?")
+
 				arguments = append(arguments, valueExpr)
 			}
 		case "ADD_PARAM":
@@ -52,6 +53,7 @@ func generateStaticSQL(instructions []codegenerator.OptimizedInstruction, format
 				if err != nil {
 					return nil, err
 				}
+
 				arguments = append(arguments, valueExpr)
 			}
 		case "ADD_SYSTEM_PARAM":
@@ -78,7 +80,7 @@ func convertPlaceholders(sql string, dialect snapsql.Dialect) string {
 	result := strings.Builder{}
 	result.Grow(len(sql))
 
-	for i := 0; i < len(sql); i++ {
+	for i := range len(sql) {
 		if sql[i] == '?' {
 			result.WriteString(GetPlaceholder(dialect, paramIndex))
 			paramIndex++
@@ -110,6 +112,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 		switch inst.Op {
 		case "EMIT_STATIC":
 			value := inst.Value
+
 			placeholderCount := strings.Count(value, "?")
 			for range placeholderCount {
 				placeholder := GetPlaceholder(dialect, paramIndex)
@@ -120,6 +123,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 			if indentLevel > 0 {
 				code.WriteString(strings.Repeat("    ", indentLevel))
 			}
+
 			code.WriteString(fmt.Sprintf("sql_parts.append(%q)\n", value))
 
 		case "EMIT_EVAL":
@@ -130,14 +134,19 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 				}
 
 				placeholder := GetPlaceholder(dialect, paramIndex)
+
 				if indentLevel > 0 {
 					code.WriteString(strings.Repeat("    ", indentLevel))
 				}
+
 				code.WriteString(fmt.Sprintf("sql_parts.append(%q)\n", placeholder))
+
 				if indentLevel > 0 {
 					code.WriteString(strings.Repeat("    ", indentLevel))
 				}
+
 				code.WriteString(fmt.Sprintf("args.append(%s)\n", exprStr))
+
 				paramIndex++
 			}
 
@@ -151,6 +160,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 				if indentLevel > 0 {
 					code.WriteString(strings.Repeat("    ", indentLevel))
 				}
+
 				code.WriteString(fmt.Sprintf("args.append(%s)\n", exprStr))
 			}
 
@@ -158,6 +168,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 			if indentLevel > 0 {
 				code.WriteString(strings.Repeat("    ", indentLevel))
 			}
+
 			code.WriteString(fmt.Sprintf("args.append(%s)\n", pythonIdentifier(inst.SystemField)))
 
 		case "IF":
@@ -169,7 +180,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 
 				indent := strings.Repeat("    ", indentLevel)
 				code.WriteString(fmt.Sprintf("%scond_value = %s\n", indent, exprStr))
-				code.WriteString(fmt.Sprintf("%sif cond_value:\n", indent))
+				code.WriteString(indent + "if cond_value:\n")
 
 				controlStack = append(controlStack, controlFrame{typ: "if"})
 				indentLevel++
@@ -178,6 +189,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 		case "ELSEIF":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "if" {
 				indentLevel--
+
 				if inst.ExprIndex != nil && hasExplangExpression(format, *inst.ExprIndex) {
 					exprStr, err := renderer.render(*inst.ExprIndex)
 					if err != nil {
@@ -186,8 +198,9 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 
 					indent := strings.Repeat("    ", indentLevel)
 					code.WriteString(fmt.Sprintf("%scond_value = %s\n", indent, exprStr))
-					code.WriteString(fmt.Sprintf("%selif cond_value:\n", indent))
+					code.WriteString(indent + "elif cond_value:\n")
 				}
+
 				indentLevel++
 			}
 
@@ -196,6 +209,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 				indentLevel--
 				code.WriteString(strings.Repeat("    ", indentLevel))
 				code.WriteString("else:\n")
+
 				indentLevel++
 			}
 
@@ -222,7 +236,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 				code.WriteString(fmt.Sprintf("%s    %s = []\n", indent, iterableVar))
 				code.WriteString(fmt.Sprintf("%selif isinstance(%s, (list, tuple)):\n", indent, collectionVar))
 				code.WriteString(fmt.Sprintf("%s    %s = list(%s)\n", indent, iterableVar, collectionVar))
-				code.WriteString(fmt.Sprintf("%selse:\n", indent))
+				code.WriteString(indent + "else:\n")
 				code.WriteString(fmt.Sprintf("%s    %s = [%s]\n", indent, iterableVar, collectionVar))
 				code.WriteString(fmt.Sprintf("%sfor %s in %s:\n", indent, loopVar, iterableVar))
 				scope.pushSingle(inst.Variable, loopVar)
@@ -233,6 +247,7 @@ func generateDynamicSQL(instructions []codegenerator.OptimizedInstruction, forma
 		case "LOOP_END":
 			if len(controlStack) > 0 && controlStack[len(controlStack)-1].typ == "for" {
 				scope.pop()
+
 				indentLevel--
 				controlStack = controlStack[:len(controlStack)-1]
 			}
@@ -275,6 +290,7 @@ func pythonIdentifier(s string) string {
 			if i == 0 {
 				builder.WriteRune('_')
 			}
+
 			builder.WriteRune(r)
 		default:
 			builder.WriteRune('_')

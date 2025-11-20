@@ -1,5 +1,7 @@
 package pygen
 
+import "maps"
+
 import "github.com/shibukawa/snapsql/intermediate"
 
 // expressionScope tracks identifiers that can be referenced in generated Python code.
@@ -35,9 +37,7 @@ func (s *expressionScope) lookup(name string) (string, bool) {
 
 func (s *expressionScope) push(bindings map[string]string) {
 	layer := map[string]string{}
-	for k, v := range bindings {
-		layer[k] = v
-	}
+	maps.Copy(layer, bindings)
 
 	s.layers = append(s.layers, layer)
 }

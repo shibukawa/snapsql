@@ -246,14 +246,17 @@ func TestConvertMarksPrimaryKeysFromConstraints(t *testing.T) {
 
 	if boards == nil {
 		t.Fatalf("expected boards table to be present in schema")
+		return
 	}
 
 	idColumn, ok := boards.Columns["id"]
 	if !ok {
 		t.Fatalf("boards table missing id column")
+		return
 	}
 
 	if !idColumn.IsPrimaryKey {
 		t.Fatalf("expected boards.id to be marked as primary key")
+		return
 	}
 }

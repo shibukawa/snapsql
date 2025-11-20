@@ -102,6 +102,7 @@ func TestConvertWhereMeta(t *testing.T) {
 
 			if result == nil {
 				t.Fatalf("expected non-nil result")
+				return
 			}
 
 			if result.Status != tt.expected.Status {

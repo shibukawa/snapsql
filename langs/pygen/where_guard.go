@@ -101,6 +101,7 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 	}
 
 	var guardBuilder strings.Builder
+
 	seen := make(map[string]struct{})
 	guardCount := 0
 
@@ -113,6 +114,7 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 		if _, ok := seen[condition]; ok {
 			return
 		}
+
 		seen[condition] = struct{}{}
 
 		if guardCount == 0 {
@@ -134,6 +136,7 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 		guardBuilder.WriteString("            query=sql,\n")
 		guardBuilder.WriteString(fmt.Sprintf("            mutation_kind=%q\n", operation))
 		guardBuilder.WriteString("        )\n\n")
+
 		guardCount++
 	}
 
@@ -145,10 +148,12 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 		if cond.HasElse {
 			continue
 		}
+
 		expr := cond.Description
 		if expr == "" {
 			expr = expressionString(cond.ExprIndex, expressions)
 		}
+
 		if expr == "" {
 			continue
 		}
@@ -167,8 +172,11 @@ func generateWhereGuardCode(funcName string, mutationKind string, whereMeta *whe
 			continue
 		}
 
-		var parts []string
-		var hints []string
+		var (
+			parts []string
+			hints []string
+		)
+
 		for _, literal := range combo {
 			expr := expressionString(literal.ExprIndex, expressions)
 			if expr == "" {

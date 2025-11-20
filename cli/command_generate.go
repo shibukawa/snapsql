@@ -435,12 +435,15 @@ func generatePythonInit(initFile string, modules []struct {
 
 	if len(runtimeExports) > 0 {
 		buf.WriteString("\nfrom .snapsql_runtime import ")
+
 		for i, name := range runtimeExports {
 			if i > 0 {
 				buf.WriteString(", ")
 			}
+
 			buf.WriteString(name)
 		}
+
 		buf.WriteString("\n")
 	}
 
@@ -458,9 +461,11 @@ func generatePythonInit(initFile string, modules []struct {
 
 	for i, name := range runtimeExports {
 		buf.WriteString(fmt.Sprintf("    %q", name))
+
 		if i < len(runtimeExports)-1 {
 			buf.WriteString(",")
 		}
+
 		buf.WriteString("\n")
 	}
 
