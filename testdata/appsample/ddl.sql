@@ -6,3 +6,11 @@ CREATE TABLE accounts (
     name TEXT,
     status TEXT
 );
+
+CREATE TABLE posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES accounts(id),
+    title TEXT NOT NULL,
+    body TEXT,
+    published_at TEXT
+);

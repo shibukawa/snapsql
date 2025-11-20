@@ -1,0 +1,455 @@
+{
+  "name": "blogdb",
+  "tables": [
+    {
+      "name": "public.users",
+      "type": "BASE TABLE",
+      "comment": "User accounts for the blog system",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('users_user_id_seq'::regclass)",
+          "comment": "Unique identifier for the user"
+        },
+        {
+          "name": "username",
+          "type": "varchar(50)",
+          "nullable": false,
+          "comment": "Unique username for login"
+        },
+        {
+          "name": "email",
+          "type": "varchar(255)",
+          "nullable": false,
+          "comment": "User's email address"
+        },
+        {
+          "name": "full_name",
+          "type": "varchar(255)",
+          "nullable": true,
+          "comment": "User's full display name"
+        },
+        {
+          "name": "bio",
+          "type": "text",
+          "nullable": true,
+          "comment": "User's biography or description"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "Timestamp when the user was created"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "Timestamp when the user was last updated"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "users_pkey",
+          "def": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (user_id)",
+          "table": "public.users",
+          "columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "users_username_key",
+          "def": "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)",
+          "table": "public.users",
+          "columns": [
+            "username"
+          ]
+        },
+        {
+          "name": "users_email_key",
+          "def": "CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email)",
+          "table": "public.users",
+          "columns": [
+            "email"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "users_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (user_id)",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "users_username_key",
+          "type": "UNIQUE",
+          "def": "UNIQUE (username)",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "username"
+          ]
+        },
+        {
+          "name": "users_email_key",
+          "type": "UNIQUE",
+          "def": "UNIQUE (email)",
+          "table": "public.users",
+          "referenced_table": "",
+          "columns": [
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.posts",
+      "type": "BASE TABLE",
+      "comment": "Blog posts created by users",
+      "columns": [
+        {
+          "name": "post_id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('posts_post_id_seq'::regclass)",
+          "comment": "Unique identifier for the post"
+        },
+        {
+          "name": "title",
+          "type": "varchar(255)",
+          "nullable": false,
+          "comment": "Post title"
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "nullable": false,
+          "comment": "Post content (markdown or plain text)"
+        },
+        {
+          "name": "author_id",
+          "type": "integer",
+          "nullable": false,
+          "comment": "Foreign key to users table"
+        },
+        {
+          "name": "published",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false",
+          "comment": "Whether the post is published or draft"
+        },
+        {
+          "name": "view_count",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "comment": "Number of times the post has been viewed"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "Timestamp when the post was created"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "Timestamp when the post was last updated"
+        },
+        {
+          "name": "created_by",
+          "type": "integer",
+          "nullable": true,
+          "comment": "User ID who created the post"
+        },
+        {
+          "name": "updated_by",
+          "type": "integer",
+          "nullable": true,
+          "comment": "User ID who last updated the post"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "posts_pkey",
+          "def": "CREATE UNIQUE INDEX posts_pkey ON public.posts USING btree (post_id)",
+          "table": "public.posts",
+          "columns": [
+            "post_id"
+          ]
+        },
+        {
+          "name": "idx_posts_author_id",
+          "def": "CREATE INDEX idx_posts_author_id ON public.posts USING btree (author_id)",
+          "table": "public.posts",
+          "columns": [
+            "author_id"
+          ]
+        },
+        {
+          "name": "idx_posts_created_at",
+          "def": "CREATE INDEX idx_posts_created_at ON public.posts USING btree (created_at DESC)",
+          "table": "public.posts",
+          "columns": [
+            "created_at"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "posts_author_id_fkey",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (author_id) REFERENCES users(user_id) ON DELETE CASCADE",
+          "table": "public.posts",
+          "referenced_table": "users",
+          "columns": [
+            "author_id"
+          ],
+          "referenced_columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "posts_created_by_fkey",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (created_by) REFERENCES users(user_id)",
+          "table": "public.posts",
+          "referenced_table": "users",
+          "columns": [
+            "created_by"
+          ],
+          "referenced_columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "posts_updated_by_fkey",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (updated_by) REFERENCES users(user_id)",
+          "table": "public.posts",
+          "referenced_table": "users",
+          "columns": [
+            "updated_by"
+          ],
+          "referenced_columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "posts_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (post_id)",
+          "table": "public.posts",
+          "referenced_table": "",
+          "columns": [
+            "post_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.comments",
+      "type": "BASE TABLE",
+      "comment": "Comments on blog posts",
+      "columns": [
+        {
+          "name": "comment_id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('comments_comment_id_seq'::regclass)",
+          "comment": "Unique identifier for the comment"
+        },
+        {
+          "name": "post_id",
+          "type": "integer",
+          "nullable": false,
+          "comment": "Foreign key to posts table"
+        },
+        {
+          "name": "author_id",
+          "type": "integer",
+          "nullable": false,
+          "comment": "Foreign key to users table"
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "nullable": false,
+          "comment": "Comment content"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "Timestamp when the comment was created"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "comment": "Timestamp when the comment was last updated"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "comments_pkey",
+          "def": "CREATE UNIQUE INDEX comments_pkey ON public.comments USING btree (comment_id)",
+          "table": "public.comments",
+          "columns": [
+            "comment_id"
+          ]
+        },
+        {
+          "name": "idx_comments_post_id",
+          "def": "CREATE INDEX idx_comments_post_id ON public.comments USING btree (post_id)",
+          "table": "public.comments",
+          "columns": [
+            "post_id"
+          ]
+        },
+        {
+          "name": "idx_comments_author_id",
+          "def": "CREATE INDEX idx_comments_author_id ON public.comments USING btree (author_id)",
+          "table": "public.comments",
+          "columns": [
+            "author_id"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "comments_author_id_fkey",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (author_id) REFERENCES users(user_id) ON DELETE CASCADE",
+          "table": "public.comments",
+          "referenced_table": "users",
+          "columns": [
+            "author_id"
+          ],
+          "referenced_columns": [
+            "user_id"
+          ]
+        },
+        {
+          "name": "comments_post_id_fkey",
+          "type": "FOREIGN KEY",
+          "def": "FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE",
+          "table": "public.comments",
+          "referenced_table": "posts",
+          "columns": [
+            "post_id"
+          ],
+          "referenced_columns": [
+            "post_id"
+          ]
+        },
+        {
+          "name": "comments_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (comment_id)",
+          "table": "public.comments",
+          "referenced_table": "",
+          "columns": [
+            "comment_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "table": "public.posts",
+      "columns": [
+        "author_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.users",
+      "parent_columns": [
+        "user_id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (author_id) REFERENCES users(user_id) ON DELETE CASCADE"
+    },
+    {
+      "table": "public.posts",
+      "columns": [
+        "created_by"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.users",
+      "parent_columns": [
+        "user_id"
+      ],
+      "parent_cardinality": "zero_or_one",
+      "def": "FOREIGN KEY (created_by) REFERENCES users(user_id)"
+    },
+    {
+      "table": "public.posts",
+      "columns": [
+        "updated_by"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.users",
+      "parent_columns": [
+        "user_id"
+      ],
+      "parent_cardinality": "zero_or_one",
+      "def": "FOREIGN KEY (updated_by) REFERENCES users(user_id)"
+    },
+    {
+      "table": "public.comments",
+      "columns": [
+        "author_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.users",
+      "parent_columns": [
+        "user_id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (author_id) REFERENCES users(user_id) ON DELETE CASCADE"
+    },
+    {
+      "table": "public.comments",
+      "columns": [
+        "post_id"
+      ],
+      "cardinality": "zero_or_more",
+      "parent_table": "public.posts",
+      "parent_columns": [
+        "post_id"
+      ],
+      "parent_cardinality": "exactly_one",
+      "def": "FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE"
+    }
+  ],
+  "driver": {
+    "name": "postgres",
+    "database_version": "PostgreSQL 16.10 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit",
+    "meta": {
+      "current_schema": "public",
+      "search_paths": [
+        "bloguser",
+        "public"
+      ],
+      "dict": {
+        "Functions": "Stored procedures and functions"
+      }
+    }
+  }
+}

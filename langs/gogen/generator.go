@@ -1298,8 +1298,8 @@ import (
 	{{- if eq .ResponseType "sql.Result" }}
 	"database/sql"
 	{{- end }}
-	{{- /* bring in snapsql root only when hierarchical aggregation or query execution explicitly needs it */}}
-	{{- if or (gt (len .HierarchicalMetas) 0) (.QueryExecution.NeedsSnapsqlImport) }}
+	{{- /* bring in snapsql root only when generated code references its error helpers */}}
+	{{- if .QueryExecution.NeedsSnapsqlImport }}
 	"github.com/shibukawa/snapsql"
 	{{- end }}
 	{{- range .ImportSlice }}

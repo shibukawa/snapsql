@@ -5,6 +5,7 @@
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
 | [accounts](accounts.md) | 3 |  | table |
+| [posts](posts.md) | 5 |  | table |
 
 ## Relations
 

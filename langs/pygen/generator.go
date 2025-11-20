@@ -11,15 +11,17 @@ import (
 
 	"github.com/shibukawa/snapsql"
 	"github.com/shibukawa/snapsql/intermediate"
+	"github.com/shibukawa/snapsql/intermediate/codegenerator"
 )
 
 // Generator generates Python code from intermediate format
 type Generator struct {
-	PackageName string
-	OutputPath  string
-	Format      *intermediate.IntermediateFormat
-	MockPath    string
-	Dialect     snapsql.Dialect // Target database dialect (postgres, mysql, sqlite)
+	PackageName        string
+	OutputPath         string
+	Format             *intermediate.IntermediateFormat
+	MockPath           string
+	Dialect            snapsql.Dialect // Target database dialect (postgres, mysql, sqlite)
+	EnableQueryLogging bool
 }
 
 // Option is a function that configures Generator
@@ -53,12 +55,20 @@ func WithMockPath(path string) Option {
 	}
 }
 
+// WithQueryLogging toggles query logging emission in generated code.
+func WithQueryLogging(enabled bool) Option {
+	return func(g *Generator) {
+		g.EnableQueryLogging = enabled
+	}
+}
+
 // New creates a new Generator
 func New(format *intermediate.IntermediateFormat, opts ...Option) *Generator {
 	g := &Generator{
-		PackageName: "generated", // Default package name
-		Format:      format,
-		Dialect:     "", // Must be specified via WithDialect
+		PackageName:        "generated", // Default package name
+		Format:             format,
+		Dialect:            "", // Must be specified via WithDialect
+		EnableQueryLogging: true,
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -127,8 +137,6 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 		ReturnType:            "Any",
 		ReturnTypeDescription: "Query result",
 	}
-
-	data.ExplangExpressions = buildExplangExpressionData(g.Format)
 
 	// Process parameters
 	params, err := g.processParameters()
@@ -199,6 +207,14 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 		queryType = strings.ToLower(g.Format.StatementType)
 	}
 
+	// Configure logging and row lock metadata
+	data.QueryType = queryType
+	data.EnableQueryLogging = g.EnableQueryLogging
+	data.NeedsRowLockClause = hasEmitSystemFor(g.Format.Instructions)
+	if data.NeedsRowLockClause {
+		data.RowLockBuilderCall = g.rowLockBuilderCall()
+	}
+
 	// Process mock data
 	mockData := processMockData(g.MockPath, g.Format.FunctionName, data.ResponseAffinity, data.ReturnType, g.Dialect, queryType)
 	data.MockData = mockData
@@ -206,9 +222,89 @@ func (g *Generator) prepareTemplateData() (*templateData, error) {
 
 	// Process WHERE clause metadata for mutations
 	data.MutationKind = getMutationKind(g.Format.StatementType)
-	if data.MutationKind != "" && g.Format.WhereClauseMeta != nil {
-		data.WhereMeta = convertWhereMeta(g.Format.WhereClauseMeta)
+	if data.MutationKind != "" {
+		whereMeta := convertWhereMeta(g.Format.WhereClauseMeta)
+		data.WhereGuardCode = generateWhereGuardCode(data.FunctionName, data.MutationKind, whereMeta, g.Format.CELExpressions)
 	}
 
+	data.RuntimeImports = g.buildRuntimeImports(data)
+
 	return data, nil
+}
+
+func (g *Generator) buildRuntimeImports(data *templateData) []string {
+	imports := []string{}
+	seen := map[string]struct{}{}
+	add := func(name string) {
+		if name == "" {
+			return
+		}
+		if _, ok := seen[name]; ok {
+			return
+		}
+		seen[name] = struct{}{}
+		imports = append(imports, name)
+	}
+
+	if data.HasImplicitParams || data.WhereGuardCode != "" || data.EnableQueryLogging || data.NeedsRowLockClause {
+		add("get_snapsql_context")
+	}
+
+	if data.HasValidation {
+		add("ValidationError")
+	}
+
+	if data.QueryExecution.UsesNotFoundError {
+		add("NotFoundError")
+	}
+
+	if data.WhereGuardCode != "" {
+		add("UnsafeQueryError")
+	}
+
+	if data.EnableQueryLogging {
+		add("QueryLogMetadata")
+	}
+
+	if data.NeedsRowLockClause {
+		add("ROW_LOCK_NONE")
+		add("ensure_row_lock_allowed")
+		builder := g.rowLockBuilderName()
+		if builder != "" {
+			add(builder)
+		}
+	}
+
+	return imports
+}
+
+func hasEmitSystemFor(instructions []intermediate.Instruction) bool {
+	for _, inst := range instructions {
+		if inst.Op == codegenerator.OpEmitSystemFor {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Generator) rowLockBuilderName() string {
+	switch g.Dialect {
+	case snapsql.DialectPostgres:
+		return "build_row_lock_clause_postgres"
+	case snapsql.DialectMySQL:
+		return "build_row_lock_clause_mysql"
+	case snapsql.DialectMariaDB:
+		return "build_row_lock_clause_mariadb"
+	case snapsql.DialectSQLite:
+		return "build_row_lock_clause_sqlite"
+	default:
+		return ""
+	}
+}
+
+func (g *Generator) rowLockBuilderCall() string {
+	if name := g.rowLockBuilderName(); name != "" {
+		return fmt.Sprintf("%s(ctx.row_lock_mode)", name)
+	}
+	return ""
 }

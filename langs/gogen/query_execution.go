@@ -717,11 +717,10 @@ func generateMetaDrivenAggregatedScanCode(responseStruct *responseStructData, is
 		code = append(code, "// Meta-driven hierarchical many scan")
 	} else {
 		code = append(code, "// Meta-driven hierarchical one scan")
+		code = append(code, "rows, err := stmt.QueryContext(ctx, args...)")
+		code = append(code, "if err != nil { return result, fmt.Errorf(\"failed to query rows: %w\", err) }")
+		code = append(code, "defer rows.Close()")
 	}
-
-	code = append(code, "rows, err := stmt.QueryContext(ctx, args...)")
-	code = append(code, "if err != nil { return result, fmt.Errorf(\"failed to query rows: %w\", err) }")
-	code = append(code, "defer rows.Close()")
 	// Declare column vars
 	for _, c := range allCols {
 		goType, _ := convertToGoType(c.resp.Type)

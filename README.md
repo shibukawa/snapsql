@@ -429,6 +429,7 @@ generation:
 - ✅ CLI tool with generate, validate, and query commands
 - ✅ 2-way SQL format support
 - ✅ Dry-run mode for testing templates
+- ✅ Python runtime modules now import `snapsql_runtime.py` and re-export the shared helpers via `__all__`
 
 **Planned Features:**
 - 🔄 Runtime libraries (Go, Python, TypeScript, Java)

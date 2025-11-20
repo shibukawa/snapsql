@@ -93,21 +93,6 @@ func GenerateMockExecutionCode(functionName string, responseAffinity string, ret
     if ctx and ctx.mock_mode and ctx.mock_data:
         mock = ctx.mock_data.get("` + functionName + `")
         if mock:
-            # Log mock execution
-            if ctx.query_logger:
-                ctx.query_logger.set_query(sql, args)
-                await ctx.query_logger.write(
-                    QueryLogMetadata(
-                        func_name="` + functionName + `",
-                        source_file="` + functionName + `",
-                        dialect="` + string(dialect) + `",
-                        query_type="` + queryType + `"
-                    ),
-                    duration_ms=0.0,
-                    row_count=len(mock.get('rows', [])) if 'rows' in mock else mock.get('rows_affected', 0),
-                    error=None
-                )
-            
             # Handle mock error
             if mock.get('error'):
                 error_type = mock.get('error_type', 'database')
