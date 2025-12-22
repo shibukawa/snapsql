@@ -8,7 +8,7 @@ require (
 	github.com/beevik/etree v1.6.0
 	github.com/fatih/color v1.18.0
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/goccy/go-yaml v1.19.0
+	github.com/goccy/go-yaml v1.19.1
 	github.com/google/cel-go v0.26.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
