@@ -11,7 +11,7 @@ require (
 	github.com/goccy/go-yaml v1.19.0
 	github.com/google/cel-go v0.26.1
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.7.6
+	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
 	github.com/k1LoW/tbls v1.91.4
 	github.com/mattn/go-sqlite3 v1.14.32
