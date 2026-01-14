@@ -14,7 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
 	github.com/k1LoW/tbls v1.91.4
-	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/shibukawa/parsercombinator v1.0.13
 	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.11.1
