@@ -13,7 +13,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
-	github.com/k1LoW/tbls v1.91.4
+	github.com/k1LoW/tbls v1.92.3
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/shibukawa/parsercombinator v1.0.13
 	github.com/shopspring/decimal v1.4.0
