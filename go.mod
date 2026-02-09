@@ -4,7 +4,7 @@ go 1.24.10
 
 require (
 	github.com/alecthomas/assert/v2 v2.11.0
-	github.com/alecthomas/kong v1.13.0
+	github.com/alecthomas/kong v1.14.0
 	github.com/beevik/etree v1.6.0
 	github.com/fatih/color v1.18.0
 	github.com/go-sql-driver/mysql v1.9.3
